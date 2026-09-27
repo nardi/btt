@@ -1,7 +1,9 @@
 //! Plans a few real legs on a timetable bundle and prints the journeys with search times.
 //!
 //! Run with `cargo run --release -p btt-planner --example plan_on_bundle -- <bundle> <date>`,
-//! where the date is a travel date inside the bundle's validity window.
+//! where the date is a travel date inside the bundle's validity window. Five more arguments plan
+//! one custom leg instead: the departure latitude and longitude, the arrival latitude and
+//! longitude, and the station search radius in meters.
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -9,7 +11,7 @@ use std::time::Instant;
 use btt_geo::TimeZoneFinder;
 use btt_model::{
     DailyTimeWindow, DurationMinutes, GeoCoordinates, InterrailPassPolicy, LegPlanningResult,
-    LegTravelMode, LocalTimeOfDay, StationSearchRadius,
+    LegTravelMode, LocalTimeOfDay, StationSearchRadius, TransferAversion,
 };
 use btt_planner::{LegEndpoint, LegPlanningInput, TimetableBundleRouter};
 use chrono::NaiveDate;
@@ -32,6 +34,27 @@ fn main() {
         .parse()
         .expect("date as YYYY-MM-DD");
 
+    let custom_arguments: Vec<f64> = arguments
+        .map(|argument| argument.parse().expect("coordinates and radius as numbers"))
+        .collect();
+    let (legs, radius) = match custom_arguments[..] {
+        [] => (LEGS.to_vec(), StationSearchRadius::DEFAULT),
+        [from_latitude, from_longitude, to_latitude, to_longitude, radius_meters] => (
+            vec![(
+                "custom departure",
+                from_latitude,
+                from_longitude,
+                "custom arrival",
+                to_latitude,
+                to_longitude,
+            )],
+            // The bounded constructor rejects radii outside 100 m to 50 km.
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            StationSearchRadius::new(radius_meters as u16).expect("radius from 100 m to 50 km"),
+        ),
+        _ => panic!("pass no custom leg or all five values of one"),
+    };
+
     let started = Instant::now();
     let finder = Arc::new(TimeZoneFinder::new());
     let router = TimetableBundleRouter::open(bundle_path.as_ref(), finder).expect("bundle loads");
@@ -42,10 +65,10 @@ fn main() {
     );
 
     let time = |hour| LocalTimeOfDay::from_hour_and_minute(hour, 0).unwrap();
-    for (from_name, from_latitude, from_longitude, to_name, to_latitude, to_longitude) in LEGS {
+    for (from_name, from_latitude, from_longitude, to_name, to_latitude, to_longitude) in legs {
         let endpoint = |latitude, longitude| LegEndpoint {
             coordinates: GeoCoordinates::from_degrees(latitude, longitude).unwrap(),
-            station_search_radius: StationSearchRadius::DEFAULT,
+            station_search_radius: radius,
             time_window: DailyTimeWindow::from_start_and_end(time(7), time(20)),
         };
         let input = LegPlanningInput {
@@ -55,6 +78,7 @@ fn main() {
             travel_mode: LegTravelMode::Daytime,
             minimum_transfer_time: DurationMinutes(10),
             pass_policy: InterrailPassPolicy::PreferPass,
+            transfer_aversion: TransferAversion::new(50).unwrap(),
         };
         let started = Instant::now();
         let result = router.plan_leg(&input, || false);
@@ -89,7 +113,19 @@ fn main() {
                         })
                         .collect();
                     let marker = if index == 0 { "*" } else { " " };
-                    println!("  {marker} {} (times in UTC)", rides.join("  >  "));
+                    let footpath = journey.arrival_footpath.map_or(String::new(), |footpath| {
+                        format!(
+                            "  >  {} min to {}",
+                            footpath.duration.0,
+                            plan.station_table[usize::from(footpath.to_station.0)].name
+                        )
+                    });
+                    println!(
+                        "  {marker} {} min access  >  {}{footpath}  >  {} min egress (times in UTC)",
+                        journey.access_duration.0,
+                        rides.join("  >  "),
+                        journey.egress_duration.0,
+                    );
                 }
             }
         }

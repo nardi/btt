@@ -3,6 +3,7 @@
 pub mod backend;
 pub mod bundle_router;
 pub mod input;
+pub mod scoring;
 pub mod session;
 #[cfg(feature = "stub")]
 pub mod stub;

@@ -25,6 +25,7 @@ const viennaToRome: LegPlan = {
       train_label: { category: "NJ", number: "40233" },
     },
     later_rides: [],
+    arrival_footpath: null,
     egress_duration: 0,
   },
   alternative_journeys: [],

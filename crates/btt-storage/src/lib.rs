@@ -403,6 +403,7 @@ mod tests {
                     },
                 },
                 later_rides: smallvec::SmallVec::new(),
+                arrival_footpath: None,
                 egress_duration: DurationMinutes(6),
             },
             alternative_journeys: smallvec::SmallVec::new(),

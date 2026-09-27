@@ -66,6 +66,7 @@ impl StubBackend {
                 },
             },
             later_rides: SmallVec::new(),
+            arrival_footpath: None,
             egress_duration: DurationMinutes::ZERO,
         };
         LegPlanningResult::Found(Box::new(LegPlan {

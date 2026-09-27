@@ -2,7 +2,7 @@
 
 use btt_model::{
     DailyTimeWindow, DurationMinutes, GeoCoordinates, InterrailPassPolicy, LegTravelMode,
-    StationSearchRadius, Trip, TripPlace, TripPlaceId,
+    StationSearchRadius, TransferAversion, Trip, TripPlace, TripPlaceId,
 };
 use chrono::NaiveDate;
 use serde::Serialize;
@@ -37,6 +37,8 @@ pub struct LegPlanningInput {
     pub minimum_transfer_time: DurationMinutes,
     /// How the planner treats trains the pass does not cover.
     pub pass_policy: InterrailPassPolicy,
+    /// Trade-off between travel time and transfers when picking a journey.
+    pub transfer_aversion: TransferAversion,
 }
 
 /// Identifies a leg result in the cache. Covers the leg input and the backend that planned it.
@@ -94,6 +96,7 @@ pub fn leg_planning_inputs(trip: &Trip) -> SmallVec<[IdentifiedLegInput; 16]> {
                 travel_mode: *leg.travel_mode,
                 minimum_transfer_time: preferences.minimum_transfer_time,
                 pass_policy: preferences.pass_policy,
+                transfer_aversion: preferences.transfer_aversion,
             },
         })
         .collect()

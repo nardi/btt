@@ -77,6 +77,7 @@
     return (
       journey.access_duration +
       (lastRide.arrival_time - journey.first_ride.departure_time) +
+      (journey.arrival_footpath?.duration ?? 0) +
       journey.egress_duration
     );
   }
@@ -160,6 +161,12 @@
             {stationName(legPlan, ride.alighting_station)}
           </li>
         {/each}
+        {#if journey.arrival_footpath !== null}
+          <li class="footpath">
+            {formatDuration(journey.arrival_footpath.duration)} on to
+            {stationName(legPlan, journey.arrival_footpath.to_station)}
+          </li>
+        {/if}
       </ol>
       <span class="summary">
         {formatDuration(journeyMinutes(journey))}
@@ -229,7 +236,8 @@
   }
 
   .pending,
-  .summary {
+  .summary,
+  .footpath {
     color: var(--color-text-muted);
   }
 

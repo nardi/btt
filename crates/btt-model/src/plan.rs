@@ -59,6 +59,16 @@ pub struct TransferAndRide {
     pub ride: TrainRide,
 }
 
+/// A walk or local transit trip from the last alighting station to another station near the
+/// arrival place, for when no train serves that station in time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub struct ArrivalFootpath {
+    /// Station the footpath ends at.
+    pub to_station: LegPlanStationIndex,
+    /// Time from the last alighting station to `to_station`.
+    pub duration: DurationMinutes,
+}
+
 /// A door-to-door journey for one leg.
 ///
 /// A journey always has at least one train, and every later train has exactly one transfer
@@ -72,7 +82,11 @@ pub struct Journey {
     /// Later trains, each with the transfer before it.
     #[specta(type = Vec<TransferAndRide>)]
     pub later_rides: SmallVec<[TransferAndRide; 3]>,
-    /// Time from the last alighting station to the arrival place.
+    /// The way from the last alighting station to another station, when the journey ends with
+    /// one.
+    pub arrival_footpath: Option<ArrivalFootpath>,
+    /// Time to the arrival place from the station the journey ends at, which is the end of
+    /// `arrival_footpath` or else the last alighting station.
     pub egress_duration: DurationMinutes,
 }
 

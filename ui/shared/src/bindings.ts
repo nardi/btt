@@ -52,6 +52,17 @@ export type AcceptedBerths =
 	preferred: BerthType | null,
 } }) & { Only?: never };
 
+/**
+ *  A walk or local transit trip from the last alighting station to another station near the
+ *  arrival place, for when no train serves that station in time.
+ */
+export type ArrivalFootpath = {
+	/**  Station the footpath ends at. */
+	to_station: LegPlanStationIndex,
+	/**  Time from the last alighting station to `to_station`. */
+	duration: DurationMinutes,
+};
+
 /**  Kind of berth on a night train. */
 export type BerthType = 
 /**  A bunk in a shared compartment of four or six. */
@@ -159,7 +170,15 @@ export type Journey = {
 	first_ride: TrainRide,
 	/**  Later trains, each with the transfer before it. */
 	later_rides: TransferAndRide[],
-	/**  Time from the last alighting station to the arrival place. */
+	/**
+	 *  The way from the last alighting station to another station, when the journey ends with
+	 *  one.
+	 */
+	arrival_footpath: ArrivalFootpath | null,
+	/**
+	 *  Time to the arrival place from the station the journey ends at, which is the end of
+	 *  `arrival_footpath` or else the last alighting station.
+	 */
 	egress_duration: DurationMinutes,
 };
 

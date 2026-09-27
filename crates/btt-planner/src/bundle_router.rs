@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use btt_geo::{TimeZoneFinder, local_time_to_unix_minutes};
 use btt_model::{
-    DailyTimeWindow, DurationMinutes, Journey, LegPlan, LegPlanStation, LegPlanStationIndex,
+    ArrivalFootpath, DailyTimeWindow, DurationMinutes, Journey, LegPlan, LegPlanStation, LegPlanStationIndex,
     LegPlanningResult, LegTravelMode, NoJourneyReason, TrainLabel, TrainRide, TransferAndRide,
     UnixTimeMinutes,
 };
@@ -20,6 +20,7 @@ use chrono::NaiveDate;
 use smallvec::SmallVec;
 
 use crate::input::{LegEndpoint, LegPlanningInput};
+use crate::scoring::{JourneyCostInputs, ScoringWeights, journey_cost};
 
 /// Largest number of candidate stations per place, closest first.
 const MAXIMUM_CANDIDATE_STATIONS: usize = 16;
@@ -117,9 +118,18 @@ impl TimetableBundleRouter {
         let found = SEARCH_BUFFERS.with_borrow_mut(|buffers| {
             search_leg_journeys(&self.bundle, &query, &BoardAnyTrip, buffers, should_stop)
         });
-        // Earliest arrival first, then fewer trains, which the scoring stage replaces.
+        // Lowest cost first. Ties go to the earlier arrival.
         let mut journeys: Vec<&RaptorJourney> = found.journeys.iter().collect();
-        journeys.sort_by_key(|journey| (journey.arrival, journey.ride_count()));
+        journeys.sort_by_key(|journey| {
+            (
+                journey_cost(
+                    journey_cost_inputs(journey),
+                    input.transfer_aversion,
+                    ScoringWeights::DEFAULT,
+                ),
+                journey.arrival,
+            )
+        });
         let Some((chosen, alternatives)) = journeys.split_first() else {
             return LegPlanningResult::NoJourneyFound(NoJourneyReason::NoConnectionInWindow);
         };
@@ -197,20 +207,28 @@ impl TimetableBundleRouter {
         let mut rides = journey.rides.iter();
         let first = rides.next()?;
         let first_ride = self.train_ride(first, stations)?;
-        let mut previous_arrival = first.arrival.0;
+        let mut last = first;
         let mut later_rides = SmallVec::new();
         for ride in rides {
-            let transfer = ride.departure.0.saturating_sub(previous_arrival);
+            let transfer = ride.departure.0.saturating_sub(last.arrival.0);
             later_rides.push(TransferAndRide {
                 transfer_duration: DurationMinutes(u16::try_from(transfer).unwrap_or(u16::MAX)),
                 ride: self.train_ride(ride, stations)?,
             });
-            previous_arrival = ride.arrival.0;
+            last = ride;
         }
+        let arrival_footpath = match arrival_footpath_minutes(journey) {
+            None => None,
+            Some(footpath_minutes) => Some(ArrivalFootpath {
+                to_station: stations.index_of(&self.bundle, journey.arrival_candidate.station)?,
+                duration: DurationMinutes(u16::try_from(footpath_minutes).unwrap_or(u16::MAX)),
+            }),
+        };
         Some(Journey {
             access_duration: DurationMinutes(journey.departure_candidate.time_to_place_minutes),
             first_ride,
             later_rides,
+            arrival_footpath,
             egress_duration: DurationMinutes(journey.arrival_candidate.time_to_place_minutes),
         })
     }
@@ -267,6 +285,41 @@ impl LegPlanStations {
             time_zone: bundle.station_time_zone(station).into(),
         });
         Some(index)
+    }
+}
+
+/// Returns the minutes of the footpath that ends a journey, or `None` when the last train
+/// stops at the arrival station itself.
+fn arrival_footpath_minutes(journey: &RaptorJourney) -> Option<u32> {
+    let last = journey.rides.last()?;
+    if last.alighting_station == journey.arrival_candidate.station {
+        return None;
+    }
+    // The journey arrival counts up to the arrival place, so the footpath takes what remains
+    // after the last train and before the egress.
+    Some(
+        journey
+            .arrival
+            .0
+            .saturating_sub(u32::from(journey.arrival_candidate.time_to_place_minutes))
+            .saturating_sub(last.arrival.0),
+    )
+}
+
+/// Collects what the journey cost depends on.
+///
+/// A footpath at the end counts as a transfer. Beyond a short walk it stands for local transit,
+/// and even a walk to another station is a change the traveller has to make.
+fn journey_cost_inputs(journey: &RaptorJourney) -> JourneyCostInputs {
+    let footpath_minutes = arrival_footpath_minutes(journey);
+    let way_to_station_minutes = u32::from(journey.departure_candidate.time_to_place_minutes)
+        + footpath_minutes.unwrap_or(0)
+        + u32::from(journey.arrival_candidate.time_to_place_minutes);
+    let train_changes = u32::try_from(journey.ride_count().saturating_sub(1)).unwrap_or(u32::MAX);
+    JourneyCostInputs {
+        door_to_door_minutes: journey.arrival.0.saturating_sub(journey.departure.0),
+        way_to_station_minutes,
+        transfer_count: train_changes + u32::from(footpath_minutes.is_some()),
     }
 }
 
