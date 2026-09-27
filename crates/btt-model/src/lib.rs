@@ -7,6 +7,7 @@ mod bounded;
 pub mod coordinates;
 pub mod edit;
 pub mod itinerary;
+pub mod place_search;
 pub mod plan;
 pub mod time;
 pub mod trip;
@@ -21,6 +22,7 @@ pub use itinerary::{
     OvernightLegOptions, PlaceStay, SameDayStayRange, StationSearchRadius, TripPlace, TripPlaceId,
     ViaPlace,
 };
+pub use place_search::PlaceSearchResult;
 pub use plan::{
     Journey, LegPlan, LegPlanStation, LegPlanStationIndex, LegPlanningResult, NoJourneyReason,
     PlanningRunId, PlanningSessionEvent, TrainLabel, TrainRide, TransferAndRide,
