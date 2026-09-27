@@ -1,12 +1,13 @@
 //! State the app shares between commands.
 
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use btt_geo::{PUBLIC_PHOTON_BASE_URL, PhotonClient, TimeZoneFinder};
 use btt_model::{PlanningSessionEvent, Trip, TripEdit, TripEditOutcome, TripId};
 use btt_planner::{
     DEFAULT_PLANNING_DEBOUNCE, LegPlanningBackend, PlanningEventSink, StubBackend,
-    TripPlanningSession,
+    TimetableBundleRouter, TripPlanningSession,
 };
 use btt_storage::Storage;
 use rustc_hash::FxHashMap;
@@ -59,13 +60,32 @@ pub struct AppState {
 impl AppState {
     /// Creates the shared state around an opened database.
     ///
+    /// Plans with the timetable bundle `find_bundle` returns, or with the stub backend when
+    /// there is none or it fails to load.
+    ///
     /// # Errors
     ///
     /// Returns an error when the HTTP client for Photon cannot be built.
-    pub fn new(storage: Storage) -> Result<Self, btt_geo::PhotonError> {
+    pub fn new(storage: Storage, data_directory: &Path) -> Result<Self, btt_geo::PhotonError> {
         let time_zone_finder = Arc::new(TimeZoneFinder::new());
-        let planning_backend =
-            Arc::new(LegPlanningBackend::Stub(StubBackend::new(time_zone_finder)));
+        let bundle_router = find_bundle(data_directory).and_then(|path| {
+            match TimetableBundleRouter::open(&path, Arc::clone(&time_zone_finder)) {
+                Ok(router) => {
+                    tracing::info!(path = %path.display(), version = router.bundle_version(), "planning with a timetable bundle");
+                    Some(router)
+                }
+                Err(error) => {
+                    tracing::warn!(path = %path.display(), %error, "the timetable bundle failed to load");
+                    None
+                }
+            }
+        });
+        let planning_backend = Arc::new(if let Some(router) = bundle_router {
+            LegPlanningBackend::TimetableBundle(Arc::new(router))
+        } else {
+            tracing::info!("no timetable bundle, planning with made-up trains");
+            LegPlanningBackend::Stub(StubBackend::new(time_zone_finder))
+        });
         Ok(Self {
             storage,
             planning_backend,
@@ -176,4 +196,26 @@ impl AppState {
         open_trip.planning_session.trip_changed_elsewhere(trip);
         Ok(())
     }
+}
+
+/// Environment variable that points the app at a timetable bundle file, for development.
+const BUNDLE_PATH_VARIABLE: &str = "BTT_TIMETABLE_BUNDLE";
+
+/// Returns the timetable bundle to plan with: the file `BTT_TIMETABLE_BUNDLE` names, or else
+/// the bundle with the highest version in the `bundles` folder of the app data directory.
+///
+/// Bundle file names end in their version as `yyyymmddNN`, so the highest name is the newest.
+fn find_bundle(data_directory: &Path) -> Option<PathBuf> {
+    if let Some(path) = std::env::var_os(BUNDLE_PATH_VARIABLE) {
+        return Some(PathBuf::from(path));
+    }
+    let entries = std::fs::read_dir(data_directory.join("bundles")).ok()?;
+    entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "bundle")
+        })
+        .max()
 }

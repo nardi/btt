@@ -62,7 +62,7 @@ pub fn run() {
             let data_directory = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_directory)?;
             let storage = Storage::open(&data_directory.join("btt.sqlite3"))?;
-            app.manage(AppState::new(storage)?);
+            app.manage(AppState::new(storage, &data_directory)?);
             Ok(())
         })
         .run(tauri::generate_context!())
