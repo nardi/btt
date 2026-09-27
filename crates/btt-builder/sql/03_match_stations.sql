@@ -11,17 +11,37 @@ CREATE MACRO normalized_station_name(name) AS
             getvariable('stopword_pattern'), ' ', 'g'),
         ' +', ' ', 'g'));
 
+-- Every usable Trainline row. City rows group several stations, and rows with same_as duplicate
+-- another row. Rows for parts of a station, such as "München Hbf Gleis 5-10", point to the
+-- whole station through parent_station_id, and a match on them counts for that station.
 CREATE TABLE trainline_stations AS
+WITH usable_rows AS (
+    SELECT *
+    FROM trainline_raw
+    WHERE is_city = 'f'
+      AND coalesce(same_as, '') = ''
+      AND TRY_CAST(latitude AS DOUBLE) IS NOT NULL
+      AND TRY_CAST(longitude AS DOUBLE) IS NOT NULL
+)
+SELECT CAST(coalesce(parents.id, rows.id) AS INTEGER) AS trainline_station_id,
+       rows.name,
+       CAST(rows.latitude AS DOUBLE) AS latitude,
+       CAST(rows.longitude AS DOUBLE) AS longitude,
+       nullif(rows.uic, '') AS uic,
+       nullif(rows.db_id, '') AS db_id,
+       nullif(coalesce(parents.time_zone, rows.time_zone), '') AS time_zone,
+       normalized_station_name(rows.name) AS normalized_name
+FROM usable_rows AS rows
+LEFT JOIN usable_rows AS parents ON parents.id = nullif(rows.parent_station_id, '');
+
+-- The name and position of each station a match can point to, which is never a station part.
+CREATE TABLE trainline_whole_stations AS
 SELECT CAST(id AS INTEGER) AS trainline_station_id,
        name,
        CAST(latitude AS DOUBLE) AS latitude,
        CAST(longitude AS DOUBLE) AS longitude,
-       nullif(uic, '') AS uic,
-       nullif(db_id, '') AS db_id,
-       nullif(time_zone, '') AS time_zone,
-       normalized_station_name(name) AS normalized_name
+       nullif(time_zone, '') AS time_zone
 FROM trainline_raw
--- City rows group several stations, and rows with same_as duplicate another row.
 WHERE is_city = 'f'
   AND coalesce(same_as, '') = ''
   AND TRY_CAST(latitude AS DOUBLE) IS NOT NULL
@@ -93,7 +113,13 @@ SELECT unmatched.feed_id,
        haversine_meters(unmatched.latitude, unmatched.longitude,
                         trainline.latitude, trainline.longitude) AS distance_meters,
        jaro_winkler_similarity(unmatched.normalized_name, trainline.normalized_name)
-           AS name_similarity
+           AS name_similarity,
+       -- One name is the other plus a qualifier, as in "Lübben" and "Lübben (Spreewald)".
+       -- Jaro-Winkler scores these low when the qualifier is long.
+       unmatched.normalized_name <> '' AND trainline.normalized_name <> '' AND (
+           starts_with(trainline.normalized_name || ' ', unmatched.normalized_name || ' ')
+           OR starts_with(unmatched.normalized_name || ' ', trainline.normalized_name || ' ')
+       ) AS name_is_word_prefix
 FROM unmatched_feed_stations AS unmatched
 JOIN trainline_stations AS trainline
   ON trainline.latitude BETWEEN unmatched.latitude - unmatched.latitude_margin
@@ -107,7 +133,7 @@ WHERE haversine_meters(unmatched.latitude, unmatched.longitude,
 CREATE TABLE name_distance_matches AS
 SELECT *
 FROM name_distance_candidates
-WHERE name_similarity >= getvariable('accepted_similarity')
+WHERE name_similarity >= getvariable('accepted_similarity') OR name_is_word_prefix
 QUALIFY row_number() OVER (PARTITION BY feed_id, station_key ORDER BY distance_meters) = 1;
 
 -- Candidates between the two thresholds go into the report and stay unmatched.
@@ -150,7 +176,7 @@ FROM (
            coalesce(any_value(trainline.time_zone), any_value(feed_config.default_time_zone),
                     'UTC') AS time_zone
     FROM station_groups
-    LEFT JOIN trainline_stations AS trainline USING (trainline_station_id)
+    LEFT JOIN trainline_whole_stations AS trainline USING (trainline_station_id)
     JOIN feed_config USING (feed_id)
     GROUP BY station_groups.group_key
 );

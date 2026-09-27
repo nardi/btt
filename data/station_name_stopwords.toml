@@ -11,6 +11,7 @@ stopwords = [
     "station",
     "gare de",
     "gare",
+    "stazione di",
     "stazione",
     "estacion",
 ]

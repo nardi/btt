@@ -23,7 +23,7 @@ category_field = "route_short_name"
 
 [[feed]]
 mirror_name = "at_Railway-Current-Reference-Data-2026"
-station_key_pattern = '^(at:\d+:\d+)'
+# Platforms carry their station as parent_station, such as Pat:44:46500.
 [feed.train_label]
 field = "trip_short_name"
 pattern = '^(?<category>[A-Za-z]+)\s*(?<number>\d+)$'
