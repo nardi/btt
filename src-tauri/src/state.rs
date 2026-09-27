@@ -4,10 +4,10 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use btt_geo::{PUBLIC_PHOTON_BASE_URL, PhotonClient, TimeZoneFinder};
-use btt_model::{PlanningSessionEvent, Trip, TripEdit, TripEditOutcome, TripId};
+use btt_model::{LegPlanningResult, PlanningSessionEvent, Trip, TripEdit, TripEditOutcome, TripId};
 use btt_planner::{
-    DEFAULT_PLANNING_DEBOUNCE, LegPlanningBackend, PlanningEventSink, StubBackend,
-    TimetableBundleRouter, TripPlanningSession,
+    DEFAULT_PLANNING_DEBOUNCE, LegCacheKey, LegPlanningBackend, LegResultStore, PlanningEventSink,
+    StubBackend, TimetableBundleRouter, TripPlanningSession,
 };
 use btt_storage::Storage;
 use rustc_hash::FxHashMap;
@@ -34,18 +34,37 @@ impl PlanningEventSink for ChannelEventSink {
     }
 }
 
+/// Keeps planned legs in the app database, so reopened trips need no replanning.
+#[derive(Clone)]
+pub struct StorageLegResultStore(Arc<Storage>);
+
+impl LegResultStore for StorageLegResultStore {
+    fn load(&self, key: LegCacheKey) -> Option<LegPlanningResult> {
+        self.0.cached_leg_result(key.0).unwrap_or_else(|error| {
+            tracing::warn!(%error, "could not read a planned leg from the database");
+            None
+        })
+    }
+
+    fn store(&self, key: LegCacheKey, namespace: u64, result: &LegPlanningResult) {
+        if let Err(error) = self.0.store_leg_result(key.0, namespace, result) {
+            tracing::warn!(%error, "could not save a planned leg to the database");
+        }
+    }
+}
+
 /// A trip the frontend has open, with the session that plans it.
 pub struct OpenTrip {
     /// The current state of the trip, which every edit starts from.
     pub trip: Trip,
     /// Plans the trip and streams results to the frontend.
-    pub planning_session: TripPlanningSession<ChannelEventSink>,
+    pub planning_session: TripPlanningSession<ChannelEventSink, StorageLegResultStore>,
 }
 
 /// Everything the commands share.
 pub struct AppState {
-    /// The app's database.
-    pub storage: Storage,
+    /// The app's database, shared with the planning sessions.
+    pub storage: Arc<Storage>,
     /// Plans single legs for every planning session.
     pub planning_backend: Arc<LegPlanningBackend>,
     /// Searches places by name and position.
@@ -86,8 +105,15 @@ impl AppState {
             tracing::info!("no timetable bundle, planning with made-up trains");
             LegPlanningBackend::Stub(StubBackend::new(time_zone_finder))
         });
+        // Legs planned with another bundle version or backend can never match again.
+        let namespace = planning_backend.cache_namespace();
+        match storage.delete_leg_results_outside(namespace) {
+            Ok(0) => {}
+            Ok(deleted) => tracing::info!(deleted, "removed planned legs of an older timetable"),
+            Err(error) => tracing::warn!(%error, "could not clean up planned legs"),
+        }
         Ok(Self {
-            storage,
+            storage: Arc::new(storage),
             planning_backend,
             photon: PhotonClient::new(PUBLIC_PHOTON_BASE_URL, USER_AGENT)?,
             // Place names come in English until the app has a language setting.
@@ -107,9 +133,10 @@ impl AppState {
     /// Starts a planning session for a trip and registers it as open. Replaces an earlier
     /// session for the same trip, for example after the frontend reloaded.
     pub fn open_trip(&self, trip: Trip, events: Channel<PlanningSessionEvent>) {
-        let planning_session = TripPlanningSession::new(
+        let planning_session = TripPlanningSession::with_result_store(
             Arc::clone(&self.planning_backend),
             ChannelEventSink(events),
+            StorageLegResultStore(Arc::clone(&self.storage)),
             DEFAULT_PLANNING_DEBOUNCE,
         );
         planning_session.trip_changed(trip.clone());

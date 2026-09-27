@@ -10,6 +10,9 @@ pub mod stub;
 pub use backend::LegPlanningBackend;
 pub use bundle_router::TimetableBundleRouter;
 pub use input::{LegCacheKey, LegEndpoint, LegPlanningInput, leg_planning_inputs};
-pub use session::{DEFAULT_PLANNING_DEBOUNCE, PlanningEventSink, TripPlanningSession};
+pub use session::{
+    DEFAULT_PLANNING_DEBOUNCE, LegResultStore, NoLegResultStore, PlanningEventSink,
+    TripPlanningSession,
+};
 #[cfg(feature = "stub")]
 pub use stub::StubBackend;

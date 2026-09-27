@@ -612,6 +612,7 @@ dependencies = [
  "rusqlite_migration",
  "serde",
  "serde_json",
+ "smallvec",
  "smol_str",
  "thiserror 2.0.21",
  "uuid",

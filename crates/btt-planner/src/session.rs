@@ -25,22 +25,47 @@ pub trait PlanningEventSink: Send + Sync + 'static {
     fn send_event(&self, event: PlanningSessionEvent);
 }
 
+/// Keeps leg results beyond a session, so reopening a trip or restarting the app needs no
+/// replanning.
+pub trait LegResultStore: Send + Sync + 'static {
+    /// Returns the result stored under a key, if any. Failures count as a miss.
+    fn load(&self, key: LegCacheKey) -> Option<LegPlanningResult>;
+
+    /// Stores a result under a key and the backend namespace it belongs to. Failures are only
+    /// logged, because the result is still delivered.
+    fn store(&self, key: LegCacheKey, namespace: u64, result: &LegPlanningResult);
+}
+
+/// A result store that keeps nothing, for sessions that only cache in memory.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoLegResultStore;
+
+impl LegResultStore for NoLegResultStore {
+    fn load(&self, _: LegCacheKey) -> Option<LegPlanningResult> {
+        None
+    }
+
+    fn store(&self, _: LegCacheKey, _: u64, _: &LegPlanningResult) {}
+}
+
 /// Plans the legs of one open trip.
 ///
 /// Each trip change cancels the running plan, waits for the debounce time and then replans the
 /// legs whose inputs differ from the ones the frontend has results for. Results stream to the
 /// event sink leg by leg.
-pub struct TripPlanningSession<S: PlanningEventSink> {
+pub struct TripPlanningSession<S: PlanningEventSink, C: LegResultStore = NoLegResultStore> {
     /// State shared with the running planning task.
-    shared: Arc<SessionShared<S>>,
+    shared: Arc<SessionShared<S, C>>,
 }
 
 /// Parts of a session that the planning task also uses.
-struct SessionShared<S> {
+struct SessionShared<S, C> {
     /// Plans single legs.
     backend: Arc<LegPlanningBackend>,
     /// Receives the session's events.
     event_sink: S,
+    /// Keeps leg results beyond the session, such as in the app database.
+    result_store: C,
     /// Time to wait after a change before planning.
     debounce: Duration,
     /// Mutable state, locked only for short, non-blocking sections.
@@ -69,12 +94,26 @@ struct CurrentRun {
 }
 
 impl<S: PlanningEventSink> TripPlanningSession<S> {
-    /// Creates a session that plans with a backend and sends events to a sink.
+    /// Creates a session that plans with a backend and sends events to a sink, and keeps
+    /// results in memory only.
     pub fn new(backend: Arc<LegPlanningBackend>, event_sink: S, debounce: Duration) -> Self {
+        Self::with_result_store(backend, event_sink, NoLegResultStore, debounce)
+    }
+}
+
+impl<S: PlanningEventSink, C: LegResultStore> TripPlanningSession<S, C> {
+    /// Creates a session that also looks up and keeps leg results in a store.
+    pub fn with_result_store(
+        backend: Arc<LegPlanningBackend>,
+        event_sink: S,
+        result_store: C,
+        debounce: Duration,
+    ) -> Self {
         Self {
             shared: Arc::new(SessionShared {
                 backend,
                 event_sink,
+                result_store,
                 debounce,
                 state: Mutex::new(SessionState::default()),
             }),
@@ -104,10 +143,7 @@ impl<S: PlanningEventSink> TripPlanningSession<S> {
     }
 }
 
-impl<S> Drop for TripPlanningSession<S>
-where
-    S: PlanningEventSink,
-{
+impl<S: PlanningEventSink, C: LegResultStore> Drop for TripPlanningSession<S, C> {
     fn drop(&mut self) {
         if let Some(run) = self.shared.lock_state().current_run.take() {
             run.cancellation.cancel();
@@ -116,7 +152,7 @@ where
     }
 }
 
-impl<S: PlanningEventSink> SessionShared<S> {
+impl<S: PlanningEventSink, C: LegResultStore> SessionShared<S, C> {
     /// Locks the state. A panic in another holder leaves the state consistent, because every
     /// section only replaces whole values, so a poisoned lock is used as is.
     fn lock_state(&self) -> MutexGuard<'_, SessionState> {
@@ -159,6 +195,7 @@ impl<S: PlanningEventSink> SessionShared<S> {
                 state.cached_results.clear();
             }
             state.cached_results.insert(key, result.clone());
+            self.result_store.store(key, namespace, &result);
             self.deliver(&mut state, run_id, leg.arrival_place_id, key, result);
         }
 
@@ -205,7 +242,12 @@ impl<S: PlanningEventSink> SessionShared<S> {
 
         let mut uncached = SmallVec::new();
         for (leg, key) in changed_legs {
-            match state.cached_results.get(&key).cloned() {
+            let cached = state.cached_results.get(&key).cloned().or_else(|| {
+                let stored = self.result_store.load(key)?;
+                state.cached_results.insert(key, stored.clone());
+                Some(stored)
+            });
+            match cached {
                 Some(result) => self.deliver(state, run_id, leg.arrival_place_id, key, result),
                 None => uncached.push(leg),
             }
@@ -384,6 +426,46 @@ mod tests {
         assert!(
             receiver.try_recv().is_err(),
             "cancelled runs sent no events"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_new_session_answers_from_the_result_store() {
+        /// Counts loads that found a result.
+        #[derive(Clone, Default)]
+        struct MemoryStore(Arc<Mutex<(FxHashMap<LegCacheKey, LegPlanningResult>, usize)>>);
+
+        impl LegResultStore for MemoryStore {
+            fn load(&self, key: LegCacheKey) -> Option<LegPlanningResult> {
+                let mut contents = self.0.lock().unwrap();
+                let found = contents.0.get(&key).cloned();
+                contents.1 += usize::from(found.is_some());
+                found
+            }
+
+            fn store(&self, key: LegCacheKey, _: u64, result: &LegPlanningResult) {
+                self.0.lock().unwrap().0.insert(key, result.clone());
+            }
+        }
+
+        let store = MemoryStore::default();
+        let trip = trip_with_places(&FOUR_CITIES);
+        for _ in 0..2 {
+            let (sender, mut receiver) = mpsc::unbounded_channel();
+            let session = TripPlanningSession::with_result_store(
+                stub_backend(),
+                ChannelSink(sender),
+                store.clone(),
+                DEFAULT_PLANNING_DEBOUNCE,
+            );
+            session.trip_changed(trip.clone());
+            let events = events_of_next_run(&mut receiver).await;
+            assert_eq!(planned_places(&events).len(), 3);
+        }
+        assert_eq!(
+            store.0.lock().unwrap().1,
+            3,
+            "the second session loaded all three legs"
         );
     }
 

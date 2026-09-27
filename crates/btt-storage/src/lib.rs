@@ -10,7 +10,7 @@ use std::path::Path;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use btt_model::{PlaceSearchResult, Trip, TripId, TripSummary};
+use btt_model::{LegPlanningResult, PlaceSearchResult, Trip, TripId, TripSummary};
 use chrono::NaiveDate;
 use rusqlite::{Connection, OptionalExtension, params};
 use rusqlite_migration::{M, Migrations};
@@ -24,8 +24,9 @@ const PLACE_SEARCH_CACHE_LIFETIME_SECONDS: i64 = 30 * 24 * 60 * 60;
 
 /// Schema migrations in order. `rusqlite_migration` records the applied count in SQLite's
 /// `user_version`.
-const SCHEMA_MIGRATIONS: &[M<'static>] = &[M::up(
-    "CREATE TABLE trips (
+const SCHEMA_MIGRATIONS: &[M<'static>] = &[
+    M::up(
+        "CREATE TABLE trips (
         trip_id BLOB PRIMARY KEY NOT NULL,
         name TEXT NOT NULL,
         start_date TEXT NOT NULL,
@@ -42,7 +43,17 @@ const SCHEMA_MIGRATIONS: &[M<'static>] = &[M::up(
         fetched_at INTEGER NOT NULL,
         search_results BLOB NOT NULL
     ) STRICT;",
-)];
+    ),
+    // Planned legs by the cache key of their input. The namespace names the backend and
+    // timetable bundle version, so results of an old bundle can be deleted in one statement.
+    M::up(
+        "CREATE TABLE leg_cache (
+        leg_cache_key INTEGER PRIMARY KEY NOT NULL,
+        cache_namespace INTEGER NOT NULL,
+        leg_result BLOB NOT NULL
+    ) STRICT;",
+    ),
+];
 
 /// Errors from reading or writing storage.
 #[derive(Debug, Error)]
@@ -233,6 +244,67 @@ impl Storage {
             .execute(params![request_key, unix_seconds_now(), encoded])?;
         Ok(())
     }
+
+    /// Returns a planned leg by its cache key, if one is stored.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the query fails or the entry cannot be decoded.
+    pub fn cached_leg_result(
+        &self,
+        leg_cache_key: u64,
+    ) -> Result<Option<LegPlanningResult>, StorageError> {
+        let encoded: Option<Vec<u8>> = self
+            .connection()
+            .prepare_cached("SELECT leg_result FROM leg_cache WHERE leg_cache_key = ?1")?
+            .query_row([sqlite_integer(leg_cache_key)], |row| row.get(0))
+            .optional()?;
+        Ok(encoded.as_deref().map(postcard::from_bytes).transpose()?)
+    }
+
+    /// Stores a planned leg under its cache key and the namespace of the backend that planned
+    /// it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the entry cannot be encoded or the query fails.
+    pub fn store_leg_result(
+        &self,
+        leg_cache_key: u64,
+        cache_namespace: u64,
+        result: &LegPlanningResult,
+    ) -> Result<(), StorageError> {
+        let encoded = postcard::to_stdvec(result)?;
+        self.connection()
+            .prepare_cached(
+                "INSERT OR REPLACE INTO leg_cache (leg_cache_key, cache_namespace, leg_result)
+                 VALUES (?1, ?2, ?3)",
+            )?
+            .execute(params![
+                sqlite_integer(leg_cache_key),
+                sqlite_integer(cache_namespace),
+                encoded
+            ])?;
+        Ok(())
+    }
+
+    /// Deletes planned legs of every other namespace, such as those of an older timetable
+    /// bundle. Returns how many it deleted.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the query fails.
+    pub fn delete_leg_results_outside(&self, cache_namespace: u64) -> Result<usize, StorageError> {
+        Ok(self
+            .connection()
+            .prepare_cached("DELETE FROM leg_cache WHERE cache_namespace <> ?1")?
+            .execute([sqlite_integer(cache_namespace)])?)
+    }
+}
+
+/// Stores a 64-bit key in SQLite, whose integers are signed, by keeping its bits.
+fn sqlite_integer(value: u64) -> i64 {
+    i64::from_ne_bytes(value.to_ne_bytes())
 }
 
 /// Returns the current time in Unix seconds.
@@ -302,6 +374,48 @@ mod tests {
             storage.cached_place_search("en:wien").unwrap(),
             Some(results)
         );
+    }
+
+    #[test]
+    fn leg_results_round_trip_and_old_namespaces_go() {
+        use btt_model::{
+            DurationMinutes, Journey, LegPlan, LegPlanStation, LegPlanStationIndex,
+            NoJourneyReason, TrainLabel, TrainRide, UnixTimeMinutes,
+        };
+
+        let storage = Storage::open_in_memory().unwrap();
+        let station = |name: &str| LegPlanStation {
+            name: name.into(),
+            coordinates: GeoCoordinates::from_degrees(50.9430, 6.9589).unwrap(),
+            time_zone: "Europe/Berlin".into(),
+        };
+        let found = LegPlanningResult::Found(Box::new(LegPlan {
+            chosen_journey: Journey {
+                access_duration: DurationMinutes(4),
+                first_ride: TrainRide {
+                    boarding_station: LegPlanStationIndex(0),
+                    departure_time: UnixTimeMinutes(29_000_000),
+                    alighting_station: LegPlanStationIndex(1),
+                    arrival_time: UnixTimeMinutes(29_000_120),
+                    train_label: TrainLabel {
+                        category: "ICE".into(),
+                        number: "913".into(),
+                    },
+                },
+                later_rides: smallvec::SmallVec::new(),
+                egress_duration: DurationMinutes(6),
+            },
+            alternative_journeys: smallvec::SmallVec::new(),
+            station_table: smallvec::smallvec![station("Köln Hbf"), station("Frankfurt Hbf")],
+        }));
+        // A key with the highest bit set checks the conversion to SQLite's signed integers.
+        let high_key = u64::MAX - 7;
+        storage.store_leg_result(high_key, 2, &found).unwrap();
+        let none = LegPlanningResult::NoJourneyFound(NoJourneyReason::NoConnectionInWindow);
+        storage.store_leg_result(3, 1, &none).unwrap();
+        assert_eq!(storage.cached_leg_result(high_key).unwrap(), Some(found));
+        assert_eq!(storage.delete_leg_results_outside(2).unwrap(), 1);
+        assert_eq!(storage.cached_leg_result(3).unwrap(), None);
     }
 
     #[test]
