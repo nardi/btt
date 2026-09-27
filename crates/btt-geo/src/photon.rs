@@ -87,7 +87,8 @@ impl PhotonClient {
                 .map(|filter| ("osm_tag", *filter)),
         );
         let url = format!("{}/api/", self.base_url);
-        self.fetch(&url, &parameters).await
+        self.fetch(&url, &parameters, ResultNaming::ObjectName)
+            .await
     }
 
     /// Finds the place closest to a position.
@@ -108,7 +109,9 @@ impl PhotonClient {
             ("lang", language),
         ];
         let url = format!("{}/reverse", self.base_url);
-        let results = self.fetch(&url, &parameters).await?;
+        let results = self
+            .fetch(&url, &parameters, ResultNaming::SettlementFirst)
+            .await?;
         Ok(results.into_iter().next())
     }
 
@@ -117,6 +120,7 @@ impl PhotonClient {
         &self,
         url: &str,
         parameters: &[(&str, &str)],
+        naming: ResultNaming,
     ) -> Result<PlaceSearchResults, PhotonError> {
         self.rate_limiter.until_ready().await;
         let feature_collection: PhotonFeatureCollection = self
@@ -128,8 +132,18 @@ impl PhotonClient {
             .error_for_status()?
             .json()
             .await?;
-        Ok(place_search_results(feature_collection))
+        Ok(place_search_results(feature_collection, naming))
     }
+}
+
+/// Which Photon property names a result.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ResultNaming {
+    /// The name of the found object, which a name search matched.
+    ObjectName,
+    /// The settlement the object lies in. The object closest to a clicked point is often a
+    /// street or a building, while the traveller thinks of the town.
+    SettlementFirst,
 }
 
 /// A Photon answer, which is a `GeoJSON` feature collection.
@@ -161,7 +175,10 @@ struct PhotonProperties {
 
 /// Turns Photon features into search results. Features without a name or with coordinates out
 /// of range are skipped.
-fn place_search_results(feature_collection: PhotonFeatureCollection) -> PlaceSearchResults {
+fn place_search_results(
+    feature_collection: PhotonFeatureCollection,
+    naming: ResultNaming,
+) -> PlaceSearchResults {
     feature_collection
         .features
         .into_iter()
@@ -169,7 +186,10 @@ fn place_search_results(feature_collection: PhotonFeatureCollection) -> PlaceSea
             let [longitude, latitude] = feature.geometry.coordinates;
             let coordinates = GeoCoordinates::from_degrees(latitude, longitude).ok()?;
             let properties = feature.properties;
-            let name = properties.name?;
+            let name = match naming {
+                ResultNaming::ObjectName => properties.name?,
+                ResultNaming::SettlementFirst => properties.city.clone().or(properties.name)?,
+            };
             // The city is only context when it differs from the name, as for a station.
             let city = properties.city.filter(|city| *city != name);
             let context_parts = [city, properties.state, properties.country];
@@ -222,13 +242,25 @@ mod tests {
     fn parses_photon_answer_into_search_results() {
         let feature_collection: PhotonFeatureCollection =
             serde_json::from_str(WIEN_ANSWER).unwrap();
-        let results = place_search_results(feature_collection);
+        let results = place_search_results(feature_collection, ResultNaming::ObjectName);
         assert_eq!(results.len(), 2, "the feature without a name is skipped");
         assert_eq!(results[0].name, "Wien");
         assert_eq!(results[0].context, "Wien, Österreich");
         assert_eq!(results[1].name, "Wien Hauptbahnhof");
         assert_eq!(results[1].context, "Wien, Wien, Österreich");
         assert_eq!(results[1].coordinates.latitude.microdegrees(), 48_185_200);
+    }
+
+    #[test]
+    fn reverse_answers_name_the_settlement() {
+        let feature_collection: PhotonFeatureCollection =
+            serde_json::from_str(WIEN_ANSWER).unwrap();
+        let results = place_search_results(feature_collection, ResultNaming::SettlementFirst);
+        assert_eq!(
+            results[1].name, "Wien",
+            "the station lies in the city of Wien"
+        );
+        assert_eq!(results[1].context, "Wien, Österreich");
     }
 
     /// Sends one real request to the public server. Run with `cargo test -- --ignored`.
