@@ -447,7 +447,8 @@ fn set_entry<K: PartialEq, V, const N: usize>(
 /// Returns the insertion index that adds the least straight-line distance to the itinerary.
 ///
 /// Inserting between two places adds the detour through the new place. Inserting before the
-/// first place or after the last adds the distance to that place.
+/// first place or after the last adds the distance to that place. On a tie the place becomes the
+/// new destination, because travellers usually add places in travel order.
 fn least_added_distance_index(places: &[TripPlace], coordinates: GeoCoordinates) -> usize {
     let distance = |place: &TripPlace| place.coordinates.haversine_distance_meters(coordinates);
     let (Some(first), Some(last)) = (places.first(), places.last()) else {
@@ -465,7 +466,7 @@ fn least_added_distance_index(places: &[TripPlace], coordinates: GeoCoordinates)
             best_added_meters = added_meters;
         }
     }
-    if distance(last) < best_added_meters {
+    if distance(last) <= best_added_meters {
         best_index = places.len();
     }
     best_index
@@ -552,6 +553,18 @@ mod tests {
         })
         .unwrap();
         assert_eq!(names(&trip), ["Amsterdam", "Berlin", "Vienna"]);
+    }
+
+    #[test]
+    fn least_added_distance_appends_to_a_single_place() {
+        let mut trip = trip_with_places(&[AMSTERDAM]);
+        let (name, latitude, longitude) = BERLIN;
+        trip.apply_edit(TripEdit::AddPlace {
+            place: new_place(name, latitude, longitude),
+            insert_at: PlaceInsertionPoint::LeastAddedDistance,
+        })
+        .unwrap();
+        assert_eq!(names(&trip), ["Amsterdam", "Berlin"]);
     }
 
     #[test]
