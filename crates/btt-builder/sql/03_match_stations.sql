@@ -1,6 +1,6 @@
 -- Step 3: collapses platforms into stations and matches each station to the Trainline stations
 -- dataset. Expects the table trainline_raw and the variables stopword_pattern,
--- match_radius_meters, accepted_similarity and uncertain_similarity.
+-- match_radius_meters, same_name_radius_meters, accepted_similarity and uncertain_similarity.
 
 -- Lowercases, removes diacritics and punctuation, and strips words such as "hbf", so
 -- "Köln Hbf" and "Koeln Hauptbahnhof" compare on "koln" and "koeln".
@@ -10,6 +10,14 @@ CREATE MACRO normalized_station_name(name) AS
             regexp_replace(strip_accents(lower(name)), '[^a-z0-9]+', ' ', 'g'),
             getvariable('stopword_pattern'), ' ', 'g'),
         ' +', ' ', 'g'));
+
+-- Rewrites a German local transit name into the order Trainline uses. It drops a leading mode
+-- such as "S" or "S+U" and moves a city in parentheses to the front, so
+-- "S Ostbahnhof (Berlin)" becomes "Berlin Ostbahnhof".
+CREATE MACRO city_first_station_name(name) AS
+    regexp_replace(
+        regexp_replace(name, '^(S\+U|S|U)\s+', ''),
+        '^(.*?)\s*\(([^)]*)\)\s*$', '\2 \1');
 
 -- Every usable Trainline row. City rows group several stations, and rows with same_as duplicate
 -- another row. Rows for parts of a station, such as "München Hbf Gleis 5-10", point to the
@@ -94,12 +102,13 @@ SELECT * FROM code_candidates
 QUALIFY row_number() OVER (PARTITION BY feed_id, station_key ORDER BY trainline_station_id) = 1;
 
 -- Second pass: distance and name, for the stations the first pass left. The margins turn the
--- match radius into degrees for a bounding box, which lets DuckDB run a range join.
+-- larger of the two radii into degrees for a bounding box, which lets DuckDB run a range join.
 CREATE TABLE unmatched_feed_stations AS
 SELECT stations.*,
        normalized_station_name(stations.name) AS normalized_name,
-       getvariable('match_radius_meters') / 111320.0 AS latitude_margin,
-       getvariable('match_radius_meters') / 111320.0
+       normalized_station_name(city_first_station_name(stations.name)) AS city_first_name,
+       getvariable('same_name_radius_meters') / 111320.0 AS latitude_margin,
+       getvariable('same_name_radius_meters') / 111320.0
            / greatest(cos(radians(stations.latitude)), 0.05) AS longitude_margin
 FROM feed_stations AS stations
 ANTI JOIN code_matches USING (feed_id, station_key);
@@ -112,14 +121,21 @@ SELECT unmatched.feed_id,
        trainline.name AS trainline_name,
        haversine_meters(unmatched.latitude, unmatched.longitude,
                         trainline.latitude, trainline.longitude) AS distance_meters,
-       jaro_winkler_similarity(unmatched.normalized_name, trainline.normalized_name)
-           AS name_similarity,
+       greatest(
+           jaro_winkler_similarity(unmatched.normalized_name, trainline.normalized_name),
+           jaro_winkler_similarity(unmatched.city_first_name, trainline.normalized_name)
+       ) AS name_similarity,
        -- One name is the other plus a qualifier, as in "Lübben" and "Lübben (Spreewald)".
        -- Jaro-Winkler scores these low when the qualifier is long.
-       unmatched.normalized_name <> '' AND trainline.normalized_name <> '' AND (
-           starts_with(trainline.normalized_name || ' ', unmatched.normalized_name || ' ')
-           OR starts_with(unmatched.normalized_name || ' ', trainline.normalized_name || ' ')
-       ) AS name_is_word_prefix
+       trainline.normalized_name <> '' AND list_bool_or(list_transform(
+           [unmatched.normalized_name, unmatched.city_first_name],
+           feed_name -> feed_name <> '' AND (
+               starts_with(trainline.normalized_name || ' ', feed_name || ' ')
+               OR starts_with(feed_name || ' ', trainline.normalized_name || ' ')))
+       ) AS name_is_word_prefix,
+       trainline.normalized_name <> ''
+           AND trainline.normalized_name IN (unmatched.normalized_name, unmatched.city_first_name)
+           AS name_is_equal
 FROM unmatched_feed_stations AS unmatched
 JOIN trainline_stations AS trainline
   ON trainline.latitude BETWEEN unmatched.latitude - unmatched.latitude_margin
@@ -128,12 +144,16 @@ JOIN trainline_stations AS trainline
                              AND unmatched.longitude + unmatched.longitude_margin
 WHERE haversine_meters(unmatched.latitude, unmatched.longitude,
                        trainline.latitude, trainline.longitude)
-      <= getvariable('match_radius_meters');
+      <= getvariable('same_name_radius_meters');
 
+-- A similar name counts within the match radius. The same name counts further out, because
+-- some Trainline stations sit a few hundred meters off, such as Leiden Centraal.
 CREATE TABLE name_distance_matches AS
 SELECT *
 FROM name_distance_candidates
-WHERE name_similarity >= getvariable('accepted_similarity') OR name_is_word_prefix
+WHERE (distance_meters <= getvariable('match_radius_meters')
+       AND (name_similarity >= getvariable('accepted_similarity') OR name_is_word_prefix))
+   OR name_is_equal
 QUALIFY row_number() OVER (PARTITION BY feed_id, station_key ORDER BY distance_meters) = 1;
 
 -- Candidates between the two thresholds go into the report and stay unmatched.
@@ -141,7 +161,8 @@ CREATE TABLE uncertain_station_matches AS
 SELECT candidates.*
 FROM name_distance_candidates AS candidates
 ANTI JOIN name_distance_matches USING (feed_id, station_key)
-WHERE candidates.name_similarity >= getvariable('uncertain_similarity')
+WHERE candidates.distance_meters <= getvariable('match_radius_meters')
+  AND candidates.name_similarity >= getvariable('uncertain_similarity')
 QUALIFY row_number() OVER (
     PARTITION BY candidates.feed_id, candidates.station_key
     ORDER BY candidates.name_similarity DESC) = 1;
@@ -151,19 +172,43 @@ SELECT feed_id, station_key, trainline_station_id, 'code' AS match_kind FROM cod
 UNION ALL
 SELECT feed_id, station_key, trainline_station_id, 'name and distance' FROM name_distance_matches;
 
--- Feed stations that match the same Trainline station become one bundle station. An unmatched
--- feed station becomes a bundle station of its own.
+-- In feeds that share a key namespace, a match for a station key counts for that key in every
+-- feed of the namespace. The lowest ID decides when feeds match a key differently.
+CREATE TABLE namespaced_key_matches AS
+SELECT feed_config.station_key_namespace,
+       matches.station_key,
+       min(matches.trainline_station_id) AS trainline_station_id
+FROM station_matches AS matches
+JOIN feed_config USING (feed_id)
+WHERE feed_config.station_key_namespace IS NOT NULL
+GROUP BY ALL;
+
+-- Feed stations that match the same Trainline station become one bundle station. Unmatched
+-- stations with the same key in one namespace become one bundle station too. Any other
+-- unmatched feed station becomes a bundle station of its own.
 CREATE TABLE station_groups AS
-SELECT stations.feed_id,
-       stations.station_key,
-       stations.name,
-       stations.latitude,
-       stations.longitude,
-       matches.trainline_station_id,
-       coalesce('trainline:' || matches.trainline_station_id,
-                'feed:' || stations.feed_id || ':' || stations.station_key) AS group_key
-FROM feed_stations AS stations
-LEFT JOIN station_matches AS matches USING (feed_id, station_key);
+WITH resolved_matches AS (
+    SELECT stations.*,
+           feed_config.station_key_namespace,
+           CASE WHEN feed_config.station_key_namespace IS NULL THEN matches.trainline_station_id
+                ELSE namespaced.trainline_station_id END AS trainline_station_id
+    FROM feed_stations AS stations
+    JOIN feed_config USING (feed_id)
+    LEFT JOIN station_matches AS matches USING (feed_id, station_key)
+    LEFT JOIN namespaced_key_matches AS namespaced
+      ON namespaced.station_key_namespace = feed_config.station_key_namespace
+     AND namespaced.station_key = stations.station_key
+)
+SELECT feed_id,
+       station_key,
+       name,
+       latitude,
+       longitude,
+       trainline_station_id,
+       coalesce('trainline:' || trainline_station_id,
+                'key:' || station_key_namespace || ':' || station_key,
+                'feed:' || feed_id || ':' || station_key) AS group_key
+FROM resolved_matches;
 
 CREATE TABLE bundle_stations AS
 SELECT CAST(row_number() OVER (ORDER BY group_key) - 1 AS INTEGER) AS bundle_station_id, *

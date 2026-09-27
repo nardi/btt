@@ -5,8 +5,11 @@ use std::path::Path;
 use crate::BuildError;
 use crate::database::{WorkDatabase, sql_string};
 
-/// Largest distance between a feed station and the Trainline station it matches.
+/// Largest distance at which a Trainline station with a similar name matches.
 const MATCH_RADIUS_METERS: f64 = 300.0;
+
+/// Largest distance at which a Trainline station with the same normalized name still matches.
+const SAME_NAME_RADIUS_METERS: f64 = 2000.0;
 
 /// Name similarity from which a candidate within the radius counts as a match.
 const ACCEPTED_SIMILARITY: f64 = 0.88;
@@ -37,6 +40,7 @@ pub fn match_stations(
          SELECT * FROM read_csv({}, delim = ';', header = true, all_varchar = true, quote = '\"');
          SET VARIABLE stopword_pattern = {};
          SET VARIABLE match_radius_meters = {MATCH_RADIUS_METERS};
+         SET VARIABLE same_name_radius_meters = {SAME_NAME_RADIUS_METERS};
          SET VARIABLE accepted_similarity = {ACCEPTED_SIMILARITY};
          SET VARIABLE uncertain_similarity = {UNCERTAIN_SIMILARITY};",
         sql_string(&trainline_path),

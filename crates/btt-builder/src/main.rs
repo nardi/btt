@@ -1,6 +1,6 @@
 //! Command-line entry point of the timetable builder.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
@@ -68,9 +68,10 @@ fn build(arguments: &Arguments) -> Result<(), BuildError> {
         start,
         days: config.validity_window_days,
     };
-    let bundle_version = u32::try_from(start.year()).unwrap_or(0) * 1_000_000
+    let first_version_of_day = u32::try_from(start.year()).unwrap_or(0) * 1_000_000
         + start.month() * 10_000
         + start.day() * 100;
+    let bundle_version = next_bundle_version(&arguments.output_directory, first_version_of_day);
 
     let downloader = Downloader::new(arguments.cache_directory.join("feeds"))?;
     let mut feeds = Vec::with_capacity(config.feeds.len());
@@ -143,4 +144,27 @@ fn build(arguments: &Arguments) -> Result<(), BuildError> {
         "build finished"
     );
     Ok(())
+}
+
+/// Returns the version for a new bundle built on a day: `first_version_of_day` plus one more
+/// than the highest build number of that day already in the output directory. Each rebuild
+/// then gets its own version, which keeps the app from reusing legs planned on an older one.
+fn next_bundle_version(output_directory: &Path, first_version_of_day: u32) -> u32 {
+    let Ok(entries) = std::fs::read_dir(output_directory) else {
+        return first_version_of_day;
+    };
+    entries
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let name = entry.file_name().into_string().ok()?;
+            let version: u32 = name
+                .strip_prefix("timetable-")?
+                .strip_suffix(".bundle")?
+                .parse()
+                .ok()?;
+            // The last two digits count the builds of one day.
+            (version / 100 == first_version_of_day / 100).then_some(version + 1)
+        })
+        .max()
+        .unwrap_or(first_version_of_day)
 }

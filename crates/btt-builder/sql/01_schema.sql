@@ -4,7 +4,9 @@
 CREATE TABLE feed_config (
     feed_id VARCHAR PRIMARY KEY,
     station_code_scheme VARCHAR NOT NULL,
-    default_time_zone VARCHAR
+    default_time_zone VARCHAR,
+    -- Feeds with the same namespace share station keys, so equal keys are the same station.
+    station_key_namespace VARCHAR
 );
 
 CREATE TABLE feed_agencies (

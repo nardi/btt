@@ -1,8 +1,7 @@
 //! Steps 6 and 7: finds copies of the same train in different feeds and merges them.
 //!
-//! The plan put detection in SQL. After UTC resolution the trips already sit in Rust memory,
-//! and trips with the same train number form small groups, so both steps run here without a
-//! round trip through the database.
+//! After UTC resolution the trips already sit in Rust memory, and trips with the same train
+//! number form small groups, so both steps run here without a round trip through the database.
 
 use btt_timetable::{ServiceDayBitset, TripStopInput};
 use rustc_hash::{FxHashMap, FxHashSet};

@@ -297,11 +297,18 @@ fn resolve_to_utc(
         let utc_midnight = utc_date * SECONDS_PER_DAY;
         let times = stops
             .iter()
-            .scan(0_i64, |previous_departure, stop| {
-                let arrival = (reference + i64::from(stop.arrival_seconds) - utc_midnight + 59)
-                    .div_euclid(60);
+            .enumerate()
+            .scan(0_i64, |previous_departure, (stop_position, stop)| {
                 let departure =
                     (reference + i64::from(stop.departure_seconds) - utc_midnight).div_euclid(60);
+                // Nobody arrives at the first stop, and its arrival rounded up could otherwise
+                // push the first departure past midnight onto the next UTC date.
+                let arrival = if stop_position == 0 {
+                    departure
+                } else {
+                    (reference + i64::from(stop.arrival_seconds) - utc_midnight + 59)
+                        .div_euclid(60)
+                };
                 // Rounding can put a departure before its arrival, and feeds occasionally step
                 // back in time. Both get clamped so the trip never goes backwards.
                 let arrival = arrival.max(*previous_departure);
@@ -396,6 +403,22 @@ mod tests {
         assert!(service_days.runs_on(0) && !service_days.runs_on(1));
         assert_eq!(trip_stops[0].departure, 22 * 60 + 30);
         assert_eq!(trip_stops[1].arrival, 24 * 60);
+    }
+
+    #[test]
+    fn a_first_stop_just_before_midnight_stays_on_its_utc_date() {
+        // 01:59:30 in Vienna summer time is 23:59:30 UTC. Rounding the first arrival up would
+        // reach midnight and drag the departure onto the next UTC date.
+        let first_seconds = 3600 + 59 * 60 + 30;
+        let stops = [
+            stop(0, first_seconds, first_seconds),
+            stop(1, 3 * 3600, 3 * 3600),
+        ];
+        let resolved = resolve_to_utc(&stops, days(&[1]), Tz::Europe__Vienna, window());
+        let (service_days, trip_stops) = &resolved[0];
+        assert!(service_days.runs_on(0));
+        assert_eq!(trip_stops[0].departure, 23 * 60 + 59);
+        assert_eq!(trip_stops[0].arrival, trip_stops[0].departure);
     }
 
     #[test]

@@ -108,10 +108,15 @@ pub fn load_feed(
 
          INSERT INTO feed_config
          SELECT {feed_id}, {scheme},
-                (SELECT any_value(agency_timezone) FROM feed_agencies WHERE feed_id = {feed_id});",
+                (SELECT any_value(agency_timezone) FROM feed_agencies WHERE feed_id = {feed_id}),
+                {namespace};",
         stop_name = column_or_null(&stop_columns, "stop_name"),
         stops = csv("stops.txt")?,
         scheme = sql_string(station_code_scheme_name(feed.station_code)),
+        namespace = feed
+            .station_key_namespace
+            .as_deref()
+            .map_or_else(|| "NULL".to_owned(), sql_string),
     ))?;
 
     load_service_days(database, archive, &feed_id, window, &csv)?;

@@ -56,6 +56,10 @@ pub struct FeedConfig {
     pub mirror_name: String,
     /// How to find the station a stop belongs to.
     pub station_key: StationKeyRule,
+    /// Name of a key scheme that several feeds share, such as `dhid`. Feeds with the same
+    /// namespace treat equal station keys as the same station, even when neither matches a
+    /// Trainline station.
+    pub station_key_namespace: Option<String>,
     /// Which official station code the stops carry.
     pub station_code: FeedStationCodeScheme,
     /// How to read category and number of a train.
@@ -137,6 +141,7 @@ struct BuilderConfigFile {
 struct FeedConfigFile {
     mirror_name: String,
     station_key_pattern: Option<String>,
+    station_key_namespace: Option<String>,
     #[serde(default)]
     station_code: StationCodeFile,
     train_label: TrainLabelFile,
@@ -221,6 +226,7 @@ impl TryFrom<FeedConfigFile> for FeedConfig {
         }
         Ok(Self {
             station_key,
+            station_key_namespace: file.station_key_namespace,
             station_code: match file.station_code {
                 StationCodeFile::None => FeedStationCodeScheme::NoStationCodes,
                 StationCodeFile::UicInStopId => FeedStationCodeScheme::UicInStopId,

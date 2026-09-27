@@ -5,6 +5,8 @@
 //! to Wien, under the label RJ 105. The build must merge the two copies, drop feed A's bus
 //! route, match all stations to the Trainline fixture and add a footpath between the two
 //! Frankfurt stations.
+//!
+//! A second pair of feeds shares DHID station keys, as DELFI and VBB do.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -12,7 +14,7 @@ use std::path::{Path, PathBuf};
 use btt_builder::config::BuilderConfig;
 use btt_builder::database::WorkDatabase;
 use btt_builder::load::ValidityWindow;
-use btt_builder::{FeedInput, PipelineInputs, run_pipeline};
+use btt_builder::{FeedInput, PipelineInputs, PipelineOutcome, run_pipeline};
 use btt_timetable::{BundleStationIndex, BundleTripIndex, LoadedTimetableBundle, RaptorRouteIndex};
 use chrono::NaiveDate;
 
@@ -173,36 +175,50 @@ fn station(bundle: &LoadedTimetableBundle, name: &str) -> BundleStationIndex {
         .unwrap_or_else(|| panic!("no station named {name}"))
 }
 
-#[test]
-fn builds_a_merged_bundle_from_two_feeds() {
-    let directory = temporary_directory("pipeline");
+/// A fixture feed with the Transitous country configuration that holds its license.
+struct FixtureFeed<'a> {
+    /// Files of the feed ZIP.
+    files: &'a [(&'a str, &'a str)],
+    /// File name of the country configuration, such as `de.json`.
+    country_file_name: &'a str,
+    /// Contents of the country configuration.
+    country_config: &'a str,
+}
+
+/// Runs the pipeline on fixture feeds in a fresh temporary directory. The feeds pair up with
+/// the feeds of the configuration in order.
+fn run_fixture_pipeline(
+    test_name: &str,
+    config_text: &str,
+    feeds: &[FixtureFeed<'_>],
+    trainline_stations: &str,
+) -> PipelineOutcome {
+    let directory = temporary_directory(test_name);
     let write = |name: &str, contents: &str| {
         let path = directory.join(name);
         std::fs::write(&path, contents).unwrap();
         path
     };
-    let config_path = write("builder.toml", CONFIG);
+    let config_path = write("builder.toml", config_text);
     let stopwords_path = write("stopwords.toml", STOPWORDS);
     let config = BuilderConfig::read(&config_path, &stopwords_path).unwrap();
-    let first_feed_zip = directory.join("de_TestA.gtfs.zip");
-    let second_feed_zip = directory.join("at_TestB.gtfs.zip");
-    write_zip(&first_feed_zip, FEED_A);
-    write_zip(&second_feed_zip, FEED_B);
-
+    let feed_inputs = config
+        .feeds
+        .iter()
+        .zip(feeds)
+        .map(|(feed_config, feed)| {
+            let zip_path = directory.join(format!("{}.gtfs.zip", feed_config.mirror_name));
+            write_zip(&zip_path, feed.files);
+            FeedInput {
+                config: feed_config,
+                zip_path,
+                country_config_path: write(feed.country_file_name, feed.country_config),
+            }
+        })
+        .collect();
     let inputs = PipelineInputs {
-        feeds: vec![
-            FeedInput {
-                config: &config.feeds[0],
-                zip_path: first_feed_zip,
-                country_config_path: write("de.json", TRANSITOUS_DE),
-            },
-            FeedInput {
-                config: &config.feeds[1],
-                zip_path: second_feed_zip,
-                country_config_path: write("at.json", TRANSITOUS_AT),
-            },
-        ],
-        trainline_stations_csv: write("stations.csv", TRAINLINE_STATIONS),
+        feeds: feed_inputs,
+        trainline_stations_csv: write("stations.csv", trainline_stations),
         station_name_stopwords: &config.station_name_stopwords,
         window: ValidityWindow {
             start: NaiveDate::from_ymd_opt(2026, 10, 20).unwrap(),
@@ -212,6 +228,30 @@ fn builds_a_merged_bundle_from_two_feeds() {
     };
     let database = WorkDatabase::open(None, &directory, false).unwrap();
     let outcome = run_pipeline(&database, &inputs).unwrap();
+    drop(database);
+    let _ = std::fs::remove_dir_all(&directory);
+    outcome
+}
+
+#[test]
+fn builds_a_merged_bundle_from_two_feeds() {
+    let outcome = run_fixture_pipeline(
+        "pipeline",
+        CONFIG,
+        &[
+            FixtureFeed {
+                files: FEED_A,
+                country_file_name: "de.json",
+                country_config: TRANSITOUS_DE,
+            },
+            FixtureFeed {
+                files: FEED_B,
+                country_file_name: "at.json",
+                country_config: TRANSITOUS_AT,
+            },
+        ],
+        TRAINLINE_STATIONS,
+    );
     assert_eq!(outcome.merge_counts.get(&(0, 1)), Some(&1));
     let bundle = LoadedTimetableBundle::from_bundle(&outcome.bundle).unwrap();
 
@@ -271,7 +311,139 @@ fn builds_a_merged_bundle_from_two_feeds() {
         2,
         "the regional train has its own route"
     );
+}
 
-    drop(database);
-    let _ = std::fs::remove_dir_all(&directory);
+const SHARED_KEY_CONFIG: &str = r#"
+validity_window_days = 14
+
+[[feed]]
+mirror_name = "de_TestC"
+station_key_pattern = '^(de:\d+:\d+)'
+station_key_namespace = "dhid"
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^0*(?<number>\d+)$'
+category_field = "route_short_name"
+
+[[feed]]
+mirror_name = "de_TestD"
+station_key_pattern = '^(de:\d+:\d+)'
+station_key_namespace = "dhid"
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^0*(?<number>\d+)$'
+category_field = "route_short_name"
+"#;
+
+/// Two stations with local transit names and one station Trainline does not list.
+const FEED_C: &[(&str, &str)] = &[
+    (
+        "agency.txt",
+        "agency_id,agency_name,agency_url,agency_timezone\n\
+         db,DB Regio AG,https://www.bahn.de,Europe/Berlin\n",
+    ),
+    (
+        "routes.txt",
+        "route_id,agency_id,route_short_name,route_type\nre1,db,RE1,106\n",
+    ),
+    (
+        "trips.txt",
+        "route_id,service_id,trip_id,trip_short_name\nre1,daily,re-1,4711\n",
+    ),
+    (
+        "stops.txt",
+        "stop_id,stop_name,stop_lat,stop_lon,parent_station\n\
+         de:11000:900003200:1:1,S+U Berlin Hauptbahnhof,52.5253,13.3694,\n\
+         de:11000:900120005:1:1,S Ostbahnhof (Berlin),52.5103,13.4351,\n\
+         de:11000:900120004:1:1,S Warschauer Str. (Berlin),52.5059,13.4492,\n",
+    ),
+    (
+        "stop_times.txt",
+        "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n\
+         re-1,10:00:00,10:00:00,de:11000:900003200:1:1,1\n\
+         re-1,10:09:00,10:10:00,de:11000:900120005:1:1,2\n\
+         re-1,10:13:00,10:13:00,de:11000:900120004:1:1,3\n",
+    ),
+    (
+        "calendar.txt",
+        "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n\
+         daily,1,1,1,1,1,1,1,20261001,20261031\n",
+    ),
+];
+
+/// The same stations under other platform IDs, served by a train with another number.
+const FEED_D: &[(&str, &str)] = &[
+    (
+        "agency.txt",
+        "agency_id,agency_name,agency_url,agency_timezone\n\
+         sbahn,S-Bahn Berlin GmbH,https://www.s-bahn-berlin.de,Europe/Berlin\n",
+    ),
+    (
+        "routes.txt",
+        "route_id,agency_id,route_short_name,route_type\ns5,sbahn,S5,109\n",
+    ),
+    (
+        "trips.txt",
+        "route_id,service_id,trip_id,trip_short_name\ns5,daily,s5-1,5047\n",
+    ),
+    (
+        "stops.txt",
+        "stop_id,stop_name,stop_lat,stop_lon,parent_station\n\
+         de:11000:900120004::2,S Warschauer Str. (Berlin),52.5058,13.4490,\n\
+         de:11000:900120005::3,S Ostbahnhof (Berlin),52.5102,13.4348,\n",
+    ),
+    (
+        "stop_times.txt",
+        "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n\
+         s5-1,11:00:00,11:00:00,de:11000:900120004::2,1\n\
+         s5-1,11:03:00,11:03:00,de:11000:900120005::3,2\n",
+    ),
+    (
+        "calendar.txt",
+        "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n\
+         daily,1,1,1,1,1,1,1,20261001,20261031\n",
+    ),
+];
+
+const BERLIN_TRAINLINE_STATIONS: &str = "\
+id;name;uic;latitude;longitude;is_city;db_id;time_zone;same_as;parent_station_id
+7540;Berlin Ostbahnhof;8003004;52.510972;13.434567;f;8010255;Europe/Berlin;;
+7630;Berlin Hbf;8065969;52.534589;13.369548;f;8011160;Europe/Berlin;;
+";
+
+const TRANSITOUS_DE_SHARED: &str = r#"{"sources": [
+    {"name": "TestC", "type": "http", "url": "https://example.org/c.zip",
+     "license": {"spdx-identifier": "CC-BY-4.0"}},
+    {"name": "TestD", "type": "http", "url": "https://example.org/d.zip",
+     "license": {"spdx-identifier": "CC-BY-4.0"}}
+]}"#;
+
+#[test]
+fn feeds_with_a_shared_key_namespace_share_stations() {
+    let feed = |files| FixtureFeed {
+        files,
+        country_file_name: "de.json",
+        country_config: TRANSITOUS_DE_SHARED,
+    };
+    let outcome = run_fixture_pipeline(
+        "shared-keys",
+        SHARED_KEY_CONFIG,
+        &[feed(FEED_C), feed(FEED_D)],
+        BERLIN_TRAINLINE_STATIONS,
+    );
+    let bundle = LoadedTimetableBundle::from_bundle(&outcome.bundle).unwrap();
+    let mut station_names: Vec<_> = (0..bundle.station_count())
+        .map(|index| bundle.station_name(BundleStationIndex(u32::try_from(index).unwrap())))
+        .collect();
+    station_names.sort_unstable();
+    // "S+U Berlin Hauptbahnhof" and "S Ostbahnhof (Berlin)" match Trainline once the mode
+    // prefix is dropped and the city moves to the front. The Trainline Hbf sits 1 km off, which
+    // only an equal name bridges. Warschauer Straße matches nothing, but both feeds use its
+    // key, so it is one station.
+    assert_eq!(
+        station_names,
+        ["Berlin Hbf", "Berlin Ostbahnhof", "S Warschauer Str. (Berlin)"]
+    );
+    let warschauer = station(&bundle, "S Warschauer Str. (Berlin)");
+    assert_eq!(bundle.route_stops_at(warschauer).len(), 2);
 }

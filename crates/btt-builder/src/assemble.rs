@@ -1,8 +1,8 @@
 //! Steps 8 and 9: splits trips into RAPTOR routes and assembles the bundle.
 //!
 //! `BundleBuilder` from `btt-timetable` groups trips by stop pattern and splits them into routes
-//! where no trip overtakes another. The plan grouped patterns in SQL first. Doing both in the
-//! bundle builder keeps one implementation, which the router tests use too.
+//! where no trip overtakes another. Doing both in the bundle builder keeps one implementation,
+//! which the router tests use too.
 
 use std::path::Path;
 
