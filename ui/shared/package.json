@@ -13,6 +13,11 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "@tauri-apps/api": "^2.12.0"
+    "@tauri-apps/api": "^2.12.0",
+    "@types/geojson": "^7946.0.16"
+  },
+  "dependencies": {
+    "maplibre-gl": "^5.24.0",
+    "svelte-maplibre-gl": "^2.2.1"
   }
 }

@@ -4,6 +4,7 @@
 // read-only variant from a snapshot. Components never import Tauri APIs themselves.
 
 import type {
+  GeoCoordinates,
   LegPlan,
   NoJourneyReason,
   PlaceSearchResult,
@@ -37,6 +38,8 @@ export type TripSource =
       readonly viewState: TripViewState;
       applyEdit(edit: TripEdit): Promise<void>;
       searchPlaces(query: string): Promise<PlaceSearchResult[]>;
+      /** Adds a place at a position picked on the map. */
+      addPlaceAt(coordinates: GeoCoordinates): Promise<void>;
     }
   | {
       readonly kind: "readonly";

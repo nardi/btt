@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   dailyTimeWindow,
   formatDailyTimeWindow,
+  formatDistance,
   formatDuration,
   formatTimeInZone,
   parseMinutesOfDay,
@@ -42,5 +43,14 @@ describe("formatTimeInZone", () => {
     const moment = Date.UTC(2026, 9, 1, 6, 0) / 60_000;
     expect(formatTimeInZone(moment, "Europe/Amsterdam")).toBe("08:00");
     expect(formatTimeInZone(moment, "Europe/London")).toBe("07:00");
+  });
+});
+
+describe("formatDistance", () => {
+  it("uses meters below a kilometer and drops needless decimals", () => {
+    expect(formatDistance(800)).toBe("800 m");
+    expect(formatDistance(2500)).toBe("2.5 km");
+    expect(formatDistance(5000)).toBe("5 km");
+    expect(formatDistance(12_400)).toBe("12 km");
   });
 });

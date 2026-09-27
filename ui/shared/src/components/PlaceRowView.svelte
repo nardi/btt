@@ -1,19 +1,26 @@
 <script lang="ts">
   // One place of the itinerary with its dates and stay.
   import type { PlaceStay, TravelDayWindows, TripEdit, TripPlaceId } from "../bindings";
-  import { formatDate } from "../format";
+  import { formatDate, formatDistance } from "../format";
   import { type PlaceRow, stayNights } from "../itinerary";
   import TimeWindowField from "./TimeWindowField.svelte";
 
   let {
     row,
     index,
+    selected,
+    onSelect,
+    onFocus,
     defaultWindows,
     onEdit,
     onReorder,
   }: {
     row: PlaceRow;
     index: number;
+    selected: boolean;
+    onSelect: () => void;
+    /** Moves the map to this place. */
+    onFocus: () => void;
     defaultWindows: TravelDayWindows;
     /** Missing in a read-only view. */
     onEdit?: (edit: TripEdit) => void;
@@ -67,6 +74,7 @@
 <li
   class="place-row"
   class:drop-target={dropTarget}
+  class:selected
   draggable={onReorder !== undefined}
   ondragstart={(event) => event.dataTransfer?.setData("text/plain", String(placeId))}
   ondragover={(event) => {
@@ -80,14 +88,21 @@
 >
   <div class="main">
     <span class="number" title={row.role}>{index + 1}</span>
-    <div class="name-and-dates">
+    <button
+      type="button"
+      class="name-and-dates"
+      title="Double-click to show on the map"
+      onclick={onSelect}
+      ondblclick={onFocus}
+    >
       <span class="name">{row.place.name}</span>
       <span class="dates">
         {#if row.arrivalDate !== null}arrive {formatDate(row.arrivalDate)}{/if}
         {#if row.arrivalDate !== null && row.departureDate !== null}·{/if}
         {#if row.departureDate !== null}leave {formatDate(row.departureDate)}{/if}
+        · stations within {formatDistance(row.place.station_search_radius)}
       </span>
-    </div>
+    </button>
 
     {#if row.stay !== null}
       <label class="stay">
@@ -160,6 +175,11 @@
     padding: var(--space-2) var(--space-3);
   }
 
+  .place-row.selected {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 1px var(--color-accent);
+  }
+
   .place-row.drop-target {
     border-color: var(--color-accent);
   }
@@ -182,6 +202,11 @@
   }
 
   .name-and-dates {
+    align-items: flex-start;
+    padding: 0;
+    border: none;
+    background: none;
+    text-align: left;
     display: flex;
     flex-direction: column;
     flex: 1;

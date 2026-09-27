@@ -3,12 +3,14 @@
 import { commands } from "@btt/shared/bindings";
 import type {
   CommandError,
+  GeoCoordinates,
   PlaceSearchResult,
   PlanningRunId,
   PlanningSessionEvent,
   Trip,
   TripEdit,
   TripEditNotice,
+  TripEditOutcome,
   TripId,
   TripPlaceId,
 } from "@btt/shared/bindings";
@@ -82,7 +84,17 @@ export class TauriTripSource implements TripViewState {
   }
 
   async applyEdit(edit: TripEdit): Promise<void> {
-    const result = await commands.applyTripEdit(this.trip.id, edit);
+    this.acceptEditResult(await commands.applyTripEdit(this.trip.id, edit));
+  }
+
+  async addPlaceAt(coordinates: GeoCoordinates): Promise<void> {
+    this.acceptEditResult(await commands.addPlaceAtCoordinates(this.trip.id, coordinates));
+  }
+
+  /** Takes the trip and notices from an edit command, or shows its error. */
+  private acceptEditResult(
+    result: { status: "ok"; data: TripEditOutcome } | { status: "error"; error: CommandError },
+  ): void {
     if (result.status === "error") {
       this.errorMessage = commandErrorMessage(result.error);
       return;

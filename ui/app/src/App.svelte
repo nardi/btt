@@ -2,6 +2,8 @@
   // The desktop app: a list of trips, or the itinerary of the open trip.
   import { commands, type TripId, type TripSummary } from "@btt/shared/bindings";
   import ItineraryView from "@btt/shared/components/ItineraryView.svelte";
+  import TripMap from "@btt/shared/components/TripMap.svelte";
+  import type { PlaceFocusRequest } from "@btt/shared/map-features";
   import { onMount } from "svelte";
 
   import { commandErrorMessage, TauriTripSource } from "./tauri-trip-source.svelte";
@@ -10,6 +12,8 @@
   let trips: TripSummary[] = $state([]);
   let openSource: TauriTripSource | null = $state(null);
   let errorMessage: string | null = $state(null);
+  let selectedPlaceId: number | null = $state(null);
+  let focusRequest: PlaceFocusRequest | null = $state(null);
 
   async function refreshTrips() {
     const result = await commands.listTrips();
@@ -50,6 +54,8 @@
   async function closeTrip() {
     await openSource?.close();
     openSource = null;
+    selectedPlaceId = null;
+    focusRequest = null;
     await refreshTrips();
   }
 
@@ -60,12 +66,18 @@
     }
   }
 
+  /** Selects a place and asks the map to move to it. */
+  function focusPlace(placeId: number) {
+    selectedPlaceId = placeId;
+    focusRequest = { placeId, requestNumber: (focusRequest?.requestNumber ?? 0) + 1 };
+  }
+
   onMount(() => {
     void refreshTrips();
   });
 </script>
 
-<main>
+<main class:trip-open={openSource !== null}>
   {#if errorMessage !== null}
     <p class="error" role="alert">{errorMessage}</p>
   {/if}
@@ -95,7 +107,24 @@
         />
       </label>
     </header>
-    <ItineraryView source={openSource} />
+    <div class="workspace">
+      <div class="itinerary-column">
+        <ItineraryView
+          source={openSource}
+          {selectedPlaceId}
+          onSelect={(placeId) => (selectedPlaceId = placeId)}
+          onFocus={focusPlace}
+        />
+      </div>
+      <div class="map-column">
+        <TripMap
+          source={openSource}
+          {selectedPlaceId}
+          {focusRequest}
+          onSelect={(placeId) => (selectedPlaceId = placeId)}
+        />
+      </div>
+    </div>
   {/if}
 </main>
 
@@ -107,6 +136,13 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
+    box-sizing: border-box;
+  }
+
+  main.trip-open {
+    max-width: none;
+    height: 100vh;
+    padding: var(--space-4);
   }
 
   .trip-header {
@@ -119,6 +155,25 @@
     flex: 1;
     font-size: 1.3rem;
     font-weight: 600;
+  }
+
+  .workspace {
+    display: grid;
+    grid-template-columns: minmax(420px, 1fr) minmax(300px, 1.2fr);
+    gap: var(--space-4);
+    flex: 1;
+    min-height: 0;
+  }
+
+  .itinerary-column {
+    overflow-y: auto;
+    padding-right: var(--space-2);
+  }
+
+  .map-column {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    overflow: hidden;
   }
 
   .error {

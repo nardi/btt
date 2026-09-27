@@ -11,7 +11,18 @@
   /** Search radius of places added through search, in meters. */
   const defaultStationSearchRadius = 5000;
 
-  let { source }: { source: TripSource } = $props();
+  let {
+    source,
+    selectedPlaceId,
+    onSelect,
+    onFocus,
+  }: {
+    source: TripSource;
+    selectedPlaceId: TripPlaceId | null;
+    onSelect: (placeId: TripPlaceId | null) => void;
+    /** Moves the map to a place. */
+    onFocus: (placeId: TripPlaceId) => void;
+  } = $props();
 
   const viewState = $derived(source.viewState);
   const trip = $derived(viewState.trip);
@@ -68,6 +79,9 @@
       <PlaceRowView
         {row}
         {index}
+        selected={row.place.id === selectedPlaceId}
+        onSelect={() => onSelect(row.place.id)}
+        onFocus={() => onFocus(row.place.id)}
         defaultWindows={trip.preferences.default_windows}
         {onEdit}
         onReorder={editable === null ? undefined : reorderPlace}
@@ -76,9 +90,13 @@
   </ol>
 
   {#if rows.places.length === 0}
-    <p class="empty">Search for the place where the trip starts.</p>
+    <p class="empty">
+      Search for the place where the trip starts, or double-click it on the map.
+    </p>
   {:else if rows.places.length === 1}
-    <p class="empty">Add the next place to plan the first leg.</p>
+    <p class="empty">
+      Add the next place to plan the first leg. Double-click a place to show it on the map.
+    </p>
   {/if}
 
   {#if editable !== null}
