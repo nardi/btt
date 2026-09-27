@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "trip": {
+    "id": "019a8f3c-6b2e-7c41-9d1a-3f5e2b7c8a90",
+    "name": "Amsterdam to Rome",
+    "start_date": "2026-10-01",
+    "itinerary": {
+      "Route": {
+        "origin": {
+          "id": 1,
+          "name": "Amsterdam",
+          "coordinates": { "latitude": 52.3789, "longitude": 4.9003 },
+          "station_search_radius": 5000,
+          "window_override": null
+        },
+        "via_places": [
+          {
+            "arriving_leg_travel_mode": "Daytime",
+            "place": {
+              "id": 2,
+              "name": "Vienna",
+              "coordinates": { "latitude": 48.1852, "longitude": 16.3761 },
+              "station_search_radius": 5000,
+              "window_override": {
+                "departure": { "start": 1080, "length": 300 },
+                "arrival": { "start": 420, "length": 960 }
+              }
+            },
+            "stay": { "Nights": 2 }
+          }
+        ],
+        "final_leg_travel_mode": {
+          "Overnight": {
+            "boarding_window": { "start": 1140, "length": 240 },
+            "alighting_window": { "start": 360, "length": 240 },
+            "accepted_berths": { "Either": { "preferred": "Couchette" } },
+            "minimum_time_on_night_train": null
+          }
+        },
+        "destination": {
+          "id": 3,
+          "name": "Rome",
+          "coordinates": { "latitude": 41.901, "longitude": 12.5007 },
+          "station_search_radius": 8000,
+          "window_override": null
+        }
+      }
+    },
+    "preferences": {
+      "default_windows": {
+        "departure": { "start": 420, "length": 780 },
+        "arrival": { "start": 420, "length": 960 }
+      },
+      "transfer_aversion": 50,
+      "default_same_day_stay": { "minimum": 120, "maximum_beyond_minimum": null },
+      "pass_policy": "PreferPass",
+      "minimum_transfer_time": 10,
+      "traveller_ids": [],
+      "travel_class": "Second",
+      "price_weight": 0
+    },
+    "next_place_id": 4
+  }
+}
