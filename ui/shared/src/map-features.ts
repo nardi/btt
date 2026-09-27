@@ -47,9 +47,20 @@ export function radiusCircles(
   };
 }
 
+/** Properties of a line between a place and a station, or between two stations on foot. */
+export interface StationWayLineProperties {
+  arrivalPlaceId: TripPlaceId;
+}
+
+/** Turns coordinates into the `[longitude, latitude]` pair GeoJSON expects. */
+function position(coordinates: GeoCoordinates): [number, number] {
+  return [coordinates.longitude, coordinates.latitude];
+}
+
 /**
- * Returns one straight line per planned train ride, from the boarding to the alighting station.
- * Legs that are still planning or have no journey draw nothing.
+ * Returns one line per planned train ride, from the boarding station through every station the
+ * train passes to the alighting station. Legs that are still planning or have no journey draw
+ * nothing.
  */
 export function rideLines(viewState: TripViewState): FeatureCollection<LineString, RideLineProperties> {
   const features: FeatureCollection<LineString, RideLineProperties>["features"] = [];
@@ -71,11 +82,54 @@ export function rideLines(viewState: TripViewState): FeatureCollection<LineStrin
         geometry: {
           type: "LineString",
           coordinates: [
-            [boarding.coordinates.longitude, boarding.coordinates.latitude],
-            [alighting.coordinates.longitude, alighting.coordinates.latitude],
+            position(boarding.coordinates),
+            ...ride.intermediate_station_coordinates.map(position),
+            position(alighting.coordinates),
           ],
         },
         properties: { arrivalPlaceId: leg.arrivalPlace.id, overnight: isOvernight(leg.travelMode) },
+      });
+    }
+  }
+  return { type: "FeatureCollection", features };
+}
+
+/**
+ * Returns the ways of each planned journey that are not on a train: from the departure place to
+ * the first station, from the last station to the arrival place, and a footpath between two
+ * stations at the end.
+ */
+export function stationWayLines(
+  viewState: TripViewState,
+): FeatureCollection<LineString, StationWayLineProperties> {
+  const features: FeatureCollection<LineString, StationWayLineProperties>["features"] = [];
+  for (const leg of itineraryRows(viewState.trip).legs) {
+    const legState = legViewState(viewState, leg.arrivalPlace.id);
+    if (legState.status !== "found") {
+      continue;
+    }
+    const { chosen_journey: journey, station_table: stations } = legState.legPlan;
+    const lastRide = journey.later_rides.at(-1)?.ride ?? journey.first_ride;
+    const firstStation = stations[journey.first_ride.boarding_station];
+    const alightingStation = stations[lastRide.alighting_station];
+    const footpathStation =
+      journey.arrival_footpath === null ? undefined : stations[journey.arrival_footpath.to_station];
+    const endStation = footpathStation ?? alightingStation;
+    const ways: [GeoCoordinates, GeoCoordinates][] = [];
+    if (firstStation !== undefined) {
+      ways.push([leg.departurePlace.coordinates, firstStation.coordinates]);
+    }
+    if (footpathStation !== undefined && alightingStation !== undefined) {
+      ways.push([alightingStation.coordinates, footpathStation.coordinates]);
+    }
+    if (endStation !== undefined) {
+      ways.push([endStation.coordinates, leg.arrivalPlace.coordinates]);
+    }
+    for (const [from, to] of ways) {
+      features.push({
+        type: "Feature",
+        geometry: { type: "LineString", coordinates: [position(from), position(to)] },
+        properties: { arrivalPlaceId: leg.arrivalPlace.id },
       });
     }
   }

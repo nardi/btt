@@ -48,6 +48,10 @@ pub struct TrainRide {
     pub arrival_time: UnixTimeMinutes,
     /// How the train is shown to the traveller.
     pub train_label: TrainLabel,
+    /// Stations the train passes between boarding and alighting, in order, so the map can
+    /// draw its line along them.
+    #[specta(type = Vec<GeoCoordinates>)]
+    pub intermediate_station_coordinates: SmallVec<[GeoCoordinates; 6]>,
 }
 
 /// A transfer from the previous ride, followed by the next ride.

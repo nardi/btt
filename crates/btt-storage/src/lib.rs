@@ -401,6 +401,9 @@ mod tests {
                         category: "ICE".into(),
                         number: "913".into(),
                     },
+                    intermediate_station_coordinates: smallvec::smallvec![
+                        GeoCoordinates::from_degrees(50.5, 7.5).unwrap()
+                    ],
                 },
                 later_rides: smallvec::SmallVec::new(),
                 arrival_footpath: None,

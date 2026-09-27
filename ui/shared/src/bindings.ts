@@ -367,6 +367,11 @@ export type TrainRide = {
 	arrival_time: UnixTimeMinutes,
 	/**  How the train is shown to the traveller. */
 	train_label: TrainLabel,
+	/**
+	 *  Stations the train passes between boarding and alighting, in order, so the map can
+	 *  draw its line along them.
+	 */
+	intermediate_station_coordinates: GeoCoordinates[],
 };
 
 /**  A transfer from the previous ride, followed by the next ride. */

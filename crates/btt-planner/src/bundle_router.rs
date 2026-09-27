@@ -240,6 +240,14 @@ impl TimetableBundleRouter {
         stations: &mut LegPlanStations,
     ) -> Option<TrainRide> {
         let (category, number, _) = self.bundle.trip_train_label(ride.trip);
+        let route = self.bundle.route(ride.raptor_route);
+        let intermediate_station_coordinates = (ride.boarding_position + 1
+            ..ride.alighting_position)
+            .map(|position| {
+                let station = self.bundle.pattern_stop(&route, position).station();
+                self.bundle.station_coordinates(station)
+            })
+            .collect();
         Some(TrainRide {
             boarding_station: stations.index_of(&self.bundle, ride.boarding_station)?,
             departure_time: UnixTimeMinutes(self.bundle_start_unix_minutes + ride.departure.0),
@@ -249,6 +257,7 @@ impl TimetableBundleRouter {
                 category: category.into(),
                 number: number.into(),
             },
+            intermediate_station_coordinates,
         })
     }
 }

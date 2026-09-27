@@ -1,6 +1,7 @@
 <script lang="ts">
-  // Map of the trip: places as markers, station search radii as circles and planned rides as
-  // lines. In an editable source, clicks add places and drags move them or change their radius.
+  // Map of the trip: places as markers, station search radii as circles, planned rides as lines
+  // and the ways between places and stations as dotted lines. In an editable source, double
+  // clicks add places and drags move them or change their radius.
   import "maplibre-gl/dist/maplibre-gl.css";
 
   import type { GeoCoordinates, TripEdit, TripPlace, TripPlaceId } from "../bindings";
@@ -15,6 +16,7 @@
     placeBounds,
     radiusCircles,
     rideLines,
+    stationWayLines,
   } from "../map-features";
   import type { TripSource } from "../trip-source";
 
@@ -60,6 +62,7 @@
   const editable = $derived(source.kind === "editable" ? source : null);
   const circles = $derived(radiusCircles(trip, selectedPlaceId, dragPreview));
   const rides = $derived(rideLines(source.viewState));
+  const stationWays = $derived(stationWayLines(source.viewState));
 
   // Zooms to all places when a trip opens.
   $effect(() => {
@@ -210,6 +213,13 @@
       }}
     />
     <LineLayer paint={{ "line-color": "#1f4e79", "line-width": 1.5, "line-opacity": 0.6 }} />
+  </GeoJSONSource>
+
+  <GeoJSONSource id="station-ways" data={stationWays}>
+    <LineLayer
+      layout={{ "line-cap": "round" }}
+      paint={{ "line-color": "#475569", "line-width": 2, "line-dasharray": [0.5, 2] }}
+    />
   </GeoJSONSource>
 
   <GeoJSONSource id="planned-rides" data={rides}>

@@ -64,6 +64,7 @@ impl StubBackend {
                     category: "STUB".into(),
                     number: "1".into(),
                 },
+                intermediate_station_coordinates: SmallVec::new(),
             },
             later_rides: SmallVec::new(),
             arrival_footpath: None,

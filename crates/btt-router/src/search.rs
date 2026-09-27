@@ -71,8 +71,12 @@ pub struct RaptorRide {
     pub service_day: u16,
     /// Where the traveller boards.
     pub boarding_station: BundleStationIndex,
+    /// Position of the boarding station in the route's stop sequence.
+    pub boarding_position: u16,
     /// Where the traveller alights.
     pub alighting_station: BundleStationIndex,
+    /// Position of the alighting station in the route's stop sequence.
+    pub alighting_position: u16,
     /// Departure from the boarding station.
     pub departure: MinutesSinceBundleStart,
     /// Arrival at the alighting station.
@@ -718,7 +722,9 @@ impl<F: BoardingFilter> Search<'_, F> {
             trip: BundleTripIndex(route.first_trip_index + ride.trip_offset),
             service_day: ride.service_day,
             boarding_station,
+            boarding_position: ride.boarding_position,
             alighting_station,
+            alighting_position,
             departure: MinutesSinceBundleStart(day_start + u32::from(departure)),
             arrival: MinutesSinceBundleStart(day_start + u32::from(arrival)),
         })

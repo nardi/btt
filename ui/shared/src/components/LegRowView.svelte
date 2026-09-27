@@ -152,6 +152,10 @@
       {@const legPlan = legState.legPlan}
       {@const journey = legPlan.chosen_journey}
       <ol class="rides">
+        <li class="station-way">
+          {formatDuration(journey.access_duration)} to
+          {stationName(legPlan, journey.first_ride.boarding_station)}
+        </li>
         {#each [journey.first_ride, ...journey.later_rides.map((later) => later.ride)] as ride, rideIndex (rideIndex)}
           <li>
             <span class="time">{stationTime(legPlan, ride.boarding_station, ride.departure_time)}</span>
@@ -162,11 +166,14 @@
           </li>
         {/each}
         {#if journey.arrival_footpath !== null}
-          <li class="footpath">
+          <li class="station-way">
             {formatDuration(journey.arrival_footpath.duration)} on to
             {stationName(legPlan, journey.arrival_footpath.to_station)}
           </li>
         {/if}
+        <li class="station-way">
+          {formatDuration(journey.egress_duration)} to {leg.arrivalPlace.name}
+        </li>
       </ol>
       <span class="summary">
         {formatDuration(journeyMinutes(journey))}
@@ -237,7 +244,7 @@
 
   .pending,
   .summary,
-  .footpath {
+  .station-way {
     color: var(--color-text-muted);
   }
 

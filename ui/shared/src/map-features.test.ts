@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { LegPlan } from "./bindings";
-import { placeBounds, radiusCircles, rideLines } from "./map-features";
+import { placeBounds, radiusCircles, rideLines, stationWayLines } from "./map-features";
 import { amsterdamViennaRome } from "./test-fixtures";
 import type { LegViewState, TripViewState } from "./trip-source";
 
@@ -23,6 +23,7 @@ const viennaToRome: LegPlan = {
       alighting_station: 1,
       arrival_time: 600,
       train_label: { category: "NJ", number: "40233" },
+      intermediate_station_coordinates: [{ latitude: 43.7, longitude: 11.2 }],
     },
     later_rides: [],
     arrival_footpath: null,
@@ -55,7 +56,38 @@ describe("rideLines", () => {
     const lines = rideLines(viewState([[3, { status: "found", legPlan: viennaToRome }]]));
     expect(lines.features).toHaveLength(1);
     expect(lines.features[0]!.properties).toEqual({ arrivalPlaceId: 3, overnight: true });
-    expect(lines.features[0]!.geometry.coordinates[0]).toEqual([16.3761, 48.1852]);
+    expect(lines.features[0]!.geometry.coordinates).toEqual([
+      [16.3761, 48.1852],
+      [11.2, 43.7],
+      [12.5007, 41.901],
+    ]);
+  });
+});
+
+describe("stationWayLines", () => {
+  it("connects the places with the first and last station", () => {
+    const lines = stationWayLines(viewState([[3, { status: "found", legPlan: viennaToRome }]]));
+    expect(lines.features).toHaveLength(2);
+    expect(lines.features[0]!.geometry.coordinates[1]).toEqual([16.3761, 48.1852]);
+    expect(lines.features[1]!.geometry.coordinates[0]).toEqual([12.5007, 41.901]);
+  });
+
+  it("adds the footpath between two stations at the end", () => {
+    const withFootpath: LegPlan = {
+      ...viennaToRome,
+      chosen_journey: { ...viennaToRome.chosen_journey, arrival_footpath: { to_station: 2, duration: 20 } },
+      station_table: [
+        ...viennaToRome.station_table,
+        { name: "Roma Tiburtina", coordinates: { latitude: 41.9106, longitude: 12.5305 }, time_zone: "Europe/Rome" },
+      ],
+    };
+    const lines = stationWayLines(viewState([[3, { status: "found", legPlan: withFootpath }]]));
+    expect(lines.features).toHaveLength(3);
+    expect(lines.features[1]!.geometry.coordinates).toEqual([
+      [12.5007, 41.901],
+      [12.5305, 41.9106],
+    ]);
+    expect(lines.features[2]!.geometry.coordinates[0]).toEqual([12.5305, 41.9106]);
   });
 });
 
