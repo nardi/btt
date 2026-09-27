@@ -5,12 +5,16 @@
 
 mod bounded;
 pub mod coordinates;
+pub mod edit;
 pub mod itinerary;
 pub mod time;
 pub mod trip;
 
 pub use bounded::ValueOutOfRangeError;
 pub use coordinates::{GeoCoordinates, Latitude, Longitude};
+pub use edit::{
+    PlaceInsertionPoint, TripEdit, TripEditError, TripEditNotice, TripEditNotices, TripEditOutcome,
+};
 pub use itinerary::{
     AcceptedBerths, BerthType, Itinerary, ItineraryLeg, ItineraryRoute, LegTravelMode,
     OvernightLegOptions, PlaceStay, SameDayStayRange, StationSearchRadius, TripPlace, TripPlaceId,
