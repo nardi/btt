@@ -69,11 +69,23 @@ must_use_candidate = "allow"
 lto = "thin"
 codegen-units = 1
 
-# Dependencies build without debug info. DuckDB's C++ sources alone would otherwise produce
-# several gigabytes of debug objects.
+# Dependencies build optimized and without debug info. The router calls into them in its inner
+# loops, and DuckDB's C++ sources alone would otherwise produce several gigabytes of debug
+# objects.
 [profile.dev.package."*"]
 debug = false
-
-# DuckDB runs the heavy SQL steps of the timetable builder, which are far too slow unoptimized.
-[profile.dev.package.libduckdb-sys]
 opt-level = 2
+
+# The router and the bundle reader run searches that take seconds unoptimized, which makes the
+# development build of the app wait on every edit.
+[profile.dev.package.btt-router]
+opt-level = 3
+
+[profile.dev.package.btt-timetable]
+opt-level = 3
+
+
+# The search is generic over its boarding filter, so its code is compiled in the planner, which
+# calls it.
+[profile.dev.package.btt-planner]
+opt-level = 3

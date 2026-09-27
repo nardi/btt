@@ -171,6 +171,11 @@ pub struct RaptorSearchBuffers {
     ride_arrival_by_station: Vec<Option<(u32, RideOrigin)>>,
     /// Stations with an entry in `ride_arrival_by_station`, so the next round clears only those.
     stations_reached_by_rides: Vec<BundleStationIndex>,
+    /// Stations whose label changed in the previous round, which the current round copies
+    /// forward.
+    stations_changed_in_previous_round: Vec<BundleStationIndex>,
+    /// Spare list that `carry_labels_forward` swaps with the one above.
+    stations_carried: Vec<BundleStationIndex>,
     /// Earliest stop position to scan per route, or `NOT_QUEUED`.
     scan_start_by_route: Vec<u16>,
     /// Routes to scan in the current round.
@@ -199,6 +204,8 @@ impl RaptorSearchBuffers {
         self.ride_arrival_by_station.clear();
         self.ride_arrival_by_station.resize(station_count, None);
         self.stations_reached_by_rides.clear();
+        self.stations_changed_in_previous_round.clear();
+        self.stations_carried.clear();
         self.scan_start_by_route.clear();
         self.scan_start_by_route.resize(route_count, NOT_QUEUED);
         self.queued_routes.clear();
@@ -264,11 +271,14 @@ pub fn search_leg_journeys<F: BoardingFilter>(
     };
     let mut best_arrival_by_rides = vec![u32::MAX; rounds];
     let mut found = ParetoJourneySet::default();
-    for departure_time in departure_times {
+    for departures in departure_times.chunk_by(|left, right| left.0 == right.0) {
         if should_stop() {
             break;
         }
-        search.run_rounds(departure_time);
+        let departure_time = departures[0].0;
+        let departing_candidates: SmallVec<[u16; 4]> =
+            departures.iter().map(|&(_, candidate)| candidate).collect();
+        search.run_rounds(departure_time, &departing_candidates);
         // Round 0 is walking only and never reaches the arrival place by train.
         for (round, best_arrival) in best_arrival_by_rides.iter_mut().enumerate().skip(1) {
             let Some((arrival, station)) = search.best_target_arrival(round) else {
@@ -328,13 +338,18 @@ impl<F: BoardingFilter> Search<'_, F> {
     /// Runs all rounds for one departure time from the departure place. Labels from runs for
     /// later departure times stay, because a journey that leaves later can also be caught by
     /// leaving earlier and waiting.
-    fn run_rounds(&mut self, departure_time: u32) {
+    ///
+    /// Every candidate gets its earlier label, but only `departing_candidates` start route
+    /// scans. The earlier label of another candidate only opens trains that leave it before the
+    /// previous run's departure time, and each of those has a run of its own.
+    fn run_rounds(&mut self, departure_time: u32, departing_candidates: &[u16]) {
         self.buffers.stations_improved.clear();
-        for (candidate_index, candidate) in self.query.departure_candidates.iter().enumerate() {
+        self.buffers.stations_changed_in_previous_round.clear();
+        for (candidate_index, candidate) in (0_u16..).zip(self.query.departure_candidates) {
             let label = Label {
                 arrival: departure_time + u32::from(candidate.time_to_place_minutes),
                 origin: LabelOrigin::DepartureCandidate {
-                    candidate: u16::try_from(candidate_index).unwrap_or(u16::MAX),
+                    candidate: candidate_index,
                 },
             };
             // Round 0 has no target bound, because walking alone never reaches the arrival
@@ -343,47 +358,75 @@ impl<F: BoardingFilter> Search<'_, F> {
             let slot = &mut self.buffers.labels_by_round_and_station[index];
             if slot.is_none_or(|existing| label.arrival < existing.arrival) {
                 *slot = Some(label);
-                self.buffers.stations_improved.insert(index);
+                self.buffers
+                    .stations_changed_in_previous_round
+                    .push(candidate.station);
+                if departing_candidates.contains(&candidate_index) {
+                    self.buffers.stations_improved.insert(index);
+                }
             }
         }
         let rounds = usize::from(self.query.maximum_train_rides.get()) + 1;
         for round in 1..rounds {
-            if self.buffers.stations_improved.is_clear() {
+            // The copies change this round's labels, so they count as changes for the next
+            // round too, next to the improvements the scans make.
+            self.carry_labels_forward(round);
+            if !self.buffers.stations_improved.is_clear() {
+                self.queue_routes();
+                self.buffers.stations_improved.clear();
+                let queued = std::mem::take(&mut self.buffers.queued_routes);
+                for &raptor_route in &queued {
+                    let start = self.buffers.scan_start_by_route[raptor_route.as_usize()];
+                    self.buffers.scan_start_by_route[raptor_route.as_usize()] = NOT_QUEUED;
+                    self.scan_route(round, raptor_route, start);
+                }
+                self.buffers.queued_routes = queued;
+                self.buffers.queued_routes.clear();
+                self.relax_footpaths(round);
+            }
+            let improved = self
+                .buffers
+                .stations_improved
+                .ones()
+                .map(|index| BundleStationIndex(u32::try_from(index).unwrap_or(u32::MAX)));
+            self.buffers
+                .stations_changed_in_previous_round
+                .extend(improved);
+            if self.buffers.stations_changed_in_previous_round.is_empty() {
                 break;
             }
-            self.carry_labels_forward(round);
-            self.queue_routes();
-            self.buffers.stations_improved.clear();
-            let queued = std::mem::take(&mut self.buffers.queued_routes);
-            for &raptor_route in &queued {
-                let start = self.buffers.scan_start_by_route[raptor_route.as_usize()];
-                self.buffers.scan_start_by_route[raptor_route.as_usize()] = NOT_QUEUED;
-                self.scan_route(round, raptor_route, start);
-            }
-            self.buffers.queued_routes = queued;
-            self.buffers.queued_routes.clear();
-            self.relax_footpaths(round);
         }
     }
 
-    /// Copies each label of the previous round into this round where it is better, because a
-    /// journey with fewer rides also counts as one with at most this many.
+    /// Copies each label that changed in the previous round into this round where it is better,
+    /// because a journey with fewer rides also counts as one with at most this many.
+    ///
+    /// Labels that did not change already satisfy this from earlier rounds and runs, so only
+    /// the changed stations need a look.
     fn carry_labels_forward(&mut self, round: usize) {
         let previous_bound = self.buffers.target_bound_by_round[round - 1];
         let bound = &mut self.buffers.target_bound_by_round[round];
         *bound = (*bound).min(previous_bound);
-        let (previous, current) = self
-            .buffers
-            .labels_by_round_and_station
-            .split_at_mut(round * self.station_count);
-        let previous = &previous[(round - 1) * self.station_count..];
-        for (current, previous) in current[..self.station_count].iter_mut().zip(previous) {
-            if let Some(previous) = previous
-                && current.is_none_or(|current| previous.arrival < current.arrival)
+        let previous_offset = (round - 1) * self.station_count;
+        let current_offset = round * self.station_count;
+        let changed = std::mem::take(&mut self.buffers.stations_changed_in_previous_round);
+        let mut updated = std::mem::take(&mut self.buffers.stations_carried);
+        updated.clear();
+        for &station in &changed {
+            let index = station.as_usize();
+            let labels = &mut self.buffers.labels_by_round_and_station;
+            if let Some(previous) = labels[previous_offset + index]
+                && labels[current_offset + index]
+                    .is_none_or(|current| previous.arrival < current.arrival)
             {
-                *current = Some(*previous);
+                labels[current_offset + index] = Some(previous);
+                updated.push(station);
             }
         }
+        // The list of changes for the next round starts with the copies. The two buffers swap,
+        // so neither allocates after the first query.
+        self.buffers.stations_carried = changed;
+        self.buffers.stations_changed_in_previous_round = updated;
     }
 
     /// Queues every route that stops at a station improved in the previous round, from the
@@ -510,11 +553,21 @@ impl<F: BoardingFilter> Search<'_, F> {
                 .0
         };
         let mut best: Option<BoardedTrip> = None;
+        let last_trip = route.trip_count.checked_sub(1)?;
         for day in first_day..=last_day {
             let day_start = day * MINUTES_PER_DAY;
+            // Trips of a later service date all depart after any trip found on an earlier one.
+            if best.is_some_and(|best| day_start + u32::from(departure_at(0)) >= best.departure) {
+                break;
+            }
             let Ok(earliest_minute) = u16::try_from(ready.saturating_sub(day_start)) else {
                 continue;
             };
+            // Most routes have no trip that is still underway a day later at this stop, which
+            // the last trip shows without a search.
+            if departure_at(last_trip) < earliest_minute {
+                continue;
+            }
             let mut offset = partition_point(route.trip_count, |trip_offset| {
                 departure_at(trip_offset) < earliest_minute
             });
@@ -673,13 +726,17 @@ impl<F: BoardingFilter> Search<'_, F> {
 }
 
 /// Returns every departure from the departure place within the window, from the latest to the
-/// earliest, as the time the traveller leaves the place for a train that leaves then.
-fn collect_departure_times(bundle: &LoadedTimetableBundle, query: &RaptorLegQuery<'_>) -> Vec<u32> {
+/// earliest, as the time the traveller leaves the place for a train that leaves then, with the
+/// candidate station the train leaves from.
+fn collect_departure_times(
+    bundle: &LoadedTimetableBundle,
+    query: &RaptorLegQuery<'_>,
+) -> Vec<(u32, u16)> {
     let mut departure_times = Vec::new();
     let window_start = query.departure_window.start.0;
     let window_end = query.departure_window.end.0;
     let last_day = u32::from(bundle.validity_days()).saturating_sub(1);
-    for candidate in query.departure_candidates {
+    for (candidate_index, candidate) in (0_u16..).zip(query.departure_candidates) {
         let access = u32::from(candidate.time_to_place_minutes);
         let (earliest, latest) = (window_start + access, window_end + access);
         for route_stop in bundle.route_stops_at(candidate.station) {
@@ -706,7 +763,7 @@ fn collect_departure_times(bundle: &LoadedTimetableBundle, query: &RaptorLegQuer
                     }
                     let trip = BundleTripIndex(route.first_trip_index + offset);
                     if bundle.trip_service_days(trip).runs_on(service_day) {
-                        departure_times.push(departure - access);
+                        departure_times.push((departure - access, candidate_index));
                     }
                     offset += 1;
                 }

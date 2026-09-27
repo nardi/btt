@@ -71,11 +71,12 @@ fn random_footpath() -> impl Strategy<Value = (u32, u32, u16)> {
         .prop_filter("distinct ends", |(from, to, _)| from != to)
 }
 
-/// Earliest arrival at `target` when leaving `origin` at `start`, by connection scan.
+/// Earliest arrival at `target` when leaving the place at `start`, by connection scan. Each
+/// origin is a station with the minutes it takes to walk there.
 fn connection_scan(
     trips: &[RandomTrip],
     footpaths: &[(u32, u32, u16)],
-    origin: u32,
+    origins: &[(u32, u16)],
     target: u32,
     start: u32,
 ) -> Option<u32> {
@@ -96,7 +97,10 @@ fn connection_scan(
     let mut arrival_by_walking = vec![u32::MAX; stations];
     let mut arrival_by_train = vec![u32::MAX; stations];
     let mut trip_boarded = vec![false; trips.len()];
-    arrival_by_walking[origin as usize] = start;
+    for &(origin, access) in origins {
+        let slot = &mut arrival_by_walking[origin as usize];
+        *slot = (*slot).min(start + u32::from(access));
+    }
     for (departure, arrival, from, to, trip_index) in connections {
         let ready = arrival_by_walking[from as usize].min(
             arrival_by_train[from as usize].saturating_add(u32::from(MINIMUM_TRANSFER_MINUTES)),
@@ -119,11 +123,11 @@ fn connection_scan(
     (best != u32::MAX).then_some(best)
 }
 
-/// Earliest arrival at `target` when leaving `origin` at `start` or later, by the router.
+/// Earliest arrival at `target` when leaving the place at `start` or later, by the router.
 fn router(
     trips: &[RandomTrip],
     footpaths: &[(u32, u32, u16)],
-    origin: u32,
+    origins: &[(u32, u16)],
     target: u32,
     start: u32,
 ) -> Option<u32> {
@@ -166,10 +170,13 @@ fn router(
         });
     }
     let bundle = LoadedTimetableBundle::from_bundle(&builder.build().unwrap()).unwrap();
-    let departure_candidates = [CandidateStation {
-        station: BundleStationIndex(origin),
-        time_to_place_minutes: 0,
-    }];
+    let departure_candidates: Vec<_> = origins
+        .iter()
+        .map(|&(origin, access)| CandidateStation {
+            station: BundleStationIndex(origin),
+            time_to_place_minutes: access,
+        })
+        .collect();
     let arrival_candidates = [CandidateStation {
         station: BundleStationIndex(target),
         time_to_place_minutes: 0,
@@ -197,9 +204,12 @@ proptest! {
         trips in proptest::collection::vec(random_trip(), 1..12),
         footpaths in proptest::collection::vec(random_footpath(), 0..4),
         start in 0..300u32,
+        first_access in 0..30u16,
+        second_access in 0..30u16,
     ) {
-        let expected = connection_scan(&trips, &footpaths, 0, STATION_COUNT - 1, start);
-        let actual = router(&trips, &footpaths, 0, STATION_COUNT - 1, start);
+        let origins = [(0, first_access), (1, second_access)];
+        let expected = connection_scan(&trips, &footpaths, &origins, STATION_COUNT - 1, start);
+        let actual = router(&trips, &footpaths, &origins, STATION_COUNT - 1, start);
         prop_assert_eq!(actual, expected);
     }
 }

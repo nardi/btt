@@ -46,7 +46,7 @@ fn main() {
         let endpoint = |latitude, longitude| LegEndpoint {
             coordinates: GeoCoordinates::from_degrees(latitude, longitude).unwrap(),
             station_search_radius: StationSearchRadius::DEFAULT,
-            time_window: DailyTimeWindow::from_start_and_end(time(7), time(11)),
+            time_window: DailyTimeWindow::from_start_and_end(time(7), time(20)),
         };
         let input = LegPlanningInput {
             departure: endpoint(from_latitude, from_longitude),
@@ -60,7 +60,7 @@ fn main() {
         let result = router.plan_leg(&input, || false);
         let elapsed = started.elapsed();
         println!(
-            "\n{from_name} to {to_name}, leaving between 07:00 and 11:00, searched in {elapsed:?}"
+            "\n{from_name} to {to_name}, leaving between 07:00 and 20:00, searched in {elapsed:?}"
         );
         match result {
             LegPlanningResult::NoJourneyFound(reason) => println!("  no journey: {reason:?}"),
