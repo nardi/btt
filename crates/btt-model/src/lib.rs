@@ -7,6 +7,7 @@ mod bounded;
 pub mod coordinates;
 pub mod edit;
 pub mod itinerary;
+pub mod plan;
 pub mod time;
 pub mod trip;
 
@@ -19,6 +20,10 @@ pub use itinerary::{
     AcceptedBerths, BerthType, Itinerary, ItineraryLeg, ItineraryRoute, LegTravelMode,
     OvernightLegOptions, PlaceStay, SameDayStayRange, StationSearchRadius, TripPlace, TripPlaceId,
     ViaPlace,
+};
+pub use plan::{
+    Journey, LegPlan, LegPlanStation, LegPlanStationIndex, LegPlanningResult, NoJourneyReason,
+    PlanningRunId, PlanningSessionEvent, TrainLabel, TrainRide, TransferAndRide,
 };
 pub use time::{
     DailyTimeWindow, DailyWindowLength, DurationMinutes, LocalTimeOfDay, TravelDayWindows,

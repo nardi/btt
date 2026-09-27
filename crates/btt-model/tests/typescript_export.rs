@@ -1,6 +1,8 @@
 //! Checks that every model type exports to TypeScript.
 
-use btt_model::{StoredTrip, TripEdit, TripEditError, TripEditOutcome, TripSummary};
+use btt_model::{
+    PlanningSessionEvent, StoredTrip, TripEdit, TripEditError, TripEditOutcome, TripSummary,
+};
 use specta::Types;
 use specta_typescript::Typescript;
 
@@ -11,7 +13,8 @@ fn model_types_export_to_typescript() {
         .register::<TripSummary>()
         .register::<TripEdit>()
         .register::<TripEditOutcome>()
-        .register::<TripEditError>();
+        .register::<TripEditError>()
+        .register::<PlanningSessionEvent>();
     let typescript = Typescript::default()
         .export(&types, specta_serde::Format)
         .unwrap();
