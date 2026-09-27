@@ -25,6 +25,9 @@ macro_rules! coordinate_axis {
         }
 
         impl $type_name {
+            /// Zero degrees, at the equator or the prime meridian.
+            pub const ZERO: Self = Self { microdegrees: 0 };
+
             /// Largest absolute value in microdegrees.
             pub const LIMIT_MICRODEGREES: i32 = $limit_degrees * 1_000_000;
 

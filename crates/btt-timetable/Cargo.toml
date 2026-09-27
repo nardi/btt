@@ -1,0 +1,21 @@
+[package]
+name = "btt-timetable"
+description = "Compact timetable bundle format for BTT, with its loader and station index"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license-file.workspace = true
+
+[dependencies]
+btt-model.workspace = true
+chrono.workspace = true
+memmap2.workspace = true
+rkyv.workspace = true
+rstar.workspace = true
+rustc-hash.workspace = true
+smallvec.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true
