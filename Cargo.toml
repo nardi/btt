@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/*"]
+members = ["crates/*", "src-tauri"]
 
 [workspace.package]
 version = "0.1.0"
@@ -31,10 +31,14 @@ smol_str = { version = "0.3.6", features = ["serde"] }
 specta = { version = "=2.0.0-rc.25", features = ["derive", "chrono", "uuid", "smallvec", "smol_str"] }
 specta-serde = "0.0.12"
 specta-typescript = "0.0.12"
+tauri = "2"
+tauri-build = "2"
+tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
 thiserror = "2.0.21"
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 tokio-util = "0.7.19"
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tzf-rs = { version = "2.1.2", default-features = false, features = ["bundled"] }
 uuid = { version = "1.26.1", features = ["v7", "serde"] }
 xxhash-rust = { version = "0.8.18", features = ["xxh3"] }

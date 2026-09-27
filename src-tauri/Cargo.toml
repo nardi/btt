@@ -1,0 +1,36 @@
+[package]
+name = "btt-app"
+description = "BigTrainTrip desktop app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license-file.workspace = true
+
+[lib]
+name = "btt_app_lib"
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[dependencies]
+btt-geo.workspace = true
+btt-model.workspace = true
+btt-planner.workspace = true
+btt-storage.workspace = true
+chrono.workspace = true
+rustc-hash.workspace = true
+serde.workspace = true
+smol_str.workspace = true
+specta.workspace = true
+specta-typescript.workspace = true
+tauri.workspace = true
+tauri-specta.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true

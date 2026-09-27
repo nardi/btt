@@ -1,0 +1,74 @@
+/* Colors and spacing shared by the desktop app and the web viewer. */
+
+:root {
+  color-scheme: light dark;
+  --color-background: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-surface-muted: #eef1f5;
+  --color-border: #d5dbe3;
+  --color-text: #1b2430;
+  --color-text-muted: #5b6878;
+  --color-accent: #1f4e79;
+  --color-accent-contrast: #ffffff;
+  --color-danger: #b3261e;
+  --color-notice: #fff4d6;
+  --radius: 8px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: #12161c;
+    --color-surface: #1b212a;
+    --color-surface-muted: #242c37;
+    --color-border: #354050;
+    --color-text: #e6ebf1;
+    --color-text-muted: #9aa7b6;
+    --color-accent: #7fb3e6;
+    --color-accent-contrast: #0c1a28;
+    --color-danger: #f2b8b5;
+    --color-notice: #3d3420;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--color-background);
+  color: var(--color-text);
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: var(--radius);
+  padding: var(--space-1) var(--space-3);
+}
+
+button.primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+input,
+select {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: var(--radius);
+  padding: var(--space-1) var(--space-2);
+}
