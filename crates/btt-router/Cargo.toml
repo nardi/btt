@@ -1,0 +1,21 @@
+[package]
+name = "btt-router"
+description = "RAPTOR journey search over BTT timetable bundles"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license-file.workspace = true
+
+[dependencies]
+btt-timetable.workspace = true
+fixedbitset.workspace = true
+smallvec.workspace = true
+
+[dev-dependencies]
+btt-model.workspace = true
+chrono.workspace = true
+proptest.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc a21ab15e2c90d7db35625534db3a0aad3d2c99a01ee8547a48f6e145529a27e2 # shrinks to trips = [RandomTrip { stations: [2, 0, 3], first_departure: 155, segment_minutes: [54, 5], dwell_minutes: [2, 0] }, RandomTrip { stations: [3, 0], first_departure: 221, segment_minutes: [5], dwell_minutes: [0] }], footpaths = [(0, 4, 1)], start = 0

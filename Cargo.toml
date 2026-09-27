@@ -13,6 +13,7 @@ license-file = "LICENSE.md"
 btt-geo = { path = "crates/btt-geo" }
 btt-model = { path = "crates/btt-model" }
 btt-planner = { path = "crates/btt-planner" }
+btt-router = { path = "crates/btt-router" }
 btt-storage = { path = "crates/btt-storage" }
 btt-builder = { path = "crates/btt-builder" }
 btt-timetable = { path = "crates/btt-timetable" }
@@ -20,6 +21,7 @@ btt-timetable = { path = "crates/btt-timetable" }
 chrono = { version = "0.4.45", default-features = false, features = ["std", "serde"] }
 chrono-tz = "0.10.4"
 clap = { version = "4.6.7", features = ["derive"] }
+fixedbitset = "0.5.7"
 duckdb = { version = "1.10505.0", features = ["bundled", "json", "parquet"] }
 governor = "0.10.4"
 memmap2 = "0.9.11"
