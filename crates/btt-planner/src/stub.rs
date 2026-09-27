@@ -7,7 +7,7 @@ use std::sync::Arc;
 use btt_geo::{TimeZoneFinder, local_time_to_unix_minutes};
 use btt_model::{
     DurationMinutes, GeoCoordinates, Journey, LegPlan, LegPlanStation, LegPlanStationIndex,
-    LegPlanningResult, TrainLabel, TrainRide, UnixTimeMinutes,
+    LegPlanningResult, LegTravelMode, TrainLabel, TrainRide, UnixTimeMinutes,
 };
 use smallvec::{SmallVec, smallvec};
 
@@ -37,11 +37,18 @@ impl StubBackend {
     pub fn plan_leg(&self, input: &LegPlanningInput) -> LegPlanningResult {
         let departure_coordinates = input.departure.coordinates;
         let arrival_coordinates = input.arrival.coordinates;
-        let time_zone = self.time_zone_finder.time_zone_at(departure_coordinates);
+        let departure_time_zone = self.time_zone_finder.time_zone_at(departure_coordinates);
+        let arrival_time_zone = self.time_zone_finder.time_zone_at(arrival_coordinates);
+        // A night train leaves in the boarding window, which is usually later than the leg's
+        // departure window.
+        let departure_window_start = match input.travel_mode {
+            LegTravelMode::Daytime => input.departure.time_window.start,
+            LegTravelMode::Overnight(options) => options.boarding_window.start,
+        };
         let departure_time = local_time_to_unix_minutes(
             input.departure_date,
-            u32::from(input.departure.time_window.start.minutes_since_midnight()),
-            time_zone,
+            u32::from(departure_window_start.minutes_since_midnight()),
+            departure_time_zone,
         );
         let ride_minutes = stub_ride_minutes(departure_coordinates, arrival_coordinates);
         let arrival_time =
@@ -68,10 +75,12 @@ impl StubBackend {
                 LegPlanStation {
                     name: "Departure station".into(),
                     coordinates: departure_coordinates,
+                    time_zone: departure_time_zone.name().into(),
                 },
                 LegPlanStation {
                     name: "Arrival station".into(),
-                    coordinates: arrival_coordinates
+                    coordinates: arrival_coordinates,
+                    time_zone: arrival_time_zone.name().into(),
                 },
             ],
         }))

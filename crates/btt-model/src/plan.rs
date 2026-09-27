@@ -22,6 +22,8 @@ pub struct LegPlanStation {
     pub name: SmolStr,
     /// Location of the station, for the map.
     pub coordinates: GeoCoordinates,
+    /// IANA time zone of the station, such as "Europe/Vienna", for showing local train times.
+    pub time_zone: SmolStr,
 }
 
 /// How a train is shown to the traveller, such as "ICE 27".
@@ -117,8 +119,9 @@ pub enum NoJourneyReason {
 /// Result of planning one leg.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
 pub enum LegPlanningResult {
-    /// The planner found at least one journey. Boxed, because a leg plan keeps its journeys inline
-    /// and is far larger than the other variant.
+    /// The planner found at least one journey.
+    // Boxed, because a leg plan keeps its journeys inline and is far larger than the other
+    // variant.
     Found(Box<LegPlan>),
     /// The planner found no journey.
     NoJourneyFound(NoJourneyReason),
