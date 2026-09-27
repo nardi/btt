@@ -1,0 +1,161 @@
+-- Step 3: collapses platforms into stations and matches each station to the Trainline stations
+-- dataset. Expects the table trainline_raw and the variables stopword_pattern,
+-- match_radius_meters, accepted_similarity and uncertain_similarity.
+
+-- Lowercases, removes diacritics and punctuation, and strips words such as "hbf", so
+-- "Köln Hbf" and "Koeln Hauptbahnhof" compare on "koln" and "koeln".
+CREATE MACRO normalized_station_name(name) AS
+    trim(regexp_replace(
+        regexp_replace(
+            regexp_replace(strip_accents(lower(name)), '[^a-z0-9]+', ' ', 'g'),
+            getvariable('stopword_pattern'), ' ', 'g'),
+        ' +', ' ', 'g'));
+
+CREATE TABLE trainline_stations AS
+SELECT CAST(id AS INTEGER) AS trainline_station_id,
+       name,
+       CAST(latitude AS DOUBLE) AS latitude,
+       CAST(longitude AS DOUBLE) AS longitude,
+       nullif(uic, '') AS uic,
+       nullif(db_id, '') AS db_id,
+       nullif(time_zone, '') AS time_zone,
+       normalized_station_name(name) AS normalized_name
+FROM trainline_raw
+-- City rows group several stations, and rows with same_as duplicate another row.
+WHERE is_city = 'f'
+  AND coalesce(same_as, '') = ''
+  AND TRY_CAST(latitude AS DOUBLE) IS NOT NULL
+  AND TRY_CAST(longitude AS DOUBLE) IS NOT NULL;
+
+-- One row per station key that rail trips use. The row whose stop ID is the key, which is the
+-- parent station, names and places the station. Without such a row the platforms do.
+CREATE TABLE feed_stations AS
+WITH used_station_keys AS (
+    SELECT DISTINCT stops.feed_id, stops.station_key
+    FROM feed_stop_times AS stop_times
+    JOIN feed_stops AS stops USING (feed_id, stop_id)
+)
+SELECT stops.feed_id,
+       stops.station_key,
+       coalesce(any_value(stops.stop_name) FILTER (WHERE stops.stop_id = stops.station_key),
+                min(stops.stop_name)) AS name,
+       coalesce(any_value(stops.latitude) FILTER (WHERE stops.stop_id = stops.station_key),
+                avg(stops.latitude)) AS latitude,
+       coalesce(any_value(stops.longitude) FILTER (WHERE stops.stop_id = stops.station_key),
+                avg(stops.longitude)) AS longitude,
+       max(stops.station_code) AS station_code
+FROM feed_stops AS stops
+JOIN used_station_keys USING (feed_id, station_key)
+WHERE stops.latitude IS NOT NULL AND stops.longitude IS NOT NULL
+GROUP BY stops.feed_id, stops.station_key;
+
+-- First pass: official station codes. A separate equality join per scheme keeps DuckDB on hash
+-- joins.
+CREATE TABLE code_matches AS
+WITH coded_stations AS (
+    SELECT stations.feed_id, stations.station_key, stations.station_code,
+           feed_config.station_code_scheme
+    FROM feed_stations AS stations
+    JOIN feed_config USING (feed_id)
+    WHERE stations.station_code IS NOT NULL AND feed_config.station_code_scheme <> 'none'
+),
+code_candidates AS (
+    SELECT coded.feed_id, coded.station_key, trainline.trainline_station_id
+    FROM coded_stations AS coded
+    JOIN trainline_stations AS trainline ON trainline.uic = coded.station_code
+    WHERE coded.station_code_scheme = 'uic'
+    UNION ALL
+    SELECT coded.feed_id, coded.station_key, trainline.trainline_station_id
+    FROM coded_stations AS coded
+    JOIN trainline_stations AS trainline ON trainline.db_id = coded.station_code
+    WHERE coded.station_code_scheme = 'eva'
+)
+SELECT * FROM code_candidates
+QUALIFY row_number() OVER (PARTITION BY feed_id, station_key ORDER BY trainline_station_id) = 1;
+
+-- Second pass: distance and name, for the stations the first pass left. The margins turn the
+-- match radius into degrees for a bounding box, which lets DuckDB run a range join.
+CREATE TABLE unmatched_feed_stations AS
+SELECT stations.*,
+       normalized_station_name(stations.name) AS normalized_name,
+       getvariable('match_radius_meters') / 111320.0 AS latitude_margin,
+       getvariable('match_radius_meters') / 111320.0
+           / greatest(cos(radians(stations.latitude)), 0.05) AS longitude_margin
+FROM feed_stations AS stations
+ANTI JOIN code_matches USING (feed_id, station_key);
+
+CREATE TABLE name_distance_candidates AS
+SELECT unmatched.feed_id,
+       unmatched.station_key,
+       unmatched.name AS feed_name,
+       trainline.trainline_station_id,
+       trainline.name AS trainline_name,
+       haversine_meters(unmatched.latitude, unmatched.longitude,
+                        trainline.latitude, trainline.longitude) AS distance_meters,
+       jaro_winkler_similarity(unmatched.normalized_name, trainline.normalized_name)
+           AS name_similarity
+FROM unmatched_feed_stations AS unmatched
+JOIN trainline_stations AS trainline
+  ON trainline.latitude BETWEEN unmatched.latitude - unmatched.latitude_margin
+                            AND unmatched.latitude + unmatched.latitude_margin
+ AND trainline.longitude BETWEEN unmatched.longitude - unmatched.longitude_margin
+                             AND unmatched.longitude + unmatched.longitude_margin
+WHERE haversine_meters(unmatched.latitude, unmatched.longitude,
+                       trainline.latitude, trainline.longitude)
+      <= getvariable('match_radius_meters');
+
+CREATE TABLE name_distance_matches AS
+SELECT *
+FROM name_distance_candidates
+WHERE name_similarity >= getvariable('accepted_similarity')
+QUALIFY row_number() OVER (PARTITION BY feed_id, station_key ORDER BY distance_meters) = 1;
+
+-- Candidates between the two thresholds go into the report and stay unmatched.
+CREATE TABLE uncertain_station_matches AS
+SELECT candidates.*
+FROM name_distance_candidates AS candidates
+ANTI JOIN name_distance_matches USING (feed_id, station_key)
+WHERE candidates.name_similarity >= getvariable('uncertain_similarity')
+QUALIFY row_number() OVER (
+    PARTITION BY candidates.feed_id, candidates.station_key
+    ORDER BY candidates.name_similarity DESC) = 1;
+
+CREATE TABLE station_matches AS
+SELECT feed_id, station_key, trainline_station_id, 'code' AS match_kind FROM code_matches
+UNION ALL
+SELECT feed_id, station_key, trainline_station_id, 'name and distance' FROM name_distance_matches;
+
+-- Feed stations that match the same Trainline station become one bundle station. An unmatched
+-- feed station becomes a bundle station of its own.
+CREATE TABLE station_groups AS
+SELECT stations.feed_id,
+       stations.station_key,
+       stations.name,
+       stations.latitude,
+       stations.longitude,
+       matches.trainline_station_id,
+       coalesce('trainline:' || matches.trainline_station_id,
+                'feed:' || stations.feed_id || ':' || stations.station_key) AS group_key
+FROM feed_stations AS stations
+LEFT JOIN station_matches AS matches USING (feed_id, station_key);
+
+CREATE TABLE bundle_stations AS
+SELECT CAST(row_number() OVER (ORDER BY group_key) - 1 AS INTEGER) AS bundle_station_id, *
+FROM (
+    SELECT station_groups.group_key,
+           any_value(station_groups.trainline_station_id) AS trainline_station_id,
+           coalesce(any_value(trainline.name), min(station_groups.name)) AS name,
+           coalesce(any_value(trainline.latitude), avg(station_groups.latitude)) AS latitude,
+           coalesce(any_value(trainline.longitude), avg(station_groups.longitude)) AS longitude,
+           coalesce(any_value(trainline.time_zone), any_value(feed_config.default_time_zone),
+                    'UTC') AS time_zone
+    FROM station_groups
+    LEFT JOIN trainline_stations AS trainline USING (trainline_station_id)
+    JOIN feed_config USING (feed_id)
+    GROUP BY station_groups.group_key
+);
+
+CREATE TABLE feed_station_bundle_ids AS
+SELECT station_groups.feed_id, station_groups.station_key, bundle_stations.bundle_station_id
+FROM station_groups
+JOIN bundle_stations USING (group_key);

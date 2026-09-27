@@ -1,0 +1,16 @@
+# Words the builder strips from station names before comparing a feed stop with a Trainline
+# station, after lowercasing and removing diacritics.
+
+stopwords = [
+    "hauptbahnhof",
+    "hbf",
+    "bahnhof",
+    "bf",
+    "centraal",
+    "centrale",
+    "station",
+    "gare de",
+    "gare",
+    "stazione",
+    "estacion",
+]

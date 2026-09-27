@@ -1,0 +1,38 @@
+# Feeds the timetable builder reads, by their name on the Transitous mirror at
+# https://api.transitous.org/gtfs/. The part before the first underscore names the country file
+# in the Transitous feed configuration, which holds the license of each feed.
+
+validity_window_days = 90
+
+[[feed]]
+mirror_name = "nl_OpenOV"
+# Platforms carry the station area as parent_station, so the default key rule fits.
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^(?<number>\d+)$'
+category_field = "route_short_name"
+
+[[feed]]
+mirror_name = "de_DELFI"
+# DHID platform IDs such as de:05315:11201:7:71 often have no parent_station.
+station_key_pattern = '^(de:\d+:\d+)'
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^0*(?<number>\d+)$'
+category_field = "route_short_name"
+
+[[feed]]
+mirror_name = "at_Railway-Current-Reference-Data-2026"
+station_key_pattern = '^(at:\d+:\d+)'
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^(?<category>[A-Za-z]+)\s*(?<number>\d+)$'
+category_field = "route_short_name"
+
+[[feed]]
+mirror_name = "eu_european-sleeper"
+station_code = "uic_in_stop_id"
+[feed.train_label]
+field = "route_short_name"
+pattern = '^(?<category>[A-Za-z]+)\s*(?<number>\d+)$'
+category_field = "route_short_name"
