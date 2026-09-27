@@ -9,6 +9,7 @@ license-file.workspace = true
 
 [dependencies]
 btt-model.workspace = true
+chrono.workspace = true
 chrono-tz.workspace = true
 governor.workspace = true
 reqwest.workspace = true

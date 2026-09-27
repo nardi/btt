@@ -100,6 +100,7 @@ name = "btt-geo"
 version = "0.1.0"
 dependencies = [
  "btt-model",
+ "chrono",
  "chrono-tz",
  "governor",
  "reqwest",
