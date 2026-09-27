@@ -114,6 +114,8 @@ pub enum NoJourneyReason {
     NoConnectionInWindow,
     /// The planning backend failed, for example because a network request failed.
     BackendUnavailable,
+    /// The travel date lies outside the days the timetable covers.
+    TravelDateOutsideTimetable,
 }
 
 /// Result of planning one leg.

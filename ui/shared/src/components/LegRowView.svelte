@@ -42,6 +42,7 @@
     NoStationNearArrivalPlace: "No station with service near the arrival place.",
     NoConnectionInWindow: "No connection fits the time windows.",
     BackendUnavailable: "The planner could not be reached.",
+    TravelDateOutsideTimetable: "The timetable does not cover this date yet.",
   };
 
   function setTravelMode(travelMode: LegTravelMode) {

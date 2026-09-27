@@ -1,8 +1,11 @@
 //! The backends that can plan a leg.
 
-use btt_model::LegPlanningResult;
+use std::sync::Arc;
+
+use btt_model::{LegPlanningResult, NoJourneyReason};
 use tokio_util::sync::CancellationToken;
 
+use crate::bundle_router::TimetableBundleRouter;
 use crate::input::LegPlanningInput;
 #[cfg(feature = "stub")]
 use crate::stub::StubBackend;
@@ -13,40 +16,49 @@ pub enum LegPlanningBackend {
     /// Invents one direct train per leg from the straight-line distance.
     #[cfg(feature = "stub")]
     Stub(StubBackend),
+    /// Searches journeys with RAPTOR on a timetable bundle.
+    TimetableBundle(Arc<TimetableBundleRouter>),
 }
 
 impl LegPlanningBackend {
     /// Returns a value that separates this backend's cached results from other backends'.
     ///
-    /// Backends built on timetable data include the data version, so a new version never
-    /// returns results from the old one.
+    /// The bundle backend includes the bundle version, so a new version never returns results
+    /// from the old one.
     pub fn cache_namespace(&self) -> u64 {
-        match *self {
+        match self {
             #[cfg(feature = "stub")]
             Self::Stub(_) => 1,
+            Self::TimetableBundle(router) => (2 << 32) | u64::from(router.bundle_version()),
         }
     }
 
     /// Plans one leg.
     ///
-    /// Slow backends stop early when the cancellation token fires, and the caller drops
-    /// whatever they return in that case.
-    #[allow(clippy::unused_async, reason = "network and timetable backends await")]
-    #[cfg_attr(
-        not(feature = "stub"),
-        allow(unused_variables, reason = "no backend is enabled to use them")
-    )]
+    /// The bundle backend searches on a blocking thread and stops early when the cancellation
+    /// token fires. The caller drops whatever a cancelled search returns.
     pub async fn plan_leg(
         &self,
         input: &LegPlanningInput,
         cancellation: &CancellationToken,
     ) -> LegPlanningResult {
-        match *self {
+        match self {
             #[cfg(feature = "stub")]
-            Self::Stub(ref stub) => {
+            Self::Stub(stub) => {
                 // The stub answers in microseconds, so it never needs to stop early.
                 let _ = cancellation;
                 stub.plan_leg(input)
+            }
+            Self::TimetableBundle(router) => {
+                let router = Arc::clone(router);
+                let input = input.clone();
+                let cancellation = cancellation.clone();
+                let search = tokio::task::spawn_blocking(move || {
+                    router.plan_leg(&input, || cancellation.is_cancelled())
+                });
+                search.await.unwrap_or(LegPlanningResult::NoJourneyFound(
+                    NoJourneyReason::BackendUnavailable,
+                ))
             }
         }
     }

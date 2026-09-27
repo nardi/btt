@@ -19,7 +19,8 @@ station_key_pattern = '^(de:\d+:\d+)'
 [feed.train_label]
 field = "trip_short_name"
 pattern = '^0*(?<number>\d+)$'
-category_field = "route_short_name"
+# Route short names are line numbers, so the category comes from the route type.
+category_field = "route_type"
 
 [[feed]]
 mirror_name = "at_Railway-Current-Reference-Data-2026"

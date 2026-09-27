@@ -15,6 +15,8 @@ stub = []
 [dependencies]
 btt-geo.workspace = true
 btt-model.workspace = true
+btt-router.workspace = true
+btt-timetable.workspace = true
 chrono.workspace = true
 chrono-tz.workspace = true
 postcard.workspace = true

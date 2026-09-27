@@ -232,7 +232,9 @@ export type NoJourneyReason =
 /**  Stations exist, but no connection fits the time windows. */
 "NoConnectionInWindow" | 
 /**  The planning backend failed, for example because a network request failed. */
-"BackendUnavailable";
+"BackendUnavailable" | 
+/**  The travel date lies outside the days the timetable covers. */
+"TravelDateOutsideTimetable";
 
 /**  Options for a leg that includes one night train. */
 export type OvernightLegOptions = {

@@ -575,6 +575,8 @@ version = "0.1.0"
 dependencies = [
  "btt-geo",
  "btt-model",
+ "btt-router",
+ "btt-timetable",
  "chrono",
  "chrono-tz",
  "postcard",

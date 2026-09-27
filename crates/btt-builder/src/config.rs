@@ -108,6 +108,8 @@ pub enum TrainLabelField {
     TripShortName,
     /// `routes.txt` `route_short_name`.
     RouteShortName,
+    /// A product name derived from `routes.txt` `route_type`, such as "ICE" for 101.
+    RouteType,
 }
 
 /// How to read category and number of a train from a trip.

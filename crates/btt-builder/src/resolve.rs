@@ -43,6 +43,7 @@ struct FeedTripHeader {
     service_id: String,
     trip_short_name: Option<String>,
     route_short_name: Option<String>,
+    route_type: i32,
     agency_name: String,
     time_zone: Tz,
 }
@@ -174,7 +175,8 @@ fn read_trip_headers(
     let mut statement = database.connection.prepare(
         "SELECT trips.feed_id, trips.trip_id, trips.service_id, trips.trip_short_name,
                 routes.route_short_name, coalesce(agencies.agency_name, ''),
-                coalesce(agencies.agency_timezone, feed_config.default_time_zone, 'UTC')
+                coalesce(agencies.agency_timezone, feed_config.default_time_zone, 'UTC'),
+                routes.route_type
          FROM feed_trips AS trips
          JOIN feed_routes AS routes USING (feed_id, route_id)
          JOIN feed_config USING (feed_id)
@@ -197,6 +199,7 @@ fn read_trip_headers(
                 service_id: row.get(2)?,
                 trip_short_name: row.get(3)?,
                 route_short_name: row.get(4)?,
+                route_type: row.get(7)?,
                 agency_name: row.get(5)?,
                 time_zone: time_zone_name.parse().unwrap_or(Tz::UTC),
             },
@@ -211,6 +214,7 @@ fn train_label(rule: &TrainLabelRule, header: &FeedTripHeader) -> (String, Train
     let field_text = |field: TrainLabelField| match field {
         TrainLabelField::TripShortName => header.trip_short_name.as_deref().unwrap_or(""),
         TrainLabelField::RouteShortName => header.route_short_name.as_deref().unwrap_or(""),
+        TrainLabelField::RouteType => route_type_category(header.route_type),
     };
     let text = field_text(rule.field).trim();
     let captures = rule.pattern.captures(text);
@@ -236,6 +240,21 @@ fn train_label(rule: &TrainLabelRule, header: &FeedTripHeader) -> (String, Train
         agency: header.agency_name.clone(),
     };
     (train_number, label)
+}
+
+/// Returns the usual German product name for a GTFS route type, for feeds whose route short
+/// names are line numbers. The extended types follow the European rail categories.
+fn route_type_category(route_type: i32) -> &'static str {
+    match route_type {
+        101 => "ICE",
+        102 => "IC",
+        103 => "IR",
+        105 => "NJ",
+        106 => "RE",
+        107 => "Tourist",
+        109 => "S",
+        _ => "Zug",
+    }
 }
 
 /// Resolves the local times of a trip to UTC for every day it runs, and groups days that give
@@ -385,6 +404,7 @@ mod tests {
             service_id: String::new(),
             trip_short_name: Some("000141".into()),
             route_short_name: Some("ICE".into()),
+            route_type: 101,
             agency_name: "DB Fernverkehr AG".into(),
             time_zone: Tz::Europe__Berlin,
         };

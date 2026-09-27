@@ -278,7 +278,12 @@ pub fn search_leg_journeys<F: BoardingFilter>(
                 continue;
             }
             *best_arrival = arrival;
-            if let Some(journey) = search.reconstruct(round, station, arrival) {
+            // A journey whose first train leaves long after the window would have the
+            // traveller leave in time and wait at the station, so it counts as outside the
+            // window.
+            if let Some(journey) = search.reconstruct(round, station, arrival)
+                && journey.departure < query.departure_window.end
+            {
                 found.journeys.push(journey);
             }
         }
