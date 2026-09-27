@@ -24,6 +24,14 @@ export const commands = {
 	 *  Async, so it runs on the Tokio runtime the planning session spawns its tasks on.
 	 */
 	applyTripEdit: (tripId: TripId, edit: TripEdit) => typedError<TripEditOutcome, CommandError>(__TAURI_INVOKE("apply_trip_edit", { tripId, edit })),
+	/**
+	 *  Adds a place where the user clicked on the map, at the position in the itinerary that adds
+	 *  the least distance. The place gets a name from its coordinates until reverse geocoding finds
+	 *  the town.
+	 * 
+	 *  Async, so it runs on the Tokio runtime the planning session spawns its tasks on.
+	 */
+	addPlaceAtCoordinates: (tripId: TripId, coordinates: GeoCoordinates) => typedError<TripEditOutcome, CommandError>(__TAURI_INVOKE("add_place_at_coordinates", { tripId, coordinates })),
 	/**  Deletes a trip and stops planning it. */
 	deleteTrip: (tripId: TripId) => typedError<null, CommandError>(__TAURI_INVOKE("delete_trip", { tripId })),
 	/**

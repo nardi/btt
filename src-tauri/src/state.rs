@@ -3,7 +3,7 @@
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use btt_geo::{PUBLIC_PHOTON_BASE_URL, PhotonClient, TimeZoneFinder};
-use btt_model::{PlanningSessionEvent, Trip, TripId};
+use btt_model::{PlanningSessionEvent, Trip, TripEdit, TripEditOutcome, TripId};
 use btt_planner::{
     DEFAULT_PLANNING_DEBOUNCE, LegPlanningBackend, PlanningEventSink, StubBackend,
     TripPlanningSession,
@@ -12,6 +12,9 @@ use btt_storage::Storage;
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 use tauri::ipc::Channel;
+
+use crate::commands::CommandError;
+use crate::place_naming::{has_provisional_name, provisional_place_name};
 
 /// `User-Agent` for requests to public services, which ask clients to identify themselves.
 const USER_AGENT: &str = concat!(
@@ -97,5 +100,80 @@ impl AppState {
                 planning_session,
             },
         );
+    }
+
+    /// Applies an edit from the frontend to an open trip, saves it and replans.
+    ///
+    /// Moving a place that still has its provisional name also updates that name, so it keeps
+    /// matching the coordinates and reverse geocoding can replace it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the trip is not open, the edit does not fit or saving fails.
+    pub fn apply_edit_from_frontend(
+        &self,
+        trip_id: TripId,
+        edit: TripEdit,
+    ) -> Result<TripEditOutcome, CommandError> {
+        let mut open_trips = self.open_trips();
+        let open_trip = open_trips
+            .get_mut(&trip_id)
+            .ok_or(CommandError::TripNotOpen(trip_id))?;
+        let mut trip = open_trip.trip.clone();
+        let provisional_rename = match &edit {
+            TripEdit::MovePlace {
+                place_id,
+                coordinates,
+            } if trip
+                .itinerary
+                .place(*place_id)
+                .is_some_and(has_provisional_name) =>
+            {
+                Some(TripEdit::RenamePlace {
+                    place_id: *place_id,
+                    name: provisional_place_name(*coordinates),
+                })
+            }
+            _ => None,
+        };
+        let mut notices = trip.apply_edit(edit).map_err(CommandError::InvalidEdit)?;
+        if let Some(rename) = provisional_rename {
+            notices.extend(trip.apply_edit(rename).map_err(CommandError::InvalidEdit)?);
+        }
+        // Saving under the lock keeps the stored order of edits the same as the applied order.
+        self.storage.save_trip(&trip)?;
+        open_trip.trip = trip.clone();
+        open_trip.planning_session.trip_changed(trip.clone());
+        Ok(TripEditOutcome { trip, notices })
+    }
+
+    /// Applies an edit that the backend makes on its own, such as a name from reverse geocoding,
+    /// and sends the changed trip to the frontend.
+    ///
+    /// Does nothing when the trip is no longer open or `still_applies` returns `false`, because
+    /// the user may have changed the trip since the backend started its work.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the edit does not fit or saving fails.
+    pub fn apply_edit_from_backend(
+        &self,
+        trip_id: TripId,
+        edit: TripEdit,
+        still_applies: impl FnOnce(&Trip) -> bool,
+    ) -> Result<(), CommandError> {
+        let mut open_trips = self.open_trips();
+        let Some(open_trip) = open_trips.get_mut(&trip_id) else {
+            return Ok(());
+        };
+        if !still_applies(&open_trip.trip) {
+            return Ok(());
+        }
+        let mut trip = open_trip.trip.clone();
+        trip.apply_edit(edit).map_err(CommandError::InvalidEdit)?;
+        self.storage.save_trip(&trip)?;
+        open_trip.trip = trip.clone();
+        open_trip.planning_session.trip_changed_elsewhere(trip);
+        Ok(())
     }
 }

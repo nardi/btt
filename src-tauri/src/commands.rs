@@ -3,18 +3,20 @@
 // Tauri passes `State` and other arguments by value, which the command signatures must match.
 #![allow(clippy::needless_pass_by_value)]
 
+use btt_model::edit::NewTripPlace;
 use btt_model::{
-    PlaceSearchResult, PlanningSessionEvent, Trip, TripEdit, TripEditError, TripEditOutcome,
-    TripId, TripSummary,
+    GeoCoordinates, PlaceInsertionPoint, PlaceSearchResult, PlanningSessionEvent,
+    StationSearchRadius, Trip, TripEdit, TripEditError, TripEditOutcome, TripId, TripSummary,
 };
 use chrono::NaiveDate;
 use serde::Serialize;
 use smol_str::SmolStr;
 use specta::Type;
-use tauri::State;
 use tauri::ipc::Channel;
+use tauri::{AppHandle, State};
 use thiserror::Error;
 
+use crate::place_naming::{name_provisional_places, provisional_place_name};
 use crate::state::AppState;
 
 /// Errors a command returns to the frontend.
@@ -102,21 +104,40 @@ pub fn close_trip(state: State<'_, AppState>, trip_id: TripId) {
 #[tauri::command]
 #[specta::specta]
 pub async fn apply_trip_edit(
+    app: AppHandle,
     state: State<'_, AppState>,
     trip_id: TripId,
     edit: TripEdit,
 ) -> Result<TripEditOutcome, CommandError> {
-    let mut open_trips = state.open_trips();
-    let open_trip = open_trips
-        .get_mut(&trip_id)
-        .ok_or(CommandError::TripNotOpen(trip_id))?;
-    let mut trip = open_trip.trip.clone();
-    let notices = trip.apply_edit(edit).map_err(CommandError::InvalidEdit)?;
-    // Saving under the lock keeps the stored order of edits the same as the applied order.
-    state.storage.save_trip(&trip)?;
-    open_trip.trip = trip.clone();
-    open_trip.planning_session.trip_changed(trip.clone());
-    Ok(TripEditOutcome { trip, notices })
+    let outcome = state.apply_edit_from_frontend(trip_id, edit)?;
+    name_provisional_places(&app, &outcome.trip);
+    Ok(outcome)
+}
+
+/// Adds a place where the user clicked on the map, at the position in the itinerary that adds
+/// the least distance. The place gets a name from its coordinates until reverse geocoding finds
+/// the town.
+///
+/// Async, so it runs on the Tokio runtime the planning session spawns its tasks on.
+#[tauri::command]
+#[specta::specta]
+pub async fn add_place_at_coordinates(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    trip_id: TripId,
+    coordinates: GeoCoordinates,
+) -> Result<TripEditOutcome, CommandError> {
+    let edit = TripEdit::AddPlace {
+        place: NewTripPlace {
+            name: provisional_place_name(coordinates),
+            coordinates,
+            station_search_radius: StationSearchRadius::DEFAULT,
+        },
+        insert_at: PlaceInsertionPoint::LeastAddedDistance,
+    };
+    let outcome = state.apply_edit_from_frontend(trip_id, edit)?;
+    name_provisional_places(&app, &outcome.trip);
+    Ok(outcome)
 }
 
 /// Deletes a trip and stops planning it.

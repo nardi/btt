@@ -1,6 +1,7 @@
 //! The BigTrainTrip desktop app: Tauri setup, commands and shared state.
 
 mod commands;
+mod place_naming;
 mod state;
 
 use btt_storage::Storage;
@@ -21,6 +22,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::open_trip,
         commands::close_trip,
         commands::apply_trip_edit,
+        commands::add_place_at_coordinates,
         commands::delete_trip,
         commands::search_places,
     ])
