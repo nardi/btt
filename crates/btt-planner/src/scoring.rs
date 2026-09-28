@@ -47,9 +47,8 @@ pub fn journey_cost(
         + weights.transfer_aversion_minutes * u32::from(transfer_aversion.percent()) / 100;
     // The door-to-door time already counts the way to the stations once, so only the extra
     // part of its weight is added.
-    let way_to_station_extra = inputs.way_to_station_minutes
-        * weights.way_to_station_percent.saturating_sub(100)
-        / 100;
+    let way_to_station_extra =
+        inputs.way_to_station_minutes * weights.way_to_station_percent.saturating_sub(100) / 100;
     inputs.door_to_door_minutes + way_to_station_extra + inputs.transfer_count * transfer_penalty
 }
 

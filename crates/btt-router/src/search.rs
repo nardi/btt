@@ -1,5 +1,7 @@
 //! Round-based search with multi-source starts and range queries.
 
+use std::cmp::Reverse;
+use std::collections::BinaryHeap;
 use std::num::NonZeroU8;
 use std::ops::Range;
 
@@ -8,6 +10,8 @@ use btt_timetable::{
 };
 use fixedbitset::FixedBitSet;
 use smallvec::SmallVec;
+
+use crate::index::SearchIndex;
 
 /// Minutes in one day.
 const MINUTES_PER_DAY: u32 = 1440;
@@ -188,6 +192,11 @@ pub struct RaptorSearchBuffers {
     egress_by_station: Vec<u16>,
     /// Stations of the last query that have an egress, so the next reset only clears those.
     egress_stations: Vec<BundleStationIndex>,
+    /// Fewest minutes from each station to the arrival place, or `u32::MAX` when it cannot
+    /// reach the place.
+    lower_bound_by_station: Vec<u32>,
+    /// Priority queue of the lower bound search.
+    lower_bound_queue: BinaryHeap<Reverse<(u32, u32)>>,
 }
 
 impl RaptorSearchBuffers {
@@ -235,6 +244,7 @@ struct BoardedTrip {
 /// One search, with the query, the bundle and the working memory.
 struct Search<'a, F: BoardingFilter> {
     bundle: &'a LoadedTimetableBundle,
+    index: &'a SearchIndex,
     query: &'a RaptorLegQuery<'a>,
     filter: &'a F,
     buffers: &'a mut RaptorSearchBuffers,
@@ -244,10 +254,11 @@ struct Search<'a, F: BoardingFilter> {
 /// Searches journeys for one leg and returns the Pareto set over departure, arrival and number
 /// of trains.
 ///
-/// `should_stop` is checked between departure times, and the search returns what it has when
-/// it returns `true`.
+/// `index` must be built from the same bundle. `should_stop` is checked between
+/// departure times, and the search returns what it has when it returns `true`.
 pub fn search_leg_journeys<F: BoardingFilter>(
     bundle: &LoadedTimetableBundle,
+    index: &SearchIndex,
     query: &RaptorLegQuery<'_>,
     filter: &F,
     buffers: &mut RaptorSearchBuffers,
@@ -256,6 +267,11 @@ pub fn search_leg_journeys<F: BoardingFilter>(
     let rounds = usize::from(query.maximum_train_rides.get()) + 1;
     let station_count = bundle.station_count();
     buffers.reset(station_count, bundle.route_count(), rounds);
+    index.lower_bounds.compute_bounds(
+        query.arrival_candidates,
+        &mut buffers.lower_bound_by_station,
+        &mut buffers.lower_bound_queue,
+    );
     for candidate in query.arrival_candidates {
         if let Some(egress) = buffers
             .egress_by_station
@@ -268,6 +284,7 @@ pub fn search_leg_journeys<F: BoardingFilter>(
     let departure_times = collect_departure_times(bundle, query);
     let mut search = Search {
         bundle,
+        index,
         query,
         filter,
         buffers,
@@ -325,7 +342,7 @@ impl<F: BoardingFilter> Search<'_, F> {
         let slot_index = round * self.station_count + index;
         let existing = self.buffers.labels_by_round_and_station[slot_index];
         if existing.is_some_and(|existing| label.arrival >= existing.arrival)
-            || label.arrival >= self.buffers.target_bound_by_round[round]
+            || !self.may_beat_target(round, station, label.arrival)
         {
             return false;
         }
@@ -337,6 +354,15 @@ impl<F: BoardingFilter> Search<'_, F> {
             *bound = (*bound).min(label.arrival + u32::from(egress));
         }
         true
+    }
+
+    /// Returns whether being at a station at a moment can still lead to an arrival at the
+    /// arrival place before the best one known for this round, by the station's lower bound.
+    /// Stations that cannot reach the place never can.
+    #[inline]
+    fn may_beat_target(&self, round: usize, station: BundleStationIndex, moment: u32) -> bool {
+        let lower_bound = self.buffers.lower_bound_by_station[station.as_usize()];
+        moment.saturating_add(lower_bound) < self.buffers.target_bound_by_round[round]
     }
 
     /// Runs all rounds for one departure time from the departure place. Labels from runs for
@@ -488,7 +514,9 @@ impl<F: BoardingFilter> Search<'_, F> {
                 continue;
             };
             let ready = previous.arrival + self.transfer_slack(previous.origin);
-            if boarded.is_some_and(|trip| trip.departure <= ready) {
+            if boarded.is_some_and(|trip| trip.departure <= ready)
+                || !self.may_beat_target(round, station, ready)
+            {
                 continue;
             }
             if let Some(trip) = self.earliest_trip(raptor_route, &route, position, ready)
@@ -510,7 +538,8 @@ impl<F: BoardingFilter> Search<'_, F> {
     }
 
     /// Keeps the earliest train arrival at a station in this round, for the footpaths that start
-    /// there. Arrivals that cannot beat the target bound are left out.
+    /// there. Arrivals that cannot beat the target bound are left out. The lower bound of the
+    /// station covers its footpaths, because they are edges of the lower bound graph.
     #[inline]
     fn record_ride_arrival(
         &mut self,
@@ -519,7 +548,7 @@ impl<F: BoardingFilter> Search<'_, F> {
         arrival: u32,
         ride: RideOrigin,
     ) {
-        if arrival >= self.buffers.target_bound_by_round[round] {
+        if !self.may_beat_target(round, station, arrival) {
             return;
         }
         let slot = &mut self.buffers.ride_arrival_by_station[station.as_usize()];
@@ -558,7 +587,12 @@ impl<F: BoardingFilter> Search<'_, F> {
         };
         let mut best: Option<BoardedTrip> = None;
         let last_trip = route.trip_count.checked_sub(1)?;
+        let route_days = self.index.service_days_by_route[raptor_route.as_usize()];
         for day in first_day..=last_day {
+            let service_day = u16::try_from(day).unwrap_or(u16::MAX);
+            if !route_days.runs_on(service_day) {
+                continue;
+            }
             let day_start = day * MINUTES_PER_DAY;
             // Trips of a later service date all depart after any trip found on an earlier one.
             if best.is_some_and(|best| day_start + u32::from(departure_at(0)) >= best.departure) {
@@ -581,7 +615,6 @@ impl<F: BoardingFilter> Search<'_, F> {
                     break;
                 }
                 let trip = BundleTripIndex(route.first_trip_index + offset);
-                let service_day = u16::try_from(day).unwrap_or(u16::MAX);
                 if self.bundle.trip_service_days(trip).runs_on(service_day)
                     && self.filter.may_board(raptor_route, trip)
                 {

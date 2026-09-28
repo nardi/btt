@@ -10,8 +10,9 @@ use std::time::Instant;
 
 use btt_geo::TimeZoneFinder;
 use btt_model::{
-    DailyTimeWindow, DurationMinutes, GeoCoordinates, InterrailPassPolicy, LegPlanningResult,
-    LegTravelMode, LocalTimeOfDay, StationSearchRadius, TransferAversion,
+    DailyTimeWindow, DurationMinutes, GeoCoordinates, InterrailPassPolicy, LegPlan,
+    LegPlanStationIndex, LegPlanningResult, LegTravelMode, LocalTimeOfDay, StationSearchRadius,
+    TransferAversion,
 };
 use btt_planner::{LegEndpoint, LegPlanningInput, TimetableBundleRouter};
 use chrono::NaiveDate;
@@ -39,7 +40,13 @@ fn main() {
         .collect();
     let (legs, radius) = match custom_arguments[..] {
         [] => (LEGS.to_vec(), StationSearchRadius::DEFAULT),
-        [from_latitude, from_longitude, to_latitude, to_longitude, radius_meters] => (
+        [
+            from_latitude,
+            from_longitude,
+            to_latitude,
+            to_longitude,
+            radius_meters,
+        ] => (
             vec![(
                 "custom departure",
                 from_latitude,
@@ -88,46 +95,45 @@ fn main() {
         );
         match result {
             LegPlanningResult::NoJourneyFound(reason) => println!("  no journey: {reason:?}"),
-            LegPlanningResult::Found(plan) => {
-                let journeys =
-                    std::iter::once(&plan.chosen_journey).chain(&plan.alternative_journeys);
-                for (index, journey) in journeys.enumerate() {
-                    let rides: Vec<String> = journey
-                        .rides()
-                        .map(|ride| {
-                            let station = |index: btt_model::LegPlanStationIndex| {
-                                plan.station_table[usize::from(index.0)].name.to_string()
-                            };
-                            let clock = |minutes: u32| {
-                                format!("{:02}:{:02}", (minutes / 60) % 24, minutes % 60)
-                            };
-                            format!(
-                                "{} {} {} {} {} {}",
-                                clock(ride.departure_time.0),
-                                station(ride.boarding_station),
-                                ride.train_label.category,
-                                ride.train_label.number,
-                                clock(ride.arrival_time.0),
-                                station(ride.alighting_station),
-                            )
-                        })
-                        .collect();
-                    let marker = if index == 0 { "*" } else { " " };
-                    let footpath = journey.arrival_footpath.map_or(String::new(), |footpath| {
-                        format!(
-                            "  >  {} min to {}",
-                            footpath.duration.0,
-                            plan.station_table[usize::from(footpath.to_station.0)].name
-                        )
-                    });
-                    println!(
-                        "  {marker} {} min access  >  {}{footpath}  >  {} min egress (times in UTC)",
-                        journey.access_duration.0,
-                        rides.join("  >  "),
-                        journey.egress_duration.0,
-                    );
-                }
-            }
+            LegPlanningResult::Found(plan) => print_plan(&plan),
         }
+    }
+}
+
+/// Prints the chosen journey of a leg plan, marked with a star, and its alternatives.
+fn print_plan(plan: &LegPlan) {
+    let station =
+        |index: LegPlanStationIndex| plan.station_table[usize::from(index.0)].name.as_str();
+    let clock = |minutes: u32| format!("{:02}:{:02}", (minutes / 60) % 24, minutes % 60);
+    let journeys = std::iter::once(&plan.chosen_journey).chain(&plan.alternative_journeys);
+    for (index, journey) in journeys.enumerate() {
+        let rides: Vec<String> = journey
+            .rides()
+            .map(|ride| {
+                format!(
+                    "{} {} {} {} {} {}",
+                    clock(ride.departure_time.0),
+                    station(ride.boarding_station),
+                    ride.train_label.category,
+                    ride.train_label.number,
+                    clock(ride.arrival_time.0),
+                    station(ride.alighting_station),
+                )
+            })
+            .collect();
+        let marker = if index == 0 { "*" } else { " " };
+        let footpath = journey.arrival_footpath.map_or(String::new(), |footpath| {
+            format!(
+                "  >  {} min to {}",
+                footpath.duration.0,
+                station(footpath.to_station)
+            )
+        });
+        println!(
+            "  {marker} {} min access  >  {}{footpath}  >  {} min egress (times in UTC)",
+            journey.access_duration.0,
+            rides.join("  >  "),
+            journey.egress_duration.0,
+        );
     }
 }

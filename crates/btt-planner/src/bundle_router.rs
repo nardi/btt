@@ -7,13 +7,13 @@ use std::sync::Arc;
 
 use btt_geo::{TimeZoneFinder, local_time_to_unix_minutes};
 use btt_model::{
-    ArrivalFootpath, DailyTimeWindow, DurationMinutes, Journey, LegPlan, LegPlanStation, LegPlanStationIndex,
-    LegPlanningResult, LegTravelMode, NoJourneyReason, TrainLabel, TrainRide, TransferAndRide,
-    UnixTimeMinutes,
+    ArrivalFootpath, DailyTimeWindow, DurationMinutes, Journey, LegPlan, LegPlanStation,
+    LegPlanStationIndex, LegPlanningResult, LegTravelMode, NoJourneyReason, TrainLabel, TrainRide,
+    TransferAndRide, UnixTimeMinutes,
 };
 use btt_router::{
     BoardAnyTrip, CandidateStation, MinutesSinceBundleStart, RaptorJourney, RaptorLegQuery,
-    RaptorSearchBuffers, search_leg_journeys,
+    RaptorSearchBuffers, SearchIndex, search_leg_journeys,
 };
 use btt_timetable::{BundleLoadError, BundleStationIndex, LoadedTimetableBundle, StationIndex};
 use chrono::NaiveDate;
@@ -45,6 +45,8 @@ pub struct TimetableBundleRouter {
     bundle: LoadedTimetableBundle,
     /// Finds stations near a place.
     station_index: StationIndex,
+    /// Lower bounds on travel times, which let the search skip hopeless stations.
+    search_index: SearchIndex,
     /// Resolves the time zone of places for their local time windows.
     time_zone_finder: Arc<TimeZoneFinder>,
     /// The bundle's first day, in minutes since the Unix epoch.
@@ -52,7 +54,7 @@ pub struct TimetableBundleRouter {
 }
 
 impl TimetableBundleRouter {
-    /// Maps a bundle file and builds its station index.
+    /// Maps a bundle file and builds its station index and lower bound graph.
     ///
     /// # Errors
     ///
@@ -73,6 +75,7 @@ impl TimetableBundleRouter {
         time_zone_finder: Arc<TimeZoneFinder>,
     ) -> Self {
         let station_index = StationIndex::new(&bundle);
+        let search_index = SearchIndex::new(&bundle);
         let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap_or_default();
         let start_days = (bundle.validity_start() - epoch).num_days();
         let bundle_start_unix_minutes =
@@ -80,6 +83,7 @@ impl TimetableBundleRouter {
         Self {
             bundle,
             station_index,
+            search_index,
             time_zone_finder,
             bundle_start_unix_minutes,
         }
@@ -116,7 +120,14 @@ impl TimetableBundleRouter {
             maximum_train_rides: MAXIMUM_TRAIN_RIDES,
         };
         let found = SEARCH_BUFFERS.with_borrow_mut(|buffers| {
-            search_leg_journeys(&self.bundle, &query, &BoardAnyTrip, buffers, should_stop)
+            search_leg_journeys(
+                &self.bundle,
+                &self.search_index,
+                &query,
+                &BoardAnyTrip,
+                buffers,
+                should_stop,
+            )
         });
         // Lowest cost first. Ties go to the earlier arrival.
         let mut journeys: Vec<&RaptorJourney> = found.journeys.iter().collect();

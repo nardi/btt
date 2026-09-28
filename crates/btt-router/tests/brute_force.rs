@@ -8,7 +8,7 @@ use std::num::NonZeroU8;
 use btt_model::GeoCoordinates;
 use btt_router::{
     BoardAnyTrip, CandidateStation, MinutesSinceBundleStart, RaptorLegQuery, RaptorSearchBuffers,
-    search_leg_journeys,
+    SearchIndex, search_leg_journeys,
 };
 use btt_timetable::{
     BundleBuilder, BundleStationIndex, LoadedTimetableBundle, ServiceDayBitset, StationInput,
@@ -190,6 +190,7 @@ fn router(
     };
     let found = search_leg_journeys(
         &bundle,
+        &SearchIndex::new(&bundle),
         &query,
         &BoardAnyTrip,
         &mut RaptorSearchBuffers::new(),
