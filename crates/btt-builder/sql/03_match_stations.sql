@@ -1,6 +1,7 @@
--- Step 3: collapses platforms into stations and matches each station to the Trainline stations
--- dataset. Expects the table trainline_raw and the variables stopword_pattern,
--- match_radius_meters, same_name_radius_meters, accepted_similarity and uncertain_similarity.
+-- Step 3: collapses platforms into stations, matches each station to the Trainline stations
+-- dataset and links stations that describe the same station. Expects the table trainline_raw
+-- and the variables stopword_pattern, match_radius_meters, same_name_radius_meters,
+-- accepted_similarity, uncertain_similarity and station_merge_radius_meters.
 
 -- Lowercases, removes diacritics and punctuation, and strips words such as "hbf", so
 -- "Köln Hbf" and "Koeln Hauptbahnhof" compare on "koln" and "koeln".
@@ -172,61 +173,57 @@ SELECT feed_id, station_key, trainline_station_id, 'code' AS match_kind FROM cod
 UNION ALL
 SELECT feed_id, station_key, trainline_station_id, 'name and distance' FROM name_distance_matches;
 
--- In feeds that share a key namespace, a match for a station key counts for that key in every
--- feed of the namespace. The lowest ID decides when feeds match a key differently.
-CREATE TABLE namespaced_key_matches AS
-SELECT feed_config.station_key_namespace,
-       matches.station_key,
-       min(matches.trainline_station_id) AS trainline_station_id
-FROM station_matches AS matches
-JOIN feed_config USING (feed_id)
-WHERE feed_config.station_key_namespace IS NOT NULL
-GROUP BY ALL;
+-- Numbers the feed stations, so the grouping step can work on integers.
+CREATE TABLE feed_station_numbers AS
+SELECT CAST(row_number() OVER (ORDER BY feed_id, station_key) - 1 AS INTEGER)
+           AS feed_station_number,
+       feed_id,
+       station_key
+FROM feed_stations;
 
--- Feed stations that match the same Trainline station become one bundle station. Unmatched
--- stations with the same key in one namespace become one bundle station too. Any other
--- unmatched feed station becomes a bundle station of its own.
-CREATE TABLE station_groups AS
-WITH resolved_matches AS (
-    SELECT stations.*,
+-- Pairs of feed stations that describe the same station, one row per pair and reason. The
+-- builder joins every connected set of stations into one bundle station. Stations of different
+-- feeds join when they lie within station_merge_radius_meters. Stations of feeds that share a
+-- key namespace join when their keys are equal, and stations join when they match the same
+-- Trainline station.
+CREATE TABLE station_group_links AS
+WITH numbered_stations AS (
+    SELECT numbers.feed_station_number,
+           stations.feed_id,
+           stations.station_key,
+           stations.latitude,
+           stations.longitude,
            feed_config.station_key_namespace,
-           CASE WHEN feed_config.station_key_namespace IS NULL THEN matches.trainline_station_id
-                ELSE namespaced.trainline_station_id END AS trainline_station_id
+           matches.trainline_station_id,
+           getvariable('station_merge_radius_meters') / 111320.0 AS latitude_margin,
+           getvariable('station_merge_radius_meters') / 111320.0
+               / greatest(cos(radians(stations.latitude)), 0.05) AS longitude_margin
     FROM feed_stations AS stations
+    JOIN feed_station_numbers AS numbers USING (feed_id, station_key)
     JOIN feed_config USING (feed_id)
     LEFT JOIN station_matches AS matches USING (feed_id, station_key)
-    LEFT JOIN namespaced_key_matches AS namespaced
-      ON namespaced.station_key_namespace = feed_config.station_key_namespace
-     AND namespaced.station_key = stations.station_key
 )
-SELECT feed_id,
-       station_key,
-       name,
-       latitude,
-       longitude,
-       trainline_station_id,
-       coalesce('trainline:' || trainline_station_id,
-                'key:' || station_key_namespace || ':' || station_key,
-                'feed:' || feed_id || ':' || station_key) AS group_key
-FROM resolved_matches;
-
-CREATE TABLE bundle_stations AS
-SELECT CAST(row_number() OVER (ORDER BY group_key) - 1 AS INTEGER) AS bundle_station_id, *
-FROM (
-    SELECT station_groups.group_key,
-           any_value(station_groups.trainline_station_id) AS trainline_station_id,
-           coalesce(any_value(trainline.name), min(station_groups.name)) AS name,
-           coalesce(any_value(trainline.latitude), avg(station_groups.latitude)) AS latitude,
-           coalesce(any_value(trainline.longitude), avg(station_groups.longitude)) AS longitude,
-           coalesce(any_value(trainline.time_zone), any_value(feed_config.default_time_zone),
-                    'UTC') AS time_zone
-    FROM station_groups
-    LEFT JOIN trainline_whole_stations AS trainline USING (trainline_station_id)
-    JOIN feed_config USING (feed_id)
-    GROUP BY station_groups.group_key
-);
-
-CREATE TABLE feed_station_bundle_ids AS
-SELECT station_groups.feed_id, station_groups.station_key, bundle_stations.bundle_station_id
-FROM station_groups
-JOIN bundle_stations USING (group_key);
+SELECT first.feed_station_number AS first_station,
+       second.feed_station_number AS second_station,
+       'distance' AS link_kind
+FROM numbered_stations AS first
+JOIN numbered_stations AS second
+  ON second.latitude BETWEEN first.latitude - first.latitude_margin
+                         AND first.latitude + first.latitude_margin
+ AND second.longitude BETWEEN first.longitude - first.longitude_margin
+                          AND first.longitude + first.longitude_margin
+WHERE first.feed_id < second.feed_id
+  AND haversine_meters(first.latitude, first.longitude, second.latitude, second.longitude)
+      <= getvariable('station_merge_radius_meters')
+UNION ALL
+SELECT first.feed_station_number, second.feed_station_number, 'shared key'
+FROM numbered_stations AS first
+JOIN numbered_stations AS second
+  ON second.station_key_namespace = first.station_key_namespace
+ AND second.station_key = first.station_key
+WHERE first.feed_station_number < second.feed_station_number
+UNION ALL
+SELECT first.feed_station_number, second.feed_station_number, 'Trainline station'
+FROM numbered_stations AS first
+JOIN numbered_stations AS second USING (trainline_station_id)
+WHERE first.feed_station_number < second.feed_station_number;

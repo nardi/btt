@@ -442,8 +442,171 @@ fn feeds_with_a_shared_key_namespace_share_stations() {
     // key, so it is one station.
     assert_eq!(
         station_names,
-        ["Berlin Hbf", "Berlin Ostbahnhof", "S Warschauer Str. (Berlin)"]
+        [
+            "Berlin Hbf",
+            "Berlin Ostbahnhof",
+            "S Warschauer Str. (Berlin)"
+        ]
     );
     let warschauer = station(&bundle, "S Warschauer Str. (Berlin)");
     assert_eq!(bundle.route_stops_at(warschauer).len(), 2);
+}
+
+const LOCATION_CONFIG: &str = r#"
+validity_window_days = 14
+
+[[feed]]
+mirror_name = "de_TestE"
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^(?<number>\d+)$'
+category_field = "route_short_name"
+
+[[feed]]
+mirror_name = "de_TestF"
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^(?<number>\d+)$'
+category_field = "route_short_name"
+"#;
+
+/// Feed E runs train 100 from Alpha Nord through Beta to Gamma. Alpha Bus lies 70 m west of
+/// Alpha Nord in the same feed.
+const FEED_E: &[(&str, &str)] = &[
+    (
+        "agency.txt",
+        "agency_id,agency_name,agency_url,agency_timezone\n\
+         e,Rail E,https://example.org,Europe/Berlin\n",
+    ),
+    (
+        "routes.txt",
+        "route_id,agency_id,route_short_name,route_type\nre,e,RE,106\n",
+    ),
+    (
+        "trips.txt",
+        "route_id,service_id,trip_id,trip_short_name\n\
+         re,daily,e-100,100\n\
+         re,daily,e-200,200\n",
+    ),
+    (
+        "stops.txt",
+        "stop_id,stop_name,stop_lat,stop_lon\n\
+         alpha,Alpha Nord,50.0000,8.0000\n\
+         alpha-bus,Alpha Bus,50.0000,7.9990\n\
+         beta,Beta,50.1000,8.1000\n\
+         gamma,Gamma,50.2000,8.2000\n",
+    ),
+    (
+        "stop_times.txt",
+        "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n\
+         e-100,10:00:00,10:00:00,alpha,1\n\
+         e-100,10:30:00,10:31:00,beta,2\n\
+         e-100,11:00:00,11:00:00,gamma,3\n\
+         e-200,12:00:00,12:00:00,alpha-bus,1\n\
+         e-200,12:30:00,12:30:00,beta,2\n",
+    ),
+    (
+        "calendar.txt",
+        "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n\
+         daily,1,1,1,1,1,1,1,20261001,20261031\n",
+    ),
+];
+
+/// Feed F runs the same train 100 under other stop names and goes on to Delta. Its Alpha lies
+/// 60 m east of feed E's Alpha Nord, its Beta Hbf 300 m north of feed E's Beta and its Gamma
+/// Süd 300 m south of feed E's Gamma.
+const FEED_F: &[(&str, &str)] = &[
+    (
+        "agency.txt",
+        "agency_id,agency_name,agency_url,agency_timezone\n\
+         f,Rail F,https://example.org,Europe/Berlin\n",
+    ),
+    (
+        "routes.txt",
+        "route_id,agency_id,route_short_name,route_type\nre,f,RE,106\n",
+    ),
+    (
+        "trips.txt",
+        "route_id,service_id,trip_id,trip_short_name\nre,daily,f-100,100\n",
+    ),
+    (
+        "stops.txt",
+        "stop_id,stop_name,stop_lat,stop_lon\n\
+         a,Alpha,50.0000,8.00084\n\
+         b,Beta Hbf,50.1027,8.1000\n\
+         g,Gamma Süd,50.1973,8.2000\n\
+         d,Delta,50.3000,8.3000\n",
+    ),
+    (
+        "stop_times.txt",
+        "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n\
+         f-100,10:00:00,10:00:00,a,1\n\
+         f-100,10:30:00,10:31:00,b,2\n\
+         f-100,11:00:00,11:01:00,g,3\n\
+         f-100,11:30:00,11:30:00,d,4\n",
+    ),
+    (
+        "calendar.txt",
+        "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n\
+         daily,1,1,1,1,1,1,1,20261001,20261031\n",
+    ),
+];
+
+const TRANSITOUS_DE_LOCATION: &str = r#"{"sources": [
+    {"name": "TestE", "type": "http", "url": "https://example.org/e.zip",
+     "license": {"spdx-identifier": "CC0-1.0"}},
+    {"name": "TestF", "type": "http", "url": "https://example.org/f.zip",
+     "license": {"spdx-identifier": "CC0-1.0"}}
+]}"#;
+
+const NO_TRAINLINE_STATIONS: &str =
+    "id;name;uic;latitude;longitude;is_city;db_id;time_zone;same_as;parent_station_id\n";
+
+#[test]
+fn stations_and_trains_merge_by_location() {
+    let feed = |files| FixtureFeed {
+        files,
+        country_file_name: "de.json",
+        country_config: TRANSITOUS_DE_LOCATION,
+    };
+    let outcome = run_fixture_pipeline(
+        "location",
+        LOCATION_CONFIG,
+        &[feed(FEED_E), feed(FEED_F)],
+        NO_TRAINLINE_STATIONS,
+    );
+    let bundle = LoadedTimetableBundle::from_bundle(&outcome.bundle).unwrap();
+    let mut station_names: Vec<_> = (0..bundle.station_count())
+        .map(|index| bundle.station_name(BundleStationIndex(u32::try_from(index).unwrap())))
+        .collect();
+    station_names.sort_unstable();
+    // Alpha and Alpha Nord lie 60 m apart in different feeds and merge. Alpha Bus lies 70 m
+    // from Alpha Nord but in the same feed, so it stays apart. Beta and Beta Hbf lie 300 m
+    // apart and stay two stations, as do Gamma and Gamma Süd.
+    assert_eq!(
+        station_names,
+        [
+            "Alpha",
+            "Alpha Bus",
+            "Beta",
+            "Beta Hbf",
+            "Delta",
+            "Gamma",
+            "Gamma Süd"
+        ]
+    );
+
+    // Train 100 still merges. Only Alpha is the same station in both copies, but Beta and Gamma
+    // lie within 600 m of their counterparts. The window spans the
+    // end of summer time, so each feed has a summer and a winter copy, and both pairs merge.
+    assert_eq!(outcome.merge_counts.get(&(0, 1)), Some(&2));
+    let alpha = station(&bundle, "Alpha");
+    let delta = station(&bundle, "Delta");
+    let merged_route = bundle
+        .route_stops_at(alpha)
+        .map(|stop| bundle.route(stop.raptor_route))
+        .find(|route| route.stop_count == 4)
+        .expect("the merged train runs from Alpha to Delta");
+    assert_eq!(bundle.pattern_stop(&merged_route, 3).station(), delta);
+    assert_eq!(merged_route.trip_count, 2);
 }

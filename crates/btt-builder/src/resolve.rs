@@ -306,8 +306,7 @@ fn resolve_to_utc(
                 let arrival = if stop_position == 0 {
                     departure
                 } else {
-                    (reference + i64::from(stop.arrival_seconds) - utc_midnight + 59)
-                        .div_euclid(60)
+                    (reference + i64::from(stop.arrival_seconds) - utc_midnight + 59).div_euclid(60)
                 };
                 // Rounding can put a departure before its arrival, and feeds occasionally step
                 // back in time. Both get clamped so the trip never goes backwards.

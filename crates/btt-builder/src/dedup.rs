@@ -3,7 +3,7 @@
 //! After UTC resolution the trips already sit in Rust memory, and trips with the same train
 //! number form small groups, so both steps run here without a round trip through the database.
 
-use btt_timetable::{ServiceDayBitset, TripStopInput};
+use btt_timetable::{BundleStationIndex, ServiceDayBitset, TripStopInput};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::resolve::ResolvedTrip;
@@ -21,6 +21,22 @@ const MINIMUM_SHARED_STATIONS: usize = 2;
 /// configuration with the smaller one first.
 pub type MergeCounts = FxHashMap<(usize, usize), usize>;
 
+/// Largest distance between two stations that copies of a train may use for the same stop, the
+/// distance nigiri uses for this check. Feeds can place one station a few hundred meters apart,
+/// for example at the building in one feed and at a platform in the other.
+pub const SAME_STOP_RADIUS_METERS: f64 = 600.0;
+
+/// Pairs of distinct stations within `SAME_STOP_RADIUS_METERS`, in both directions.
+#[derive(Debug, Default)]
+pub struct NearbyStationPairs(pub FxHashSet<(BundleStationIndex, BundleStationIndex)>);
+
+impl NearbyStationPairs {
+    /// Returns whether two stations can stand for the same stop of a train.
+    fn same_stop(&self, first: BundleStationIndex, second: BundleStationIndex) -> bool {
+        first == second || self.0.contains(&(first, second))
+    }
+}
+
 /// Two trips that are the same train on some days.
 struct DuplicateMatch {
     /// Days the second trip's service date lies after the first trip's.
@@ -29,8 +45,12 @@ struct DuplicateMatch {
     shared_days: ServiceDayBitset,
 }
 
-/// Merges copies of the same train and returns the remaining trips with merge counts.
-pub fn merge_duplicate_trips(trips: Vec<ResolvedTrip>) -> (Vec<ResolvedTrip>, MergeCounts) {
+/// Merges copies of the same train and returns the remaining trips with merge counts. Two
+/// copies share a stop when they use the same station or two stations in `nearby`.
+pub fn merge_duplicate_trips(
+    trips: Vec<ResolvedTrip>,
+    nearby: &NearbyStationPairs,
+) -> (Vec<ResolvedTrip>, MergeCounts) {
     let mut groups: FxHashMap<String, Vec<ResolvedTrip>> = FxHashMap::default();
     let mut result = Vec::with_capacity(trips.len());
     for trip in trips {
@@ -51,18 +71,22 @@ pub fn merge_duplicate_trips(trips: Vec<ResolvedTrip>) -> (Vec<ResolvedTrip>, Me
         let Some(group) = groups.remove(&key) else {
             continue;
         };
-        result.extend(merge_group(group, &mut merge_counts));
+        result.extend(merge_group(group, &mut merge_counts, nearby));
     }
     (result, merge_counts)
 }
 
 /// Merges duplicates within one group of trips that share a train number.
-fn merge_group(mut group: Vec<ResolvedTrip>, merge_counts: &mut MergeCounts) -> Vec<ResolvedTrip> {
+fn merge_group(
+    mut group: Vec<ResolvedTrip>,
+    merge_counts: &mut MergeCounts,
+    nearby: &NearbyStationPairs,
+) -> Vec<ResolvedTrip> {
     // Each merge removes the shared days from both copies, so the loop ends. The bound only
     // guards against a mistake in that reasoning.
     let merge_limit = group.len() * group.len() * 4 + 4;
     for _ in 0..merge_limit {
-        let Some((first, second, found)) = find_duplicate_pair(&group) else {
+        let Some((first, second, found)) = find_duplicate_pair(&group, nearby) else {
             break;
         };
         let (primary, secondary, date_offset_days, shared_days) =
@@ -79,6 +103,7 @@ fn merge_group(mut group: Vec<ResolvedTrip>, merge_counts: &mut MergeCounts) -> 
             &group[secondary],
             date_offset_days,
             shared_days,
+            nearby,
         );
         // Remove the higher index first so the lower one stays valid.
         let (higher, lower) = if primary > secondary {
@@ -94,10 +119,13 @@ fn merge_group(mut group: Vec<ResolvedTrip>, merge_counts: &mut MergeCounts) -> 
 }
 
 /// Finds the first pair of trips in a group that are the same train on some day.
-fn find_duplicate_pair(group: &[ResolvedTrip]) -> Option<(usize, usize, DuplicateMatch)> {
+fn find_duplicate_pair(
+    group: &[ResolvedTrip],
+    nearby: &NearbyStationPairs,
+) -> Option<(usize, usize, DuplicateMatch)> {
     for first in 0..group.len() {
         for second in first + 1..group.len() {
-            if let Some(found) = duplicate_match(&group[first], &group[second]) {
+            if let Some(found) = duplicate_match(&group[first], &group[second], nearby) {
                 return Some((first, second, found));
             }
         }
@@ -108,7 +136,11 @@ fn find_duplicate_pair(group: &[ResolvedTrip]) -> Option<(usize, usize, Duplicat
 /// Checks whether two trips are the same train on at least one day. The second trip's service
 /// date may lie a day before or after the first's, when one feed starts the train before
 /// midnight in UTC and the other after.
-fn duplicate_match(first: &ResolvedTrip, second: &ResolvedTrip) -> Option<DuplicateMatch> {
+fn duplicate_match(
+    first: &ResolvedTrip,
+    second: &ResolvedTrip,
+    nearby: &NearbyStationPairs,
+) -> Option<DuplicateMatch> {
     for date_offset_days in -1..=1 {
         let shared_days = intersect(
             first.trip.service_days,
@@ -124,7 +156,7 @@ fn duplicate_match(first: &ResolvedTrip, second: &ResolvedTrip) -> Option<Duplic
             .iter()
             .filter(|first_stop| {
                 second.trip.stops.iter().any(|second_stop| {
-                    second_stop.station == first_stop.station
+                    nearby.same_stop(second_stop.station, first_stop.station)
                         && (i32::from(second_stop.departure) + offset_minutes
                             - i32::from(first_stop.departure))
                         .abs()
@@ -152,6 +184,7 @@ fn merge_pair(
     secondary: &ResolvedTrip,
     date_offset_days: i32,
     shared_days: ServiceDayBitset,
+    nearby: &NearbyStationPairs,
 ) -> Vec<ResolvedTrip> {
     let mut parts = Vec::with_capacity(3);
     let primary_rest = subtract(primary.trip.service_days, shared_days);
@@ -159,7 +192,7 @@ fn merge_pair(
         secondary.trip.service_days,
         shift_days(shared_days, date_offset_days),
     );
-    if let Some(merged) = extended_trip(primary, secondary, date_offset_days, shared_days) {
+    if let Some(merged) = extended_trip(primary, secondary, date_offset_days, shared_days, nearby) {
         parts.push(merged);
     }
     if !primary_rest.is_empty() {
@@ -182,9 +215,15 @@ fn extended_trip(
     secondary: &ResolvedTrip,
     date_offset_days: i32,
     shared_days: ServiceDayBitset,
+    nearby: &NearbyStationPairs,
 ) -> Option<ResolvedTrip> {
-    let primary_stations: FxHashSet<_> =
-        primary.trip.stops.iter().map(|stop| stop.station).collect();
+    let primary_serves = |station: BundleStationIndex| {
+        primary
+            .trip
+            .stops
+            .iter()
+            .any(|primary_stop| nearby.same_stop(primary_stop.station, station))
+    };
     let offset_minutes = date_offset_days * MINUTES_PER_DAY;
     let secondary_stops: Vec<(TripStopInput, i32, i32)> = secondary
         .trip
@@ -200,10 +239,10 @@ fn extended_trip(
         .collect();
     let first_shared = secondary_stops
         .iter()
-        .position(|(stop, ..)| primary_stations.contains(&stop.station));
+        .position(|(stop, ..)| primary_serves(stop.station));
     let last_shared = secondary_stops
         .iter()
-        .rposition(|(stop, ..)| primary_stations.contains(&stop.station));
+        .rposition(|(stop, ..)| primary_serves(stop.station));
     let (Some(first_shared), Some(last_shared)) = (first_shared, last_shared) else {
         return None;
     };
@@ -286,7 +325,7 @@ fn ordered_pair(left: usize, right: usize) -> (usize, usize) {
 
 #[cfg(test)]
 mod tests {
-    use btt_timetable::{BundleStationIndex, TrainLabelInput, TripInput};
+    use btt_timetable::{TrainLabelInput, TripInput};
 
     use super::*;
 
@@ -347,7 +386,8 @@ mod tests {
             vec![stop(1, 690, 692), stop(3, 840, 846), stop(4, 1000, 1000)],
             days(&[0, 1, 2]),
         );
-        let (trips, counts) = merge_duplicate_trips(vec![full, partial]);
+        let (trips, counts) =
+            merge_duplicate_trips(vec![full, partial], &NearbyStationPairs::default());
         assert_eq!(counts.get(&(0, 1)), Some(&1));
         let merged = trips
             .iter()
@@ -374,7 +414,53 @@ mod tests {
             vec![stop(0, 1200, 1200), stop(1, 1290, 1290)],
             days(&[0]),
         );
-        let (trips, counts) = merge_duplicate_trips(vec![morning, evening]);
+        let (trips, counts) =
+            merge_duplicate_trips(vec![morning, evening], &NearbyStationPairs::default());
+        assert_eq!(trips.len(), 2);
+        assert!(counts.is_empty());
+    }
+
+    #[test]
+    fn copies_at_nearby_stations_merge_and_extend() {
+        // Feed 1 uses station 11 for Salzburg and 12 for Vienna, each close to feed 0's.
+        let nearby = NearbyStationPairs(
+            [(1, 11), (11, 1), (3, 12), (12, 3)]
+                .into_iter()
+                .map(|(first, second)| (BundleStationIndex(first), BundleStationIndex(second)))
+                .collect(),
+        );
+        let full = trip(
+            0,
+            vec![stop(0, 600, 600), stop(1, 690, 692), stop(3, 840, 845)],
+            days(&[0]),
+        );
+        let partial = trip(
+            1,
+            vec![stop(11, 690, 692), stop(12, 840, 845), stop(4, 1000, 1000)],
+            days(&[0]),
+        );
+        let (trips, counts) = merge_duplicate_trips(vec![full, partial], &nearby);
+        assert_eq!(counts.get(&(0, 1)), Some(&1));
+        assert_eq!(trips.len(), 1);
+        let stations: Vec<u32> = trips[0]
+            .trip
+            .stops
+            .iter()
+            .map(|stop| stop.station.0)
+            .collect();
+        assert_eq!(
+            stations,
+            [0, 1, 3, 4],
+            "Budapest extends the train past Vienna"
+        );
+    }
+
+    #[test]
+    fn copies_at_distant_stations_stay_apart() {
+        let first = trip(0, vec![stop(1, 690, 692), stop(3, 840, 845)], days(&[0]));
+        let second = trip(1, vec![stop(11, 690, 692), stop(12, 840, 845)], days(&[0]));
+        let (trips, counts) =
+            merge_duplicate_trips(vec![first, second], &NearbyStationPairs::default());
         assert_eq!(trips.len(), 2);
         assert!(counts.is_empty());
     }
@@ -396,7 +482,10 @@ mod tests {
             vec![stop(1, 60, 60), stop(2, 120, 121), stop(5, 200, 200)],
             days(&[4]),
         );
-        let (trips, counts) = merge_duplicate_trips(vec![evening_start, after_midnight]);
+        let (trips, counts) = merge_duplicate_trips(
+            vec![evening_start, after_midnight],
+            &NearbyStationPairs::default(),
+        );
         assert_eq!(counts.len(), 1);
         assert_eq!(trips.len(), 1);
         let merged = &trips[0];

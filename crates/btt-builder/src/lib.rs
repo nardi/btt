@@ -123,7 +123,8 @@ pub fn run_pipeline(
     tracing::info!(trips = resolved.len(), elapsed = ?started.elapsed(), "resolved trips to UTC");
 
     let started = Instant::now();
-    let (trips, merge_counts) = dedup::merge_duplicate_trips(resolved);
+    let nearby = stations::nearby_station_pairs(database)?;
+    let (trips, merge_counts) = dedup::merge_duplicate_trips(resolved, &nearby);
     tracing::info!(trips = trips.len(), elapsed = ?started.elapsed(), "merged duplicate trips");
 
     let attributions = inputs

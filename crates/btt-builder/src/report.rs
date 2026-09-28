@@ -75,7 +75,7 @@ pub fn write_report(
     Ok(statistics)
 }
 
-/// Counts routes, trips, stop times and station matches per feed.
+/// Counts routes, trips, stop times, station matches and joined stations per feed.
 fn feed_statistics(
     database: &WorkDatabase,
     feeds: &[&FeedConfig],
@@ -109,6 +109,27 @@ fn feed_statistics(
         (
             "uncertain station matches",
             "SELECT count(*) FROM uncertain_station_matches WHERE feed_id = {feed}",
+        ),
+        (
+            "stations joined to another by distance",
+            "SELECT count(DISTINCT numbers.feed_station_number) FROM station_group_links AS links
+             JOIN feed_station_numbers AS numbers
+               ON numbers.feed_station_number IN (links.first_station, links.second_station)
+             WHERE numbers.feed_id = {feed} AND links.link_kind = 'distance'",
+        ),
+        (
+            "stations joined to another by shared key",
+            "SELECT count(DISTINCT numbers.feed_station_number) FROM station_group_links AS links
+             JOIN feed_station_numbers AS numbers
+               ON numbers.feed_station_number IN (links.first_station, links.second_station)
+             WHERE numbers.feed_id = {feed} AND links.link_kind = 'shared key'",
+        ),
+        (
+            "stations joined to another by Trainline station",
+            "SELECT count(DISTINCT numbers.feed_station_number) FROM station_group_links AS links
+             JOIN feed_station_numbers AS numbers
+               ON numbers.feed_station_number IN (links.first_station, links.second_station)
+             WHERE numbers.feed_id = {feed} AND links.link_kind = 'Trainline station'",
         ),
     ];
     let mut statistics = Vec::new();
