@@ -59,8 +59,8 @@ export type AcceptedBerths =
 export type ArrivalFootpath = {
 	/**  Station the footpath ends at. */
 	to_station: LegPlanStationIndex,
-	/**  Time from the last alighting station to `to_station`. */
-	duration: DurationMinutes,
+	/**  The way from the last alighting station to `to_station`. */
+	way: StationWay,
 };
 
 /**  Kind of berth on a night train. */
@@ -164,8 +164,8 @@ export type ItineraryRoute = {
  *  before it, so two transfers in a row cannot be represented.
  */
 export type Journey = {
-	/**  Time from the departure place to the first boarding station. */
-	access_duration: DurationMinutes,
+	/**  The way from the departure place to the first boarding station. */
+	access: StationWay,
 	/**  The first train. */
 	first_ride: TrainRide,
 	/**  Later trains, each with the transfer before it. */
@@ -176,10 +176,10 @@ export type Journey = {
 	 */
 	arrival_footpath: ArrivalFootpath | null,
 	/**
-	 *  Time to the arrival place from the station the journey ends at, which is the end of
+	 *  The way to the arrival place from the station the journey ends at, which is the end of
 	 *  `arrival_footpath` or else the last alighting station.
 	 */
-	egress_duration: DurationMinutes,
+	egress: StationWay,
 };
 
 /**
@@ -346,6 +346,19 @@ export type SameDayStayRange = {
 
 /**  Largest distance from a place to a station the planner may use, from 100 m to 50 km. */
 export type StationSearchRadius = number;
+
+/**
+ *  A way off the train, between a place and a station or between two stations. Its duration
+ *  is an estimate from the straight-line distance, not a planned connection.
+ */
+export type StationWay = {
+	/**  Estimated time the way takes. */
+	duration: DurationMinutes,
+	/**  Straight-line distance of the way. */
+	distance_meters: number,
+	/**  How the estimate assumes the traveller goes. */
+	mode: WayToStationMode,
+};
 
 /**  How a train is shown to the traveller, such as "ICE 27". */
 export type TrainLabel = {
@@ -592,6 +605,13 @@ export type ViaPlace = {
 	/**  How long the traveller stays here. */
 	stay: PlaceStay,
 };
+
+/**  How the planner assumes a traveller covers a way off the train. */
+export type WayToStationMode = 
+/**  On foot, for ways shorter than a kilometer. */
+"Walk" | 
+/**  By bus, tram or metro, for longer ways. */
+"LocalTransport";
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

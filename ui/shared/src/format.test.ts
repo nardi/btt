@@ -5,6 +5,8 @@ import {
   formatDailyTimeWindow,
   formatDistance,
   formatDuration,
+  formatStationWay,
+  explainStationWay,
   formatTimeInZone,
   parseMinutesOfDay,
 } from "./format";
@@ -52,5 +54,17 @@ describe("formatDistance", () => {
     expect(formatDistance(2500)).toBe("2.5 km");
     expect(formatDistance(5000)).toBe("5 km");
     expect(formatDistance(12_400)).toBe("12 km");
+  });
+});
+
+describe("formatStationWay", () => {
+  it("names the assumed mode and marks the time as an estimate", () => {
+    const walk = { duration: 6, distance_meters: 450, mode: "Walk" } as const;
+    const localTransport = { duration: 25, distance_meters: 2500, mode: "LocalTransport" } as const;
+    expect(formatStationWay(walk, "Amsterdam Lelylaan")).toBe("about 6 min walk to Amsterdam Lelylaan");
+    expect(formatStationWay(localTransport, "Berlin Ostbahnhof")).toBe(
+      "about 25 min by local transport to Berlin Ostbahnhof",
+    );
+    expect(explainStationWay(localTransport)).toContain("straight-line distance of 2.5 km");
   });
 });

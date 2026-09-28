@@ -7,7 +7,8 @@ use std::sync::Arc;
 use btt_geo::{TimeZoneFinder, local_time_to_unix_minutes};
 use btt_model::{
     DurationMinutes, GeoCoordinates, Journey, LegPlan, LegPlanStation, LegPlanStationIndex,
-    LegPlanningResult, LegTravelMode, TrainLabel, TrainRide, UnixTimeMinutes,
+    LegPlanningResult, LegTravelMode, StationWay, TrainLabel, TrainRide, UnixTimeMinutes,
+    WayToStationMode,
 };
 use smallvec::{SmallVec, smallvec};
 
@@ -18,6 +19,13 @@ const ROUTE_DETOUR_FACTOR: f64 = 1.3;
 
 /// Average speed of the invented trains.
 const STUB_TRAIN_SPEED_METERS_PER_MINUTE: f64 = 100_000.0 / 60.0;
+
+/// The invented stations lie exactly at the places, so there is no way to them.
+const STUB_STATION_WAY: StationWay = StationWay {
+    duration: DurationMinutes::ZERO,
+    distance_meters: 0,
+    mode: WayToStationMode::Walk,
+};
 
 /// Plans every leg as one invented direct train.
 pub struct StubBackend {
@@ -54,7 +62,7 @@ impl StubBackend {
         let arrival_time =
             UnixTimeMinutes(departure_time.0.saturating_add(u32::from(ride_minutes)));
         let journey = Journey {
-            access_duration: DurationMinutes::ZERO,
+            access: STUB_STATION_WAY,
             first_ride: TrainRide {
                 boarding_station: LegPlanStationIndex(0),
                 departure_time,
@@ -68,7 +76,7 @@ impl StubBackend {
             },
             later_rides: SmallVec::new(),
             arrival_footpath: None,
-            egress_duration: DurationMinutes::ZERO,
+            egress: STUB_STATION_WAY,
         };
         LegPlanningResult::Found(Box::new(LegPlan {
             chosen_journey: journey,

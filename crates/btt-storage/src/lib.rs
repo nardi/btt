@@ -380,7 +380,7 @@ mod tests {
     fn leg_results_round_trip_and_old_namespaces_go() {
         use btt_model::{
             DurationMinutes, Journey, LegPlan, LegPlanStation, LegPlanStationIndex,
-            NoJourneyReason, TrainLabel, TrainRide, UnixTimeMinutes,
+            NoJourneyReason, StationWay, TrainLabel, TrainRide, UnixTimeMinutes, WayToStationMode,
         };
 
         let storage = Storage::open_in_memory().unwrap();
@@ -391,7 +391,11 @@ mod tests {
         };
         let found = LegPlanningResult::Found(Box::new(LegPlan {
             chosen_journey: Journey {
-                access_duration: DurationMinutes(4),
+                access: StationWay {
+                    duration: DurationMinutes(4),
+                    distance_meters: 300,
+                    mode: WayToStationMode::Walk,
+                },
                 first_ride: TrainRide {
                     boarding_station: LegPlanStationIndex(0),
                     departure_time: UnixTimeMinutes(29_000_000),
@@ -407,7 +411,11 @@ mod tests {
                 },
                 later_rides: smallvec::SmallVec::new(),
                 arrival_footpath: None,
-                egress_duration: DurationMinutes(6),
+                egress: StationWay {
+                    duration: DurationMinutes(22),
+                    distance_meters: 1700,
+                    mode: WayToStationMode::LocalTransport,
+                },
             },
             alternative_journeys: smallvec::SmallVec::new(),
             station_table: smallvec::smallvec![station("Köln Hbf"), station("Frankfurt Hbf")],

@@ -63,14 +63,35 @@ pub struct TransferAndRide {
     pub ride: TrainRide,
 }
 
+/// How the planner assumes a traveller covers a way off the train.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub enum WayToStationMode {
+    /// On foot, for ways shorter than a kilometer.
+    Walk,
+    /// By bus, tram or metro, for longer ways.
+    LocalTransport,
+}
+
+/// A way off the train, between a place and a station or between two stations. Its duration
+/// is an estimate from the straight-line distance, not a planned connection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub struct StationWay {
+    /// Estimated time the way takes.
+    pub duration: DurationMinutes,
+    /// Straight-line distance of the way.
+    pub distance_meters: u32,
+    /// How the estimate assumes the traveller goes.
+    pub mode: WayToStationMode,
+}
+
 /// A walk or local transit trip from the last alighting station to another station near the
 /// arrival place, for when no train serves that station in time.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
 pub struct ArrivalFootpath {
     /// Station the footpath ends at.
     pub to_station: LegPlanStationIndex,
-    /// Time from the last alighting station to `to_station`.
-    pub duration: DurationMinutes,
+    /// The way from the last alighting station to `to_station`.
+    pub way: StationWay,
 }
 
 /// A door-to-door journey for one leg.
@@ -79,8 +100,8 @@ pub struct ArrivalFootpath {
 /// before it, so two transfers in a row cannot be represented.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
 pub struct Journey {
-    /// Time from the departure place to the first boarding station.
-    pub access_duration: DurationMinutes,
+    /// The way from the departure place to the first boarding station.
+    pub access: StationWay,
     /// The first train.
     pub first_ride: TrainRide,
     /// Later trains, each with the transfer before it.
@@ -89,9 +110,9 @@ pub struct Journey {
     /// The way from the last alighting station to another station, when the journey ends with
     /// one.
     pub arrival_footpath: Option<ArrivalFootpath>,
-    /// Time to the arrival place from the station the journey ends at, which is the end of
+    /// The way to the arrival place from the station the journey ends at, which is the end of
     /// `arrival_footpath` or else the last alighting station.
-    pub egress_duration: DurationMinutes,
+    pub egress: StationWay,
 }
 
 impl Journey {

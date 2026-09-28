@@ -125,15 +125,15 @@ fn print_plan(plan: &LegPlan) {
         let footpath = journey.arrival_footpath.map_or(String::new(), |footpath| {
             format!(
                 "  >  {} min to {}",
-                footpath.duration.0,
+                footpath.way.duration.0,
                 station(footpath.to_station)
             )
         });
         println!(
             "  {marker} {} min access  >  {}{footpath}  >  {} min egress (times in UTC)",
-            journey.access_duration.0,
+            journey.access.duration.0,
             rides.join("  >  "),
-            journey.egress_duration.0,
+            journey.egress.duration.0,
         );
     }
 }

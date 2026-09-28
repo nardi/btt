@@ -7,8 +7,8 @@ use std::sync::{Arc, Mutex, PoisonError};
 use btt_geo::{TimeZoneFinder, local_time_to_unix_minutes};
 use btt_model::{
     ArrivalFootpath, DailyTimeWindow, DurationMinutes, Journey, LegPlan, LegPlanStation,
-    LegPlanStationIndex, LegPlanningResult, LegTravelMode, NoJourneyReason, TrainLabel, TrainRide,
-    TransferAndRide, UnixTimeMinutes,
+    LegPlanStationIndex, LegPlanningResult, LegTravelMode, NoJourneyReason, StationWay, TrainLabel,
+    TrainRide, TransferAndRide, UnixTimeMinutes, WayToStationMode,
 };
 use btt_router::{
     BoardAnyTrip, CandidateStation, MinutesSinceBundleStart, ParetoJourneySet, RaptorJourney,
@@ -138,13 +138,13 @@ impl TimetableBundleRouter {
             return LegPlanningResult::NoJourneyFound(NoJourneyReason::NoConnectionInWindow);
         };
         let mut stations = LegPlanStations::default();
-        let Some(chosen_journey) = self.journey(chosen, &mut stations) else {
+        let Some(chosen_journey) = self.journey(chosen, input, &mut stations) else {
             return LegPlanningResult::NoJourneyFound(NoJourneyReason::NoConnectionInWindow);
         };
         let alternative_journeys = alternatives
             .iter()
             .take(MAXIMUM_ALTERNATIVES)
-            .filter_map(|journey| self.journey(journey, &mut stations))
+            .filter_map(|journey| self.journey(journey, input, &mut stations))
             .collect();
         LegPlanningResult::Found(Box::new(LegPlan {
             chosen_journey,
@@ -266,7 +266,12 @@ impl TimetableBundleRouter {
     }
 
     /// Turns a router journey into a model journey, adding its stations to the table.
-    fn journey(&self, journey: &RaptorJourney, stations: &mut LegPlanStations) -> Option<Journey> {
+    fn journey(
+        &self,
+        journey: &RaptorJourney,
+        input: &LegPlanningInput,
+        stations: &mut LegPlanStations,
+    ) -> Option<Journey> {
         let mut rides = journey.rides.iter();
         let first = rides.next()?;
         let first_ride = self.train_ride(first, stations)?;
@@ -280,19 +285,36 @@ impl TimetableBundleRouter {
             });
             last = ride;
         }
+        let coordinates = |station| self.bundle.station_coordinates(station);
         let arrival_footpath = match arrival_footpath_minutes(journey) {
             None => None,
             Some(footpath_minutes) => Some(ArrivalFootpath {
                 to_station: stations.index_of(&self.bundle, journey.arrival_candidate.station)?,
-                duration: DurationMinutes(u16::try_from(footpath_minutes).unwrap_or(u16::MAX)),
+                way: station_way(
+                    coordinates(last.alighting_station)
+                        .haversine_distance_meters(coordinates(journey.arrival_candidate.station)),
+                    u16::try_from(footpath_minutes).unwrap_or(u16::MAX),
+                ),
             }),
         };
         Some(Journey {
-            access_duration: DurationMinutes(journey.departure_candidate.time_to_place_minutes),
+            access: station_way(
+                input
+                    .departure
+                    .coordinates
+                    .haversine_distance_meters(coordinates(journey.departure_candidate.station)),
+                journey.departure_candidate.time_to_place_minutes,
+            ),
             first_ride,
             later_rides,
             arrival_footpath,
-            egress_duration: DurationMinutes(journey.arrival_candidate.time_to_place_minutes),
+            egress: station_way(
+                input
+                    .arrival
+                    .coordinates
+                    .haversine_distance_meters(coordinates(journey.arrival_candidate.station)),
+                journey.arrival_candidate.time_to_place_minutes,
+            ),
         })
     }
 
@@ -395,11 +417,30 @@ fn journey_cost_inputs(journey: &RaptorJourney) -> JourneyCostInputs {
     }
 }
 
+/// Distance from which the estimates assume local transport instead of walking, matching the
+/// builder's footpaths.
+const LONGEST_WALK_METERS: f64 = 1000.0;
+
+/// Describes a way off the train with its estimated minutes and the mode the estimate assumes.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn station_way(distance_meters: f64, minutes: u16) -> StationWay {
+    StationWay {
+        duration: DurationMinutes(minutes),
+        // Ways are at most a few tens of kilometers, so the meters fit easily.
+        distance_meters: distance_meters.round() as u32,
+        mode: if distance_meters < LONGEST_WALK_METERS {
+            WayToStationMode::Walk
+        } else {
+            WayToStationMode::LocalTransport
+        },
+    }
+}
+
 /// Estimates the minutes between a place and a station at a distance, with the same formula as
 /// the builder's footpaths. Short distances are walks, longer ones local transit.
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn access_minutes(distance_meters: f64) -> u16 {
-    let minutes = if distance_meters < 1000.0 {
+    let minutes = if distance_meters < LONGEST_WALK_METERS {
         (distance_meters * 1.3 / 83.3).ceil()
     } else {
         (15.0 + distance_meters / 250.0).ceil()

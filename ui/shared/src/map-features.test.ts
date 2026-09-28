@@ -16,7 +16,7 @@ function viewState(legStates: [number, LegViewState][]): TripViewState {
 
 const viennaToRome: LegPlan = {
   chosen_journey: {
-    access_duration: 0,
+    access: { duration: 0, distance_meters: 0, mode: "Walk" },
     first_ride: {
       boarding_station: 0,
       departure_time: 0,
@@ -27,7 +27,7 @@ const viennaToRome: LegPlan = {
     },
     later_rides: [],
     arrival_footpath: null,
-    egress_duration: 0,
+    egress: { duration: 0, distance_meters: 0, mode: "Walk" },
   },
   alternative_journeys: [],
   station_table: [
@@ -75,7 +75,13 @@ describe("stationWayLines", () => {
   it("adds the footpath between two stations at the end", () => {
     const withFootpath: LegPlan = {
       ...viennaToRome,
-      chosen_journey: { ...viennaToRome.chosen_journey, arrival_footpath: { to_station: 2, duration: 20 } },
+      chosen_journey: {
+        ...viennaToRome.chosen_journey,
+        arrival_footpath: {
+          to_station: 2,
+          way: { duration: 20, distance_meters: 2600, mode: "LocalTransport" },
+        },
+      },
       station_table: [
         ...viennaToRome.station_table,
         { name: "Roma Tiburtina", coordinates: { latitude: 41.9106, longitude: 12.5305 }, time_zone: "Europe/Rome" },

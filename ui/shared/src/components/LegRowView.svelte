@@ -9,7 +9,13 @@
     OvernightLegOptions,
     TripEdit,
   } from "../bindings";
-  import { formatDate, formatDuration, formatTimeInZone } from "../format";
+  import {
+    explainStationWay,
+    formatDate,
+    formatDuration,
+    formatStationWay,
+    formatTimeInZone,
+  } from "../format";
   import type { LegRow } from "../itinerary";
   import type { LegViewState } from "../trip-source";
   import TimeWindowField from "./TimeWindowField.svelte";
@@ -75,10 +81,10 @@
   function journeyMinutes(journey: Journey): number {
     const lastRide = journey.later_rides.at(-1)?.ride ?? journey.first_ride;
     return (
-      journey.access_duration +
+      journey.access.duration +
       (lastRide.arrival_time - journey.first_ride.departure_time) +
-      (journey.arrival_footpath?.duration ?? 0) +
-      journey.egress_duration
+      (journey.arrival_footpath?.way.duration ?? 0) +
+      journey.egress.duration
     );
   }
 
@@ -152,9 +158,8 @@
       {@const legPlan = legState.legPlan}
       {@const journey = legPlan.chosen_journey}
       <ol class="rides">
-        <li class="station-way">
-          {formatDuration(journey.access_duration)} to
-          {stationName(legPlan, journey.first_ride.boarding_station)}
+        <li class="station-way" title={explainStationWay(journey.access)}>
+          {formatStationWay(journey.access, stationName(legPlan, journey.first_ride.boarding_station))}
         </li>
         {#each [journey.first_ride, ...journey.later_rides.map((later) => later.ride)] as ride, rideIndex (rideIndex)}
           <li>
@@ -166,13 +171,15 @@
           </li>
         {/each}
         {#if journey.arrival_footpath !== null}
-          <li class="station-way">
-            {formatDuration(journey.arrival_footpath.duration)} on to
-            {stationName(legPlan, journey.arrival_footpath.to_station)}
+          <li class="station-way" title={explainStationWay(journey.arrival_footpath.way)}>
+            {formatStationWay(
+              journey.arrival_footpath.way,
+              stationName(legPlan, journey.arrival_footpath.to_station),
+            )}
           </li>
         {/if}
-        <li class="station-way">
-          {formatDuration(journey.egress_duration)} to {leg.arrivalPlace.name}
+        <li class="station-way" title={explainStationWay(journey.egress)}>
+          {formatStationWay(journey.egress, leg.arrivalPlace.name)}
         </li>
       </ol>
       <span class="summary">
