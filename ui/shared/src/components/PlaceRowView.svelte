@@ -14,6 +14,8 @@
     defaultWindows,
     onEdit,
     onReorder,
+    draggedIndex = null,
+    onDragChange,
   }: {
     row: PlaceRow;
     index: number;
@@ -26,10 +28,22 @@
     onEdit?: (edit: TripEdit) => void;
     /** Moves the dragged place to this row's index. Missing in a read-only view. */
     onReorder?: (draggedPlaceId: TripPlaceId, newIndex: number) => void;
+    /** Position of the place being dragged in the list, if any. */
+    draggedIndex?: number | null;
+    /** Reports the start and end of dragging this row. */
+    onDragChange?: (draggedIndex: number | null) => void;
   } = $props();
 
   let showWindows = $state(false);
   let dropTarget = $state(false);
+  // A place dragged down lands after this row, and one dragged up lands before it.
+  const dropPosition = $derived(
+    !dropTarget || draggedIndex === null || draggedIndex === index
+      ? null
+      : draggedIndex < index
+        ? "after"
+        : "before",
+  );
   const placeId = $derived(row.place.id);
   const windows = $derived(row.place.window_override ?? defaultWindows);
 
@@ -73,10 +87,15 @@
 
 <li
   class="place-row"
-  class:drop-target={dropTarget}
+  class:drop-before={dropPosition === "before"}
+  class:drop-after={dropPosition === "after"}
   class:selected
   draggable={onReorder !== undefined}
-  ondragstart={(event) => event.dataTransfer?.setData("text/plain", String(placeId))}
+  ondragstart={(event) => {
+    event.dataTransfer?.setData("text/plain", String(placeId));
+    onDragChange?.(index);
+  }}
+  ondragend={() => onDragChange?.(null)}
   ondragover={(event) => {
     if (onReorder !== undefined) {
       event.preventDefault();
@@ -168,6 +187,7 @@
 
 <style>
   .place-row {
+    position: relative;
     list-style: none;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
@@ -180,8 +200,25 @@
     box-shadow: 0 0 0 1px var(--color-accent);
   }
 
-  .place-row.drop-target {
-    border-color: var(--color-accent);
+  /* A bar on the edge of the row shows where the dragged place will land. It stays inside the
+     row, because the scrolling list clips anything above the first row. */
+  .place-row.drop-before::before,
+  .place-row.drop-after::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--color-accent);
+  }
+
+  .place-row.drop-before::before {
+    top: -1px;
+  }
+
+  .place-row.drop-after::after {
+    bottom: -1px;
   }
 
   .main {

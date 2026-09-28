@@ -57,6 +57,9 @@
     });
   }
 
+  /** Position of the place being dragged, so rows can show where it would land. */
+  let draggedIndex: number | null = $state(null);
+
   function reorderPlace(draggedPlaceId: TripPlaceId, newIndex: number) {
     onEdit?.({ ReorderPlace: { place_id: draggedPlaceId, new_index: newIndex } });
   }
@@ -85,6 +88,8 @@
         defaultWindows={trip.preferences.default_windows}
         {onEdit}
         onReorder={editable === null ? undefined : reorderPlace}
+        {draggedIndex}
+        onDragChange={(newDraggedIndex) => (draggedIndex = newDraggedIndex)}
       />
     {/each}
   </ol>
