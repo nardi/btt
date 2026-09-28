@@ -1,14 +1,16 @@
 //! Compares the router with a connection scan on random small networks.
 //!
 //! The connection scan looks at every consecutive pair of stops of every trip in order of
-//! departure, which is simple enough to trust. Both must find the same earliest arrival.
+//! departure, which is simple enough to trust. Both must find the same earliest arrival. A second
+//! test checks that searching a departure window in two parts and merging the results gives the
+//! same journeys as one search over the whole window.
 
 use std::num::NonZeroU8;
 
 use btt_model::GeoCoordinates;
 use btt_router::{
-    BoardAnyTrip, CandidateStation, MinutesSinceBundleStart, RaptorLegQuery, RaptorSearchBuffers,
-    SearchIndex, search_leg_journeys,
+    BoardAnyTrip, CandidateStation, MinutesSinceBundleStart, ParetoJourneySet, RaptorLegQuery,
+    RaptorSearchBuffers, SearchIndex, search_leg_journeys,
 };
 use btt_timetable::{
     BundleBuilder, BundleStationIndex, LoadedTimetableBundle, ServiceDayBitset, StationInput,
@@ -131,6 +133,21 @@ fn router(
     target: u32,
     start: u32,
 ) -> Option<u32> {
+    router_journeys(trips, footpaths, origins, target, &[(start, 1440)])
+        .into_iter()
+        .map(|(_, arrival, _)| arrival)
+        .min()
+}
+
+/// Searches each departure window, given as start and end, merges the results and returns every
+/// journey as its departure, arrival and number of trains.
+fn router_journeys(
+    trips: &[RandomTrip],
+    footpaths: &[(u32, u32, u16)],
+    origins: &[(u32, u16)],
+    target: u32,
+    windows: &[(u32, u32)],
+) -> Vec<(u32, u32, usize)> {
     let mut builder =
         BundleBuilder::new(NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(), 2, 1).unwrap();
     for index in 0..STATION_COUNT {
@@ -181,22 +198,30 @@ fn router(
         station: BundleStationIndex(target),
         time_to_place_minutes: 0,
     }];
-    let query = RaptorLegQuery {
-        departure_candidates: &departure_candidates,
-        arrival_candidates: &arrival_candidates,
-        departure_window: MinutesSinceBundleStart(start)..MinutesSinceBundleStart(1440),
-        minimum_transfer_minutes: MINIMUM_TRANSFER_MINUTES,
-        maximum_train_rides: NonZeroU8::new(u8::try_from(trips.len().max(1)).unwrap()).unwrap(),
-    };
-    let found = search_leg_journeys(
-        &bundle,
-        &SearchIndex::new(&bundle),
-        &query,
-        &BoardAnyTrip,
-        &mut RaptorSearchBuffers::new(),
-        || false,
-    );
-    found.journeys.iter().map(|journey| journey.arrival.0).min()
+    let index = SearchIndex::new(&bundle);
+    let found = windows.iter().map(|&(window_start, window_end)| {
+        let query = RaptorLegQuery {
+            departure_candidates: &departure_candidates,
+            arrival_candidates: &arrival_candidates,
+            departure_window: MinutesSinceBundleStart(window_start)
+                ..MinutesSinceBundleStart(window_end),
+            minimum_transfer_minutes: MINIMUM_TRANSFER_MINUTES,
+            maximum_train_rides: NonZeroU8::new(u8::try_from(trips.len().max(1)).unwrap()).unwrap(),
+        };
+        search_leg_journeys(
+            &bundle,
+            &index,
+            &query,
+            &BoardAnyTrip,
+            &mut RaptorSearchBuffers::new(),
+            || false,
+        )
+    });
+    ParetoJourneySet::merge(found)
+        .journeys
+        .iter()
+        .map(|journey| (journey.departure.0, journey.arrival.0, journey.ride_count()))
+        .collect()
 }
 
 proptest! {
@@ -212,5 +237,28 @@ proptest! {
         let expected = connection_scan(&trips, &footpaths, &origins, STATION_COUNT - 1, start);
         let actual = router(&trips, &footpaths, &origins, STATION_COUNT - 1, start);
         prop_assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn split_windows_give_the_same_journeys(
+        trips in proptest::collection::vec(random_trip(), 1..12),
+        footpaths in proptest::collection::vec(random_footpath(), 0..4),
+        start in 0..300u32,
+        split in 0..600u32,
+        first_access in 0..30u16,
+        second_access in 0..30u16,
+    ) {
+        let origins = [(0, first_access), (1, second_access)];
+        let middle = start + split;
+        let target = STATION_COUNT - 1;
+        let whole = router_journeys(&trips, &footpaths, &origins, target, &[(start, 1440)]);
+        let halves = router_journeys(
+            &trips,
+            &footpaths,
+            &origins,
+            target,
+            &[(start, middle), (middle, 1440)],
+        );
+        prop_assert_eq!(halves, whole);
     }
 }

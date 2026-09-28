@@ -1,9 +1,8 @@
 //! A backend that plans legs with the RAPTOR router on a timetable bundle.
 
-use std::cell::RefCell;
 use std::num::NonZeroU8;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use btt_geo::{TimeZoneFinder, local_time_to_unix_minutes};
 use btt_model::{
@@ -12,8 +11,8 @@ use btt_model::{
     TransferAndRide, UnixTimeMinutes,
 };
 use btt_router::{
-    BoardAnyTrip, CandidateStation, MinutesSinceBundleStart, RaptorJourney, RaptorLegQuery,
-    RaptorSearchBuffers, SearchIndex, search_leg_journeys,
+    BoardAnyTrip, CandidateStation, MinutesSinceBundleStart, ParetoJourneySet, RaptorJourney,
+    RaptorLegQuery, RaptorSearchBuffers, SearchIndex, search_leg_journeys,
 };
 use btt_timetable::{BundleLoadError, BundleStationIndex, LoadedTimetableBundle, StationIndex};
 use chrono::NaiveDate;
@@ -34,10 +33,11 @@ const MAXIMUM_ALTERNATIVES: usize = 4;
 /// Minutes in one day.
 const MINUTES_PER_DAY: u32 = 1440;
 
-thread_local! {
-    /// Search buffers of the current blocking thread, reused across legs.
-    static SEARCH_BUFFERS: RefCell<RaptorSearchBuffers> = RefCell::new(RaptorSearchBuffers::new());
-}
+/// Number of parts the departure window splits into, each searched on its own thread.
+const PARALLEL_WINDOW_SLICES: u32 = 4;
+
+/// Shortest part of the departure window worth a thread of its own, in minutes.
+const SHORTEST_WINDOW_SLICE_MINUTES: u32 = 60;
 
 /// Plans legs on a loaded bundle.
 pub struct TimetableBundleRouter {
@@ -51,6 +51,8 @@ pub struct TimetableBundleRouter {
     time_zone_finder: Arc<TimeZoneFinder>,
     /// The bundle's first day, in minutes since the Unix epoch.
     bundle_start_unix_minutes: u32,
+    /// Search buffers of finished searches, reused by later ones to avoid allocating.
+    spare_search_buffers: Mutex<Vec<RaptorSearchBuffers>>,
 }
 
 impl TimetableBundleRouter {
@@ -86,6 +88,7 @@ impl TimetableBundleRouter {
             search_index,
             time_zone_finder,
             bundle_start_unix_minutes,
+            spare_search_buffers: Mutex::new(Vec::new()),
         }
     }
 
@@ -98,7 +101,7 @@ impl TimetableBundleRouter {
     pub fn plan_leg(
         &self,
         input: &LegPlanningInput,
-        should_stop: impl Fn() -> bool,
+        should_stop: impl Fn() -> bool + Sync,
     ) -> LegPlanningResult {
         let Some(departure_window) = self.departure_window(input) else {
             return LegPlanningResult::NoJourneyFound(NoJourneyReason::TravelDateOutsideTimetable);
@@ -112,23 +115,13 @@ impl TimetableBundleRouter {
         if arrival_candidates.is_empty() {
             return LegPlanningResult::NoJourneyFound(NoJourneyReason::NoStationNearArrivalPlace);
         }
-        let query = RaptorLegQuery {
-            departure_candidates: &departure_candidates,
-            arrival_candidates: &arrival_candidates,
+        let found = self.search_in_parallel(
+            &departure_candidates,
+            &arrival_candidates,
             departure_window,
-            minimum_transfer_minutes: input.minimum_transfer_time.minutes(),
-            maximum_train_rides: MAXIMUM_TRAIN_RIDES,
-        };
-        let found = SEARCH_BUFFERS.with_borrow_mut(|buffers| {
-            search_leg_journeys(
-                &self.bundle,
-                &self.search_index,
-                &query,
-                &BoardAnyTrip,
-                buffers,
-                should_stop,
-            )
-        });
+            input,
+            &should_stop,
+        );
         // Lowest cost first. Ties go to the earlier arrival.
         let mut journeys: Vec<&RaptorJourney> = found.journeys.iter().collect();
         journeys.sort_by_key(|journey| {
@@ -158,6 +151,65 @@ impl TimetableBundleRouter {
             alternative_journeys,
             station_table: stations.table,
         }))
+    }
+
+    /// Searches the departure window in parts on scoped threads and merges their journeys.
+    ///
+    /// Range search reuses labels from later departures within one part only, so the parts do
+    /// more work in total than one search over the whole window. They finish sooner because
+    /// they run at the same time, and the merged journeys are the same.
+    fn search_in_parallel(
+        &self,
+        departure_candidates: &[CandidateStation],
+        arrival_candidates: &[CandidateStation],
+        departure_window: std::ops::Range<MinutesSinceBundleStart>,
+        input: &LegPlanningInput,
+        should_stop: &(impl Fn() -> bool + Sync),
+    ) -> ParetoJourneySet {
+        let start = departure_window.start.0;
+        let length = departure_window.end.0.saturating_sub(start);
+        let slice_count = PARALLEL_WINDOW_SLICES
+            .min(length / SHORTEST_WINDOW_SLICE_MINUTES)
+            .max(1);
+        let slices = (0..slice_count).map(|slice| {
+            let slice_start = start + length * slice / slice_count;
+            let slice_end = start + length * (slice + 1) / slice_count;
+            MinutesSinceBundleStart(slice_start)..MinutesSinceBundleStart(slice_end)
+        });
+        let search_slice = |slice_window| {
+            let query = RaptorLegQuery {
+                departure_candidates,
+                arrival_candidates,
+                departure_window: slice_window,
+                minimum_transfer_minutes: input.minimum_transfer_time.minutes(),
+                maximum_train_rides: MAXIMUM_TRAIN_RIDES,
+            };
+            let mut buffers = self
+                .spare_search_buffers
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .pop()
+                .unwrap_or_default();
+            let found = search_leg_journeys(
+                &self.bundle,
+                &self.search_index,
+                &query,
+                &BoardAnyTrip,
+                &mut buffers,
+                should_stop,
+            );
+            self.spare_search_buffers
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .push(buffers);
+            found
+        };
+        std::thread::scope(|scope| {
+            let searches: Vec<_> = slices
+                .map(|slice_window| scope.spawn(|| search_slice(slice_window)))
+                .collect();
+            ParetoJourneySet::merge(searches.into_iter().filter_map(|search| search.join().ok()))
+        })
     }
 
     /// Turns the local departure window of a leg into bundle minutes. A night train leaves in

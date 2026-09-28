@@ -128,6 +128,18 @@ pub struct ParetoJourneySet {
     pub journeys: SmallVec<[RaptorJourney; 8]>,
 }
 
+impl ParetoJourneySet {
+    /// Joins the results of searches over parts of one departure window, keeping only the
+    /// journeys no journey of any part beats.
+    pub fn merge(sets: impl IntoIterator<Item = Self>) -> Self {
+        let mut merged = Self {
+            journeys: sets.into_iter().flat_map(|set| set.journeys).collect(),
+        };
+        keep_pareto_optimal(&mut merged);
+        merged
+    }
+}
+
 /// A ride on a trip from a boarding stop, as a label records it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct RideOrigin {
