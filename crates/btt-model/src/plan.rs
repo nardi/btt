@@ -48,6 +48,8 @@ pub struct TrainRide {
     pub arrival_time: UnixTimeMinutes,
     /// How the train is shown to the traveller.
     pub train_label: TrainLabel,
+    /// Whether the train has couchettes or sleepers, whatever the leg's travel mode.
+    pub offers_berths: bool,
     /// Stations the train passes between boarding and alighting, in order, so the map can
     /// draw its line along them.
     #[specta(type = Vec<GeoCoordinates>)]

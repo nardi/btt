@@ -63,6 +63,7 @@ struct FeedTripHeader {
 pub fn resolve_trips(
     database: &WorkDatabase,
     feeds: &[&FeedConfig],
+    night_train_categories: &[String],
     window: ValidityWindow,
 ) -> Result<Vec<ResolvedTrip>, BuildError> {
     let feed_indices: FxHashMap<&str, usize> = feeds
@@ -95,7 +96,12 @@ pub fn resolve_trips(
             .copied()
             .unwrap_or_default();
         let feed = &feeds[trip_key.0];
-        let (train_number, train_label) = train_label(&feed.train_label, header);
+        let (train_number, mut train_label) = train_label(&feed.train_label, header);
+        train_label.offers_berths = offers_berths(
+            header.route_type,
+            &train_label.category,
+            night_train_categories,
+        );
         for (service_days, trip_stops) in resolve_to_utc(stops, days, header.time_zone, window) {
             resolved.push(ResolvedTrip {
                 feed_index: trip_key.0,
@@ -222,6 +228,19 @@ fn read_trip_headers(
     Ok(headers)
 }
 
+/// GTFS route type of a sleeper rail service in the extended route types.
+const SLEEPER_RAIL_ROUTE_TYPE: i32 = 105;
+
+/// Returns whether a trip runs on a train with couchettes or sleepers, by its route type or its
+/// category. Feeds disagree on both, so either one is enough.
+fn offers_berths(route_type: i32, category: &str, night_train_categories: &[String]) -> bool {
+    let category = category.to_lowercase();
+    route_type == SLEEPER_RAIL_ROUTE_TYPE
+        || night_train_categories
+            .iter()
+            .any(|night_category| night_category.to_lowercase() == category)
+}
+
 /// Reads a trip's train category and number with the feed's rule. Returns the number for
 /// deduplication and the label for the bundle.
 fn train_label(rule: &TrainLabelRule, header: &FeedTripHeader) -> (String, TrainLabelInput) {
@@ -265,6 +284,8 @@ fn train_label(rule: &TrainLabelRule, header: &FeedTripHeader) -> (String, Train
         category: category.to_owned(),
         number: number.to_owned(),
         agency: header.agency_name.clone(),
+        // The caller decides this with the list of night train categories.
+        offers_berths: false,
     };
     (train_number, label)
 }
@@ -497,5 +518,14 @@ mod tests {
         let (number, label) = train_label(&rule, &header);
         assert_eq!(number, "6201");
         assert_eq!(label.category, "TGV INOUI");
+    }
+
+    #[test]
+    fn berths_follow_the_route_type_or_the_category() {
+        let night_categories = ["NJ".to_owned(), "INTERCITÉS de nuit".to_owned()];
+        assert!(offers_berths(105, "D", &night_categories));
+        assert!(offers_berths(2, "nj", &night_categories));
+        assert!(offers_berths(2, "Intercités de nuit", &night_categories));
+        assert!(!offers_berths(102, "IC", &night_categories));
     }
 }

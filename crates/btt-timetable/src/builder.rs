@@ -91,6 +91,8 @@ pub struct TrainLabelInput {
     pub number: String,
     /// Name of the operating agency.
     pub agency: String,
+    /// Whether the train has couchettes or sleepers.
+    pub offers_berths: bool,
 }
 
 /// A trip to add to a bundle.
@@ -585,6 +587,7 @@ impl<'input> BundleTables<'input> {
             category: self.strings.intern(&label.category)?,
             number: self.strings.intern(&label.number)?,
             agency: self.strings.intern(&label.agency)?,
+            offers_berths: label.offers_berths,
         });
         self.train_label_indices.insert(label, index);
         Ok(index)

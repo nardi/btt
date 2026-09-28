@@ -183,6 +183,7 @@ fn router_journeys(
                 category: String::new(),
                 number: String::new(),
                 agency: String::new(),
+                offers_berths: false,
             },
         });
     }

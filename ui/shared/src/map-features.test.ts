@@ -23,6 +23,7 @@ const viennaToRome: LegPlan = {
       alighting_station: 1,
       arrival_time: 600,
       train_label: { category: "NJ", number: "40233" },
+      offers_berths: true,
       intermediate_station_coordinates: [{ latitude: 43.7, longitude: 11.2 }],
     },
     later_rides: [],
@@ -55,7 +56,7 @@ describe("rideLines", () => {
   it("draws planned rides and skips pending legs", () => {
     const lines = rideLines(viewState([[3, { status: "found", legPlan: viennaToRome }]]));
     expect(lines.features).toHaveLength(1);
-    expect(lines.features[0]!.properties).toEqual({ arrivalPlaceId: 3, overnight: true });
+    expect(lines.features[0]!.properties).toEqual({ arrivalPlaceId: 3, offersBerths: true });
     expect(lines.features[0]!.geometry.coordinates).toEqual([
       [16.3761, 48.1852],
       [11.2, 43.7],

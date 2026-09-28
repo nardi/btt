@@ -4,7 +4,7 @@ import type { FeatureCollection, LineString, Polygon } from "geojson";
 
 import type { GeoCoordinates, Trip, TripPlaceId } from "./bindings";
 import { circleRing } from "./geo";
-import { isOvernight, itineraryRows, tripPlaces } from "./itinerary";
+import { itineraryRows, tripPlaces } from "./itinerary";
 import { legViewState, type TripViewState } from "./trip-source";
 
 /** Properties of a station search radius circle. */
@@ -16,7 +16,8 @@ export interface RadiusCircleProperties {
 /** Properties of a ride line. */
 export interface RideLineProperties {
   arrivalPlaceId: TripPlaceId;
-  overnight: boolean;
+  /** Whether the train has couchettes or sleepers, which the map shows in purple. */
+  offersBerths: boolean;
 }
 
 /** A place whose position or radius is being dragged and not yet saved. */
@@ -87,7 +88,7 @@ export function rideLines(viewState: TripViewState): FeatureCollection<LineStrin
             position(alighting.coordinates),
           ],
         },
-        properties: { arrivalPlaceId: leg.arrivalPlace.id, overnight: isOvernight(leg.travelMode) },
+        properties: { arrivalPlaceId: leg.arrivalPlace.id, offersBerths: ride.offers_berths },
       });
     }
   }

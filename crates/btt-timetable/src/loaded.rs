@@ -322,6 +322,13 @@ impl LoadedTimetableBundle {
         )
     }
 
+    /// Returns whether a trip's train has couchettes or sleepers.
+    pub fn trip_offers_berths(&self, trip: BundleTripIndex) -> bool {
+        let archived = self.archived();
+        let label_index = archived.trips[trip.as_usize()].train_label.to_native();
+        archived.train_labels[label_index.as_usize()].offers_berths
+    }
+
     /// Returns the feeds that went into the bundle as name, license and URL.
     pub fn feed_attributions(&self) -> impl Iterator<Item = (&str, &str, &str)> + '_ {
         self.archived()

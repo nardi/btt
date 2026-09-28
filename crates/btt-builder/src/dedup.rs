@@ -290,6 +290,11 @@ fn extended_trip(
     let mut merged = primary.clone();
     merged.trip.stops = trip_stops;
     merged.trip.service_days = service_days;
+    // Some feeds file night trains as ordinary long-distance trains. When only one copy knows
+    // that the train has berths, its label is the better one.
+    if secondary.trip.train_label.offers_berths && !primary.trip.train_label.offers_berths {
+        merged.trip.train_label = secondary.trip.train_label.clone();
+    }
     Some(merged)
 }
 
@@ -362,6 +367,7 @@ mod tests {
                     category: "RJX".into(),
                     number: "65".into(),
                     agency: String::new(),
+                    offers_berths: false,
                 },
             },
         }
@@ -453,6 +459,25 @@ mod tests {
             [0, 1, 3, 4],
             "Budapest extends the train past Vienna"
         );
+    }
+
+    #[test]
+    fn a_copy_that_knows_about_berths_gives_its_label() {
+        // The longer copy files the train as an Intercity, the shorter one as a Nightjet.
+        let intercity = trip(
+            0,
+            vec![stop(0, 600, 600), stop(1, 690, 692), stop(3, 840, 845)],
+            days(&[0]),
+        );
+        let mut nightjet = trip(1, vec![stop(0, 600, 600), stop(1, 690, 692)], days(&[0]));
+        nightjet.trip.train_label.category = "NJ".into();
+        nightjet.trip.train_label.offers_berths = true;
+        let (trips, _) =
+            merge_duplicate_trips(vec![intercity, nightjet], &NearbyStationPairs::default());
+        assert_eq!(trips.len(), 1);
+        assert_eq!(trips[0].trip.stops.len(), 3);
+        assert_eq!(trips[0].trip.train_label.category, "NJ");
+        assert!(trips[0].trip.train_label.offers_berths);
     }
 
     #[test]

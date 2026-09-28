@@ -342,6 +342,7 @@ impl TimetableBundleRouter {
                 category: category.into(),
                 number: number.into(),
             },
+            offers_berths: self.bundle.trip_offers_berths(ride.trip),
             intermediate_station_coordinates,
         })
     }

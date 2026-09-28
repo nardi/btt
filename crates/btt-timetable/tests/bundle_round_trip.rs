@@ -40,6 +40,7 @@ fn label(number: &str) -> TrainLabelInput {
         category: "ICE".into(),
         number: number.into(),
         agency: "DB".into(),
+        offers_berths: number == "3",
     }
 }
 
@@ -115,6 +116,8 @@ fn bundle_survives_archiving() {
         bundle.trip_train_label(BundleTripIndex(1)),
         ("ICE", "3", "DB")
     );
+    assert!(bundle.trip_offers_berths(BundleTripIndex(1)));
+    assert!(!bundle.trip_offers_berths(BundleTripIndex(0)));
     assert!(bundle.trip_service_days(BundleTripIndex(0)).runs_on(29));
     assert!(bundle.station_service_days(cologne).runs_on(0));
     assert_eq!(bundle.feed_attributions().next().unwrap().0, "DELFI");

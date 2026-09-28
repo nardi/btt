@@ -4,6 +4,21 @@
 
 validity_window_days = 90
 
+# Categories of trains with couchettes or sleepers, compared without regard to case. A train
+# also counts when any feed gives it the GTFS route type 105, and when any feed's copy of a
+# merged train does.
+night_train_categories = [
+    "NJ",
+    "Nightjet",
+    "EN",
+    "EuroNight",
+    "ES",
+    "European Sleeper",
+    "ICN",
+    "InterCityNotte",
+    "INTERCITES de nuit",
+]
+
 [[feed]]
 mirror_name = "nl_OpenOV"
 # Platforms carry the station area as parent_station, so the default key rule fits.

@@ -48,6 +48,9 @@ pub struct BuilderConfig {
     pub feeds: Vec<FeedConfig>,
     /// Words stripped from station names before comparing them, such as "hbf".
     pub station_name_stopwords: Vec<String>,
+    /// Train categories that stand for trains with couchettes or sleepers, such as "NJ",
+    /// compared without regard to case.
+    pub night_train_categories: Vec<String>,
 }
 
 /// How to read one feed.
@@ -149,6 +152,8 @@ pub struct TrainLabelRule {
 #[serde(deny_unknown_fields)]
 struct BuilderConfigFile {
     validity_window_days: u16,
+    #[serde(default)]
+    night_train_categories: Vec<String>,
     feed: Vec<FeedConfigFile>,
 }
 
@@ -213,6 +218,7 @@ impl BuilderConfig {
             validity_window_days: file.validity_window_days,
             feeds,
             station_name_stopwords: stopwords.stopwords,
+            night_train_categories: file.night_train_categories,
         })
     }
 }

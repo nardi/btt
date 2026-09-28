@@ -111,6 +111,7 @@ fn build(arguments: &Arguments) -> Result<(), BuildError> {
         feeds,
         trainline_stations_csv,
         station_name_stopwords: &config.station_name_stopwords,
+        night_train_categories: &config.night_train_categories,
         window,
         bundle_version,
     };

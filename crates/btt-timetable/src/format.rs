@@ -9,7 +9,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 
 /// Changes whenever the layout of `TimetableBundle` changes, so an app never reads a bundle it
 /// does not understand.
-pub const BUNDLE_FORMAT_VERSION: u32 = 1;
+pub const BUNDLE_FORMAT_VERSION: u32 = 2;
 
 /// Marks the start of every bundle file.
 pub const BUNDLE_MAGIC: [u8; 8] = *b"BTTBUNDL";
@@ -278,6 +278,8 @@ pub struct BundleTrainLabel {
     pub number: PooledString,
     /// Name of the operating agency.
     pub agency: PooledString,
+    /// Whether the train has couchettes or sleepers.
+    pub offers_berths: bool,
 }
 
 /// Source and license of a feed that went into the bundle.

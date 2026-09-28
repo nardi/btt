@@ -405,6 +405,7 @@ mod tests {
                         category: "ICE".into(),
                         number: "913".into(),
                     },
+                    offers_berths: true,
                     intermediate_station_coordinates: smallvec::smallvec![
                         GeoCoordinates::from_degrees(50.5, 7.5).unwrap()
                     ],

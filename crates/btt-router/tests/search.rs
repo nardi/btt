@@ -79,6 +79,7 @@ impl Network {
                 category: "T".into(),
                 number: number.into(),
                 agency: String::new(),
+                offers_berths: false,
             },
         });
     }

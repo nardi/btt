@@ -220,6 +220,7 @@ fn run_fixture_pipeline(
         feeds: feed_inputs,
         trainline_stations_csv: write("stations.csv", trainline_stations),
         station_name_stopwords: &config.station_name_stopwords,
+        night_train_categories: &config.night_train_categories,
         window: ValidityWindow {
             start: NaiveDate::from_ymd_opt(2026, 10, 20).unwrap(),
             days: 14,

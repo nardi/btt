@@ -77,6 +77,8 @@ pub struct PipelineInputs<'config> {
     pub trainline_stations_csv: PathBuf,
     /// Words stripped from station names before matching.
     pub station_name_stopwords: &'config [String],
+    /// Train categories that stand for trains with couchettes or sleepers.
+    pub night_train_categories: &'config [String],
     /// Days the bundle covers.
     pub window: ValidityWindow,
     /// Version of the data as `yyyymmddNN`.
@@ -119,7 +121,12 @@ pub fn run_pipeline(
 
     let started = Instant::now();
     let feed_configs: Vec<&FeedConfig> = inputs.feeds.iter().map(|feed| feed.config).collect();
-    let resolved = resolve::resolve_trips(database, &feed_configs, inputs.window)?;
+    let resolved = resolve::resolve_trips(
+        database,
+        &feed_configs,
+        inputs.night_train_categories,
+        inputs.window,
+    )?;
     tracing::info!(trips = resolved.len(), elapsed = ?started.elapsed(), "resolved trips to UTC");
 
     let started = Instant::now();

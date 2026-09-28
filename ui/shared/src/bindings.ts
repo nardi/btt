@@ -380,6 +380,8 @@ export type TrainRide = {
 	arrival_time: UnixTimeMinutes,
 	/**  How the train is shown to the traveller. */
 	train_label: TrainLabel,
+	/**  Whether the train has couchettes or sleepers, whatever the leg's travel mode. */
+	offers_berths: boolean,
 	/**
 	 *  Stations the train passes between boarding and alighting, in order, so the map can
 	 *  draw its line along them.

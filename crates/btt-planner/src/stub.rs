@@ -72,6 +72,7 @@ impl StubBackend {
                     category: "STUB".into(),
                     number: "1".into(),
                 },
+                offers_berths: false,
                 intermediate_station_coordinates: SmallVec::new(),
             },
             later_rides: SmallVec::new(),

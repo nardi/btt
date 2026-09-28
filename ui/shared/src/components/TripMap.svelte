@@ -223,14 +223,13 @@
   </GeoJSONSource>
 
   <GeoJSONSource id="planned-rides" data={rides}>
+    <!-- Purple marks trains with couchettes or sleepers, whatever the leg's travel mode. -->
     <LineLayer
-      filter={["!", ["get", "overnight"]]}
       layout={{ "line-cap": "round" }}
-      paint={{ "line-color": "#c2410c", "line-width": 3 }}
-    />
-    <LineLayer
-      filter={["get", "overnight"]}
-      paint={{ "line-color": "#6d28d9", "line-width": 3, "line-dasharray": [2, 1.5] }}
+      paint={{
+        "line-color": ["case", ["get", "offersBerths"], "#6d28d9", "#c2410c"],
+        "line-width": 3,
+      }}
     />
   </GeoJSONSource>
 
