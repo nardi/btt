@@ -21,6 +21,7 @@ CREATE TABLE feed_routes (
     route_id VARCHAR NOT NULL,
     agency_id VARCHAR,
     route_short_name VARCHAR,
+    route_desc VARCHAR,
     route_type INTEGER NOT NULL
 );
 
@@ -29,7 +30,8 @@ CREATE TABLE feed_trips (
     trip_id VARCHAR NOT NULL,
     route_id VARCHAR NOT NULL,
     service_id VARCHAR NOT NULL,
-    trip_short_name VARCHAR
+    trip_short_name VARCHAR,
+    trip_headsign VARCHAR
 );
 
 CREATE TABLE feed_stop_times (

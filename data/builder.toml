@@ -50,3 +50,51 @@ station_code = "uic_in_stop_id"
 field = "route_short_name"
 pattern = '^(?<category>[A-Za-z]+)\s*(?<number>\d+)$'
 category_field = "route_short_name"
+
+[[feed]]
+mirror_name = "be_sncb"
+# Stop IDs start with the UIC code, as in 8891140_1 for a platform of Aalter.
+station_code = "uic_in_stop_id"
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^(?<number>\d+)$'
+# Route short names are products such as "IC" or lines such as "S41".
+category_field = "route_short_name"
+
+[[feed]]
+mirror_name = "fr_horaires-sncf"
+# Stop IDs end with the UIC code and its check digit, as in StopArea:OCE87313759.
+station_code = "uic8_in_stop_id"
+[feed.train_label]
+# The headsign holds the train number, and trip_short_name is missing.
+field = "trip_headsign"
+pattern = '^(?<number>\d+)$'
+# Route short names are line codes. The product is part of every stop point ID, as in
+# StopPoint:OCETGV INOUI-87686006.
+category_field = "first_stop_id"
+category_pattern = '^StopPoint:OCE(?<category>.+)-\d+$'
+
+[[feed]]
+mirror_name = "fr_eurostar-gtfs-plan-de-transport-et-temps-reel"
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^(?<number>\d+)$'
+# Route short names are station code pairs, and every agency is named Eurostar.
+category_field = "agency_name"
+
+# Swiss timetables run from December to December, so the window needs two feeds around the
+# change of timetable.
+[[feed]]
+mirror_name = "ch_opentransportdataswiss26"
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^(?<number>\d+)$'
+# Route descriptions hold the product, such as "IC", "IR" or "S".
+category_field = "route_desc"
+
+[[feed]]
+mirror_name = "ch_opentransportdataswiss27"
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^(?<number>\d+)$'
+category_field = "route_desc"

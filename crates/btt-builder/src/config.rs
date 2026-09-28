@@ -28,6 +28,9 @@ pub enum ConfigError {
         /// Why the pattern failed.
         source: regex::Error,
     },
+    /// A category pattern has no `category` group.
+    #[error("the category pattern of feed {0} has no `category` group")]
+    MissingCategoryGroup(String),
     /// A train label pattern has no `number` group.
     #[error("the train label pattern of feed {0} has no `number` group")]
     MissingNumberGroup(String),
@@ -98,10 +101,12 @@ pub enum StationKeyRule {
 pub enum FeedStationCodeScheme {
     /// The stops carry no code the Trainline dataset knows.
     NoStationCodes,
-    /// The stop ID is a UIC station code.
+    /// The stop ID starts with a seven-digit UIC station code.
     UicInStopId,
-    /// The stop ID is an EVA number, as used by DB.
+    /// The stop ID starts with an EVA number, as used by DB.
     EvaInStopId,
+    /// The stop ID ends with an eight-digit UIC code with its check digit, as SNCF uses.
+    Uic8InStopId,
 }
 
 /// A GTFS field that can hold the category or number of a train.
@@ -110,10 +115,18 @@ pub enum FeedStationCodeScheme {
 pub enum TrainLabelField {
     /// `trips.txt` `trip_short_name`.
     TripShortName,
+    /// `trips.txt` `trip_headsign`, which some feeds fill with the train number.
+    TripHeadsign,
     /// `routes.txt` `route_short_name`.
     RouteShortName,
+    /// `routes.txt` `route_desc`, which some feeds fill with the product, such as "IC".
+    RouteDesc,
     /// A product name derived from `routes.txt` `route_type`, such as "ICE" for 101.
     RouteType,
+    /// `agency.txt` `agency_name` of the trip's route.
+    AgencyName,
+    /// The `stop_id` of the trip's first stop, which some feeds build from the product.
+    FirstStopId,
 }
 
 /// How to read category and number of a train from a trip.
@@ -126,6 +139,9 @@ pub struct TrainLabelRule {
     /// Field that holds the category when the pattern has no `category` group or it does not
     /// match.
     pub category_field: TrainLabelField,
+    /// Pattern with a `category` group that picks the category out of `category_field`. The
+    /// whole field is the category without it, or when it does not match.
+    pub category_pattern: Option<Regex>,
 }
 
 /// The configuration file as written.
@@ -154,6 +170,7 @@ enum StationCodeFile {
     None,
     UicInStopId,
     EvaInStopId,
+    Uic8InStopId,
 }
 
 #[derive(Debug, Deserialize)]
@@ -162,6 +179,7 @@ struct TrainLabelFile {
     field: TrainLabelField,
     pattern: String,
     category_field: TrainLabelField,
+    category_pattern: Option<String>,
 }
 
 /// The stopword file as written.
@@ -224,6 +242,20 @@ impl TryFrom<FeedConfigFile> for FeedConfig {
         {
             return Err(ConfigError::MissingNumberGroup(file.mirror_name));
         }
+        let category_pattern = match &file.train_label.category_pattern {
+            Some(text) => {
+                let category_pattern = Regex::new(text).map_err(pattern_error)?;
+                if !category_pattern
+                    .capture_names()
+                    .flatten()
+                    .any(|name| name == "category")
+                {
+                    return Err(ConfigError::MissingCategoryGroup(file.mirror_name));
+                }
+                Some(category_pattern)
+            }
+            None => None,
+        };
         Ok(Self {
             station_key,
             station_key_namespace: file.station_key_namespace,
@@ -231,11 +263,13 @@ impl TryFrom<FeedConfigFile> for FeedConfig {
                 StationCodeFile::None => FeedStationCodeScheme::NoStationCodes,
                 StationCodeFile::UicInStopId => FeedStationCodeScheme::UicInStopId,
                 StationCodeFile::EvaInStopId => FeedStationCodeScheme::EvaInStopId,
+                StationCodeFile::Uic8InStopId => FeedStationCodeScheme::Uic8InStopId,
             },
             train_label: TrainLabelRule {
                 field: file.train_label.field,
                 pattern,
                 category_field: file.train_label.category_field,
+                category_pattern,
             },
             mirror_name: file.mirror_name,
         })

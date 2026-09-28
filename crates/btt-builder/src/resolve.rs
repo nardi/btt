@@ -46,6 +46,10 @@ struct FeedTripHeader {
     route_type: i32,
     agency_name: String,
     time_zone: Tz,
+    trip_headsign: Option<String>,
+    route_desc: Option<String>,
+    /// Stop ID of the trip's first stop, which some feeds use to name the train's product.
+    first_stop_id: Option<String>,
 }
 
 /// Reads every rail trip from the working database and resolves it to UTC.
@@ -173,13 +177,20 @@ fn read_trip_headers(
     // A route without agency_id belongs to the feed's only agency, so any agency of the feed
     // fits. The QUALIFY keeps one row per trip either way.
     let mut statement = database.connection.prepare(
-        "SELECT trips.feed_id, trips.trip_id, trips.service_id, trips.trip_short_name,
+        "WITH first_stops AS (
+             SELECT feed_id, trip_id, arg_min(stop_id, stop_sequence) AS first_stop_id
+             FROM feed_stop_times
+             GROUP BY feed_id, trip_id
+         )
+         SELECT trips.feed_id, trips.trip_id, trips.service_id, trips.trip_short_name,
                 routes.route_short_name, coalesce(agencies.agency_name, ''),
                 coalesce(agencies.agency_timezone, feed_config.default_time_zone, 'UTC'),
-                routes.route_type
+                routes.route_type, trips.trip_headsign, routes.route_desc,
+                first_stops.first_stop_id
          FROM feed_trips AS trips
          JOIN feed_routes AS routes USING (feed_id, route_id)
          JOIN feed_config USING (feed_id)
+         LEFT JOIN first_stops USING (feed_id, trip_id)
          LEFT JOIN feed_agencies AS agencies
            ON agencies.feed_id = trips.feed_id
           AND (agencies.agency_id = routes.agency_id OR routes.agency_id IS NULL)
@@ -202,6 +213,9 @@ fn read_trip_headers(
                 route_type: row.get(7)?,
                 agency_name: row.get(5)?,
                 time_zone: time_zone_name.parse().unwrap_or(Tz::UTC),
+                trip_headsign: row.get(8)?,
+                route_desc: row.get(9)?,
+                first_stop_id: row.get(10)?,
             },
         );
     }
@@ -213,8 +227,12 @@ fn read_trip_headers(
 fn train_label(rule: &TrainLabelRule, header: &FeedTripHeader) -> (String, TrainLabelInput) {
     let field_text = |field: TrainLabelField| match field {
         TrainLabelField::TripShortName => header.trip_short_name.as_deref().unwrap_or(""),
+        TrainLabelField::TripHeadsign => header.trip_headsign.as_deref().unwrap_or(""),
         TrainLabelField::RouteShortName => header.route_short_name.as_deref().unwrap_or(""),
+        TrainLabelField::RouteDesc => header.route_desc.as_deref().unwrap_or(""),
         TrainLabelField::RouteType => route_type_category(header.route_type),
+        TrainLabelField::AgencyName => header.agency_name.as_str(),
+        TrainLabelField::FirstStopId => header.first_stop_id.as_deref().unwrap_or(""),
     };
     let text = field_text(rule.field).trim();
     let captures = rule.pattern.captures(text);
@@ -226,7 +244,16 @@ fn train_label(rule: &TrainLabelRule, header: &FeedTripHeader) -> (String, Train
         .as_ref()
         .and_then(|captures| captures.name("category"))
         .map_or_else(
-            || field_text(rule.category_field).trim(),
+            || {
+                let category_text = field_text(rule.category_field).trim();
+                // A category pattern picks the category out of a longer field. A field it does
+                // not match stays whole, so an unexpected value still shows up in the label.
+                rule.category_pattern
+                    .as_ref()
+                    .and_then(|pattern| pattern.captures(category_text))
+                    .and_then(|captures| captures.name("category"))
+                    .map_or(category_text, |category| category.as_str().trim())
+            },
             |category| category.as_str(),
         );
     let train_number = if captures.is_some() {
@@ -429,11 +456,15 @@ mod tests {
             route_type: 101,
             agency_name: "DB Fernverkehr AG".into(),
             time_zone: Tz::Europe__Berlin,
+            trip_headsign: None,
+            route_desc: None,
+            first_stop_id: None,
         };
         let rule = TrainLabelRule {
             field: TrainLabelField::TripShortName,
             pattern: Regex::new(r"^0*(?<number>\d+)$").unwrap(),
             category_field: TrainLabelField::RouteShortName,
+            category_pattern: None,
         };
         let (number, label) = train_label(&rule, &header);
         assert_eq!(number, "141");
@@ -441,5 +472,30 @@ mod tests {
             (label.category.as_str(), label.number.as_str()),
             ("ICE", "141")
         );
+    }
+
+    #[test]
+    fn labels_read_the_category_out_of_the_first_stop() {
+        // SNCF puts the train number in the headsign and the product in its stop point IDs.
+        let header = FeedTripHeader {
+            service_id: String::new(),
+            trip_short_name: None,
+            route_short_name: Some("K82".into()),
+            route_type: 2,
+            agency_name: "SNCF VOYAGEURS".into(),
+            time_zone: Tz::Europe__Paris,
+            trip_headsign: Some("6201".into()),
+            route_desc: None,
+            first_stop_id: Some("StopPoint:OCETGV INOUI-87686006".into()),
+        };
+        let rule = TrainLabelRule {
+            field: TrainLabelField::TripHeadsign,
+            pattern: Regex::new(r"^(?<number>\d+)$").unwrap(),
+            category_field: TrainLabelField::FirstStopId,
+            category_pattern: Some(Regex::new(r"^StopPoint:OCE(?<category>.+)-\d+$").unwrap()),
+        };
+        let (number, label) = train_label(&rule, &header);
+        assert_eq!(number, "6201");
+        assert_eq!(label.category, "TGV INOUI");
     }
 }

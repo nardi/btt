@@ -51,13 +51,13 @@ pub fn load_feed(
          SELECT {feed_id}, {agency_id}, {agency_name}, {agency_timezone} FROM {agencies};
 
          INSERT INTO feed_routes
-         SELECT {feed_id}, route_id, {route_agency_id}, {route_short_name},
+         SELECT {feed_id}, route_id, {route_agency_id}, {route_short_name}, {route_desc},
                 TRY_CAST(route_type AS INTEGER)
          FROM {routes}
          WHERE {RAIL_ROUTE_TYPE_FILTER};
 
          INSERT INTO feed_trips
-         SELECT {feed_id}, trip_id, route_id, service_id, {trip_short_name}
+         SELECT {feed_id}, trip_id, route_id, service_id, {trip_short_name}, {trip_headsign}
          FROM {trips}
          WHERE route_id IN (SELECT route_id FROM feed_routes WHERE feed_id = {feed_id});",
         agency_id = column_or_null(&agency_columns, "agency_id"),
@@ -66,8 +66,10 @@ pub fn load_feed(
         agencies = csv("agency.txt")?,
         route_agency_id = column_or_null(&route_columns, "agency_id"),
         route_short_name = column_or_null(&route_columns, "route_short_name"),
+        route_desc = column_or_null(&route_columns, "route_desc"),
         routes = csv("routes.txt")?,
         trip_short_name = column_or_null(&trip_columns, "trip_short_name"),
+        trip_headsign = column_or_null(&trip_columns, "trip_headsign"),
         trips = csv("trips.txt")?,
     ))?;
 
@@ -96,9 +98,15 @@ pub fn load_feed(
             sql_string(pattern)
         ),
     };
+    // Platform IDs often add a suffix to the station code, as in 8891140_1, so the code is
+    // the leading digits. SNCF IDs end in the code, as in StopArea:OCE87313759.
     let station_code = match feed.station_code {
         FeedStationCodeScheme::NoStationCodes => "NULL",
-        FeedStationCodeScheme::UicInStopId | FeedStationCodeScheme::EvaInStopId => "stop_id",
+        FeedStationCodeScheme::UicInStopId => "nullif(regexp_extract(stop_id, '^(\\d{7})', 1), '')",
+        FeedStationCodeScheme::EvaInStopId => "nullif(regexp_extract(stop_id, '^(\\d+)', 1), '')",
+        FeedStationCodeScheme::Uic8InStopId => {
+            "nullif(regexp_extract(stop_id, '(\\d{8})$', 1), '')"
+        }
     };
     database.run(&format!(
         "INSERT INTO feed_stops
@@ -198,5 +206,6 @@ fn station_code_scheme_name(scheme: FeedStationCodeScheme) -> &'static str {
         FeedStationCodeScheme::NoStationCodes => "none",
         FeedStationCodeScheme::UicInStopId => "uic",
         FeedStationCodeScheme::EvaInStopId => "eva",
+        FeedStationCodeScheme::Uic8InStopId => "uic8",
     }
 }
