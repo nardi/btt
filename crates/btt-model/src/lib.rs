@@ -19,8 +19,8 @@ pub use edit::{
 };
 pub use itinerary::{
     AcceptedBerths, BerthType, Itinerary, ItineraryLeg, ItineraryRoute, LegTravelMode,
-    OvernightLegOptions, PlaceStay, SameDayStayRange, StationSearchRadius, TripPlace, TripPlaceId,
-    ViaPlace,
+    OvernightLegOptions, PlaceStay, PlaceWindowOverride, SameDayStayRange, StationSearchRadius,
+    TripPlace, TripPlaceId, ViaPlace,
 };
 pub use place_search::PlaceSearchResult;
 pub use plan::{

@@ -74,8 +74,7 @@ pub struct IdentifiedLegInput {
 pub fn leg_planning_inputs(trip: &Trip) -> SmallVec<[IdentifiedLegInput; 16]> {
     let preferences = &trip.preferences;
     let departure_dates = trip.itinerary.leg_departure_dates(trip.start_date);
-    let windows_of =
-        |place: &TripPlace| place.window_override.unwrap_or(preferences.default_windows);
+    let windows_of = |place: &TripPlace| place.windows(preferences.default_windows);
     trip.itinerary
         .legs()
         .zip(departure_dates)

@@ -123,11 +123,12 @@ impl TimetableBundleRouter {
             &should_stop,
         );
         // Lowest cost first. Ties go to the earlier arrival.
+        let arrival_window = self.arrival_window_in_bundle_minutes(input);
         let mut journeys: Vec<&RaptorJourney> = found.journeys.iter().collect();
         journeys.sort_by_key(|journey| {
             (
                 journey_cost(
-                    journey_cost_inputs(journey),
+                    journey_cost_inputs(journey, &arrival_window),
                     input.transfer_aversion,
                     ScoringWeights::DEFAULT,
                 ),
@@ -239,6 +240,33 @@ impl TimetableBundleRouter {
         let bundle_end = u32::from(self.bundle.validity_days()) * MINUTES_PER_DAY;
         (start < bundle_end)
             .then_some(MinutesSinceBundleStart(start)..MinutesSinceBundleStart(end.min(bundle_end)))
+    }
+
+    /// Returns the arrival window of a leg in bundle minutes. A daytime leg arrives on its
+    /// departure date, and a night train leaves its passengers the morning after, in its
+    /// alighting window. Moments before the bundle start count as its start.
+    fn arrival_window_in_bundle_minutes(&self, input: &LegPlanningInput) -> std::ops::Range<u32> {
+        let (window, date) = match input.travel_mode {
+            LegTravelMode::Daytime => (input.arrival.time_window, input.departure_date),
+            LegTravelMode::Overnight(options) => (
+                options.alighting_window,
+                input
+                    .departure_date
+                    .succ_opt()
+                    .unwrap_or(input.departure_date),
+            ),
+        };
+        let time_zone = self
+            .time_zone_finder
+            .time_zone_at(input.arrival.coordinates);
+        let start_minute = u32::from(window.start.minutes_since_midnight());
+        let end_minute = start_minute + u32::from(window.length.minutes());
+        let bundle_minutes = |minute: u32| {
+            local_time_to_unix_minutes(date, minute, time_zone)
+                .0
+                .saturating_sub(self.bundle_start_unix_minutes)
+        };
+        bundle_minutes(start_minute)..bundle_minutes(end_minute)
     }
 
     /// Returns the stations within a place's search radius that have service on any of the
@@ -405,16 +433,22 @@ fn arrival_footpath_minutes(journey: &RaptorJourney) -> Option<u32> {
 ///
 /// A footpath at the end counts as a transfer. Beyond a short walk it stands for local transit,
 /// and even a walk to another station is a change the traveller has to make.
-fn journey_cost_inputs(journey: &RaptorJourney) -> JourneyCostInputs {
+fn journey_cost_inputs(
+    journey: &RaptorJourney,
+    arrival_window: &std::ops::Range<u32>,
+) -> JourneyCostInputs {
     let footpath_minutes = arrival_footpath_minutes(journey);
     let way_to_station_minutes = u32::from(journey.departure_candidate.time_to_place_minutes)
         + footpath_minutes.unwrap_or(0)
         + u32::from(journey.arrival_candidate.time_to_place_minutes);
     let train_changes = u32::try_from(journey.ride_count().saturating_sub(1)).unwrap_or(u32::MAX);
+    let arrival = journey.arrival.0;
     JourneyCostInputs {
-        door_to_door_minutes: journey.arrival.0.saturating_sub(journey.departure.0),
+        door_to_door_minutes: arrival.saturating_sub(journey.departure.0),
         way_to_station_minutes,
         transfer_count: train_changes + u32::from(footpath_minutes.is_some()),
+        minutes_outside_arrival_window: arrival_window.start.saturating_sub(arrival)
+            + arrival.saturating_sub(arrival_window.end),
     }
 }
 

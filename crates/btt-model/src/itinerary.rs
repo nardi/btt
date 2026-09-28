@@ -41,7 +41,45 @@ pub struct TripPlace {
     /// Largest distance to a station the planner may use for this place.
     pub station_search_radius: StationSearchRadius,
     /// Replaces the trip's default windows for legs that leave or reach this place.
-    pub window_override: Option<TravelDayWindows>,
+    pub window_override: Option<PlaceWindowOverride>,
+}
+
+impl TripPlace {
+    /// Returns the windows that apply at this place, given the trip's defaults.
+    pub fn windows(&self, defaults: TravelDayWindows) -> TravelDayWindows {
+        self.window_override.map_or(defaults, |window_override| {
+            window_override.windows(defaults)
+        })
+    }
+}
+
+/// Time windows of a place that replace the trip's defaults. The arrival window applies to the
+/// leg that reaches the place, and the departure window to the leg that leaves it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub enum PlaceWindowOverride {
+    /// Only the arrival window differs from the default.
+    Arrival(DailyTimeWindow),
+    /// Only the departure window differs from the default.
+    Departure(DailyTimeWindow),
+    /// Both windows differ from the defaults.
+    Both(TravelDayWindows),
+}
+
+impl PlaceWindowOverride {
+    /// Returns the windows that apply, taking the defaults where this override has none.
+    pub fn windows(self, defaults: TravelDayWindows) -> TravelDayWindows {
+        match self {
+            Self::Arrival(arrival) => TravelDayWindows {
+                arrival,
+                ..defaults
+            },
+            Self::Departure(departure) => TravelDayWindows {
+                departure,
+                ..defaults
+            },
+            Self::Both(windows) => windows,
+        }
+    }
 }
 
 /// Time spent at a same-day stop, measured from train arrival to train departure.
@@ -355,6 +393,22 @@ pub(crate) mod tests {
             final_leg_travel_mode: overnight(),
             destination: place(3, "Rome", 41.901_0, 12.500_7),
         })
+    }
+
+    #[test]
+    fn a_window_override_replaces_only_its_own_windows() {
+        let time = |hour| LocalTimeOfDay::from_hour_and_minute(hour, 0).unwrap();
+        let defaults = TravelDayWindows {
+            departure: DailyTimeWindow::from_start_and_end(time(7), time(20)),
+            arrival: DailyTimeWindow::from_start_and_end(time(7), time(23)),
+        };
+        let evening = DailyTimeWindow::from_start_and_end(time(17), time(21));
+        let arrival_only = PlaceWindowOverride::Arrival(evening).windows(defaults);
+        assert_eq!(arrival_only.arrival, evening);
+        assert_eq!(arrival_only.departure, defaults.departure);
+        let departure_only = PlaceWindowOverride::Departure(evening).windows(defaults);
+        assert_eq!(departure_only.departure, evening);
+        assert_eq!(departure_only.arrival, defaults.arrival);
     }
 
     #[test]

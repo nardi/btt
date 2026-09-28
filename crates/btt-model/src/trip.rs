@@ -145,7 +145,7 @@ impl Trip {
 }
 
 /// Schema version that `StoredTrip` documents written by this build carry.
-pub const CURRENT_TRIP_SCHEMA_VERSION: u16 = 1;
+pub const CURRENT_TRIP_SCHEMA_VERSION: u16 = 2;
 
 /// A trip as it is stored and exported, with the schema version of its document.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]

@@ -1,9 +1,21 @@
 <script lang="ts">
   // One place of the itinerary with its dates and stay.
-  import type { PlaceStay, TravelDayWindows, TripEdit, TripPlaceId } from "../bindings";
+  import type {
+    PlaceStay,
+    PlaceWindowOverride,
+    TravelDayWindows,
+    TripEdit,
+    TripPlaceId,
+  } from "../bindings";
   import { formatDate, formatDistance } from "../format";
-  import { type PlaceRow, stayNights } from "../itinerary";
-  import TimeWindowField from "./TimeWindowField.svelte";
+  import {
+    overriddenArrivalWindow,
+    overriddenDepartureWindow,
+    type PlaceRow,
+    placeWindowOverride,
+    stayNights,
+  } from "../itinerary";
+  import TimeWindowOverrideField from "./TimeWindowOverrideField.svelte";
 
   let {
     row,
@@ -45,7 +57,8 @@
         : "before",
   );
   const placeId = $derived(row.place.id);
-  const windows = $derived(row.place.window_override ?? defaultWindows);
+  const arrivalOverride = $derived(overriddenArrivalWindow(row.place.window_override));
+  const departureOverride = $derived(overriddenDepartureWindow(row.place.window_override));
 
   /** Turns a number of nights into a stay. Zero nights keeps existing same-day settings. */
   function stayWithNights(nights: number): PlaceStay {
@@ -71,8 +84,8 @@
     });
   }
 
-  function setWindows(windowOverride: TravelDayWindows | null) {
-    onEdit?.({ SetPlaceWindowOverride: { place_id: placeId, windows: windowOverride } });
+  function setWindows(windowOverride: PlaceWindowOverride | null) {
+    onEdit?.({ SetPlaceWindowOverride: { place_id: placeId, window_override: windowOverride } });
   }
 
   function dropPlace(event: DragEvent) {
@@ -166,20 +179,26 @@
 
   {#if showWindows}
     <div class="windows">
-      <TimeWindowField
-        label="Depart between"
-        window={windows.departure}
-        onChange={(departure) => setWindows({ ...windows, departure })}
-      />
-      <TimeWindowField
-        label="Arrive between"
-        window={windows.arrival}
-        onChange={(arrival) => setWindows({ ...windows, arrival })}
-      />
+      <!-- The arrival comes first, as it does at the place. The origin has no arrival and the
+           destination no departure. -->
+      {#if row.role !== "origin"}
+        <TimeWindowOverrideField
+          label="Arrive here between"
+          window={arrivalOverride}
+          defaultWindow={defaultWindows.arrival}
+          onChange={(arrival) => setWindows(placeWindowOverride(arrival, departureOverride))}
+        />
+      {/if}
+      {#if row.role !== "destination"}
+        <TimeWindowOverrideField
+          label="Leave here between"
+          window={departureOverride}
+          defaultWindow={defaultWindows.departure}
+          onChange={(departure) => setWindows(placeWindowOverride(arrivalOverride, departure))}
+        />
+      {/if}
       {#if row.place.window_override !== null}
         <button type="button" onclick={() => setWindows(null)}>Use trip defaults</button>
-      {:else}
-        <span class="hint">These are the trip's default times.</span>
       {/if}
     </div>
   {/if}
@@ -254,10 +273,6 @@
   }
 
   .dates,
-  .hint {
-    color: var(--color-text-muted);
-  }
-
   .stay input {
     width: 4em;
   }

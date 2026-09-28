@@ -9,10 +9,9 @@ use thiserror::Error;
 
 use crate::coordinates::GeoCoordinates;
 use crate::itinerary::{
-    Itinerary, ItineraryRoute, LegTravelMode, PlaceStay, StationSearchRadius, TripPlace,
-    TripPlaceId, ViaPlace,
+    Itinerary, ItineraryRoute, LegTravelMode, PlaceStay, PlaceWindowOverride, StationSearchRadius,
+    TripPlace, TripPlaceId, ViaPlace,
 };
-use crate::time::TravelDayWindows;
 use crate::trip::{Trip, TripPreferences};
 
 /// Largest number of places in one itinerary.
@@ -78,8 +77,8 @@ pub enum TripEdit {
     SetPlaceWindowOverride {
         /// The place to change.
         place_id: TripPlaceId,
-        /// The new windows, or `None` to use the trip's defaults.
-        windows: Option<TravelDayWindows>,
+        /// The new override, or `None` to use the trip's defaults.
+        window_override: Option<PlaceWindowOverride>,
     },
     /// Removes a place.
     RemovePlace(TripPlaceId),
@@ -191,9 +190,10 @@ impl Trip {
             TripEdit::SetStationSearchRadius { place_id, radius } => {
                 self.update_place(place_id, |place| place.station_search_radius = radius)
             }
-            TripEdit::SetPlaceWindowOverride { place_id, windows } => {
-                self.update_place(place_id, |place| place.window_override = windows)
-            }
+            TripEdit::SetPlaceWindowOverride {
+                place_id,
+                window_override,
+            } => self.update_place(place_id, |place| place.window_override = window_override),
             TripEdit::RemovePlace(place_id) => {
                 let mut layout = ItineraryLayout::from_itinerary(&self.itinerary);
                 let index = layout.index_of(place_id)?;

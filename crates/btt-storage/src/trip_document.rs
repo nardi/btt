@@ -11,9 +11,27 @@ type TripDocumentMigration = fn(&mut Value);
 
 /// Migrations in order. Entry `i` upgrades a document from version `i + 1` to `i + 2`.
 ///
-/// Version 1 is the first version, so the list is empty. A change to the `Trip` layout adds a
-/// function here, bumps `CURRENT_TRIP_SCHEMA_VERSION` and adds a fixture for the old version.
-const TRIP_DOCUMENT_MIGRATIONS: [TripDocumentMigration; 0] = [];
+/// A change to the `Trip` layout adds a function here, bumps `CURRENT_TRIP_SCHEMA_VERSION` and
+/// adds a fixture for the old version.
+const TRIP_DOCUMENT_MIGRATIONS: [TripDocumentMigration; 1] = [wrap_window_overrides];
+
+/// Version 2 lets a place override only its arrival or departure window. A version 1 override
+/// always held both, so it becomes the `Both` case.
+fn wrap_window_overrides(document: &mut Value) {
+    match document {
+        Value::Object(fields) => {
+            for (key, value) in fields.iter_mut() {
+                if key == "window_override" && value.is_object() {
+                    *value = serde_json::json!({ "Both": value.take() });
+                } else {
+                    wrap_window_overrides(value);
+                }
+            }
+        }
+        Value::Array(items) => items.iter_mut().for_each(wrap_window_overrides),
+        _ => {}
+    }
+}
 
 /// Borrowed form of `StoredTrip` with the same layout, so writing a document needs no clone.
 #[derive(Serialize)]
@@ -63,6 +81,8 @@ pub fn trip_from_document(document: &str) -> Result<Trip, StorageError> {
 
 #[cfg(test)]
 mod tests {
+    use btt_model::PlaceWindowOverride;
+
     use super::*;
 
     /// A document written by schema version 1. It must keep loading in every later version.
@@ -78,6 +98,11 @@ mod tests {
         let trip = trip_from_document(TRIP_DOCUMENT_VERSION_1).unwrap();
         assert_eq!(trip.name, "Amsterdam to Rome");
         assert_eq!(trip.itinerary.place_count(), 3);
+        let vienna = trip.itinerary.trip_places().nth(1).unwrap();
+        assert!(matches!(
+            vienna.window_override,
+            Some(PlaceWindowOverride::Both(_))
+        ));
     }
 
     #[test]

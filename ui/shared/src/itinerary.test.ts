@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { addDays, itineraryRows, tripPlaces } from "./itinerary";
+import {
+  addDays,
+  itineraryRows,
+  overriddenArrivalWindow,
+  overriddenDepartureWindow,
+  placeWindowOverride,
+  tripPlaces,
+} from "./itinerary";
 import { amsterdamViennaRome, place } from "./test-fixtures";
 
 describe("addDays", () => {
@@ -36,5 +43,25 @@ describe("itineraryRows", () => {
     expect(tripPlaces("Empty")).toEqual([]);
     const originOnly = { ...trip, itinerary: { OriginOnly: place(1, "Amsterdam") } };
     expect(itineraryRows(originOnly).legs).toEqual([]);
+  });
+});
+
+describe("place window overrides", () => {
+  const morning = { start: 7 * 60, length: 3 * 60 };
+  const evening = { start: 17 * 60, length: 4 * 60 };
+
+  it("keeps only the windows that differ from the defaults", () => {
+    expect(placeWindowOverride(null, null)).toBeNull();
+    expect(placeWindowOverride(morning, null)).toEqual({ Arrival: morning });
+    expect(placeWindowOverride(null, evening)).toEqual({ Departure: evening });
+    expect(placeWindowOverride(morning, evening)).toEqual({ Both: { arrival: morning, departure: evening } });
+  });
+
+  it("reads each window back out of an override", () => {
+    const both = placeWindowOverride(morning, evening);
+    expect(overriddenArrivalWindow(both)).toEqual(morning);
+    expect(overriddenDepartureWindow(both)).toEqual(evening);
+    expect(overriddenArrivalWindow({ Departure: evening })).toBeNull();
+    expect(overriddenDepartureWindow(null)).toBeNull();
   });
 });

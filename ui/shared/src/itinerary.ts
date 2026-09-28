@@ -4,10 +4,12 @@
 // which has no Tauri runtime.
 
 import type {
+  DailyTimeWindow,
   Itinerary,
   ItineraryRoute,
   LegTravelMode,
   PlaceStay,
+  PlaceWindowOverride,
   Trip,
   TripPlace,
 } from "./bindings";
@@ -143,4 +145,28 @@ export function itineraryRows(trip: Trip): ItineraryRows {
     departureDate = nextDepartureDate ?? arrivalDate;
   }
   return { places, legs };
+}
+
+/** Returns the arrival window a place overrides, or `null` when it uses the trip's default. */
+export function overriddenArrivalWindow(windowOverride: PlaceWindowOverride | null): DailyTimeWindow | null {
+  return windowOverride?.Arrival ?? windowOverride?.Both?.arrival ?? null;
+}
+
+/** Returns the departure window a place overrides, or `null` when it uses the trip's default. */
+export function overriddenDepartureWindow(windowOverride: PlaceWindowOverride | null): DailyTimeWindow | null {
+  return windowOverride?.Departure ?? windowOverride?.Both?.departure ?? null;
+}
+
+/** Combines the windows a place overrides into an override, or `null` when it overrides none. */
+export function placeWindowOverride(
+  arrival: DailyTimeWindow | null,
+  departure: DailyTimeWindow | null,
+): PlaceWindowOverride | null {
+  if (arrival !== null && departure !== null) {
+    return { Both: { arrival, departure } };
+  }
+  if (arrival !== null) {
+    return { Arrival: arrival };
+  }
+  return departure === null ? null : { Departure: departure };
 }

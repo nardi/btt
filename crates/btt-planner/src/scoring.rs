@@ -13,16 +13,20 @@ pub struct ScoringWeights {
     /// How much a minute on the way between a place and a station costs, in percent of a
     /// minute on a train. Above 100 favors stations close to the place.
     pub way_to_station_percent: u32,
+    /// How much each minute of arriving outside the arrival window costs, in percent of a
+    /// minute on a train.
+    pub arrival_window_miss_percent: u32,
 }
 
 impl ScoringWeights {
     /// Weights for when the user has not tuned anything. One transfer costs from 10 minutes at
-    /// no aversion to two hours at full aversion, and a minute to or from a station counts
-    /// one and a half times.
+    /// no aversion to two hours at full aversion, a minute to or from a station counts one and
+    /// a half times, and a minute of arriving outside the window counts twice.
     pub const DEFAULT: Self = Self {
         transfer_base_minutes: 10,
         transfer_aversion_minutes: 110,
         way_to_station_percent: 150,
+        arrival_window_miss_percent: 200,
     };
 }
 
@@ -35,6 +39,8 @@ pub struct JourneyCostInputs {
     pub way_to_station_minutes: u32,
     /// Number of changes between trains.
     pub transfer_count: u32,
+    /// Minutes by which the arrival at the place falls before or after the arrival window.
+    pub minutes_outside_arrival_window: u32,
 }
 
 /// Returns the cost of a journey in minutes. Lower is better.
@@ -49,7 +55,12 @@ pub fn journey_cost(
     // part of its weight is added.
     let way_to_station_extra =
         inputs.way_to_station_minutes * weights.way_to_station_percent.saturating_sub(100) / 100;
-    inputs.door_to_door_minutes + way_to_station_extra + inputs.transfer_count * transfer_penalty
+    let arrival_window_miss =
+        inputs.minutes_outside_arrival_window * weights.arrival_window_miss_percent / 100;
+    inputs.door_to_door_minutes
+        + way_to_station_extra
+        + inputs.transfer_count * transfer_penalty
+        + arrival_window_miss
 }
 
 #[cfg(test)]
@@ -57,15 +68,33 @@ mod tests {
     use super::*;
 
     fn cost(door_to_door: u32, way_to_station: u32, transfers: u32, aversion: u8) -> u32 {
+        cost_with_window_miss(door_to_door, way_to_station, transfers, aversion, 0)
+    }
+
+    fn cost_with_window_miss(
+        door_to_door: u32,
+        way_to_station: u32,
+        transfers: u32,
+        aversion: u8,
+        minutes_outside_arrival_window: u32,
+    ) -> u32 {
         journey_cost(
             JourneyCostInputs {
                 door_to_door_minutes: door_to_door,
                 way_to_station_minutes: way_to_station,
                 transfer_count: transfers,
+                minutes_outside_arrival_window,
             },
             TransferAversion::new(aversion).unwrap(),
             ScoringWeights::DEFAULT,
         )
+    }
+
+    #[test]
+    fn arriving_outside_the_window_costs_twice_the_minutes() {
+        assert_eq!(cost_with_window_miss(300, 0, 0, 50, 45), 390);
+        // Arriving an hour late loses against a journey that takes 90 minutes longer.
+        assert!(cost_with_window_miss(300, 0, 0, 50, 60) > cost(390, 0, 0, 50));
     }
 
     #[test]

@@ -299,6 +299,18 @@ export type PlaceStay =
 	prefers_longer_stay: boolean,
 } }) & { Nights?: never };
 
+/**
+ *  Time windows of a place that replace the trip's defaults. The arrival window applies to the
+ *  leg that reaches the place, and the departure window to the leg that leaves it.
+ */
+export type PlaceWindowOverride = 
+/**  Only the arrival window differs from the default. */
+({ Arrival: DailyTimeWindow }) & { Both?: never; Departure?: never } | 
+/**  Only the departure window differs from the default. */
+({ Departure: DailyTimeWindow }) & { Arrival?: never; Both?: never } | 
+/**  Both windows differ from the defaults. */
+({ Both: TravelDayWindows }) & { Arrival?: never; Departure?: never };
+
 /**  Counts planning runs within one session. A newer run replaces the results of older ones. */
 export type PlanningRunId = number;
 
@@ -475,8 +487,8 @@ export type TripEdit =
 ({ SetPlaceWindowOverride: {
 	/**  The place to change. */
 	place_id: TripPlaceId,
-	/**  The new windows, or `None` to use the trip's defaults. */
-	windows: TravelDayWindows | null,
+	/**  The new override, or `None` to use the trip's defaults. */
+	window_override: PlaceWindowOverride | null,
 } }) & { AddPlace?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
 /**  Removes a place. */
 ({ RemovePlace: TripPlaceId }) & { AddPlace?: never; MovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
@@ -557,7 +569,7 @@ export type TripPlace = {
 	/**  Largest distance to a station the planner may use for this place. */
 	station_search_radius: StationSearchRadius,
 	/**  Replaces the trip's default windows for legs that leave or reach this place. */
-	window_override: TravelDayWindows | null,
+	window_override: PlaceWindowOverride | null,
 };
 
 /**  Identifies a place within one trip. Unique within that trip only. */
