@@ -298,6 +298,98 @@ fn extended_trip(
     Some(merged)
 }
 
+/// Largest difference between the times of a train with berths and a copy without them at a
+/// shared station, for `link_berths`. Split copies often differ by a few minutes at the
+/// station where one feed's part ends and the other's begins.
+const BERTH_LINK_TOLERANCE_MINUTES: i32 = 10;
+
+/// Returns the part of a train number that stays the same across operators. DB files
+/// codeshared night trains with a leading 4 or 6 on a five-digit number, such as 60470 for
+/// Nightjet 470. The merge doesn't use this key, because such numbers also mark portions of
+/// one night train, such as Nightjet 421 to Innsbruck and 40421 to Vienna.
+fn train_number_key(train_number: &str) -> &str {
+    let is_prefixed = train_number.len() == 5
+        && train_number.bytes().all(|byte| byte.is_ascii_digit())
+        && matches!(train_number.as_bytes()[0], b'4' | b'6');
+    if !is_prefixed {
+        return train_number;
+    }
+    let key = train_number[1..].trim_start_matches('0');
+    if key.is_empty() { train_number } else { key }
+}
+
+/// Gives the label of a train with berths to trips without berths that are the same train in
+/// another feed, and returns how many trips it changed.
+///
+/// This covers copies that the merge can't join, because they overlap at a single station,
+/// such as SBB's Nightjet 470 from Zürich to Singen and DB's IC 60470 from Singen onwards.
+/// Two trips count as the same train when their train number keys match, they run on a
+/// shared day, and they stop at one station within `BERTH_LINK_TOLERANCE_MINUTES` of each
+/// other. The whole trip gets the label, including days the other copy doesn't run on,
+/// because a train with berths on one day has them on the others too.
+pub fn link_berths(trips: &mut [ResolvedTrip], nearby: &NearbyStationPairs) -> usize {
+    let mut positions_by_key: FxHashMap<&str, Vec<usize>> = FxHashMap::default();
+    for (position, trip) in trips.iter().enumerate() {
+        if !trip.train_number.is_empty() {
+            positions_by_key
+                .entry(train_number_key(&trip.train_number))
+                .or_default()
+                .push(position);
+        }
+    }
+    let mut new_labels = Vec::new();
+    for positions in positions_by_key.values() {
+        for &without in positions {
+            if trips[without].trip.train_label.offers_berths {
+                continue;
+            }
+            // A copy with the same number goes first. Night trains run in portions with
+            // related numbers, such as Nightjet 421 to Innsbruck and 40421 to Vienna, and a
+            // trip should take the label of its own portion.
+            let berth_copy = positions
+                .iter()
+                .copied()
+                .filter(|&with| {
+                    trips[with].trip.train_label.offers_berths
+                        && touches(&trips[with], &trips[without], nearby)
+                })
+                .min_by_key(|&with| trips[with].train_number != trips[without].train_number);
+            if let Some(with) = berth_copy {
+                new_labels.push((without, trips[with].trip.train_label.clone()));
+            }
+        }
+    }
+    let linked = new_labels.len();
+    for (position, label) in new_labels {
+        trips[position].trip.train_label = label;
+    }
+    linked
+}
+
+/// Returns whether two trips run on a shared day, allowing a one-day offset between their
+/// service dates, and stop at one station within `BERTH_LINK_TOLERANCE_MINUTES`.
+fn touches(first: &ResolvedTrip, second: &ResolvedTrip, nearby: &NearbyStationPairs) -> bool {
+    (-1..=1).any(|date_offset_days| {
+        let shared_days = intersect(
+            first.trip.service_days,
+            shift_days(second.trip.service_days, -date_offset_days),
+        );
+        let offset_minutes = date_offset_days * MINUTES_PER_DAY;
+        !shared_days.is_empty()
+            && first.trip.stops.iter().any(|first_stop| {
+                second.trip.stops.iter().any(|second_stop| {
+                    let close = |first_minute: u16, second_minute: u16| {
+                        (i32::from(second_minute) + offset_minutes - i32::from(first_minute)).abs()
+                            <= BERTH_LINK_TOLERANCE_MINUTES
+                    };
+                    nearby.same_stop(first_stop.station, second_stop.station)
+                        && (close(first_stop.arrival, second_stop.arrival)
+                            || close(first_stop.departure, second_stop.departure))
+                })
+            })
+    })
+}
+
 /// Moves every day of a bitset by a number of days. Days that leave the window drop out.
 fn shift_days(days: ServiceDayBitset, offset: i32) -> ServiceDayBitset {
     let mut shifted = ServiceDayBitset::default();
@@ -520,5 +612,77 @@ mod tests {
             "times count from the first departure's date"
         );
         assert_eq!(merged.trip.service_days, days(&[3]));
+    }
+
+    #[test]
+    fn codeshare_prefixes_are_dropped_from_the_key() {
+        assert_eq!(train_number_key("40421"), "421");
+        assert_eq!(train_number_key("60470"), "470");
+        assert_eq!(train_number_key("12345"), "12345");
+        assert_eq!(train_number_key("4211"), "4211");
+        assert_eq!(train_number_key("40000"), "40000");
+    }
+
+    #[test]
+    fn a_split_night_train_passes_its_berths_on() {
+        // SBB runs the Nightjet from Zürich (0) to Singen (1). DB continues it from Singen to
+        // Hamburg (2) as an IC with another number and without berths.
+        let mut swiss_part = trip(
+            0,
+            vec![stop(0, 1140, 1140), stop(1, 1207, 1207)],
+            days(&[3]),
+        );
+        swiss_part.train_number = "470".into();
+        swiss_part.trip.train_label.category = "NJ".into();
+        swiss_part.trip.train_label.number = "470".into();
+        swiss_part.trip.train_label.offers_berths = true;
+        let mut german_part = trip(
+            1,
+            vec![stop(1, 1210, 1240), stop(2, 1880, 1880)],
+            days(&[3]),
+        );
+        german_part.train_number = "60470".into();
+        german_part.trip.train_label.category = "IC".into();
+        german_part.trip.train_label.number = "60470".into();
+        // Another IC at Singen at the same time, with an unrelated number, stays as it is.
+        let other = trip(
+            1,
+            vec![stop(1, 1205, 1215), stop(2, 1900, 1900)],
+            days(&[3]),
+        );
+
+        let mut trips = vec![swiss_part, german_part, other];
+        assert_eq!(link_berths(&mut trips, &NearbyStationPairs::default()), 1);
+        assert!(trips[1].trip.train_label.offers_berths);
+        assert_eq!(trips[1].trip.train_label.number, "470");
+        assert!(!trips[2].trip.train_label.offers_berths);
+    }
+
+    #[test]
+    fn a_trip_takes_the_label_of_its_own_portion() {
+        // Nightjet 421 and 40421 run coupled from Amsterdam (0) to Köln (1). A copy of 40421
+        // without berths touches both at Köln and takes the label with its own number.
+        let berth_portion = |number: &str| {
+            let mut portion = trip(
+                0,
+                vec![stop(0, 1100, 1100), stop(1, 1250, 1255)],
+                days(&[3]),
+            );
+            portion.train_number = number.into();
+            portion.trip.train_label.category = "NJ".into();
+            portion.trip.train_label.number = number.into();
+            portion.trip.train_label.offers_berths = true;
+            portion
+        };
+        let mut seated_copy = trip(
+            1,
+            vec![stop(1, 1250, 1255), stop(2, 1700, 1700)],
+            days(&[3]),
+        );
+        seated_copy.train_number = "40421".into();
+
+        let mut trips = vec![berth_portion("421"), berth_portion("40421"), seated_copy];
+        assert_eq!(link_berths(&mut trips, &NearbyStationPairs::default()), 1);
+        assert_eq!(trips[2].trip.train_label.number, "40421");
     }
 }
