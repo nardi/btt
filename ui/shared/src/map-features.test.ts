@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import type { LegPlan } from "./bindings";
-import { placeBounds, radiusCircles, rideLines, stationWayLines, transferPoints } from "./map-features";
+import {
+  intermediateStopPoints,
+  placeBounds,
+  radiusCircles,
+  rideLines,
+  stationWayLines,
+  transferPoints,
+} from "./map-features";
 import { amsterdamViennaRome } from "./test-fixtures";
 import type { LegViewState, TripViewState } from "./trip-source";
 
@@ -69,6 +76,15 @@ describe("rideLines", () => {
     expect(
       coordinates.some(([longitude, latitude]) => Math.abs(longitude! - 11.2) < 1e-5 && Math.abs(latitude! - 43.7) < 1e-5),
     ).toBe(true);
+  });
+});
+
+describe("intermediateStopPoints", () => {
+  it("marks the stops between boarding and alighting", () => {
+    const points = intermediateStopPoints(viewState([[3, { status: "found", legPlan: viennaToRome }]]));
+    expect(points.features).toHaveLength(1);
+    expect(points.features[0]!.geometry.coordinates).toEqual([11.2, 43.7]);
+    expect(points.features[0]!.properties.offersBerths).toBe(true);
   });
 });
 

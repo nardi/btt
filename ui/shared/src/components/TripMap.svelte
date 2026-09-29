@@ -25,6 +25,7 @@
     radiusCircles,
     rideLines,
     stationWayLines,
+    intermediateStopPoints,
     transferPoints,
   } from "../map-features";
   import type { TripSource } from "../trip-source";
@@ -75,6 +76,7 @@
   const circles = $derived(radiusCircles(trip, selectedPlaceId, dragPreview));
   const rides = $derived(rideLines(source.viewState));
   const stationWays = $derived(stationWayLines(source.viewState));
+  const intermediateStops = $derived(intermediateStopPoints(source.viewState));
   const transfers = $derived(transferPoints(source.viewState));
 
   /** The feature under the pointer and where its tooltip goes, or `null` when there is none. */
@@ -280,6 +282,19 @@
       paint={{ "line-color": "#000000", "line-opacity": 0, "line-width": 14 }}
       onmousemove={showTooltip}
       onmouseleave={hideTooltip}
+    />
+  </GeoJSONSource>
+
+  <!-- Small dots for stops the traveller stays on the train through. They take no pointer
+       events, so hovering one still shows the tooltip of the line below. -->
+  <GeoJSONSource id="intermediate-stops" data={intermediateStops}>
+    <CircleLayer
+      paint={{
+        "circle-radius": 2.5,
+        "circle-color": "#ffffff",
+        "circle-stroke-color": ["case", ["get", "offersBerths"], "#6d28d9", "#c2410c"],
+        "circle-stroke-width": 1.5,
+      }}
     />
   </GeoJSONSource>
 

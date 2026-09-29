@@ -134,6 +134,35 @@ export function rideLines(viewState: TripViewState): FeatureCollection<LineStrin
   return { type: "FeatureCollection", features };
 }
 
+/** Properties of a stop where the train halts but the traveller stays on. */
+export interface IntermediateStopProperties {
+  /** Whether the train has couchettes or sleepers, so the dot matches the line's color. */
+  offersBerths: boolean;
+}
+
+/** Returns a point for every stop between boarding and alighting of the planned trains. */
+export function intermediateStopPoints(
+  viewState: TripViewState,
+): FeatureCollection<Point, IntermediateStopProperties> {
+  const features: FeatureCollection<Point, IntermediateStopProperties>["features"] = [];
+  for (const leg of itineraryRows(viewState.trip).legs) {
+    const legState = legViewState(viewState, leg.arrivalPlace.id);
+    if (legState.status !== "found") {
+      continue;
+    }
+    for (const ride of chosenRides(legState.legPlan)) {
+      for (const coordinates of ride.intermediate_station_coordinates) {
+        features.push({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: position(coordinates) },
+          properties: { offersBerths: ride.offers_berths },
+        });
+      }
+    }
+  }
+  return { type: "FeatureCollection", features };
+}
+
 /**
  * Returns a point for every transfer of the planned journeys, and a smaller one for the first
  * and last station of each journey. A change to another station gets a point at both stations.
