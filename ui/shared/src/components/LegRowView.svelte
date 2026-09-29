@@ -3,6 +3,7 @@
   import type {
     AcceptedBerths,
     Journey,
+    JourneyChoice,
     LegPlan,
     LegTravelMode,
     NoJourneyReason,
@@ -24,13 +25,55 @@
   let {
     leg,
     legState,
+    storedChoice,
     onEdit,
   }: {
     leg: LegRow;
     legState: LegViewState;
+    /** The journey the traveller picked for this leg, or `null` for the planner's pick. */
+    storedChoice: JourneyChoice | null;
     /** Missing in a read-only view. */
     onEdit?: (edit: TripEdit) => void;
   } = $props();
+
+  /**
+   * Returns whether a journey is the one a choice describes. A plan whose alternatives still
+   * hold the picked journey is from before the pick and about to be replaced, so the leg row
+   * doesn't claim the pick is gone.
+   */
+  function matchesChoice(journey: Journey, choice: JourneyChoice): boolean {
+    const rides = journeyRides(journey);
+    return (
+      journey.first_ride.departure_time === choice.first_departure_time &&
+      rides.length === choice.trains.length &&
+      rides.every(
+        (ride, index) =>
+          ride.train_label.category === choice.trains[index]?.category &&
+          ride.train_label.number === choice.trains[index]?.number,
+      )
+    );
+  }
+
+  /** Returns whether the traveller picked a journey that the latest plan no longer has. */
+  function pickIsGone(legPlan: LegPlan): boolean {
+    return (
+      storedChoice !== null &&
+      !legPlan.follows_traveller_choice &&
+      !legPlan.alternative_journeys.some((alternative) => matchesChoice(alternative, storedChoice))
+    );
+  }
+
+  /** Makes a journey the chosen one for this leg, or goes back to the planner's pick. */
+  function chooseJourney(journey: Journey | null) {
+    const choice =
+      journey === null
+        ? null
+        : {
+            first_departure_time: journey.first_ride.departure_time,
+            trains: journeyRides(journey).map((ride) => ride.train_label),
+          };
+    onEdit?.({ ChooseJourney: { arrival_place_id: leg.arrivalPlace.id, choice } });
+  }
 
   /** Options a leg gets when the user first turns on the night train. */
   const defaultOvernightOptions: OvernightLegOptions = {
@@ -215,6 +258,23 @@
           </button>
         {/if}
       </span>
+      {#if legPlan.follows_traveller_choice}
+        <span class="choice-note">
+          Your pick ·
+          {#if onEdit !== undefined}
+            <button type="button" class="link" onclick={() => chooseJourney(null)}>
+              use the planner's pick
+            </button>
+          {/if}
+        </span>
+      {:else if pickIsGone(legPlan)}
+        <span class="choice-note">
+          The journey you picked is no longer possible, so this is the planner's pick.
+          {#if onEdit !== undefined}
+            <button type="button" class="link" onclick={() => chooseJourney(null)}>Forget my pick</button>
+          {/if}
+        </span>
+      {/if}
       {#if showAlternatives}
         <!-- Other good journeys, best first by the same cost that picked the chosen one. -->
         <ol class="alternatives">
@@ -232,6 +292,11 @@
               <span class="alternative-details">
                 {formatDuration(journeyMinutes(alternative))} · {transferSummary(alternative)} ·
                 {rides.map((ride) => `${ride.train_label.category} ${ride.train_label.number}`).join(", ")}
+                {#if onEdit !== undefined}
+                  · <button type="button" class="link" onclick={() => chooseJourney(alternative)}>
+                    Take this one
+                  </button>
+                {/if}
               </span>
             </li>
           {/each}
@@ -322,6 +387,11 @@
     padding: 0 0 0 var(--space-3);
     border-left: 2px solid var(--color-border);
     list-style: none;
+  }
+
+  .choice-note {
+    display: block;
+    color: var(--color-text-muted);
   }
 
   .alternative-details {

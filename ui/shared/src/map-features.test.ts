@@ -31,6 +31,7 @@ const viennaToRome: LegPlan = {
     egress: { duration: 0, distance_meters: 0, mode: "Walk" },
   },
   alternative_journeys: [],
+  follows_traveller_choice: false,
   station_table: [
     { name: "Wien Hbf", coordinates: { latitude: 48.1852, longitude: 16.3761 }, time_zone: "Europe/Vienna" },
     { name: "Roma Termini", coordinates: { latitude: 41.901, longitude: 12.5007 }, time_zone: "Europe/Rome" },

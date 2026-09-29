@@ -70,6 +70,19 @@ export type BerthType =
 /**  A bed in a compartment of one to three. */
 "Sleeper";
 
+/**
+ *  A journey the traveller picked for the leg between two places. A reorder that separates the
+ *  two places drops it, because that leg no longer exists.
+ */
+export type ChosenJourney = {
+	/**  Place the leg leaves from. */
+	departure_place_id: TripPlaceId,
+	/**  Place the leg arrives at. */
+	arrival_place_id: TripPlaceId,
+	/**  The picked journey. */
+	choice: JourneyChoice,
+};
+
 /**  Errors a command returns to the frontend. */
 export type CommandError = 
 /**  No trip with this ID exists. */
@@ -183,6 +196,17 @@ export type Journey = {
 };
 
 /**
+ *  A journey the traveller picked for a leg, recognised by its first departure and its trains.
+ *  It survives replanning as long as a journey with the same trains at the same time exists.
+ */
+export type JourneyChoice = {
+	/**  Departure of the journey's first train. */
+	first_departure_time: UnixTimeMinutes,
+	/**  Every train of the journey in travel order. */
+	trains: TrainLabel[],
+};
+
+/**
  *  Latitude from -90 to 90 degrees, stored in millionths of a degree.
  * 
  *  A microdegree of latitude is about 11 cm, far more precise than a place or station needs.
@@ -197,6 +221,8 @@ export type LegPlan = {
 	alternative_journeys: Journey[],
 	/**  Stations used by the journeys in this leg. */
 	station_table: LegPlanStation[],
+	/**  Whether `chosen_journey` is the one the traveller picked, instead of the planner's pick. */
+	follows_traveller_choice: boolean,
 };
 
 /**  A station used by the journeys of one leg plan. */
@@ -447,74 +473,83 @@ export type Trip = {
 	preferences: TripPreferences,
 	/**  Next free `TripPlaceId` in this trip. IDs of removed places are never reused. */
 	next_place_id: number,
+	/**  Journeys the traveller picked instead of the planner's pick, at most one per leg. */
+	chosen_journeys?: ChosenJourney[],
 };
 
 /**  One change to a trip. */
 export type TripEdit = 
 /**  Changes the trip's name. */
-({ RenameTrip: string }) & { AddPlace?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
+({ RenameTrip: string }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
 /**  Changes the date of the first departure. */
-({ SetStartDate: string }) & { AddPlace?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
+({ SetStartDate: string }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
 /**  Adds a place. */
 ({ AddPlace: {
 	/**  The place to add. */
 	place: NewTripPlace,
 	/**  Where the place goes. */
 	insert_at: PlaceInsertionPoint,
-} }) & { MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
+} }) & { ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
 /**  Moves a place to new coordinates. */
 ({ MovePlace: {
 	/**  The place to move. */
 	place_id: TripPlaceId,
 	/**  The new coordinates. */
 	coordinates: GeoCoordinates,
-} }) & { AddPlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
+} }) & { AddPlace?: never; ChooseJourney?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
 /**  Changes the name of a place. */
 ({ RenamePlace: {
 	/**  The place to rename. */
 	place_id: TripPlaceId,
 	/**  The new name. */
 	name: string,
-} }) & { AddPlace?: never; MovePlace?: never; RemovePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
+} }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
 /**  Changes how far from a place the planner may look for stations. */
 ({ SetStationSearchRadius: {
 	/**  The place to change. */
 	place_id: TripPlaceId,
 	/**  The new radius. */
 	radius: StationSearchRadius,
-} }) & { AddPlace?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetTripPreferences?: never } | 
+} }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetTripPreferences?: never } | 
 /**  Sets or clears the time windows that replace the trip's defaults at a place. */
 ({ SetPlaceWindowOverride: {
 	/**  The place to change. */
 	place_id: TripPlaceId,
 	/**  The new override, or `None` to use the trip's defaults. */
 	window_override: PlaceWindowOverride | null,
-} }) & { AddPlace?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
+} }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
 /**  Removes a place. */
-({ RemovePlace: TripPlaceId }) & { AddPlace?: never; MovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
+({ RemovePlace: TripPlaceId }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
 /**  Moves a place to another position in the itinerary. */
 ({ ReorderPlace: {
 	/**  The place to move. */
 	place_id: TripPlaceId,
 	/**  Index of the place after the move. */
 	new_index: number,
-} }) & { AddPlace?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
+} }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
 /**  Changes how long the traveller stays at a via place. */
 ({ SetPlaceStay: {
 	/**  The via place to change. */
 	place_id: TripPlaceId,
 	/**  The new stay. */
 	stay: PlaceStay,
-} }) & { AddPlace?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
+} }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
 /**  Changes whether the leg that arrives at a place includes a night train. */
 ({ SetLegTravelMode: {
 	/**  Place at which the leg arrives. Every place except the origin has one arriving leg. */
 	arrival_place_id: TripPlaceId,
 	/**  The new travel mode. */
 	travel_mode: LegTravelMode,
-} }) & { AddPlace?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
+} }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
 /**  Replaces the trip-wide preferences. */
-({ SetTripPreferences: TripPreferences }) & { AddPlace?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never };
+({ SetTripPreferences: TripPreferences }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never } | 
+/**  Picks a journey for the leg that arrives at a place, or goes back to the planner's pick. */
+({ ChooseJourney: {
+	/**  Place at which the leg arrives. */
+	arrival_place_id: TripPlaceId,
+	/**  The picked journey, or `None` for the planner's pick. */
+	choice: JourneyChoice | null,
+} }) & { AddPlace?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never };
 
 /**  Reasons an edit can be rejected. A rejected edit leaves the trip unchanged. */
 export type TripEditError = 

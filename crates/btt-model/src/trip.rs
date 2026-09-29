@@ -10,7 +10,8 @@ use specta::Type;
 use uuid::Uuid;
 
 use crate::bounded::bounded_integer;
-use crate::itinerary::{Itinerary, SameDayStayRange};
+use crate::itinerary::{Itinerary, SameDayStayRange, TripPlaceId};
+use crate::plan::JourneyChoice;
 use crate::time::{DailyTimeWindow, DurationMinutes, LocalTimeOfDay, TravelDayWindows};
 
 /// Identifies a trip. A UUID v7, so trips imported from another machine never collide.
@@ -128,6 +129,21 @@ pub struct Trip {
     pub preferences: TripPreferences,
     /// Next free `TripPlaceId` in this trip. IDs of removed places are never reused.
     pub next_place_id: NonZeroU32,
+    /// Journeys the traveller picked instead of the planner's pick, at most one per leg.
+    #[serde(default)]
+    pub chosen_journeys: Vec<ChosenJourney>,
+}
+
+/// A journey the traveller picked for the leg between two places. A reorder that separates the
+/// two places drops it, because that leg no longer exists.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub struct ChosenJourney {
+    /// Place the leg leaves from.
+    pub departure_place_id: TripPlaceId,
+    /// Place the leg arrives at.
+    pub arrival_place_id: TripPlaceId,
+    /// The picked journey.
+    pub choice: JourneyChoice,
 }
 
 impl Trip {
@@ -140,6 +156,7 @@ impl Trip {
             itinerary: Itinerary::Empty,
             preferences: TripPreferences::default(),
             next_place_id: NonZeroU32::MIN,
+            chosen_journeys: Vec::new(),
         }
     }
 }

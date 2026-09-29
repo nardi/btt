@@ -142,6 +142,32 @@ pub struct LegPlan {
     /// Stations used by the journeys in this leg.
     #[specta(type = Vec<LegPlanStation>)]
     pub station_table: SmallVec<[LegPlanStation; 8]>,
+    /// Whether `chosen_journey` is the one the traveller picked, instead of the planner's pick.
+    pub follows_traveller_choice: bool,
+}
+
+/// A journey the traveller picked for a leg, recognised by its first departure and its trains.
+/// It survives replanning as long as a journey with the same trains at the same time exists.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub struct JourneyChoice {
+    /// Departure of the journey's first train.
+    pub first_departure_time: UnixTimeMinutes,
+    /// Every train of the journey in travel order.
+    #[specta(type = Vec<TrainLabel>)]
+    pub trains: SmallVec<[TrainLabel; 4]>,
+}
+
+impl JourneyChoice {
+    /// Describes a journey as a choice.
+    pub fn of_journey(journey: &Journey) -> Self {
+        Self {
+            first_departure_time: journey.first_ride.departure_time,
+            trains: journey
+                .rides()
+                .map(|ride| ride.train_label.clone())
+                .collect(),
+        }
+    }
 }
 
 /// Why the planner found no journey for a leg.

@@ -1,7 +1,7 @@
 <script lang="ts">
   // The itinerary of one trip: its places, the legs between them and the trip preferences.
   import type { PlaceSearchResult, TripEdit, TripEditNotice, TripPlaceId } from "../bindings";
-  import { itineraryRows, tripPlaces } from "../itinerary";
+  import { itineraryRows, storedJourneyChoice, tripPlaces } from "../itinerary";
   import { legViewState, type TripSource } from "../trip-source";
   import LegRowView from "./LegRowView.svelte";
   import PlaceRowView from "./PlaceRowView.svelte";
@@ -77,7 +77,12 @@
     {#each rows.places as row, index (row.place.id)}
       {#if index > 0}
         {@const leg = rows.legs[index - 1]!}
-        <LegRowView {leg} legState={legViewState(viewState, leg.arrivalPlace.id)} {onEdit} />
+        <LegRowView
+          {leg}
+          legState={legViewState(viewState, leg.arrivalPlace.id)}
+          storedChoice={storedJourneyChoice(trip, leg)}
+          {onEdit}
+        />
       {/if}
       <PlaceRowView
         {row}

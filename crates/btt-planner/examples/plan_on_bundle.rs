@@ -86,6 +86,7 @@ fn main() {
             minimum_transfer_time: DurationMinutes(10),
             pass_policy: InterrailPassPolicy::PreferPass,
             transfer_aversion: TransferAversion::new(50).unwrap(),
+            chosen_journey: None,
         };
         let started = Instant::now();
         let result = router.plan_leg(&input, || false);

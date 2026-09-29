@@ -7,6 +7,7 @@ import type {
   DailyTimeWindow,
   Itinerary,
   ItineraryRoute,
+  JourneyChoice,
   LegTravelMode,
   PlaceStay,
   PlaceWindowOverride,
@@ -169,4 +170,13 @@ export function placeWindowOverride(
     return { Arrival: arrival };
   }
   return departure === null ? null : { Departure: departure };
+}
+
+/** Returns the journey the traveller picked for a leg, or `null` when the planner picks. */
+export function storedJourneyChoice(trip: Trip, leg: LegRow): JourneyChoice | null {
+  const chosen = (trip.chosen_journeys ?? []).find(
+    (candidate) =>
+      candidate.departure_place_id === leg.departurePlace.id && candidate.arrival_place_id === leg.arrivalPlace.id,
+  );
+  return chosen?.choice ?? null;
 }

@@ -24,15 +24,15 @@ pub use itinerary::{
 };
 pub use place_search::PlaceSearchResult;
 pub use plan::{
-    ArrivalFootpath, Journey, LegPlan, LegPlanStation, LegPlanStationIndex, LegPlanningResult,
-    NoJourneyReason, PlanningRunId, PlanningSessionEvent, StationWay, TrainLabel, TrainRide,
-    TransferAndRide, WayToStationMode,
+    ArrivalFootpath, Journey, JourneyChoice, LegPlan, LegPlanStation, LegPlanStationIndex,
+    LegPlanningResult, NoJourneyReason, PlanningRunId, PlanningSessionEvent, StationWay,
+    TrainLabel, TrainRide, TransferAndRide, WayToStationMode,
 };
 pub use time::{
     DailyTimeWindow, DailyWindowLength, DurationMinutes, LocalTimeOfDay, TravelDayWindows,
     UnixTimeMinutes,
 };
 pub use trip::{
-    CURRENT_TRIP_SCHEMA_VERSION, InterrailPassPolicy, PriceWeight, StoredTrip, TransferAversion,
-    TravelClass, TravellerId, Trip, TripId, TripPreferences, TripSummary,
+    CURRENT_TRIP_SCHEMA_VERSION, ChosenJourney, InterrailPassPolicy, PriceWeight, StoredTrip,
+    TransferAversion, TravelClass, TravellerId, Trip, TripId, TripPreferences, TripSummary,
 };

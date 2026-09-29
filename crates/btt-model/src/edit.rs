@@ -12,7 +12,8 @@ use crate::itinerary::{
     Itinerary, ItineraryRoute, LegTravelMode, PlaceStay, PlaceWindowOverride, StationSearchRadius,
     TripPlace, TripPlaceId, ViaPlace,
 };
-use crate::trip::{Trip, TripPreferences};
+use crate::plan::JourneyChoice;
+use crate::trip::{ChosenJourney, Trip, TripPreferences};
 
 /// Largest number of places in one itinerary.
 pub const MAXIMUM_PLACE_COUNT: usize = 255;
@@ -105,6 +106,13 @@ pub enum TripEdit {
     },
     /// Replaces the trip-wide preferences.
     SetTripPreferences(TripPreferences),
+    /// Picks a journey for the leg that arrives at a place, or goes back to the planner's pick.
+    ChooseJourney {
+        /// Place at which the leg arrives.
+        arrival_place_id: TripPlaceId,
+        /// The picked journey, or `None` for the planner's pick.
+        choice: Option<JourneyChoice>,
+    },
 }
 
 /// Something an edit changed besides what it asked for, shown to the user.
@@ -166,6 +174,13 @@ impl Trip {
     /// Returns an error when the edit names a place the trip does not have, asks for something
     /// the place's position does not allow, or would exceed the place limit.
     pub fn apply_edit(&mut self, edit: TripEdit) -> Result<TripEditNotices, TripEditError> {
+        let notices = self.apply_edit_to_parts(edit)?;
+        self.drop_choices_of_missing_legs();
+        Ok(notices)
+    }
+
+    /// Applies one edit to the part of the trip it changes.
+    fn apply_edit_to_parts(&mut self, edit: TripEdit) -> Result<TripEditNotices, TripEditError> {
         match edit {
             TripEdit::RenameTrip(name) => {
                 self.name = name;
@@ -238,7 +253,40 @@ impl Trip {
                 set_entry(&mut layout.leg_travel_modes, leg_key, travel_mode);
                 Ok(self.replace_itinerary(&layout))
             }
+            TripEdit::ChooseJourney {
+                arrival_place_id,
+                choice,
+            } => {
+                let layout = ItineraryLayout::from_itinerary(&self.itinerary);
+                let index = layout.index_of(arrival_place_id)?;
+                let Some(previous_index) = index.checked_sub(1) else {
+                    return Err(TripEditError::PlaceHasNoArrivingLeg(arrival_place_id));
+                };
+                let departure_place_id = layout.places[previous_index].id;
+                self.chosen_journeys
+                    .retain(|chosen| chosen.arrival_place_id != arrival_place_id);
+                if let Some(choice) = choice {
+                    self.chosen_journeys.push(ChosenJourney {
+                        departure_place_id,
+                        arrival_place_id,
+                        choice,
+                    });
+                }
+                Ok(TripEditNotices::new())
+            }
         }
+    }
+
+    /// Drops the journey choices of legs that no longer exist, such as after a reorder that
+    /// separated their two places.
+    fn drop_choices_of_missing_legs(&mut self) {
+        let legs: SmallVec<[(TripPlaceId, TripPlaceId); 16]> = self
+            .itinerary
+            .legs()
+            .map(|leg| (leg.departure_place.id, leg.arrival_place.id))
+            .collect();
+        self.chosen_journeys
+            .retain(|chosen| legs.contains(&(chosen.departure_place_id, chosen.arrival_place_id)));
     }
 
     /// Adds a place at the requested position and assigns it the next free ID.
@@ -517,6 +565,63 @@ mod tests {
     const BERLIN: (&str, f64, f64) = ("Berlin", 52.525_1, 13.369_4);
     const VIENNA: (&str, f64, f64) = ("Vienna", 48.185_2, 16.376_1);
     const ROME: (&str, f64, f64) = ("Rome", 41.901_0, 12.500_7);
+
+    fn choice_of_one_train(number: &str) -> JourneyChoice {
+        JourneyChoice {
+            first_departure_time: crate::time::UnixTimeMinutes(29_000_000),
+            trains: smallvec::smallvec![crate::plan::TrainLabel {
+                category: "ICE".into(),
+                number: number.into(),
+            }],
+        }
+    }
+
+    #[test]
+    fn a_journey_choice_stays_with_its_leg_until_the_leg_disappears() {
+        let mut trip = trip_with_places(&[AMSTERDAM, BERLIN, VIENNA]);
+        let berlin = id_of(&trip, "Berlin");
+        let vienna = id_of(&trip, "Vienna");
+        trip.apply_edit(TripEdit::ChooseJourney {
+            arrival_place_id: berlin,
+            choice: Some(choice_of_one_train("145")),
+        })
+        .unwrap();
+        // A second choice for the same leg replaces the first.
+        trip.apply_edit(TripEdit::ChooseJourney {
+            arrival_place_id: berlin,
+            choice: Some(choice_of_one_train("147")),
+        })
+        .unwrap();
+        assert_eq!(trip.chosen_journeys.len(), 1);
+        assert_eq!(trip.chosen_journeys[0].choice.trains[0].number, "147");
+
+        // Renaming keeps the leg, and moving Berlin to the end removes it.
+        trip.apply_edit(TripEdit::RenamePlace {
+            place_id: vienna,
+            name: "Wien".into(),
+        })
+        .unwrap();
+        assert_eq!(trip.chosen_journeys.len(), 1);
+        trip.apply_edit(TripEdit::ReorderPlace {
+            place_id: berlin,
+            new_index: 2,
+        })
+        .unwrap();
+        assert!(trip.chosen_journeys.is_empty());
+    }
+
+    #[test]
+    fn the_origin_has_no_journey_to_choose() {
+        let mut trip = trip_with_places(&[AMSTERDAM, BERLIN]);
+        let amsterdam = id_of(&trip, "Amsterdam");
+        assert_eq!(
+            trip.apply_edit(TripEdit::ChooseJourney {
+                arrival_place_id: amsterdam,
+                choice: None,
+            }),
+            Err(TripEditError::PlaceHasNoArrivingLeg(amsterdam))
+        );
+    }
 
     #[test]
     fn adding_places_moves_through_itinerary_variants() {

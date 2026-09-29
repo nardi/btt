@@ -94,6 +94,7 @@ impl StubBackend {
                     time_zone: arrival_time_zone.name().into(),
                 },
             ],
+            follows_traveller_choice: false,
         }))
     }
 }

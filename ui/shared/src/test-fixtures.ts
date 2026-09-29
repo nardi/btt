@@ -55,5 +55,6 @@ export function amsterdamViennaRome(): Trip {
       price_weight: 0,
     },
     next_place_id: 4,
+    chosen_journeys: [],
   };
 }

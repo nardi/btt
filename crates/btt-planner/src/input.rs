@@ -1,8 +1,8 @@
 //! What each leg of a trip needs for planning, and a cache key over it.
 
 use btt_model::{
-    DailyTimeWindow, DurationMinutes, GeoCoordinates, InterrailPassPolicy, LegTravelMode,
-    StationSearchRadius, TransferAversion, Trip, TripPlace, TripPlaceId,
+    DailyTimeWindow, DurationMinutes, GeoCoordinates, InterrailPassPolicy, JourneyChoice,
+    LegTravelMode, StationSearchRadius, TransferAversion, Trip, TripPlace, TripPlaceId,
 };
 use chrono::NaiveDate;
 use serde::Serialize;
@@ -39,6 +39,8 @@ pub struct LegPlanningInput {
     pub pass_policy: InterrailPassPolicy,
     /// Trade-off between travel time and transfers when picking a journey.
     pub transfer_aversion: TransferAversion,
+    /// The journey the traveller picked for this leg, which the planner shows when it can.
+    pub chosen_journey: Option<JourneyChoice>,
 }
 
 /// Identifies a leg result in the cache. Covers the leg input and the backend that planned it.
@@ -96,6 +98,14 @@ pub fn leg_planning_inputs(trip: &Trip) -> SmallVec<[IdentifiedLegInput; 16]> {
                 minimum_transfer_time: preferences.minimum_transfer_time,
                 pass_policy: preferences.pass_policy,
                 transfer_aversion: preferences.transfer_aversion,
+                chosen_journey: trip
+                    .chosen_journeys
+                    .iter()
+                    .find(|chosen| {
+                        chosen.departure_place_id == leg.departure_place.id
+                            && chosen.arrival_place_id == leg.arrival_place.id
+                    })
+                    .map(|chosen| chosen.choice.clone()),
             },
         })
         .collect()
@@ -153,6 +163,29 @@ pub(crate) mod tests {
         })
         .unwrap();
         assert_eq!(cache_keys(&trip), before);
+    }
+
+    #[test]
+    fn choosing_a_journey_changes_only_its_leg() {
+        let mut trip = trip_with_places(&FOUR_CITIES);
+        let before = cache_keys(&trip);
+        let choice = btt_model::JourneyChoice {
+            first_departure_time: btt_model::UnixTimeMinutes(29_000_000),
+            trains: smallvec::smallvec![btt_model::TrainLabel {
+                category: "ICE".into(),
+                number: "145".into(),
+            }],
+        };
+        trip.apply_edit(TripEdit::ChooseJourney {
+            arrival_place_id: place_id(&trip, 1),
+            choice: Some(choice.clone()),
+        })
+        .unwrap();
+        let inputs = leg_planning_inputs(&trip);
+        assert_eq!(inputs[0].input.chosen_journey, Some(choice));
+        let after = cache_keys(&trip);
+        assert_ne!(after[0], before[0]);
+        assert_eq!(after[1..], before[1..]);
     }
 
     #[test]

@@ -6,9 +6,9 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use btt_geo::{TimeZoneFinder, local_time_to_unix_minutes};
 use btt_model::{
-    ArrivalFootpath, DailyTimeWindow, DurationMinutes, Journey, LegPlan, LegPlanStation,
-    LegPlanStationIndex, LegPlanningResult, LegTravelMode, NoJourneyReason, StationWay, TrainLabel,
-    TrainRide, TransferAndRide, UnixTimeMinutes, WayToStationMode,
+    ArrivalFootpath, DailyTimeWindow, DurationMinutes, Journey, JourneyChoice, LegPlan,
+    LegPlanStation, LegPlanStationIndex, LegPlanningResult, LegTravelMode, NoJourneyReason,
+    StationWay, TrainLabel, TrainRide, TransferAndRide, UnixTimeMinutes, WayToStationMode,
 };
 use btt_router::{
     BoardAnyTrip, CandidateStation, MinutesSinceBundleStart, ParetoJourneySet, RaptorJourney,
@@ -135,6 +135,17 @@ impl TimetableBundleRouter {
                 journey.arrival,
             )
         });
+        // The traveller's pick goes first when it is still among the journeys, and the
+        // planner's pick becomes the first alternative.
+        let chosen_position = input.chosen_journey.as_ref().and_then(|choice| {
+            journeys
+                .iter()
+                .position(|journey| self.journey_matches_choice(journey, choice))
+        });
+        if let Some(position) = chosen_position {
+            let picked = journeys.remove(position);
+            journeys.insert(0, picked);
+        }
         let Some((chosen, alternatives)) = journeys.split_first() else {
             return LegPlanningResult::NoJourneyFound(NoJourneyReason::NoConnectionInWindow);
         };
@@ -151,7 +162,25 @@ impl TimetableBundleRouter {
             chosen_journey,
             alternative_journeys,
             station_table: stations.table,
+            follows_traveller_choice: chosen_position.is_some(),
         }))
+    }
+
+    /// Returns whether a journey has the first departure and the trains of a choice.
+    fn journey_matches_choice(&self, journey: &RaptorJourney, choice: &JourneyChoice) -> bool {
+        let Some(first) = journey.rides.first() else {
+            return false;
+        };
+        self.bundle_start_unix_minutes + first.departure.0 == choice.first_departure_time.0
+            && journey.rides.len() == choice.trains.len()
+            && journey
+                .rides
+                .iter()
+                .zip(&choice.trains)
+                .all(|(ride, train)| {
+                    let (category, number, _) = self.bundle.trip_train_label(ride.trip);
+                    category == train.category && number == train.number
+                })
     }
 
     /// Searches the departure window in parts on scoped threads and merges their journeys.

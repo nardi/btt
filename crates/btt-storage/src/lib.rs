@@ -420,6 +420,7 @@ mod tests {
             },
             alternative_journeys: smallvec::SmallVec::new(),
             station_table: smallvec::smallvec![station("Köln Hbf"), station("Frankfurt Hbf")],
+            follows_traveller_choice: true,
         }));
         // A key with the highest bit set checks the conversion to SQLite's signed integers.
         let high_key = u64::MAX - 7;
