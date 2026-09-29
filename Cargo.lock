@@ -580,6 +580,7 @@ dependencies = [
  "btt-geo",
  "btt-model",
  "btt-router",
+ "btt-storage",
  "btt-timetable",
  "chrono",
  "chrono-tz",

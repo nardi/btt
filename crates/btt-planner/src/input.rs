@@ -2,7 +2,8 @@
 
 use btt_model::{
     DailyTimeWindow, DurationMinutes, GeoCoordinates, InterrailPassPolicy, JourneyChoice,
-    LegTravelMode, StationSearchRadius, TransferAversion, Trip, TripPlace, TripPlaceId,
+    LegTravelMode, PlaceStay, PlaceWindowOverride, SameDayStayRange, StationSearchRadius,
+    TransferAversion, Trip, TripPlace, TripPlaceId,
 };
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -64,7 +65,7 @@ impl LegPlanningInput {
 }
 
 /// A leg planning input together with the place that identifies its leg.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IdentifiedLegInput {
     /// Place at which the leg arrives.
     pub arrival_place_id: TripPlaceId,
@@ -109,6 +110,81 @@ pub fn leg_planning_inputs(trip: &Trip) -> SmallVec<[IdentifiedLegInput; 16]> {
             },
         })
         .collect()
+}
+
+/// A place with a same-day stay between two legs of a chain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct SameDayStop {
+    /// Shortest and longest stay the traveller wants.
+    pub stay_range: SameDayStayRange,
+    /// Whether a longer stay within the range is better.
+    pub prefers_longer_stay: bool,
+    /// Whether the traveller set a departure window for the place, which then bounds the
+    /// departure next to the stay range.
+    pub has_departure_window: bool,
+}
+
+/// Legs joined by same-day stops, which the planner plans together, because the arrival of
+/// one leg limits when the next can leave. A leg after a place with nights starts a new chain,
+/// so most chains hold a single leg.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LegChainInput {
+    /// The legs in travel order. Never empty.
+    pub legs: SmallVec<[IdentifiedLegInput; 4]>,
+    /// The stop between leg `i` and leg `i + 1`.
+    pub stops: SmallVec<[SameDayStop; 3]>,
+}
+
+impl LegChainInput {
+    /// Returns the cache key of one leg of the chain.
+    ///
+    /// A single leg keeps the key of its own input. A leg of a longer chain depends on every
+    /// leg and stop of the chain, so its key covers all of them and the leg's position.
+    pub fn leg_cache_key(&self, backend_namespace: u64, leg_index: usize) -> LegCacheKey {
+        if self.legs.len() == 1 {
+            return self.legs[0].input.cache_key(backend_namespace);
+        }
+        let inputs: SmallVec<[&LegPlanningInput; 4]> =
+            self.legs.iter().map(|leg| &leg.input).collect();
+        // Every field is a plain value that postcard encodes without failing.
+        let encoded = postcard::to_stdvec(&(inputs, &self.stops, leg_index)).unwrap_or_default();
+        LegCacheKey(xxhash_rust::xxh3::xxh3_64_with_seed(
+            &encoded,
+            backend_namespace,
+        ))
+    }
+}
+
+/// Groups the legs of a trip into chains joined by same-day stops, in travel order.
+pub fn leg_chain_inputs(trip: &Trip) -> SmallVec<[LegChainInput; 8]> {
+    let mut chains: SmallVec<[LegChainInput; 8]> = SmallVec::new();
+    for (leg, input) in trip.itinerary.legs().zip(leg_planning_inputs(trip)) {
+        let same_day_stop = match leg.stay_at_departure_place {
+            Some(PlaceStay::SameDay {
+                stay_range_override,
+                prefers_longer_stay,
+            }) => Some(SameDayStop {
+                stay_range: stay_range_override.unwrap_or(trip.preferences.default_same_day_stay),
+                prefers_longer_stay: *prefers_longer_stay,
+                has_departure_window: matches!(
+                    leg.departure_place.window_override,
+                    Some(PlaceWindowOverride::Departure(_) | PlaceWindowOverride::Both(_))
+                ),
+            }),
+            Some(PlaceStay::Nights(_)) | None => None,
+        };
+        match (same_day_stop, chains.last_mut()) {
+            (Some(stop), Some(chain)) => {
+                chain.stops.push(stop);
+                chain.legs.push(input);
+            }
+            _ => chains.push(LegChainInput {
+                legs: smallvec::smallvec![input],
+                stops: SmallVec::new(),
+            }),
+        }
+    }
+    chains
 }
 
 #[cfg(test)]

@@ -10,7 +10,7 @@ use tokio::task::{JoinHandle, JoinSet};
 use tokio_util::sync::CancellationToken;
 
 use crate::backend::LegPlanningBackend;
-use crate::input::{IdentifiedLegInput, LegCacheKey, leg_planning_inputs};
+use crate::input::{LegCacheKey, LegChainInput, leg_chain_inputs};
 
 /// Time a session waits after the last trip change before it starts planning, so a burst of
 /// edits leads to one run.
@@ -175,28 +175,32 @@ impl<S: PlanningEventSink, C: LegResultStore> SessionShared<S, C> {
         let run_id = legs_to_plan.run_id;
 
         let mut planning_tasks = JoinSet::new();
-        for leg in legs_to_plan.uncached {
+        for chain in legs_to_plan.uncached {
             let backend = Arc::clone(&self.backend);
             let cancellation = cancellation.clone();
             planning_tasks.spawn(async move {
-                let result = backend.plan_leg(&leg.input, &cancellation).await;
-                (leg, result)
+                let results = backend.plan_chain(&chain, &cancellation).await;
+                (chain, results)
             });
         }
         while let Some(joined) = planning_tasks.join_next().await {
-            let Ok((leg, result)) = joined else { continue };
+            let Ok((chain, results)) = joined else {
+                continue;
+            };
             let mut state = self.lock_state();
             if cancellation.is_cancelled() {
                 return;
             }
-            tracing::info!(run = run_id.0, arrival_place = ?leg.arrival_place_id, "planned leg");
-            let key = leg.input.cache_key(namespace);
-            if state.cached_results.len() >= MAXIMUM_CACHED_LEG_RESULTS {
-                state.cached_results.clear();
+            for (index, (leg, result)) in chain.legs.iter().zip(results).enumerate() {
+                tracing::info!(run = run_id.0, arrival_place = ?leg.arrival_place_id, "planned leg");
+                let key = chain.leg_cache_key(namespace, index);
+                if state.cached_results.len() >= MAXIMUM_CACHED_LEG_RESULTS {
+                    state.cached_results.clear();
+                }
+                state.cached_results.insert(key, result.clone());
+                self.result_store.store(key, namespace, &result);
+                self.deliver(&mut state, run_id, leg.arrival_place_id, key, result);
             }
-            state.cached_results.insert(key, result.clone());
-            self.result_store.store(key, namespace, &result);
-            self.deliver(&mut state, run_id, leg.arrival_place_id, key, result);
         }
 
         let mut state = self.lock_state();
@@ -208,48 +212,67 @@ impl<S: PlanningEventSink, C: LegResultStore> SessionShared<S, C> {
     }
 
     /// Starts a run. Announces the legs it replans, delivers the ones it finds in the cache
-    /// right away and returns the rest.
+    /// right away and returns the chains that still need planning.
+    ///
+    /// Legs joined by same-day stops are planned as a chain, and a change to one leg of a chain
+    /// changes the cache keys of all its legs, so a chain is always replanned as a whole.
     fn start_run(&self, state: &mut SessionState, trip: &Trip, namespace: u64) -> StartedRun {
         let run_id = PlanningRunId(state.next_run_id);
         state.next_run_id = state.next_run_id.wrapping_add(1);
 
-        let legs = leg_planning_inputs(trip);
+        let chains = leg_chain_inputs(trip);
         // Legs of removed places no longer exist, so their delivered keys go.
-        state
-            .delivered_leg_keys
-            .retain(|(place_id, _)| legs.iter().any(|leg| leg.arrival_place_id == *place_id));
-        let changed_legs: SmallVec<[(IdentifiedLegInput, LegCacheKey); 16]> = legs
+        state.delivered_leg_keys.retain(|(place_id, _)| {
+            chains
+                .iter()
+                .flat_map(|chain| &chain.legs)
+                .any(|leg| leg.arrival_place_id == *place_id)
+        });
+        let changed_chains: SmallVec<[(LegChainInput, SmallVec<[LegCacheKey; 4]>); 8]> = chains
             .into_iter()
-            .map(|leg| {
-                let key = leg.input.cache_key(namespace);
-                (leg, key)
+            .map(|chain| {
+                let keys: SmallVec<[LegCacheKey; 4]> = (0..chain.legs.len())
+                    .map(|index| chain.leg_cache_key(namespace, index))
+                    .collect();
+                (chain, keys)
             })
-            .filter(|(leg, key)| {
-                !state
-                    .delivered_leg_keys
-                    .contains(&(leg.arrival_place_id, *key))
+            .filter(|(chain, keys)| {
+                chain.legs.iter().zip(keys).any(|(leg, key)| {
+                    !state
+                        .delivered_leg_keys
+                        .contains(&(leg.arrival_place_id, *key))
+                })
             })
             .collect();
 
         self.event_sink
             .send_event(PlanningSessionEvent::PlanningStarted {
                 run_id,
-                replanned_arrival_place_ids: changed_legs
+                replanned_arrival_place_ids: changed_chains
                     .iter()
-                    .map(|(leg, _)| leg.arrival_place_id)
+                    .flat_map(|(chain, _)| chain.legs.iter().map(|leg| leg.arrival_place_id))
                     .collect(),
             });
 
         let mut uncached = SmallVec::new();
-        for (leg, key) in changed_legs {
-            let cached = state.cached_results.get(&key).cloned().or_else(|| {
-                let stored = self.result_store.load(key)?;
-                state.cached_results.insert(key, stored.clone());
-                Some(stored)
-            });
+        for (chain, keys) in changed_chains {
+            let cached: Option<Vec<LegPlanningResult>> = keys
+                .iter()
+                .map(|key| {
+                    state.cached_results.get(key).cloned().or_else(|| {
+                        let stored = self.result_store.load(*key)?;
+                        state.cached_results.insert(*key, stored.clone());
+                        Some(stored)
+                    })
+                })
+                .collect();
             match cached {
-                Some(result) => self.deliver(state, run_id, leg.arrival_place_id, key, result),
-                None => uncached.push(leg),
+                Some(results) => {
+                    for ((leg, key), result) in chain.legs.iter().zip(keys).zip(results) {
+                        self.deliver(state, run_id, leg.arrival_place_id, key, result);
+                    }
+                }
+                None => uncached.push(chain),
             }
         }
         StartedRun { run_id, uncached }
@@ -285,8 +308,8 @@ impl<S: PlanningEventSink, C: LegResultStore> SessionShared<S, C> {
 struct StartedRun {
     /// Identifies the run.
     run_id: PlanningRunId,
-    /// Changed legs without a cached result.
-    uncached: SmallVec<[IdentifiedLegInput; 16]>,
+    /// Changed chains without cached results.
+    uncached: SmallVec<[LegChainInput; 8]>,
 }
 
 #[cfg(test)]
@@ -398,6 +421,36 @@ mod tests {
         session.trip_changed(trip.clone());
         let events = events_of_next_run(&mut receiver).await;
         assert_eq!(replanned_places(&events), [place_id(&trip, 3)]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn legs_around_a_same_day_stop_replan_together() {
+        let (session, mut receiver) = session();
+        let mut trip = trip_with_places(&FOUR_CITIES);
+        let berlin = place_id(&trip, 1);
+        trip.apply_edit(TripEdit::SetPlaceStay {
+            place_id: berlin,
+            stay: PlaceStay::SameDay {
+                stay_range_override: None,
+                prefers_longer_stay: false,
+            },
+        })
+        .unwrap();
+        session.trip_changed(trip.clone());
+        events_of_next_run(&mut receiver).await;
+
+        // Moving Amsterdam changes only the leg to Berlin, but the leg on from Berlin depends
+        // on its arrival, so both are planned again. The leg from Vienna is not.
+        let amsterdam = place_id(&trip, 0);
+        let haarlem = GeoCoordinates::from_degrees(52.387_4, 4.638_1).unwrap();
+        trip.apply_edit(TripEdit::MovePlace {
+            place_id: amsterdam,
+            coordinates: haarlem,
+        })
+        .unwrap();
+        session.trip_changed(trip.clone());
+        let events = events_of_next_run(&mut receiver).await;
+        assert_eq!(replanned_places(&events), [berlin, place_id(&trip, 2)]);
     }
 
     #[tokio::test(start_paused = true)]

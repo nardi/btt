@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use btt_geo::TimeZoneFinder;
 use btt_model::{Journey, LegPlan, LegPlanStationIndex, LegPlanningResult, UnixTimeMinutes};
-use btt_planner::{LegPlanningInput, TimetableBundleRouter};
+use btt_planner::{TimetableBundleRouter, leg_chain_inputs};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
@@ -30,7 +30,6 @@ struct BundleSummary {
 /// The parts of one entry of `legs.json` the replay reads.
 #[derive(Deserialize)]
 struct ReportedLeg {
-    input: LegPlanningInput,
     stored_result: Option<LegPlanningResult>,
 }
 
@@ -70,8 +69,15 @@ fn main() {
 
     let router = TimetableBundleRouter::open(bundle_path.as_ref(), Arc::new(TimeZoneFinder::new()))
         .expect("bundle loads");
-    for (index, leg) in legs.iter().enumerate() {
-        let replanned = router.plan_leg(&leg.input, || false);
+    // Legs joined by same-day stops are planned together, as the app does. The chains come
+    // from the report's trip, which older reports have too.
+    let trip = btt_storage::trip_from_document(&read_entry(&mut archive, "trip.json"))
+        .expect("trip.json loads");
+    let replanned_legs: Vec<LegPlanningResult> = leg_chain_inputs(&trip)
+        .iter()
+        .flat_map(|chain| router.plan_chain(chain, || false))
+        .collect();
+    for (index, (leg, replanned)) in legs.iter().zip(replanned_legs).enumerate() {
         println!("\nLeg {}", index + 1);
         let stored = leg
             .stored_result

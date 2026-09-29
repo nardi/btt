@@ -9,7 +9,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use btt_model::{GeoCoordinates, LegPlanningResult, Trip, TripId, TripPlaceId};
-use btt_planner::{LegExplanation, LegPlanningInput, leg_planning_inputs};
+use btt_planner::{LegExplanation, LegPlanningInput, leg_chain_inputs};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use specta::Type;
@@ -68,7 +68,9 @@ struct ReportedLeg {
     cache_key: u64,
     /// The result the app has stored for the leg, which the traveller saw.
     stored_result: Option<LegPlanningResult>,
-    /// The leg planned again now, with the candidate stations and the cost of every journey.
+    /// The leg planned again now on its own, with the candidate stations and the cost of every
+    /// journey. A leg of a chain joined by same-day stops is planned with the chain in the app,
+    /// so its explanation can differ from the stored result.
     explanation: LegExplanation,
 }
 
@@ -108,15 +110,18 @@ pub async fn export_problem_report(
     };
 
     let namespace = state.planning_backend.cache_namespace();
+    let chains = leg_chain_inputs(&trip);
     let mut legs = Vec::new();
-    for identified in leg_planning_inputs(&trip) {
-        let cache_key = identified.input.cache_key(namespace);
-        legs.push(ReportedLeg {
-            stored_result: state.storage.cached_leg_result(cache_key.0)?,
-            explanation: state.planning_backend.explain_leg(&identified.input).await,
-            input: identified.input,
-            cache_key: cache_key.0,
-        });
+    for chain in &chains {
+        for (index, identified) in chain.legs.iter().enumerate() {
+            let cache_key = chain.leg_cache_key(namespace, index);
+            legs.push(ReportedLeg {
+                stored_result: state.storage.cached_leg_result(cache_key.0)?,
+                explanation: state.planning_backend.explain_leg(&identified.input).await,
+                input: identified.input.clone(),
+                cache_key: cache_key.0,
+            });
+        }
     }
     let summary = ReportSummary {
         note,

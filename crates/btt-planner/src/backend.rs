@@ -7,14 +7,14 @@ use tokio_util::sync::CancellationToken;
 
 use crate::bundle_router::TimetableBundleRouter;
 use crate::explanation::LegExplanation;
-use crate::input::LegPlanningInput;
+use crate::input::{LegChainInput, LegPlanningInput};
 #[cfg(feature = "stub")]
 use crate::stub::StubBackend;
 
 /// Revision of the planner's results. Cached results are `postcard` bytes, which don't
 /// survive a change to the layout of `LegPlanningResult`, and a change to the planning logic
 /// makes them stale. Either change raises this number, so the app drops the old results.
-const LEG_PLAN_REVISION: u64 = 4;
+const LEG_PLAN_REVISION: u64 = 5;
 
 /// Plans single legs. An enum instead of a trait object, because the set of backends is fixed
 /// at compile time.
@@ -67,6 +67,41 @@ impl LegPlanningBackend {
                 search.await.unwrap_or(LegPlanningResult::NoJourneyFound(
                     NoJourneyReason::BackendUnavailable,
                 ))
+            }
+        }
+    }
+
+    /// Plans the legs of a chain joined by same-day stops, one result per leg. The stub plans
+    /// each leg on its own.
+    pub async fn plan_chain(
+        &self,
+        chain: &LegChainInput,
+        cancellation: &CancellationToken,
+    ) -> Vec<LegPlanningResult> {
+        match self {
+            #[cfg(feature = "stub")]
+            Self::Stub(stub) => {
+                let _ = cancellation;
+                chain
+                    .legs
+                    .iter()
+                    .map(|leg| stub.plan_leg(&leg.input))
+                    .collect()
+            }
+            Self::TimetableBundle(router) => {
+                let router = Arc::clone(router);
+                let chain = chain.clone();
+                let leg_count = chain.legs.len();
+                let cancellation = cancellation.clone();
+                let search = tokio::task::spawn_blocking(move || {
+                    router.plan_chain(&chain, || cancellation.is_cancelled())
+                });
+                search.await.unwrap_or_else(|_| {
+                    vec![
+                        LegPlanningResult::NoJourneyFound(NoJourneyReason::BackendUnavailable);
+                        leg_count
+                    ]
+                })
             }
         }
     }

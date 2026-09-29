@@ -21,8 +21,9 @@ use btt_timetable::{
 use chrono::NaiveDate;
 use smallvec::SmallVec;
 
+use crate::chain::{ChainJourney, ChainStay, chain_through_costs};
 use crate::explanation::{CandidateExplanation, LegExplanation, RankedJourneyExplanation};
-use crate::input::{LegEndpoint, LegPlanningInput};
+use crate::input::{LegChainInput, LegEndpoint, LegPlanningInput, SameDayStop};
 use crate::ride_path::StationHopGraph;
 use crate::scoring::{JourneyCostInputs, ScoringWeights, journey_cost};
 
@@ -184,6 +185,207 @@ impl TimetableBundleRouter {
         }
     }
 
+    /// Plans the legs of a chain joined by same-day stops, one result per leg in order.
+    ///
+    /// Each leg after the first leaves within the stay range after the arrivals of the leg
+    /// before it. Every journey then gets the cost of the best chain through it, which picks
+    /// the chosen journeys and orders the alternatives. A leg without journeys splits the
+    /// chain, and the legs on both sides are paired on their own.
+    pub fn plan_chain(
+        &self,
+        chain: &LegChainInput,
+        should_stop: impl Fn() -> bool + Sync,
+    ) -> Vec<LegPlanningResult> {
+        if let [leg] = chain.legs.as_slice() {
+            return vec![self.plan_leg(&leg.input, should_stop)];
+        }
+        let mut searches: Vec<Result<LegSearch, NoJourneyReason>> =
+            Vec::with_capacity(chain.legs.len());
+        for (index, leg) in chain.legs.iter().enumerate() {
+            let window_after_stay = index.checked_sub(1).and_then(|previous| {
+                let previous_search = searches[previous].as_ref().ok()?;
+                self.window_after_stay(previous_search, chain.stops[previous], &leg.input)
+            });
+            searches.push(match window_after_stay {
+                Some(window) => self.search_leg_in_window(&leg.input, window, &should_stop),
+                None => self.search_leg(&leg.input, &should_stop),
+            });
+        }
+
+        let mut results: Vec<Option<LegPlanningResult>> = vec![None; chain.legs.len()];
+        let mut segment_start = 0;
+        for index in 0..=chain.legs.len() {
+            let segment_ends = searches.get(index).is_none_or(Result::is_err);
+            if !segment_ends {
+                continue;
+            }
+            if segment_start < index {
+                let segment = segment_start..index;
+                let segment_searches: Vec<&LegSearch> = searches[segment.clone()]
+                    .iter()
+                    .filter_map(|search| search.as_ref().ok())
+                    .collect();
+                let segment_inputs: Vec<&LegPlanningInput> = chain.legs[segment.clone()]
+                    .iter()
+                    .map(|leg| &leg.input)
+                    .collect();
+                let stays = &chain.stops[segment.start..segment.end - 1];
+                for (offset, result) in self
+                    .plan_segment(&segment_searches, &segment_inputs, stays)
+                    .into_iter()
+                    .enumerate()
+                {
+                    results[segment.start + offset] = Some(result);
+                }
+            }
+            if let Some(Err(reason)) = searches.get(index) {
+                results[index] = Some(LegPlanningResult::NoJourneyFound(*reason));
+            }
+            segment_start = index + 1;
+        }
+        results
+            .into_iter()
+            .map(|result| {
+                result.unwrap_or(LegPlanningResult::NoJourneyFound(
+                    NoJourneyReason::NoConnectionInWindow,
+                ))
+            })
+            .collect()
+    }
+
+    /// Ranks the journeys of consecutive searched legs by the best chain through them and turns
+    /// them into leg plans.
+    fn plan_segment(
+        &self,
+        searches: &[&LegSearch],
+        inputs: &[&LegPlanningInput],
+        stops: &[SameDayStop],
+    ) -> Vec<LegPlanningResult> {
+        let costed: Vec<Vec<RankedJourney<'_>>> = searches
+            .iter()
+            .zip(inputs)
+            .map(|(search, input)| self.journey_costs(search, input))
+            .collect();
+        let chain_journeys: Vec<Vec<ChainJourney>> = costed
+            .iter()
+            .map(|journeys| {
+                journeys
+                    .iter()
+                    .map(|ranked| ChainJourney {
+                        departure: ranked.journey.departure.0,
+                        arrival: ranked.journey.arrival.0,
+                        cost: ranked.cost,
+                    })
+                    .collect()
+            })
+            .collect();
+        let stays: Vec<ChainStay> = stops
+            .iter()
+            .map(|stop| {
+                let minimum = u32::from(stop.stay_range.minimum.minutes());
+                ChainStay {
+                    minimum,
+                    maximum: stop
+                        .stay_range
+                        .maximum_beyond_minimum
+                        .map(|beyond| minimum + u32::from(beyond.minutes())),
+                    prefers_longer: stop.prefers_longer_stay,
+                }
+            })
+            .collect();
+        let picks: Vec<Option<usize>> = costed
+            .iter()
+            .zip(inputs)
+            .map(|(journeys, input)| {
+                let choice = input.chosen_journey.as_ref()?;
+                journeys
+                    .iter()
+                    .position(|ranked| self.journey_matches_choice(ranked.journey, choice))
+            })
+            .collect();
+
+        costed
+            .into_iter()
+            .enumerate()
+            .map(|(leg, journeys)| {
+                // The picks of the other legs hold, while this leg's journeys all compete, so
+                // the ranking also has alternatives to a picked journey.
+                let mut forced = picks.clone();
+                forced[leg] = None;
+                let through_costs =
+                    chain_through_costs(&chain_journeys, &stays, &forced, ScoringWeights::DEFAULT);
+                let mut ranked: Vec<RankedJourney<'_>> = journeys
+                    .into_iter()
+                    .zip(&through_costs[leg])
+                    .filter_map(|(ranked, through_cost)| {
+                        Some(RankedJourney {
+                            cost: u32::try_from((*through_cost)?.max(0)).unwrap_or(u32::MAX),
+                            ..ranked
+                        })
+                    })
+                    .collect();
+                ranked.sort_by_key(|ranked| (ranked.cost, ranked.journey.arrival));
+                let pick_position = inputs[leg].chosen_journey.as_ref().and_then(|choice| {
+                    ranked.iter().position(|candidate| {
+                        self.journey_matches_choice(candidate.journey, choice)
+                    })
+                });
+                if let Some(position) = pick_position {
+                    let picked = ranked.remove(position);
+                    ranked.insert(0, picked);
+                }
+                let ranking = JourneyRanking {
+                    journeys: ranked,
+                    follows_traveller_choice: pick_position.is_some(),
+                    night: searches[leg].night.clone(),
+                };
+                self.leg_plan(&ranking, inputs[leg])
+            })
+            .collect()
+    }
+
+    /// Returns the departure window of a leg that follows a same-day stop: from the earliest
+    /// arrival of the leg before plus the shortest stay, to the latest arrival plus the longest
+    /// stay. Without a longest stay it ends with the leg's own departure window. A departure
+    /// window the traveller set, or the window of a night train, also bounds it. Returns `None`
+    /// when the leg before has no journeys.
+    fn window_after_stay(
+        &self,
+        previous: &LegSearch,
+        stop: SameDayStop,
+        input: &LegPlanningInput,
+    ) -> Option<std::ops::Range<MinutesSinceBundleStart>> {
+        let arrivals = previous
+            .journeys
+            .journeys
+            .iter()
+            .map(|journey| journey.arrival.0);
+        let earliest_arrival = arrivals.clone().min()?;
+        let latest_arrival = arrivals.max()?;
+        let own_window = self.departure_window(input);
+        let minimum = u32::from(stop.stay_range.minimum.minutes());
+        let start = earliest_arrival + minimum;
+        let end = match stop.stay_range.maximum_beyond_minimum {
+            Some(beyond) => latest_arrival + minimum + u32::from(beyond.minutes()),
+            None => own_window.as_ref().map_or(start, |window| window.end.0),
+        };
+        // A window of at least an hour leaves room for a departure when the stay range and the
+        // leg's own window don't meet, and the stay then costs by how far it's off.
+        let mut window = start..end.max(start + 60);
+        let bounded_by_own_window =
+            stop.has_departure_window || matches!(input.travel_mode, LegTravelMode::Overnight(_));
+        if bounded_by_own_window && let Some(own_window) = own_window {
+            let start = window.start.max(own_window.start.0);
+            let end = window.end.min(own_window.end.0);
+            window = if start < end {
+                start..end
+            } else {
+                own_window.start.0..own_window.end.0
+            };
+        }
+        Some(MinutesSinceBundleStart(window.start)..MinutesSinceBundleStart(window.end))
+    }
+
     /// Plans one leg like `plan_leg` and also returns what the plan came from: the candidate
     /// stations and every journey of the Pareto set with its cost, for problem reports.
     pub fn explain_leg(&self, input: &LegPlanningInput) -> LegExplanation {
@@ -250,6 +452,21 @@ impl TimetableBundleRouter {
         let departure_window = self
             .departure_window(input)
             .ok_or(NoJourneyReason::TravelDateOutsideTimetable)?;
+        self.search_leg_in_window(input, departure_window, should_stop)
+    }
+
+    /// Searches a leg like `search_leg`, leaving the departure place within a given window
+    /// instead of the leg's own.
+    fn search_leg_in_window(
+        &self,
+        input: &LegPlanningInput,
+        departure_window: std::ops::Range<MinutesSinceBundleStart>,
+        should_stop: &(impl Fn() -> bool + Sync),
+    ) -> Result<LegSearch, NoJourneyReason> {
+        let bundle_end = u32::from(self.bundle.validity_days()) * MINUTES_PER_DAY;
+        if departure_window.start.0 >= bundle_end {
+            return Err(NoJourneyReason::TravelDateOutsideTimetable);
+        }
         let first_day = departure_window.start.0 / MINUTES_PER_DAY;
         let departure_candidates = self.candidates(&input.departure, first_day..=first_day + 1);
         if departure_candidates.is_empty() {
@@ -307,13 +524,37 @@ impl TimetableBundleRouter {
         search: &'search LegSearch,
         input: &LegPlanningInput,
     ) -> JourneyRanking<'search> {
+        let mut journeys = self.journey_costs(search, input);
+        journeys.sort_by_key(|ranked| (ranked.cost, ranked.journey.arrival));
+        let chosen_position = input.chosen_journey.as_ref().and_then(|choice| {
+            journeys
+                .iter()
+                .position(|ranked| self.journey_matches_choice(ranked.journey, choice))
+        });
+        if let Some(position) = chosen_position {
+            let picked = journeys.remove(position);
+            journeys.insert(0, picked);
+        }
+        JourneyRanking {
+            journeys,
+            follows_traveller_choice: chosen_position.is_some(),
+            night: search.night.clone(),
+        }
+    }
+
+    /// Returns every journey of a search with its cost, in the order of the search.
+    fn journey_costs<'search>(
+        &self,
+        search: &'search LegSearch,
+        input: &LegPlanningInput,
+    ) -> Vec<RankedJourney<'search>> {
         let mut arrival_window = self.arrival_window_in_bundle_minutes(input);
         // Arriving before the wake-up time counts as arriving outside the window.
         if let Some(night) = &search.night {
             arrival_window.start = arrival_window.start.max(night.end);
             arrival_window.end = arrival_window.end.max(arrival_window.start);
         }
-        let mut journeys: Vec<RankedJourney<'search>> = search
+        search
             .journeys
             .journeys
             .iter()
@@ -330,22 +571,7 @@ impl TimetableBundleRouter {
                     ),
                 }
             })
-            .collect();
-        journeys.sort_by_key(|ranked| (ranked.cost, ranked.journey.arrival));
-        let chosen_position = input.chosen_journey.as_ref().and_then(|choice| {
-            journeys
-                .iter()
-                .position(|ranked| self.journey_matches_choice(ranked.journey, choice))
-        });
-        if let Some(position) = chosen_position {
-            let picked = journeys.remove(position);
-            journeys.insert(0, picked);
-        }
-        JourneyRanking {
-            journeys,
-            follows_traveller_choice: chosen_position.is_some(),
-            night: search.night.clone(),
-        }
+            .collect()
     }
 
     /// Turns ranked journeys into a leg plan, with the first as the chosen journey.

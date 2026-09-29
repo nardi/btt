@@ -19,6 +19,12 @@ pub struct ScoringWeights {
     /// How much each minute of the night spent off a train with berths costs, in percent of a
     /// minute on a train. Only overnight legs have a night.
     pub night_awake_percent: u32,
+    /// How much each minute of a same-day stay outside its range costs, in percent of a minute
+    /// on a train.
+    pub stay_outside_range_percent: u32,
+    /// How much each minute of a same-day stay beyond its minimum takes off the cost when the
+    /// traveller prefers a longer stay, in percent of a minute on a train.
+    pub longer_stay_bonus_percent: u32,
 }
 
 impl ScoringWeights {
@@ -26,13 +32,16 @@ impl ScoringWeights {
     /// no aversion to two hours at full aversion, a minute to or from a station counts one and
     /// a half times, and a minute of arriving outside the window counts twice. A minute of the
     /// night without a berth counts three times, so missing a whole night of 7.5 hours costs
-    /// almost a day of travel.
+    /// almost a day of travel. A minute of stay outside a same-day stay range counts twice, and
+    /// with "longer is better" a minute beyond the minimum takes a quarter minute off.
     pub const DEFAULT: Self = Self {
         transfer_base_minutes: 10,
         transfer_aversion_minutes: 110,
         way_to_station_percent: 150,
         arrival_window_miss_percent: 200,
         night_awake_percent: 300,
+        stay_outside_range_percent: 200,
+        longer_stay_bonus_percent: 25,
     };
 }
 
