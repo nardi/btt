@@ -8,7 +8,10 @@ use btt_timetable::{BundleStationIndex, LoadedTimetableBundle};
 fn main() {
     let mut arguments = std::env::args().skip(1);
     let bundle_path = arguments.next().expect("pass the bundle path");
-    let text = arguments.next().expect("pass a text to search").to_lowercase();
+    let text = arguments
+        .next()
+        .expect("pass a text to search")
+        .to_lowercase();
     let bundle = LoadedTimetableBundle::open(bundle_path.as_ref()).expect("bundle loads");
     for index in 0..bundle.station_count() {
         let station = BundleStationIndex(u32::try_from(index).expect("station index fits"));

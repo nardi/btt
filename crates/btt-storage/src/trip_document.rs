@@ -22,9 +22,10 @@ const TRIP_DOCUMENT_MIGRATIONS: [TripDocumentMigration; 2] =
 fn night_windows_to_bedtime(document: &mut Value) {
     match document {
         Value::Object(fields) => {
-            if let (Some(boarding), Some(alighting)) =
-                (fields.get("boarding_window"), fields.get("alighting_window"))
-            {
+            if let (Some(boarding), Some(alighting)) = (
+                fields.get("boarding_window"),
+                fields.get("alighting_window"),
+            ) {
                 let minutes = |window: &Value, key: &str| window.get(key).and_then(Value::as_u64);
                 let bedtime = minutes(boarding, "start")
                     .zip(minutes(boarding, "length"))
