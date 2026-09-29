@@ -39,6 +39,15 @@ export const commands = {
 	 *  cache.
 	 */
 	searchPlaces: (query: string) => typedError<PlaceSearchResult[], CommandError>(__TAURI_INVOKE("search_places", { query })),
+	/**
+	 *  Asks where to save a problem report for a trip and writes it there. Returns the path of the
+	 *  saved file, or `None` when the traveller cancelled.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when the trip does not exist or the file cannot be written.
+	 */
+	exportProblemReport: (tripId: TripId, note: string, view: ProblemReportView) => typedError<string | null, CommandError>(__TAURI_INVOKE("export_problem_report", { tripId, note, view })),
 };
 
 /* Types */
@@ -368,6 +377,16 @@ export type PlanningSessionEvent =
 
 /**  How many minutes of travel time one euro is worth in scoring, in hundredths of a minute. */
 export type PriceWeight = number;
+
+/**  What the map showed when the traveller made the report. */
+export type ProblemReportView = {
+	/**  The place selected in the list or on the map, if any. */
+	selected_place_id: TripPlaceId | null,
+	/**  Centre of the map. */
+	map_center: GeoCoordinates,
+	/**  Zoom level of the map. */
+	map_zoom: number | null,
+};
 
 /**
  *  Time spent at a same-day stop, measured from train arrival to train departure.

@@ -1,13 +1,18 @@
 //! The BigTrainTrip desktop app: Tauri setup, commands and shared state.
 
 mod commands;
+mod log_buffer;
 mod place_naming;
+mod problem_report;
 mod state;
 
 use btt_storage::Storage;
 use tauri::Manager;
 use tauri_specta::collect_commands;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
+use crate::log_buffer::RecentLogLines;
 use crate::state::AppState;
 
 /// Path of the generated TypeScript bindings, relative to this crate.
@@ -25,6 +30,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::add_place_at_coordinates,
         commands::delete_trip,
         commands::search_places,
+        problem_report::export_problem_report,
     ])
 }
 
@@ -41,10 +47,18 @@ pub fn typescript_exporter() -> specta_typescript::Typescript {
 ///
 /// Panics when Tauri cannot start, for example because the web view is missing.
 pub fn run() {
-    tracing_subscriber::fmt()
-        .with_env_filter(
+    // Log lines go to the terminal and, without colour codes, into memory for problem reports.
+    let recent_log_lines = RecentLogLines::default();
+    tracing_subscriber::registry()
+        .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(recent_log_lines.clone()),
         )
         .init();
 
@@ -56,13 +70,14 @@ pub fn run() {
     }
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(specta_builder.invoke_handler())
         .setup(move |app| {
             specta_builder.mount_events(app);
             let data_directory = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_directory)?;
             let storage = Storage::open(&data_directory.join("btt.sqlite3"))?;
-            app.manage(AppState::new(storage, &data_directory)?);
+            app.manage(AppState::new(storage, &data_directory, recent_log_lines)?);
             Ok(())
         })
         .run(tauri::generate_context!())

@@ -42,6 +42,7 @@ specta = { version = "=2.0.0-rc.25", features = ["derive", "chrono", "uuid", "sm
 specta-serde = "0.0.12"
 specta-typescript = "0.0.12"
 tauri = "2"
+tauri-plugin-dialog = "2"
 tauri-build = "2"
 tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
 thiserror = "2.0.21"

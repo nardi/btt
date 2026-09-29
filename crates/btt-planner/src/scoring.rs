@@ -31,7 +31,7 @@ impl ScoringWeights {
 }
 
 /// The parts of a journey the cost depends on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub struct JourneyCostInputs {
     /// Minutes from leaving the departure place to reaching the arrival place.
     pub door_to_door_minutes: u32,

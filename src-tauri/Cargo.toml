@@ -26,11 +26,15 @@ smol_str.workspace = true
 specta.workspace = true
 specta-typescript.workspace = true
 tauri.workspace = true
+tauri-plugin-dialog.workspace = true
 tauri-specta.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+zip.workspace = true
+sha2.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true

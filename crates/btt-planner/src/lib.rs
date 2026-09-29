@@ -2,6 +2,7 @@
 
 pub mod backend;
 pub mod bundle_router;
+pub mod explanation;
 pub mod input;
 pub mod scoring;
 pub mod session;
@@ -10,6 +11,7 @@ pub mod stub;
 
 pub use backend::LegPlanningBackend;
 pub use bundle_router::TimetableBundleRouter;
+pub use explanation::{CandidateExplanation, LegExplanation, RankedJourneyExplanation};
 pub use input::{LegCacheKey, LegEndpoint, LegPlanningInput, leg_planning_inputs};
 pub use session::{
     DEFAULT_PLANNING_DEBOUNCE, LegResultStore, NoLegResultStore, PlanningEventSink,

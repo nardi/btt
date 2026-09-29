@@ -6,6 +6,7 @@ use btt_model::{LegPlanningResult, NoJourneyReason};
 use tokio_util::sync::CancellationToken;
 
 use crate::bundle_router::TimetableBundleRouter;
+use crate::explanation::LegExplanation;
 use crate::input::LegPlanningInput;
 #[cfg(feature = "stub")]
 use crate::stub::StubBackend;
@@ -60,6 +61,35 @@ impl LegPlanningBackend {
                     NoJourneyReason::BackendUnavailable,
                 ))
             }
+        }
+    }
+
+    /// Plans one leg and explains the result, for problem reports. The stub has nothing to
+    /// explain beyond its result.
+    pub async fn explain_leg(&self, input: &LegPlanningInput) -> LegExplanation {
+        match self {
+            #[cfg(feature = "stub")]
+            Self::Stub(stub) => LegExplanation::without_search(stub.plan_leg(input)),
+            Self::TimetableBundle(router) => {
+                let router = Arc::clone(router);
+                let input = input.clone();
+                tokio::task::spawn_blocking(move || router.explain_leg(&input))
+                    .await
+                    .unwrap_or_else(|_| {
+                        LegExplanation::without_search(LegPlanningResult::NoJourneyFound(
+                            NoJourneyReason::BackendUnavailable,
+                        ))
+                    })
+            }
+        }
+    }
+
+    /// Returns a short name of the backend, for problem reports.
+    pub fn kind_name(&self) -> &'static str {
+        match self {
+            #[cfg(feature = "stub")]
+            Self::Stub(_) => "stub",
+            Self::TimetableBundle(_) => "timetable bundle",
         }
     }
 }

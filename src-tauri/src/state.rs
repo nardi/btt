@@ -15,6 +15,7 @@ use smol_str::SmolStr;
 use tauri::ipc::Channel;
 
 use crate::commands::CommandError;
+use crate::log_buffer::RecentLogLines;
 use crate::place_naming::{has_provisional_name, provisional_place_name};
 
 /// `User-Agent` for requests to public services, which ask clients to identify themselves.
@@ -69,6 +70,10 @@ pub struct AppState {
     pub planning_backend: Arc<LegPlanningBackend>,
     /// Searches places by name and position.
     pub photon: PhotonClient,
+    /// The timetable bundle the planner loaded, if any.
+    pub bundle_path: Option<PathBuf>,
+    /// The most recent log lines, for problem reports.
+    pub recent_log_lines: RecentLogLines,
     /// Language for place names, as a two-letter code.
     pub language: SmolStr,
     /// Trips the frontend has open. Edits lock this map, which keeps edits to one trip in
@@ -85,9 +90,14 @@ impl AppState {
     /// # Errors
     ///
     /// Returns an error when the HTTP client for Photon cannot be built.
-    pub fn new(storage: Storage, data_directory: &Path) -> Result<Self, btt_geo::PhotonError> {
+    pub fn new(
+        storage: Storage,
+        data_directory: &Path,
+        recent_log_lines: RecentLogLines,
+    ) -> Result<Self, btt_geo::PhotonError> {
         let time_zone_finder = Arc::new(TimeZoneFinder::new());
-        let bundle_router = find_bundle(data_directory).and_then(|path| {
+        let bundle_path = find_bundle(data_directory);
+        let bundle_router = bundle_path.clone().and_then(|path| {
             match TimetableBundleRouter::open(&path, Arc::clone(&time_zone_finder)) {
                 Ok(router) => {
                     tracing::info!(path = %path.display(), version = router.bundle_version(), "planning with a timetable bundle");
@@ -116,6 +126,8 @@ impl AppState {
             storage: Arc::new(storage),
             planning_backend,
             photon: PhotonClient::new(PUBLIC_PHOTON_BASE_URL, USER_AGENT)?,
+            bundle_path,
+            recent_log_lines,
             // Place names come in English until the app has a language setting.
             language: "en".into(),
             open_trips: Mutex::new(FxHashMap::default()),

@@ -1,12 +1,13 @@
 <script lang="ts">
   // The desktop app: a list of trips, or the itinerary of the open trip.
-  import { commands, type TripId, type TripSummary } from "@btt/shared/bindings";
+  import { commands, type GeoCoordinates, type TripId, type TripSummary } from "@btt/shared/bindings";
   import ItineraryView from "@btt/shared/components/ItineraryView.svelte";
   import TripMap from "@btt/shared/components/TripMap.svelte";
   import type { PlaceFocusRequest } from "@btt/shared/map-features";
   import { onMount } from "svelte";
 
   import { commandErrorMessage, TauriTripSource } from "./tauri-trip-source.svelte";
+  import ProblemReportDialog from "./ProblemReportDialog.svelte";
   import TripList from "./TripList.svelte";
 
   let trips: TripSummary[] = $state([]);
@@ -14,6 +15,9 @@
   let errorMessage: string | null = $state(null);
   let selectedPlaceId: number | null = $state(null);
   let focusRequest: PlaceFocusRequest | null = $state(null);
+  let showProblemReport = $state(false);
+  /** Where the map of the open trip looks, for problem reports. */
+  let mapView: { center: GeoCoordinates; zoom: number } | null = $state(null);
 
   async function refreshTrips() {
     const result = await commands.listTrips();
@@ -106,7 +110,16 @@
           }}
         />
       </label>
+      <button type="button" onclick={() => (showProblemReport = true)}>Report a problem</button>
     </header>
+    {#if showProblemReport}
+      <ProblemReportDialog
+        tripId={openSource.trip.id}
+        {selectedPlaceId}
+        {mapView}
+        onClose={() => (showProblemReport = false)}
+      />
+    {/if}
     <div class="workspace">
       <div class="itinerary-column">
         <ItineraryView
@@ -122,6 +135,7 @@
           {selectedPlaceId}
           {focusRequest}
           onSelect={(placeId) => (selectedPlaceId = placeId)}
+          onViewChange={(view) => (mapView = view)}
         />
       </div>
     </div>

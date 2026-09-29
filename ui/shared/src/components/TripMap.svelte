@@ -49,12 +49,15 @@
     selectedPlaceId,
     focusRequest,
     onSelect,
+    onViewChange,
   }: {
     source: TripSource;
     selectedPlaceId: TripPlaceId | null;
     /** Asks the map to move to a place, for example after a double click in the list. */
     focusRequest: PlaceFocusRequest | null;
     onSelect: (placeId: TripPlaceId | null) => void;
+    /** Receives the centre and zoom of the map after it moves. */
+    onViewChange?: (view: { center: GeoCoordinates; zoom: number }) => void;
   } = $props();
 
   let map: MapLibreMap | undefined = $state.raw();
@@ -86,6 +89,14 @@
     tooltip = { lnglat: [event.lngLat.lng, event.lngLat.lat], lines: text.split("\n") };
     if (map !== undefined) {
       map.getCanvas().style.cursor = "pointer";
+    }
+  }
+
+  /** Tells the parent where the map looks after it moved. */
+  function reportView() {
+    if (map !== undefined) {
+      const center = map.getCenter();
+      onViewChange?.({ center: { latitude: center.lat, longitude: center.lng }, zoom: map.getZoom() });
     }
   }
 
@@ -236,6 +247,7 @@
   doubleClickZoom={editable === null}
   onclick={handleMapClick}
   ondblclick={handleMapDoubleClick}
+  onmoveend={reportView}
 >
   <GeoJSONSource id="station-search-radii" data={circles}>
     <FillLayer

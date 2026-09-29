@@ -22,6 +22,7 @@ chrono-tz.workspace = true
 postcard.workspace = true
 rustc-hash.workspace = true
 serde.workspace = true
+smol_str.workspace = true
 smallvec.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true

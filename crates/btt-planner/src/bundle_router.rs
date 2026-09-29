@@ -18,6 +18,7 @@ use btt_timetable::{BundleLoadError, BundleStationIndex, LoadedTimetableBundle, 
 use chrono::NaiveDate;
 use smallvec::SmallVec;
 
+use crate::explanation::{CandidateExplanation, LegExplanation, RankedJourneyExplanation};
 use crate::input::{LegEndpoint, LegPlanningInput};
 use crate::scoring::{JourneyCostInputs, ScoringWeights, journey_cost};
 
@@ -103,66 +104,164 @@ impl TimetableBundleRouter {
         input: &LegPlanningInput,
         should_stop: impl Fn() -> bool + Sync,
     ) -> LegPlanningResult {
-        let Some(departure_window) = self.departure_window(input) else {
-            return LegPlanningResult::NoJourneyFound(NoJourneyReason::TravelDateOutsideTimetable);
+        match self.search_leg(input, &should_stop) {
+            Err(reason) => LegPlanningResult::NoJourneyFound(reason),
+            Ok(search) => {
+                let ranking = self.rank_journeys(&search, input);
+                self.leg_plan(&ranking, input)
+            }
+        }
+    }
+
+    /// Plans one leg like `plan_leg` and also returns what the plan came from: the candidate
+    /// stations and every journey of the Pareto set with its cost, for problem reports.
+    pub fn explain_leg(&self, input: &LegPlanningInput) -> LegExplanation {
+        let search = match self.search_leg(input, &|| false) {
+            Err(reason) => {
+                return LegExplanation::without_search(LegPlanningResult::NoJourneyFound(reason));
+            }
+            Ok(search) => search,
         };
+        let ranking = self.rank_journeys(&search, input);
+        let result = self.leg_plan(&ranking, input);
+        let candidate = |endpoint: &LegEndpoint, candidate: &CandidateStation| {
+            let coordinates = self.bundle.station_coordinates(candidate.station);
+            CandidateExplanation {
+                station_name: self.bundle.station_name(candidate.station).into(),
+                coordinates,
+                distance_meters: rounded_meters(
+                    endpoint.coordinates.haversine_distance_meters(coordinates),
+                ),
+                minutes_to_place: candidate.time_to_place_minutes,
+            }
+        };
+        let mut stations = LegPlanStations::default();
+        let ranked_journeys = ranking
+            .journeys
+            .iter()
+            .filter_map(|ranked| {
+                Some(RankedJourneyExplanation {
+                    journey: self.journey(ranked.journey, input, &mut stations)?,
+                    cost: ranked.cost,
+                    cost_inputs: ranked.cost_inputs,
+                })
+            })
+            .collect();
+        LegExplanation {
+            result,
+            departure_candidates: search
+                .departure_candidates
+                .iter()
+                .map(|station| candidate(&input.departure, station))
+                .collect(),
+            arrival_candidates: search
+                .arrival_candidates
+                .iter()
+                .map(|station| candidate(&input.arrival, station))
+                .collect(),
+            ranked_journeys,
+            station_table: stations.table.into_vec(),
+            follows_traveller_choice: ranking.follows_traveller_choice,
+        }
+    }
+
+    /// Finds the candidate stations of a leg and searches its Pareto set of journeys.
+    fn search_leg(
+        &self,
+        input: &LegPlanningInput,
+        should_stop: &(impl Fn() -> bool + Sync),
+    ) -> Result<LegSearch, NoJourneyReason> {
+        let departure_window = self
+            .departure_window(input)
+            .ok_or(NoJourneyReason::TravelDateOutsideTimetable)?;
         let first_day = departure_window.start.0 / MINUTES_PER_DAY;
         let departure_candidates = self.candidates(&input.departure, first_day..=first_day + 1);
         if departure_candidates.is_empty() {
-            return LegPlanningResult::NoJourneyFound(NoJourneyReason::NoStationNearDeparturePlace);
+            return Err(NoJourneyReason::NoStationNearDeparturePlace);
         }
         let arrival_candidates = self.candidates(&input.arrival, first_day..=first_day + 2);
         if arrival_candidates.is_empty() {
-            return LegPlanningResult::NoJourneyFound(NoJourneyReason::NoStationNearArrivalPlace);
+            return Err(NoJourneyReason::NoStationNearArrivalPlace);
         }
-        let found = self.search_in_parallel(
+        let journeys = self.search_in_parallel(
             &departure_candidates,
             &arrival_candidates,
             departure_window,
             input,
-            &should_stop,
+            should_stop,
         );
-        // Lowest cost first. Ties go to the earlier arrival.
+        Ok(LegSearch {
+            departure_candidates,
+            arrival_candidates,
+            journeys,
+        })
+    }
+
+    /// Orders the journeys of a search by cost, lowest first and the earlier arrival on a tie.
+    /// The traveller's pick goes first when it is still among them, and the planner's pick
+    /// then becomes the first alternative.
+    fn rank_journeys<'search>(
+        &self,
+        search: &'search LegSearch,
+        input: &LegPlanningInput,
+    ) -> JourneyRanking<'search> {
         let arrival_window = self.arrival_window_in_bundle_minutes(input);
-        let mut journeys: Vec<&RaptorJourney> = found.journeys.iter().collect();
-        journeys.sort_by_key(|journey| {
-            (
-                journey_cost(
-                    journey_cost_inputs(journey, &arrival_window),
-                    input.transfer_aversion,
-                    ScoringWeights::DEFAULT,
-                ),
-                journey.arrival,
-            )
-        });
-        // The traveller's pick goes first when it is still among the journeys, and the
-        // planner's pick becomes the first alternative.
+        let mut journeys: Vec<RankedJourney<'search>> = search
+            .journeys
+            .journeys
+            .iter()
+            .map(|journey| {
+                let cost_inputs = journey_cost_inputs(journey, &arrival_window);
+                RankedJourney {
+                    journey,
+                    cost_inputs,
+                    cost: journey_cost(
+                        cost_inputs,
+                        input.transfer_aversion,
+                        ScoringWeights::DEFAULT,
+                    ),
+                }
+            })
+            .collect();
+        journeys.sort_by_key(|ranked| (ranked.cost, ranked.journey.arrival));
         let chosen_position = input.chosen_journey.as_ref().and_then(|choice| {
             journeys
                 .iter()
-                .position(|journey| self.journey_matches_choice(journey, choice))
+                .position(|ranked| self.journey_matches_choice(ranked.journey, choice))
         });
         if let Some(position) = chosen_position {
             let picked = journeys.remove(position);
             journeys.insert(0, picked);
         }
-        let Some((chosen, alternatives)) = journeys.split_first() else {
+        JourneyRanking {
+            journeys,
+            follows_traveller_choice: chosen_position.is_some(),
+        }
+    }
+
+    /// Turns ranked journeys into a leg plan, with the first as the chosen journey.
+    fn leg_plan(
+        &self,
+        ranking: &JourneyRanking<'_>,
+        input: &LegPlanningInput,
+    ) -> LegPlanningResult {
+        let Some((chosen, alternatives)) = ranking.journeys.split_first() else {
             return LegPlanningResult::NoJourneyFound(NoJourneyReason::NoConnectionInWindow);
         };
         let mut stations = LegPlanStations::default();
-        let Some(chosen_journey) = self.journey(chosen, input, &mut stations) else {
+        let Some(chosen_journey) = self.journey(chosen.journey, input, &mut stations) else {
             return LegPlanningResult::NoJourneyFound(NoJourneyReason::NoConnectionInWindow);
         };
         let alternative_journeys = alternatives
             .iter()
             .take(MAXIMUM_ALTERNATIVES)
-            .filter_map(|journey| self.journey(journey, input, &mut stations))
+            .filter_map(|ranked| self.journey(ranked.journey, input, &mut stations))
             .collect();
         LegPlanningResult::Found(Box::new(LegPlan {
             chosen_journey,
             alternative_journeys,
             station_table: stations.table,
-            follows_traveller_choice: chosen_position.is_some(),
+            follows_traveller_choice: ranking.follows_traveller_choice,
         }))
     }
 
@@ -511,4 +610,38 @@ fn access_minutes(distance_meters: f64) -> u16 {
     };
     // The distance is at most the 50 km search radius, so the minutes fit easily.
     minutes as u16
+}
+
+/// Everything a search found for a leg, before ranking.
+struct LegSearch {
+    /// Stations near the departure place with their access times.
+    departure_candidates: SmallVec<[CandidateStation; 16]>,
+    /// Stations near the arrival place with their egress times.
+    arrival_candidates: SmallVec<[CandidateStation; 16]>,
+    /// The Pareto set of journeys.
+    journeys: ParetoJourneySet,
+}
+
+/// A journey of a search with its cost.
+struct RankedJourney<'search> {
+    /// The journey.
+    journey: &'search RaptorJourney,
+    /// What the cost came from.
+    cost_inputs: JourneyCostInputs,
+    /// The cost, lower is better.
+    cost: u32,
+}
+
+/// The journeys of a search in the order the planner shows them.
+struct JourneyRanking<'search> {
+    /// Chosen journey first, then the alternatives.
+    journeys: Vec<RankedJourney<'search>>,
+    /// Whether the first journey is the traveller's pick.
+    follows_traveller_choice: bool,
+}
+
+/// Rounds a distance to whole meters. Distances here stay far below the range of `u32`.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn rounded_meters(distance_meters: f64) -> u32 {
+    distance_meters.round() as u32
 }
