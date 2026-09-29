@@ -586,12 +586,15 @@ dependencies = [
  "postcard",
  "rustc-hash",
  "serde",
+ "serde_json",
+ "sha2 0.11.0",
  "smallvec",
  "smol_str",
  "tokio",
  "tokio-util",
  "tracing",
  "xxhash-rust",
+ "zip 8.6.0",
 ]
 
 [[package]]
