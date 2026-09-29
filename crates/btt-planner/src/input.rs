@@ -5,11 +5,11 @@ use btt_model::{
     LegTravelMode, StationSearchRadius, TransferAversion, Trip, TripPlace, TripPlaceId,
 };
 use chrono::NaiveDate;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 
 /// One end of a leg, with the time window that applies at that end.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct LegEndpoint {
     /// Point the traveller leaves from or travels to.
     pub coordinates: GeoCoordinates,
@@ -23,7 +23,7 @@ pub struct LegEndpoint {
 ///
 /// Two legs with equal inputs get the same result, which is what the cache relies on. Names of
 /// places are left out for that reason.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct LegPlanningInput {
     /// Where and when the leg starts.
     pub departure: LegEndpoint,
