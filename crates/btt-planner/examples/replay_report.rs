@@ -9,7 +9,7 @@ use std::io::Read;
 use std::sync::Arc;
 
 use btt_geo::TimeZoneFinder;
-use btt_model::{Journey, LegPlan, LegPlanningResult};
+use btt_model::{Journey, LegPlan, LegPlanStationIndex, LegPlanningResult, UnixTimeMinutes};
 use btt_planner::{LegPlanningInput, TimetableBundleRouter};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -98,7 +98,8 @@ fn read_entry(archive: &mut zip::ZipArchive<std::fs::File>, name: &str) -> Strin
     text
 }
 
-/// Describes a leg result by its chosen journey, such as "ICE 145 at 29864628".
+/// Describes a leg result by the rides of its chosen journey, such as
+/// "ICE 145 Amsterdam-Centraal 13 07:48 to Berlin Hbf 13 14:50", with days and times in UTC.
 fn describe_result(result: &LegPlanningResult) -> String {
     match result {
         LegPlanningResult::NoJourneyFound(reason) => format!("no journey ({reason:?})"),
@@ -107,17 +108,30 @@ fn describe_result(result: &LegPlanningResult) -> String {
 }
 
 fn describe_journey(plan: &LegPlan, journey: &Journey) -> String {
-    let trains: Vec<String> = journey
+    let station = |index: LegPlanStationIndex| {
+        plan.station_table
+            .get(usize::from(index.0))
+            .map_or("?", |station| station.name.as_str())
+    };
+    let moment = |time: UnixTimeMinutes| {
+        chrono::DateTime::from_timestamp(i64::from(time.0) * 60, 0).map_or_else(
+            || "?".to_owned(),
+            |moment| moment.format("%d %H:%M").to_string(),
+        )
+    };
+    journey
         .rides()
-        .map(|ride| format!("{} {}", ride.train_label.category, ride.train_label.number))
-        .collect();
-    let first_station = plan
-        .station_table
-        .get(usize::from(journey.first_ride.boarding_station.0))
-        .map_or("?", |station| station.name.as_str());
-    format!(
-        "{} from {first_station}, first departure at minute {} since 1970",
-        trains.join(", "),
-        journey.first_ride.departure_time.0
-    )
+        .map(|ride| {
+            format!(
+                "{} {} {} {} to {} {}",
+                ride.train_label.category,
+                ride.train_label.number,
+                station(ride.boarding_station),
+                moment(ride.departure_time),
+                station(ride.alighting_station),
+                moment(ride.arrival_time)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
