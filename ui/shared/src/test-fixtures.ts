@@ -14,10 +14,9 @@ export function place(id: number, name: string, latitude = 50, longitude = 10): 
 
 export const overnight: LegTravelMode = {
   Overnight: {
-    boarding_window: { start: 1140, length: 240 },
-    alighting_window: { start: 360, length: 240 },
+    bedtime: 1380,
+    wake_up_time: 390,
     accepted_berths: { Either: { preferred: null } },
-    minimum_time_on_night_train: null,
   },
 };
 

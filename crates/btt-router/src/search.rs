@@ -49,8 +49,13 @@ pub struct RaptorLegQuery<'a> {
 
 /// Decides which trips the router may board.
 pub trait BoardingFilter {
-    /// Returns whether the traveller may board a trip.
-    fn may_board(&self, raptor_route: RaptorRouteIndex, trip: BundleTripIndex) -> bool;
+    /// Returns whether the traveller may board a trip that departs at a moment.
+    fn may_board(
+        &self,
+        raptor_route: RaptorRouteIndex,
+        trip: BundleTripIndex,
+        departure: MinutesSinceBundleStart,
+    ) -> bool;
 }
 
 /// Allows every trip.
@@ -59,7 +64,12 @@ pub struct BoardAnyTrip;
 
 impl BoardingFilter for BoardAnyTrip {
     #[inline]
-    fn may_board(&self, _: RaptorRouteIndex, _: BundleTripIndex) -> bool {
+    fn may_board(
+        &self,
+        _: RaptorRouteIndex,
+        _: BundleTripIndex,
+        _: MinutesSinceBundleStart,
+    ) -> bool {
         true
     }
 }
@@ -628,7 +638,9 @@ impl<F: BoardingFilter> Search<'_, F> {
                 }
                 let trip = BundleTripIndex(route.first_trip_index + offset);
                 if self.bundle.trip_service_days(trip).runs_on(service_day)
-                    && self.filter.may_board(raptor_route, trip)
+                    && self
+                        .filter
+                        .may_board(raptor_route, trip, MinutesSinceBundleStart(departure))
                 {
                     best = Some(BoardedTrip {
                         trip_offset: offset,

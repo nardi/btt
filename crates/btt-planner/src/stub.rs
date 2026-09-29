@@ -47,17 +47,25 @@ impl StubBackend {
         let arrival_coordinates = input.arrival.coordinates;
         let departure_time_zone = self.time_zone_finder.time_zone_at(departure_coordinates);
         let arrival_time_zone = self.time_zone_finder.time_zone_at(arrival_coordinates);
-        // A night train leaves in the boarding window, which is usually later than the leg's
-        // departure window.
-        let departure_window_start = match input.travel_mode {
-            LegTravelMode::Daytime => input.departure.time_window.start,
-            LegTravelMode::Overnight(options) => options.boarding_window.start,
+        // A night train leaves two hours before bedtime, which is usually later than the leg's
+        // departure window. Bedtime before noon falls on the next day.
+        let (departure_minute, offers_berths) = match input.travel_mode {
+            LegTravelMode::Daytime => (
+                u32::from(input.departure.time_window.start.minutes_since_midnight()),
+                false,
+            ),
+            LegTravelMode::Overnight(options) => {
+                let bedtime = u32::from(options.bedtime.minutes_since_midnight());
+                let bedtime = if bedtime < 12 * 60 {
+                    bedtime + 24 * 60
+                } else {
+                    bedtime
+                };
+                (bedtime - 2 * 60, true)
+            }
         };
-        let departure_time = local_time_to_unix_minutes(
-            input.departure_date,
-            u32::from(departure_window_start.minutes_since_midnight()),
-            departure_time_zone,
-        );
+        let departure_time =
+            local_time_to_unix_minutes(input.departure_date, departure_minute, departure_time_zone);
         let ride_minutes = stub_ride_minutes(departure_coordinates, arrival_coordinates);
         let arrival_time =
             UnixTimeMinutes(departure_time.0.saturating_add(u32::from(ride_minutes)));
@@ -72,12 +80,13 @@ impl StubBackend {
                     category: "STUB".into(),
                     number: "1".into(),
                 },
-                offers_berths: false,
+                offers_berths,
                 intermediate_station_coordinates: SmallVec::new(),
             },
             later_rides: SmallVec::new(),
             arrival_footpath: None,
             egress: STUB_STATION_WAY,
+            sleeping_ride: offers_berths.then_some(0),
         };
         LegPlanningResult::Found(Box::new(LegPlan {
             chosen_journey: journey,

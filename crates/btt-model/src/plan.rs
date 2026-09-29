@@ -115,6 +115,10 @@ pub struct Journey {
     /// The way to the arrival place from the station the journey ends at, which is the end of
     /// `arrival_footpath` or else the last alighting station.
     pub egress: StationWay,
+    /// Position in `rides()` of the train with berths the traveller sleeps on, when one covers
+    /// at least half of the night of an overnight leg.
+    #[serde(default)]
+    pub sleeping_ride: Option<u8>,
 }
 
 impl Journey {

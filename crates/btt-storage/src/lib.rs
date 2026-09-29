@@ -417,6 +417,7 @@ mod tests {
                     distance_meters: 1700,
                     mode: WayToStationMode::LocalTransport,
                 },
+                sleeping_ride: None,
             },
             alternative_journeys: smallvec::SmallVec::new(),
             station_table: smallvec::smallvec![station("Köln Hbf"), station("Frankfurt Hbf")],

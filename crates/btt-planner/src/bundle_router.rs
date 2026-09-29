@@ -6,15 +6,18 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use btt_geo::{TimeZoneFinder, local_time_to_unix_minutes};
 use btt_model::{
-    ArrivalFootpath, DailyTimeWindow, DurationMinutes, Journey, JourneyChoice, LegPlan,
-    LegPlanStation, LegPlanStationIndex, LegPlanningResult, LegTravelMode, NoJourneyReason,
+    ArrivalFootpath, DurationMinutes, Journey, JourneyChoice, LegPlan, LegPlanStation,
+    LegPlanStationIndex, LegPlanningResult, LegTravelMode, NoJourneyReason, OvernightLegOptions,
     StationWay, TrainLabel, TrainRide, TransferAndRide, UnixTimeMinutes, WayToStationMode,
 };
 use btt_router::{
-    BoardAnyTrip, CandidateStation, MinutesSinceBundleStart, ParetoJourneySet, RaptorJourney,
-    RaptorLegQuery, RaptorSearchBuffers, SearchIndex, search_leg_journeys,
+    BoardAnyTrip, BoardingFilter, CandidateStation, MinutesSinceBundleStart, ParetoJourneySet,
+    RaptorJourney, RaptorLegQuery, RaptorSearchBuffers, SearchIndex, search_leg_journeys,
 };
-use btt_timetable::{BundleLoadError, BundleStationIndex, LoadedTimetableBundle, StationIndex};
+use btt_timetable::{
+    BundleLoadError, BundleStationIndex, BundleTripIndex, LoadedTimetableBundle, RaptorRouteIndex,
+    StationIndex,
+};
 use chrono::NaiveDate;
 use smallvec::SmallVec;
 
@@ -39,6 +42,41 @@ const PARALLEL_WINDOW_SLICES: u32 = 4;
 
 /// Shortest part of the departure window worth a thread of its own, in minutes.
 const SHORTEST_WINDOW_SLICE_MINUTES: u32 = 60;
+
+/// Length of the departure window of an overnight leg, which ends at bedtime. Night trains
+/// often leave in the early evening, and the way to them may start with a daytime train.
+const OVERNIGHT_DEPARTURE_WINDOW_MINUTES: u32 = 8 * 60;
+
+/// Returns the local bedtime of an overnight leg in minutes since midnight of the departure
+/// date. A bedtime before noon falls after midnight, so it counts on the next day.
+fn bedtime_minute(options: OvernightLegOptions) -> u32 {
+    let bedtime = u32::from(options.bedtime.minutes_since_midnight());
+    if bedtime < MINUTES_PER_DAY / 2 {
+        bedtime + MINUTES_PER_DAY
+    } else {
+        bedtime
+    }
+}
+
+/// Allows trains with berths at any time and other trains only when they depart outside the
+/// night, so a seated train through the night cannot push a night train out of the Pareto set.
+struct NightBoardingFilter<'a> {
+    /// The bundle that says which trips have berths.
+    bundle: &'a LoadedTimetableBundle,
+    /// The night in bundle minutes.
+    night: std::ops::Range<u32>,
+}
+
+impl BoardingFilter for NightBoardingFilter<'_> {
+    fn may_board(
+        &self,
+        _: RaptorRouteIndex,
+        trip: BundleTripIndex,
+        departure: MinutesSinceBundleStart,
+    ) -> bool {
+        !self.night.contains(&departure.0) || self.bundle.trip_offers_berths(trip)
+    }
+}
 
 /// Plans legs on a loaded bundle.
 pub struct TimetableBundleRouter {
@@ -141,7 +179,12 @@ impl TimetableBundleRouter {
             .iter()
             .filter_map(|ranked| {
                 Some(RankedJourneyExplanation {
-                    journey: self.journey(ranked.journey, input, &mut stations)?,
+                    journey: self.journey(
+                        ranked.journey,
+                        input,
+                        ranking.night.as_ref(),
+                        &mut stations,
+                    )?,
                     cost: ranked.cost,
                     cost_inputs: ranked.cost_inputs,
                 })
@@ -183,17 +226,43 @@ impl TimetableBundleRouter {
         if arrival_candidates.is_empty() {
             return Err(NoJourneyReason::NoStationNearArrivalPlace);
         }
-        let journeys = self.search_in_parallel(
+        let mut journeys = self.search_in_parallel(
             &departure_candidates,
             &arrival_candidates,
-            departure_window,
+            departure_window.clone(),
             input,
+            &BoardAnyTrip,
             should_stop,
         );
+        let night = self.night_in_bundle_minutes(input);
+        if let Some(night) = &night {
+            // A second search keeps night trains that the first one prunes, because a seated
+            // train that leaves later or arrives earlier beats them in time. The ranking then
+            // weighs the sleep against the time.
+            let filter = NightBoardingFilter {
+                bundle: &self.bundle,
+                night: night.clone(),
+            };
+            let night_journeys = self.search_in_parallel(
+                &departure_candidates,
+                &arrival_candidates,
+                departure_window,
+                input,
+                &filter,
+                should_stop,
+            );
+            for journey in night_journeys.journeys {
+                if !journeys.journeys.contains(&journey) {
+                    journeys.journeys.push(journey);
+                }
+            }
+            journeys.journeys.sort_by_key(|journey| journey.arrival);
+        }
         Ok(LegSearch {
             departure_candidates,
             arrival_candidates,
             journeys,
+            night,
         })
     }
 
@@ -211,7 +280,8 @@ impl TimetableBundleRouter {
             .journeys
             .iter()
             .map(|journey| {
-                let cost_inputs = journey_cost_inputs(journey, &arrival_window);
+                let cost_inputs =
+                    self.journey_cost_inputs(journey, &arrival_window, search.night.as_ref());
                 RankedJourney {
                     journey,
                     cost_inputs,
@@ -236,6 +306,7 @@ impl TimetableBundleRouter {
         JourneyRanking {
             journeys,
             follows_traveller_choice: chosen_position.is_some(),
+            night: search.night.clone(),
         }
     }
 
@@ -249,13 +320,17 @@ impl TimetableBundleRouter {
             return LegPlanningResult::NoJourneyFound(NoJourneyReason::NoConnectionInWindow);
         };
         let mut stations = LegPlanStations::default();
-        let Some(chosen_journey) = self.journey(chosen.journey, input, &mut stations) else {
+        let Some(chosen_journey) =
+            self.journey(chosen.journey, input, ranking.night.as_ref(), &mut stations)
+        else {
             return LegPlanningResult::NoJourneyFound(NoJourneyReason::NoConnectionInWindow);
         };
         let alternative_journeys = alternatives
             .iter()
             .take(MAXIMUM_ALTERNATIVES)
-            .filter_map(|ranked| self.journey(ranked.journey, input, &mut stations))
+            .filter_map(|ranked| {
+                self.journey(ranked.journey, input, ranking.night.as_ref(), &mut stations)
+            })
             .collect();
         LegPlanningResult::Found(Box::new(LegPlan {
             chosen_journey,
@@ -287,12 +362,13 @@ impl TimetableBundleRouter {
     /// Range search reuses labels from later departures within one part only, so the parts do
     /// more work in total than one search over the whole window. They finish sooner because
     /// they run at the same time, and the merged journeys are the same.
-    fn search_in_parallel(
+    fn search_in_parallel<F: BoardingFilter + Sync>(
         &self,
         departure_candidates: &[CandidateStation],
         arrival_candidates: &[CandidateStation],
         departure_window: std::ops::Range<MinutesSinceBundleStart>,
         input: &LegPlanningInput,
+        boarding_filter: &F,
         should_stop: &(impl Fn() -> bool + Sync),
     ) -> ParetoJourneySet {
         let start = departure_window.start.0;
@@ -323,7 +399,7 @@ impl TimetableBundleRouter {
                 &self.bundle,
                 &self.search_index,
                 &query,
-                &BoardAnyTrip,
+                boarding_filter,
                 &mut buffers,
                 should_stop,
             );
@@ -342,47 +418,71 @@ impl TimetableBundleRouter {
     }
 
     /// Turns the local departure window of a leg into bundle minutes. A night train leaves in
-    /// its boarding window. Returns `None` when the window lies outside the bundle.
+    /// the hours before bedtime. Returns `None` when the window lies outside the bundle.
     fn departure_window(
         &self,
         input: &LegPlanningInput,
     ) -> Option<std::ops::Range<MinutesSinceBundleStart>> {
-        let window: DailyTimeWindow = match input.travel_mode {
-            LegTravelMode::Daytime => input.departure.time_window,
-            LegTravelMode::Overnight(options) => options.boarding_window,
+        let (start_minute, end_minute) = match input.travel_mode {
+            LegTravelMode::Daytime => {
+                let window = input.departure.time_window;
+                let start = u32::from(window.start.minutes_since_midnight());
+                (start, start + u32::from(window.length.minutes()))
+            }
+            LegTravelMode::Overnight(options) => {
+                let bedtime = bedtime_minute(options);
+                (bedtime - OVERNIGHT_DEPARTURE_WINDOW_MINUTES, bedtime)
+            }
         };
         let time_zone = self
             .time_zone_finder
             .time_zone_at(input.departure.coordinates);
-        let start_minute = u32::from(window.start.minutes_since_midnight());
-        let start = local_time_to_unix_minutes(input.departure_date, start_minute, time_zone);
-        let end = local_time_to_unix_minutes(
-            input.departure_date,
-            start_minute + u32::from(window.length.minutes()),
-            time_zone,
-        );
-        let bundle_minutes =
-            |moment: UnixTimeMinutes| moment.0.checked_sub(self.bundle_start_unix_minutes);
-        let start = bundle_minutes(start)?;
-        let end = bundle_minutes(end)?;
+        let bundle_minutes = |minute: u32| {
+            local_time_to_unix_minutes(input.departure_date, minute, time_zone)
+                .0
+                .checked_sub(self.bundle_start_unix_minutes)
+        };
+        let start = bundle_minutes(start_minute)?;
+        let end = bundle_minutes(end_minute)?;
         let bundle_end = u32::from(self.bundle.validity_days()) * MINUTES_PER_DAY;
         (start < bundle_end)
             .then_some(MinutesSinceBundleStart(start)..MinutesSinceBundleStart(end.min(bundle_end)))
     }
 
+    /// Returns the night of an overnight leg in bundle minutes, from bedtime at the departure
+    /// place to the wake-up time at the arrival place on the morning after the departure date.
+    /// Returns `None` for a daytime leg. Moments before the bundle start count as its start.
+    fn night_in_bundle_minutes(&self, input: &LegPlanningInput) -> Option<std::ops::Range<u32>> {
+        let LegTravelMode::Overnight(options) = input.travel_mode else {
+            return None;
+        };
+        let bundle_minutes = |date, minute, coordinates| {
+            let time_zone = self.time_zone_finder.time_zone_at(coordinates);
+            local_time_to_unix_minutes(date, minute, time_zone)
+                .0
+                .saturating_sub(self.bundle_start_unix_minutes)
+        };
+        let bedtime = bundle_minutes(
+            input.departure_date,
+            bedtime_minute(options),
+            input.departure.coordinates,
+        );
+        let wake_up_time = bundle_minutes(
+            input.departure_date + chrono::Days::new(1),
+            u32::from(options.wake_up_time.minutes_since_midnight()),
+            input.arrival.coordinates,
+        );
+        Some(bedtime..wake_up_time.max(bedtime))
+    }
+
     /// Returns the arrival window of a leg in bundle minutes. A daytime leg arrives on its
-    /// departure date, and a night train leaves its passengers the morning after, in its
-    /// alighting window. Moments before the bundle start count as its start.
+    /// departure date, and an overnight leg on the day after. Moments before the bundle start
+    /// count as its start.
     fn arrival_window_in_bundle_minutes(&self, input: &LegPlanningInput) -> std::ops::Range<u32> {
-        let (window, date) = match input.travel_mode {
-            LegTravelMode::Daytime => (input.arrival.time_window, input.departure_date),
-            LegTravelMode::Overnight(options) => (
-                options.alighting_window,
-                input
-                    .departure_date
-                    .succ_opt()
-                    .unwrap_or(input.departure_date),
-            ),
+        let window = input.arrival.time_window;
+        let date = match input.travel_mode {
+            LegTravelMode::Daytime => input.departure_date,
+            LegTravelMode::Overnight(_) => input.departure_date + chrono::Days::new(1),
         };
         let time_zone = self
             .time_zone_finder
@@ -395,6 +495,64 @@ impl TimetableBundleRouter {
                 .saturating_sub(self.bundle_start_unix_minutes)
         };
         bundle_minutes(start_minute)..bundle_minutes(end_minute)
+    }
+
+    /// Finds the train with berths that covers most of the night, with the minutes it covers.
+    /// Only one train counts, because changing trains wakes the traveller up.
+    fn sleeping_ride(
+        &self,
+        journey: &RaptorJourney,
+        night: &std::ops::Range<u32>,
+    ) -> Option<(usize, u32)> {
+        journey
+            .rides
+            .iter()
+            .enumerate()
+            .filter(|(_, ride)| self.bundle.trip_offers_berths(ride.trip))
+            .map(|(position, ride)| {
+                let covered = ride
+                    .arrival
+                    .0
+                    .min(night.end)
+                    .saturating_sub(ride.departure.0.max(night.start));
+                (position, covered)
+            })
+            .filter(|&(_, covered)| covered > 0)
+            .max_by_key(|&(_, covered)| covered)
+    }
+
+    /// Collects what the journey cost depends on.
+    ///
+    /// A footpath at the end counts as a transfer. Beyond a short walk it stands for local
+    /// transit, and even a walk to another station is a change the traveller has to make.
+    fn journey_cost_inputs(
+        &self,
+        journey: &RaptorJourney,
+        arrival_window: &std::ops::Range<u32>,
+        night: Option<&std::ops::Range<u32>>,
+    ) -> JourneyCostInputs {
+        let footpath_minutes = arrival_footpath_minutes(journey);
+        let way_to_station_minutes = u32::from(journey.departure_candidate.time_to_place_minutes)
+            + footpath_minutes.unwrap_or(0)
+            + u32::from(journey.arrival_candidate.time_to_place_minutes);
+        let train_changes =
+            u32::try_from(journey.ride_count().saturating_sub(1)).unwrap_or(u32::MAX);
+        let arrival = journey.arrival.0;
+        let (sleeping_minutes, night_minutes_awake) = night.map_or((0, 0), |night| {
+            let sleeping = self
+                .sleeping_ride(journey, night)
+                .map_or(0, |(_, covered)| covered);
+            (sleeping, (night.end - night.start) - sleeping)
+        });
+        JourneyCostInputs {
+            door_to_door_minutes: arrival.saturating_sub(journey.departure.0),
+            way_to_station_minutes,
+            transfer_count: train_changes + u32::from(footpath_minutes.is_some()),
+            minutes_outside_arrival_window: arrival_window.start.saturating_sub(arrival)
+                + arrival.saturating_sub(arrival_window.end),
+            sleeping_minutes,
+            night_minutes_awake,
+        }
     }
 
     /// Returns the stations within a place's search radius that have service on any of the
@@ -426,6 +584,7 @@ impl TimetableBundleRouter {
         &self,
         journey: &RaptorJourney,
         input: &LegPlanningInput,
+        night: Option<&std::ops::Range<u32>>,
         stations: &mut LegPlanStations,
     ) -> Option<Journey> {
         let mut rides = journey.rides.iter();
@@ -471,6 +630,12 @@ impl TimetableBundleRouter {
                     .haversine_distance_meters(coordinates(journey.arrival_candidate.station)),
                 journey.arrival_candidate.time_to_place_minutes,
             ),
+            sleeping_ride: night.and_then(|night| {
+                let (position, covered) = self.sleeping_ride(journey, night)?;
+                (covered * 2 >= night.end - night.start)
+                    .then(|| u8::try_from(position).ok())
+                    .flatten()
+            }),
         })
     }
 
@@ -557,29 +722,6 @@ fn arrival_footpath_minutes(journey: &RaptorJourney) -> Option<u32> {
     )
 }
 
-/// Collects what the journey cost depends on.
-///
-/// A footpath at the end counts as a transfer. Beyond a short walk it stands for local transit,
-/// and even a walk to another station is a change the traveller has to make.
-fn journey_cost_inputs(
-    journey: &RaptorJourney,
-    arrival_window: &std::ops::Range<u32>,
-) -> JourneyCostInputs {
-    let footpath_minutes = arrival_footpath_minutes(journey);
-    let way_to_station_minutes = u32::from(journey.departure_candidate.time_to_place_minutes)
-        + footpath_minutes.unwrap_or(0)
-        + u32::from(journey.arrival_candidate.time_to_place_minutes);
-    let train_changes = u32::try_from(journey.ride_count().saturating_sub(1)).unwrap_or(u32::MAX);
-    let arrival = journey.arrival.0;
-    JourneyCostInputs {
-        door_to_door_minutes: arrival.saturating_sub(journey.departure.0),
-        way_to_station_minutes,
-        transfer_count: train_changes + u32::from(footpath_minutes.is_some()),
-        minutes_outside_arrival_window: arrival_window.start.saturating_sub(arrival)
-            + arrival.saturating_sub(arrival_window.end),
-    }
-}
-
 /// Distance from which the estimates assume local transport instead of walking, matching the
 /// builder's footpaths.
 const LONGEST_WALK_METERS: f64 = 1000.0;
@@ -618,8 +760,11 @@ struct LegSearch {
     departure_candidates: SmallVec<[CandidateStation; 16]>,
     /// Stations near the arrival place with their egress times.
     arrival_candidates: SmallVec<[CandidateStation; 16]>,
-    /// The Pareto set of journeys.
+    /// The journeys: the Pareto set, and for an overnight leg also the Pareto set of the
+    /// search that keeps night trains.
     journeys: ParetoJourneySet,
+    /// The night of an overnight leg in bundle minutes.
+    night: Option<std::ops::Range<u32>>,
 }
 
 /// A journey of a search with its cost.
@@ -638,6 +783,8 @@ struct JourneyRanking<'search> {
     journeys: Vec<RankedJourney<'search>>,
     /// Whether the first journey is the traveller's pick.
     follows_traveller_choice: bool,
+    /// The night of an overnight leg in bundle minutes.
+    night: Option<std::ops::Range<u32>>,
 }
 
 /// Rounds a distance to whole meters. Distances here stay far below the range of `u32`.

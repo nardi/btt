@@ -15,12 +15,13 @@
     explainStationWay,
     formatDate,
     formatDuration,
+    formatMinutesOfDay,
     formatStationWay,
     formatTimeInZone,
+    parseMinutesOfDay,
   } from "../format";
   import type { LegRow } from "../itinerary";
   import type { LegViewState } from "../trip-source";
-  import TimeWindowField from "./TimeWindowField.svelte";
 
   let {
     leg,
@@ -77,10 +78,9 @@
 
   /** Options a leg gets when the user first turns on the night train. */
   const defaultOvernightOptions: OvernightLegOptions = {
-    boarding_window: { start: 19 * 60, length: 5 * 60 },
-    alighting_window: { start: 6 * 60, length: 4 * 60 },
+    bedtime: 23 * 60,
+    wake_up_time: 6 * 60 + 30,
     accepted_berths: { Either: { preferred: null } },
-    minimum_time_on_night_train: null,
   };
 
   const overnightOptions = $derived(
@@ -102,6 +102,14 @@
   function setOvernightOptions(changes: Partial<OvernightLegOptions>) {
     if (overnightOptions !== null) {
       setTravelMode({ Overnight: { ...overnightOptions, ...changes } });
+    }
+  }
+
+  /** Sets the bedtime or wake-up time when the input holds a valid time. */
+  function setOvernightTime(field: "bedtime" | "wake_up_time", text: string) {
+    const minutes = parseMinutesOfDay(text);
+    if (minutes !== null) {
+      setOvernightOptions({ [field]: minutes });
     }
   }
 
@@ -182,18 +190,24 @@
 
   {#if overnightOptions !== null}
     <div class="overnight-options">
-      <TimeWindowField
-        label="Board between"
-        window={overnightOptions.boarding_window}
-        disabled={onEdit === undefined}
-        onChange={(boarding_window) => setOvernightOptions({ boarding_window })}
-      />
-      <TimeWindowField
-        label="Leave between"
-        window={overnightOptions.alighting_window}
-        disabled={onEdit === undefined}
-        onChange={(alighting_window) => setOvernightOptions({ alighting_window })}
-      />
+      <label class="time-field">
+        <span class="label">In bed by</span>
+        <input
+          type="time"
+          value={formatMinutesOfDay(overnightOptions.bedtime)}
+          disabled={onEdit === undefined}
+          onchange={(event) => setOvernightTime("bedtime", event.currentTarget.value)}
+        />
+      </label>
+      <label class="time-field">
+        <span class="label">Up at</span>
+        <input
+          type="time"
+          value={formatMinutesOfDay(overnightOptions.wake_up_time)}
+          disabled={onEdit === undefined}
+          onchange={(event) => setOvernightTime("wake_up_time", event.currentTarget.value)}
+        />
+      </label>
       <label>
         Berth
         <select
@@ -226,7 +240,9 @@
           <li>
             <span class="time">{stationTime(legPlan, ride.boarding_station, ride.departure_time)}</span>
             {stationName(legPlan, ride.boarding_station)}
-            <span class="train">{ride.train_label.category} {ride.train_label.number}</span>
+            <span class="train" class:sleeping={journey.sleeping_ride === rideIndex}>
+              {ride.train_label.category} {ride.train_label.number}
+            </span>
             <span class="time">{stationTime(legPlan, ride.alighting_station, ride.arrival_time)}</span>
             {stationName(legPlan, ride.alighting_station)}
           </li>
@@ -258,6 +274,13 @@
           </button>
         {/if}
       </span>
+      {#if overnightOptions !== null && journey.sleeping_ride === null}
+        <span class="night-note">
+          No night train with berths covers most of the night from
+          {formatMinutesOfDay(overnightOptions.bedtime)} to
+          {formatMinutesOfDay(overnightOptions.wake_up_time)} on this date.
+        </span>
+      {/if}
       {#if legPlan.follows_traveller_choice}
         <span class="choice-note">
           Your pick ·
@@ -358,6 +381,28 @@
     padding: 0 var(--space-1);
     border-radius: 4px;
     background: var(--color-surface-muted);
+  }
+
+  /* The train the traveller sleeps on, in the purple of night trains on the map. */
+  .train.sleeping {
+    background: var(--color-night-train);
+    color: white;
+  }
+
+  .time-field {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .time-field .label {
+    min-width: 7em;
+    color: var(--color-text-muted);
+  }
+
+  .night-note {
+    display: block;
+    color: var(--color-danger);
   }
 
   .pending,

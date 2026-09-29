@@ -5,8 +5,8 @@ use std::num::NonZeroU8;
 
 use btt_model::edit::NewTripPlace;
 use btt_model::{
-    AcceptedBerths, DailyTimeWindow, GeoCoordinates, Itinerary, LegTravelMode, LocalTimeOfDay,
-    OvernightLegOptions, PlaceInsertionPoint, PlaceStay, StationSearchRadius, Trip, TripEdit,
+    GeoCoordinates, Itinerary, LegTravelMode, OvernightLegOptions, PlaceInsertionPoint, PlaceStay,
+    StationSearchRadius, Trip, TripEdit,
 };
 use chrono::NaiveDate;
 use proptest::prelude::*;
@@ -50,13 +50,7 @@ fn positional_edit() -> impl Strategy<Value = PositionalEdit> {
 }
 
 fn overnight() -> LegTravelMode {
-    let time = |hour| LocalTimeOfDay::from_hour_and_minute(hour, 0).unwrap();
-    LegTravelMode::Overnight(OvernightLegOptions {
-        boarding_window: DailyTimeWindow::from_start_and_end(time(19), time(23)),
-        alighting_window: DailyTimeWindow::from_start_and_end(time(6), time(10)),
-        accepted_berths: AcceptedBerths::Either { preferred: None },
-        minimum_time_on_night_train: None,
-    })
+    LegTravelMode::Overnight(OvernightLegOptions::DEFAULT)
 }
 
 /// Turns a positional edit into a trip edit for the current itinerary.

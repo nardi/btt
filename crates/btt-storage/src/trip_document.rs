@@ -13,7 +13,35 @@ type TripDocumentMigration = fn(&mut Value);
 ///
 /// A change to the `Trip` layout adds a function here, bumps `CURRENT_TRIP_SCHEMA_VERSION` and
 /// adds a fixture for the old version.
-const TRIP_DOCUMENT_MIGRATIONS: [TripDocumentMigration; 1] = [wrap_window_overrides];
+const TRIP_DOCUMENT_MIGRATIONS: [TripDocumentMigration; 2] =
+    [wrap_window_overrides, night_windows_to_bedtime];
+
+/// Version 3 describes a night train by bedtime and wake-up time instead of a boarding and an
+/// alighting window. Bedtime becomes the end of the boarding window, the latest moment to be
+/// on the train, and the wake-up time the start of the alighting window.
+fn night_windows_to_bedtime(document: &mut Value) {
+    match document {
+        Value::Object(fields) => {
+            if let (Some(boarding), Some(alighting)) =
+                (fields.get("boarding_window"), fields.get("alighting_window"))
+            {
+                let minutes = |window: &Value, key: &str| window.get(key).and_then(Value::as_u64);
+                let bedtime = minutes(boarding, "start")
+                    .zip(minutes(boarding, "length"))
+                    .map_or(23 * 60, |(start, length)| (start + length) % (24 * 60));
+                let wake_up_time = minutes(alighting, "start").unwrap_or(6 * 60 + 30);
+                fields.remove("boarding_window");
+                fields.remove("alighting_window");
+                fields.remove("minimum_time_on_night_train");
+                fields.insert("bedtime".to_owned(), Value::from(bedtime));
+                fields.insert("wake_up_time".to_owned(), Value::from(wake_up_time));
+            }
+            fields.values_mut().for_each(night_windows_to_bedtime);
+        }
+        Value::Array(items) => items.iter_mut().for_each(night_windows_to_bedtime),
+        _ => {}
+    }
+}
 
 /// Version 2 lets a place override only its arrival or departure window. A version 1 override
 /// always held both, so it becomes the `Both` case.
@@ -81,12 +109,15 @@ pub fn trip_from_document(document: &str) -> Result<Trip, StorageError> {
 
 #[cfg(test)]
 mod tests {
-    use btt_model::PlaceWindowOverride;
+    use btt_model::{LegTravelMode, PlaceWindowOverride};
 
     use super::*;
 
     /// A document written by schema version 1. It must keep loading in every later version.
     const TRIP_DOCUMENT_VERSION_1: &str = include_str!("../tests/fixtures/trip_v1.json");
+
+    /// A document written by schema version 2, with a night leg in the windows of that version.
+    const TRIP_DOCUMENT_VERSION_2: &str = include_str!("../tests/fixtures/trip_v2.json");
 
     #[test]
     fn every_schema_version_fixture_loads() {
@@ -103,6 +134,16 @@ mod tests {
             vienna.window_override,
             Some(PlaceWindowOverride::Both(_))
         ));
+
+        // A night leg that boarded between 19:00 and 24:00 and left between 06:00 and 10:00
+        // goes to bed at midnight and wakes up at 06:00.
+        let trip = trip_from_document(TRIP_DOCUMENT_VERSION_2).unwrap();
+        let night_leg = trip.itinerary.legs().next().unwrap();
+        let LegTravelMode::Overnight(options) = night_leg.travel_mode else {
+            panic!("the first leg of the version 2 fixture is a night leg");
+        };
+        assert_eq!(options.bedtime.minutes_since_midnight(), 0);
+        assert_eq!(options.wake_up_time.minutes_since_midnight(), 360);
     }
 
     #[test]

@@ -29,6 +29,7 @@ const viennaToRome: LegPlan = {
     later_rides: [],
     arrival_footpath: null,
     egress: { duration: 0, distance_meters: 0, mode: "Walk" },
+    sleeping_ride: null,
   },
   alternative_journeys: [],
   follows_traveller_choice: false,

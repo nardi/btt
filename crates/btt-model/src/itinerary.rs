@@ -10,7 +10,7 @@ use specta::Type;
 
 use crate::bounded::bounded_integer;
 use crate::coordinates::GeoCoordinates;
-use crate::time::{DailyTimeWindow, DurationMinutes, TravelDayWindows};
+use crate::time::{DailyTimeWindow, DurationMinutes, LocalTimeOfDay, TravelDayWindows};
 
 /// Identifies a place within one trip. Unique within that trip only.
 #[derive(
@@ -169,17 +169,36 @@ pub enum AcceptedBerths {
     },
 }
 
-/// Options for a leg that includes one night train.
+/// Options for a leg that includes one night train. The traveller sleeps on a train with
+/// berths from bedtime to wake-up time, and trains before and after it may bring them to it
+/// and take them on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
 pub struct OvernightLegOptions {
-    /// Local-time window in which the night train is boarded.
-    pub boarding_window: DailyTimeWindow,
-    /// Local-time window in which the night train is left.
-    pub alighting_window: DailyTimeWindow,
+    /// Local time at the departure place by which the traveller is on the night train.
+    pub bedtime: LocalTimeOfDay,
+    /// Local time at the arrival place until which the traveller stays on the night train, on
+    /// the morning after departure.
+    pub wake_up_time: LocalTimeOfDay,
     /// Berth types the traveller accepts.
     pub accepted_berths: AcceptedBerths,
-    /// Shortest acceptable time on the night train.
-    pub minimum_time_on_night_train: Option<DurationMinutes>,
+}
+
+impl OvernightLegOptions {
+    /// Options for a leg that just became overnight: in bed by 23:00, up at 06:30.
+    pub const DEFAULT: Self = Self {
+        bedtime: time_of_day(23, 0),
+        wake_up_time: time_of_day(6, 30),
+        accepted_berths: AcceptedBerths::Either { preferred: None },
+    };
+}
+
+/// Returns a valid time of day in a constant. An invalid one would be a typo in this file, and
+/// becomes midnight instead of a panic.
+const fn time_of_day(hour: u16, minute: u16) -> LocalTimeOfDay {
+    match LocalTimeOfDay::from_hour_and_minute(hour, minute) {
+        Ok(time) => time,
+        Err(_) => LocalTimeOfDay::MIDNIGHT,
+    }
 }
 
 /// Whether a leg happens during the day or includes a night train.
@@ -364,13 +383,7 @@ pub(crate) mod tests {
     }
 
     pub(crate) fn overnight() -> LegTravelMode {
-        let time = |hour| LocalTimeOfDay::from_hour_and_minute(hour, 0).unwrap();
-        LegTravelMode::Overnight(OvernightLegOptions {
-            boarding_window: DailyTimeWindow::from_start_and_end(time(19), time(23)),
-            alighting_window: DailyTimeWindow::from_start_and_end(time(6), time(10)),
-            accepted_berths: AcceptedBerths::Either { preferred: None },
-            minimum_time_on_night_train: None,
-        })
+        LegTravelMode::Overnight(OvernightLegOptions::DEFAULT)
     }
 
     fn nights(count: u8) -> PlaceStay {

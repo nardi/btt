@@ -1,0 +1,103 @@
+{
+  "schema_version": 2,
+  "trip": {
+    "id": "01a0e950-bd03-7381-a0d9-a273f8e3d460",
+    "name": "test",
+    "start_date": "2026-10-21",
+    "itinerary": {
+      "Route": {
+        "origin": {
+          "id": 1,
+          "name": "Amsterdam",
+          "coordinates": {
+            "latitude": 52.36735,
+            "longitude": 4.83633
+          },
+          "station_search_radius": 2400,
+          "window_override": null
+        },
+        "via_places": [
+          {
+            "arriving_leg_travel_mode": {
+              "Overnight": {
+                "boarding_window": {
+                  "start": 1140,
+                  "length": 300
+                },
+                "alighting_window": {
+                  "start": 360,
+                  "length": 240
+                },
+                "accepted_berths": {
+                  "Either": {
+                    "preferred": null
+                  }
+                },
+                "minimum_time_on_night_train": null
+              }
+            },
+            "place": {
+              "id": 3,
+              "name": "Vienna",
+              "coordinates": {
+                "latitude": 48.1886,
+                "longitude": 16.37428
+              },
+              "station_search_radius": 1900,
+              "window_override": null
+            },
+            "stay": {
+              "Nights": 1
+            }
+          }
+        ],
+        "final_leg_travel_mode": "Daytime",
+        "destination": {
+          "id": 2,
+          "name": "Berlin",
+          "coordinates": {
+            "latitude": 52.494748,
+            "longitude": 13.450285
+          },
+          "station_search_radius": 1300,
+          "window_override": {
+            "Both": {
+              "departure": {
+                "start": 420,
+                "length": 480
+              },
+              "arrival": {
+                "start": 420,
+                "length": 960
+              }
+            }
+          }
+        }
+      }
+    },
+    "preferences": {
+      "default_windows": {
+        "departure": {
+          "start": 420,
+          "length": 780
+        },
+        "arrival": {
+          "start": 420,
+          "length": 960
+        }
+      },
+      "transfer_aversion": 50,
+      "default_same_day_stay": {
+        "minimum": 120,
+        "maximum_beyond_minimum": null
+      },
+      "pass_policy": "PreferPass",
+      "minimum_transfer_time": 10,
+      "traveller_ids": [],
+      "travel_class": "Second",
+      "price_weight": 0
+    },
+    "next_place_id": 4,
+    "chosen_journeys": []
+  }
+}

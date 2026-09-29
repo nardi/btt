@@ -202,6 +202,11 @@ export type Journey = {
 	 *  `arrival_footpath` or else the last alighting station.
 	 */
 	egress: StationWay,
+	/**
+	 *  Position in `rides()` of the train with berths the traveller sleeps on, when one covers
+	 *  at least half of the night of an overnight leg.
+	 */
+	sleeping_ride?: number | null,
 };
 
 /**
@@ -290,16 +295,21 @@ export type NoJourneyReason =
 /**  The travel date lies outside the days the timetable covers. */
 "TravelDateOutsideTimetable";
 
-/**  Options for a leg that includes one night train. */
+/**
+ *  Options for a leg that includes one night train. The traveller sleeps on a train with
+ *  berths from bedtime to wake-up time, and trains before and after it may bring them to it
+ *  and take them on.
+ */
 export type OvernightLegOptions = {
-	/**  Local-time window in which the night train is boarded. */
-	boarding_window: DailyTimeWindow,
-	/**  Local-time window in which the night train is left. */
-	alighting_window: DailyTimeWindow,
+	/**  Local time at the departure place by which the traveller is on the night train. */
+	bedtime: LocalTimeOfDay,
+	/**
+	 *  Local time at the arrival place until which the traveller stays on the night train, on
+	 *  the morning after departure.
+	 */
+	wake_up_time: LocalTimeOfDay,
 	/**  Berth types the traveller accepts. */
 	accepted_berths: AcceptedBerths,
-	/**  Shortest acceptable time on the night train. */
-	minimum_time_on_night_train: DurationMinutes | null,
 };
 
 /**  Where a new place goes in the itinerary. */

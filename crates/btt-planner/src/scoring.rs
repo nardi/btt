@@ -16,17 +16,23 @@ pub struct ScoringWeights {
     /// How much each minute of arriving outside the arrival window costs, in percent of a
     /// minute on a train.
     pub arrival_window_miss_percent: u32,
+    /// How much each minute of the night spent off a train with berths costs, in percent of a
+    /// minute on a train. Only overnight legs have a night.
+    pub night_awake_percent: u32,
 }
 
 impl ScoringWeights {
     /// Weights for when the user has not tuned anything. One transfer costs from 10 minutes at
     /// no aversion to two hours at full aversion, a minute to or from a station counts one and
-    /// a half times, and a minute of arriving outside the window counts twice.
+    /// a half times, and a minute of arriving outside the window counts twice. A minute of the
+    /// night without a berth counts three times, so missing a whole night of 7.5 hours costs
+    /// almost a day of travel.
     pub const DEFAULT: Self = Self {
         transfer_base_minutes: 10,
         transfer_aversion_minutes: 110,
         way_to_station_percent: 150,
         arrival_window_miss_percent: 200,
+        night_awake_percent: 300,
     };
 }
 
@@ -41,6 +47,11 @@ pub struct JourneyCostInputs {
     pub transfer_count: u32,
     /// Minutes by which the arrival at the place falls before or after the arrival window.
     pub minutes_outside_arrival_window: u32,
+    /// Minutes of the night between bedtime and wake-up time spent on the train with berths the
+    /// traveller sleeps on. They are part of the door-to-door time but cost nothing.
+    pub sleeping_minutes: u32,
+    /// Minutes of the night not spent on that train.
+    pub night_minutes_awake: u32,
 }
 
 /// Returns the cost of a journey in minutes. Lower is better.
@@ -57,10 +68,14 @@ pub fn journey_cost(
         inputs.way_to_station_minutes * weights.way_to_station_percent.saturating_sub(100) / 100;
     let arrival_window_miss =
         inputs.minutes_outside_arrival_window * weights.arrival_window_miss_percent / 100;
-    inputs.door_to_door_minutes
+    let night_awake = inputs.night_minutes_awake * weights.night_awake_percent / 100;
+    inputs
+        .door_to_door_minutes
+        .saturating_sub(inputs.sleeping_minutes)
         + way_to_station_extra
         + inputs.transfer_count * transfer_penalty
         + arrival_window_miss
+        + night_awake
 }
 
 #[cfg(test)]
@@ -84,6 +99,8 @@ mod tests {
                 way_to_station_minutes: way_to_station,
                 transfer_count: transfers,
                 minutes_outside_arrival_window,
+                sleeping_minutes: 0,
+                night_minutes_awake: 0,
             },
             TransferAversion::new(aversion).unwrap(),
             ScoringWeights::DEFAULT,
@@ -95,6 +112,28 @@ mod tests {
         assert_eq!(cost_with_window_miss(300, 0, 0, 50, 45), 390);
         // Arriving an hour late loses against a journey that takes 90 minutes longer.
         assert!(cost_with_window_miss(300, 0, 0, 50, 60) > cost(390, 0, 0, 50));
+    }
+
+    #[test]
+    fn a_night_in_a_berth_beats_a_faster_night_awake() {
+        let night = |door_to_door, sleeping_minutes| {
+            journey_cost(
+                JourneyCostInputs {
+                    door_to_door_minutes: door_to_door,
+                    way_to_station_minutes: 0,
+                    transfer_count: 0,
+                    minutes_outside_arrival_window: 0,
+                    sleeping_minutes,
+                    night_minutes_awake: 450 - sleeping_minutes,
+                },
+                TransferAversion::new(50).unwrap(),
+                ScoringWeights::DEFAULT,
+            )
+        };
+        // Sleeping the whole night costs only the waking hours on the train.
+        assert_eq!(night(900, 450), 450);
+        // Leaving the train at midnight saves three hours but loses 6.5 hours of sleep.
+        assert!(night(720, 60) > night(900, 450));
     }
 
     #[test]
