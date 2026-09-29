@@ -137,34 +137,37 @@
     </button>
 
     {#if row.stay !== null}
-      <label class="stay">
-        <input
-          type="number"
-          min="0"
-          max="255"
-          value={stayNights(row.stay)}
-          disabled={onEdit === undefined}
-          onchange={(event) =>
-            onEdit?.({
-              SetPlaceStay: {
-                place_id: placeId,
-                stay: stayWithNights(event.currentTarget.valueAsNumber || 0),
-              },
-            })}
-        />
-        nights
-      </label>
-      {#if row.stay.SameDay !== undefined}
-        <label>
+      <!-- The flag sits under the nights, so the name and dates keep their width. -->
+      <div class="stay-settings">
+        <label class="stay">
           <input
-            type="checkbox"
-            checked={row.stay.SameDay.prefers_longer_stay}
+            type="number"
+            min="0"
+            max="255"
+            value={stayNights(row.stay)}
             disabled={onEdit === undefined}
-            onchange={(event) => setPrefersLongerStay(event.currentTarget.checked)}
+            onchange={(event) =>
+              onEdit?.({
+                SetPlaceStay: {
+                  place_id: placeId,
+                  stay: stayWithNights(event.currentTarget.valueAsNumber || 0),
+                },
+              })}
           />
-          longer is better
+          nights
         </label>
-      {/if}
+        {#if row.stay.SameDay !== undefined}
+          <label class="longer-stay">
+            <input
+              type="checkbox"
+              checked={row.stay.SameDay.prefers_longer_stay}
+              disabled={onEdit === undefined}
+              onchange={(event) => setPrefersLongerStay(event.currentTarget.checked)}
+            />
+            longer is better
+          </label>
+        {/if}
+      </div>
     {/if}
 
     {#if onEdit !== undefined}
@@ -274,6 +277,19 @@
 
   .dates {
     color: var(--color-text-muted);
+  }
+
+  .stay-settings {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+  }
+
+  .longer-stay {
+    color: var(--color-text-muted);
+    font-size: 0.9em;
+    white-space: nowrap;
   }
 
   .stay input {
