@@ -7,6 +7,7 @@
     LegTravelMode,
     NoJourneyReason,
     OvernightLegOptions,
+    TrainRide,
     TripEdit,
   } from "../bindings";
   import {
@@ -75,6 +76,23 @@
 
   function berthChoice(acceptedBerths: AcceptedBerths): string {
     return acceptedBerths.Only ?? "Either";
+  }
+
+  /** Whether the list of alternative journeys is open. */
+  let showAlternatives = $state(false);
+
+  /** Returns the rides of a journey in travel order. */
+  function journeyRides(journey: Journey): TrainRide[] {
+    return [journey.first_ride, ...journey.later_rides.map((later) => later.ride)];
+  }
+
+  /** Describes the number of transfers, such as "direct" or "2 transfers". */
+  function transferSummary(journey: Journey): string {
+    const count = journey.later_rides.length;
+    if (count === 0) {
+      return "direct";
+    }
+    return `${count} ${count === 1 ? "transfer" : "transfers"}`;
   }
 
   /** Returns door-to-door minutes, including the ways to and from the stations. */
@@ -183,14 +201,42 @@
         </li>
       </ol>
       <span class="summary">
-        {formatDuration(journeyMinutes(journey))}
-        · {journey.later_rides.length === 0
-          ? "direct"
-          : `${journey.later_rides.length} ${journey.later_rides.length === 1 ? "transfer" : "transfers"}`}
+        {formatDuration(journeyMinutes(journey))} · {transferSummary(journey)}
         {#if legPlan.alternative_journeys.length > 0}
-          · {legPlan.alternative_journeys.length} alternatives
+          ·
+          <button
+            type="button"
+            class="link"
+            aria-expanded={showAlternatives}
+            onclick={() => (showAlternatives = !showAlternatives)}
+          >
+            {legPlan.alternative_journeys.length}
+            {legPlan.alternative_journeys.length === 1 ? "alternative" : "alternatives"}
+          </button>
         {/if}
       </span>
+      {#if showAlternatives}
+        <!-- Other good journeys, best first by the same cost that picked the chosen one. -->
+        <ol class="alternatives">
+          {#each legPlan.alternative_journeys as alternative, alternativeIndex (alternativeIndex)}
+            {@const rides = journeyRides(alternative)}
+            {@const lastRide = rides.at(-1) ?? alternative.first_ride}
+            <li>
+              <span class="time">
+                {stationTime(legPlan, alternative.first_ride.boarding_station, alternative.first_ride.departure_time)}
+              </span>
+              {stationName(legPlan, alternative.first_ride.boarding_station)}
+              →
+              <span class="time">{stationTime(legPlan, lastRide.alighting_station, lastRide.arrival_time)}</span>
+              {stationName(legPlan, lastRide.alighting_station)}
+              <span class="alternative-details">
+                {formatDuration(journeyMinutes(alternative))} · {transferSummary(alternative)} ·
+                {rides.map((ride) => `${ride.train_label.category} ${ride.train_label.number}`).join(", ")}
+              </span>
+            </li>
+          {/each}
+        </ol>
+      {/if}
     {/if}
   </div>
 </li>
@@ -257,5 +303,29 @@
 
   .no-journey {
     color: var(--color-danger);
+  }
+
+  /* The alternatives button reads as part of the summary text. */
+  .link {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--color-accent);
+    text-decoration: underline;
+  }
+
+  .alternatives {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin: var(--space-2) 0 0;
+    padding: 0 0 0 var(--space-3);
+    border-left: 2px solid var(--color-border);
+    list-style: none;
+  }
+
+  .alternative-details {
+    display: block;
+    color: var(--color-text-muted);
   }
 </style>
