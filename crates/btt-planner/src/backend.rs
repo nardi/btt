@@ -11,6 +11,11 @@ use crate::input::LegPlanningInput;
 #[cfg(feature = "stub")]
 use crate::stub::StubBackend;
 
+/// Revision of the planner's results. Cached results are `postcard` bytes, which don't
+/// survive a change to the layout of `LegPlanningResult`, and a change to the planning logic
+/// makes them stale. Either change raises this number, so the app drops the old results.
+const LEG_PLAN_REVISION: u64 = 2;
+
 /// Plans single legs. An enum instead of a trait object, because the set of backends is fixed
 /// at compile time.
 pub enum LegPlanningBackend {
@@ -25,13 +30,15 @@ impl LegPlanningBackend {
     /// Returns a value that separates this backend's cached results from other backends'.
     ///
     /// The bundle backend includes the bundle version, so a new version never returns results
-    /// from the old one.
+    /// from the old one. Every backend includes `LEG_PLAN_REVISION`, so results of an older
+    /// planner are never read back either.
     pub fn cache_namespace(&self) -> u64 {
-        match self {
+        let backend = match self {
             #[cfg(feature = "stub")]
             Self::Stub(_) => 1,
             Self::TimetableBundle(router) => (2 << 32) | u64::from(router.bundle_version()),
-        }
+        };
+        (LEG_PLAN_REVISION << 40) | backend
     }
 
     /// Plans one leg.
