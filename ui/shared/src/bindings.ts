@@ -237,6 +237,12 @@ export type LegPlan = {
 	station_table: LegPlanStation[],
 	/**  Whether `chosen_journey` is the one the traveller picked, instead of the planner's pick. */
 	follows_traveller_choice: boolean,
+	/**
+	 *  Cost of the planner's best journey for the leg on its own, in minutes of train travel,
+	 *  which lets the planner compare the leg with the same leg on another day. For a leg joined
+	 *  to others by same-day stops, the best journey is the one on the best chain.
+	 */
+	best_journey_cost?: number,
 };
 
 /**  A station used by the journeys of one leg plan. */
@@ -271,6 +277,19 @@ export type LocalTimeOfDay = number;
 
 /**  Longitude from -180 to 180 degrees, stored in millionths of a degree. */
 export type Longitude = number;
+
+/**
+ *  A day before or after a leg's date on which the leg can be travelled much better, such as
+ *  the day a night train runs.
+ */
+export type NearbyDaySuggestion = {
+	/**  Days from the leg's departure date, `-1` or `1`. */
+	day_offset: number,
+	/**  The departure date on that day. */
+	departure_date: string,
+	/**  The plan of the leg on that day. */
+	plan: LegPlan,
+};
 
 /**  A place to add to a trip. The trip assigns its ID. */
 export type NewTripPlace = {
@@ -362,14 +381,14 @@ export type PlanningRunId = number;
 /**  Messages from a planning session to the frontend. */
 export type PlanningSessionEvent = 
 /**  The trip changed outside the frontend, for example when reverse geocoding named a place. */
-({ TripChanged: Trip }) & { LegPlanned?: never; PlanningFinished?: never; PlanningStarted?: never } | 
+({ TripChanged: Trip }) & { LegPlanned?: never; NearbyDaySuggested?: never; PlanningFinished?: never; PlanningStarted?: never } | 
 /**  A run started. Legs it replans are pending until their `LegPlanned` event. */
 ({ PlanningStarted: {
 	/**  Identifies the run. */
 	run_id: PlanningRunId,
 	/**  Places whose arriving legs this run replans. */
 	replanned_arrival_place_ids: TripPlaceId[],
-} }) & { LegPlanned?: never; PlanningFinished?: never; TripChanged?: never } | 
+} }) & { LegPlanned?: never; NearbyDaySuggested?: never; PlanningFinished?: never; TripChanged?: never } | 
 /**  One leg of a run finished. */
 ({ LegPlanned: {
 	/**  Identifies the run. */
@@ -378,12 +397,24 @@ export type PlanningSessionEvent =
 	arrival_place_id: TripPlaceId,
 	/**  The planned journeys, or why there are none. */
 	result: LegPlanningResult,
-} }) & { PlanningFinished?: never; PlanningStarted?: never; TripChanged?: never } | 
+} }) & { NearbyDaySuggested?: never; PlanningFinished?: never; PlanningStarted?: never; TripChanged?: never } | 
 /**  Every leg of a run finished. */
 ({ PlanningFinished: {
 	/**  Identifies the run. */
 	run_id: PlanningRunId,
-} }) & { LegPlanned?: never; PlanningStarted?: never; TripChanged?: never };
+} }) & { LegPlanned?: never; NearbyDaySuggested?: never; PlanningStarted?: never; TripChanged?: never } | 
+/**
+ *  A day before or after a leg's date is much better for the leg. Sent after
+ *  `PlanningFinished`, and a leg that is planned again loses its suggestion.
+ */
+({ NearbyDaySuggested: {
+	/**  Identifies the run. */
+	run_id: PlanningRunId,
+	/**  Place at which the leg arrives. */
+	arrival_place_id: TripPlaceId,
+	/**  The better day. */
+	suggestion: NearbyDaySuggestion,
+} }) & { LegPlanned?: never; PlanningFinished?: never; PlanningStarted?: never; TripChanged?: never };
 
 /**  How many minutes of travel time one euro is worth in scoring, in hundredths of a minute. */
 export type PriceWeight = number;

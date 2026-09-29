@@ -561,14 +561,16 @@ impl TimetableBundleRouter {
             .map(|journey| {
                 let cost_inputs =
                     self.journey_cost_inputs(journey, &arrival_window, search.night.as_ref());
+                let cost = journey_cost(
+                    cost_inputs,
+                    input.transfer_aversion,
+                    ScoringWeights::DEFAULT,
+                );
                 RankedJourney {
                     journey,
                     cost_inputs,
-                    cost: journey_cost(
-                        cost_inputs,
-                        input.transfer_aversion,
-                        ScoringWeights::DEFAULT,
-                    ),
+                    cost,
+                    own_cost: cost,
                 }
             })
             .collect()
@@ -597,6 +599,13 @@ impl TimetableBundleRouter {
             .map(|ranked| ranked.cost)
             .min()
             .unwrap_or(0);
+        // The planner's best journey, whose own cost lets the session compare the leg with
+        // another day. A chain cost would also change with the other legs of the chain.
+        let best_own_cost = ranking
+            .journeys
+            .iter()
+            .min_by_key(|ranked| ranked.cost)
+            .map_or(0, |ranked| ranked.own_cost);
         let mut shown_routes = vec![self.journey_route(chosen.journey)];
         let alternative_journeys = alternatives
             .iter()
@@ -621,6 +630,7 @@ impl TimetableBundleRouter {
             alternative_journeys,
             station_table: stations.table,
             follows_traveller_choice: ranking.follows_traveller_choice,
+            best_journey_cost: best_own_cost,
         }))
     }
 
@@ -1089,8 +1099,11 @@ struct RankedJourney<'search> {
     journey: &'search RaptorJourney,
     /// What the cost came from.
     cost_inputs: JourneyCostInputs,
-    /// The cost, lower is better.
+    /// The cost, lower is better. For a leg of a chain, the cost of the best chain through
+    /// the journey.
     cost: u32,
+    /// The cost of the journey on its own.
+    own_cost: u32,
 }
 
 /// The journeys of a search in the order the planner shows them.

@@ -3,7 +3,10 @@
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
-use btt_model::{LegPlanningResult, PlanningRunId, PlanningSessionEvent, Trip, TripPlaceId};
+use btt_model::{
+    LegPlan, LegPlanningResult, NearbyDaySuggestion, PlanningRunId, PlanningSessionEvent, Trip,
+    TripPlaceId,
+};
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 use tokio::task::{JoinHandle, JoinSet};
@@ -203,12 +206,129 @@ impl<S: PlanningEventSink, C: LegResultStore> SessionShared<S, C> {
             }
         }
 
+        {
+            let state = self.lock_state();
+            if cancellation.is_cancelled() {
+                return;
+            }
+            self.event_sink
+                .send_event(PlanningSessionEvent::PlanningFinished { run_id });
+            drop(state);
+        }
+        self.suggest_nearby_days(run_id, &legs_to_plan.replanned, namespace, &cancellation)
+            .await;
         let mut state = self.lock_state();
         if !cancellation.is_cancelled() {
             state.current_run = None;
-            self.event_sink
-                .send_event(PlanningSessionEvent::PlanningFinished { run_id });
         }
+    }
+
+    /// Plans every replanned chain a day earlier and a day later, and suggests the other day
+    /// for a leg that is much better there. This runs after `PlanningFinished`, so the plan
+    /// itself doesn't wait for it.
+    async fn suggest_nearby_days(
+        &self,
+        run_id: PlanningRunId,
+        chains: &[LegChainInput],
+        namespace: u64,
+        cancellation: &CancellationToken,
+    ) {
+        let mut tasks = JoinSet::new();
+        for chain in chains {
+            for day_offset in [-1_i8, 1] {
+                let Some(shifted) = shifted_chain(chain, day_offset) else {
+                    continue;
+                };
+                let keys: SmallVec<[LegCacheKey; 4]> = (0..shifted.legs.len())
+                    .map(|index| shifted.leg_cache_key(namespace, index))
+                    .collect();
+                let cached: Option<Vec<LegPlanningResult>> = {
+                    let mut state = self.lock_state();
+                    keys.iter()
+                        .map(|key| self.cached_result(&mut state, *key))
+                        .collect()
+                };
+                let current_keys: SmallVec<[LegCacheKey; 4]> = (0..chain.legs.len())
+                    .map(|index| chain.leg_cache_key(namespace, index))
+                    .collect();
+                let backend = Arc::clone(&self.backend);
+                let cancellation = cancellation.clone();
+                tasks.spawn(async move {
+                    let (results, planned) = match cached {
+                        Some(results) => (results, false),
+                        None => (backend.plan_chain(&shifted, &cancellation).await, true),
+                    };
+                    (shifted, keys, current_keys, day_offset, results, planned)
+                });
+            }
+        }
+
+        let mut best_by_place: SmallVec<[(TripPlaceId, NearbyDaySuggestion); 8]> = SmallVec::new();
+        while let Some(joined) = tasks.join_next().await {
+            let Ok((shifted, keys, current_keys, day_offset, results, planned)) = joined else {
+                continue;
+            };
+            let mut state = self.lock_state();
+            if cancellation.is_cancelled() {
+                return;
+            }
+            for (index, (leg, result)) in shifted.legs.iter().zip(results).enumerate() {
+                if planned {
+                    state.cached_results.insert(keys[index], result.clone());
+                    self.result_store.store(keys[index], namespace, &result);
+                }
+                let LegPlanningResult::Found(plan) = result else {
+                    continue;
+                };
+                let current = state.cached_results.get(&current_keys[index]);
+                if !is_much_better(current, &plan) {
+                    continue;
+                }
+                let suggestion = NearbyDaySuggestion {
+                    day_offset,
+                    departure_date: leg.input.departure_date,
+                    plan,
+                };
+                match best_by_place
+                    .iter_mut()
+                    .find(|(place_id, _)| *place_id == leg.arrival_place_id)
+                {
+                    Some((_, best))
+                        if best.plan.best_journey_cost > suggestion.plan.best_journey_cost =>
+                    {
+                        *best = suggestion;
+                    }
+                    Some(_) => {}
+                    None => best_by_place.push((leg.arrival_place_id, suggestion)),
+                }
+            }
+        }
+
+        let _state = self.lock_state();
+        if cancellation.is_cancelled() {
+            return;
+        }
+        for (arrival_place_id, suggestion) in best_by_place {
+            self.event_sink
+                .send_event(PlanningSessionEvent::NearbyDaySuggested {
+                    run_id,
+                    arrival_place_id,
+                    suggestion,
+                });
+        }
+    }
+
+    /// Returns a result from memory or else from the result store, keeping it in memory.
+    fn cached_result(
+        &self,
+        state: &mut SessionState,
+        key: LegCacheKey,
+    ) -> Option<LegPlanningResult> {
+        state.cached_results.get(&key).cloned().or_else(|| {
+            let stored = self.result_store.load(key)?;
+            state.cached_results.insert(key, stored.clone());
+            Some(stored)
+        })
     }
 
     /// Starts a run. Announces the legs it replans, delivers the ones it finds in the cache
@@ -255,16 +375,12 @@ impl<S: PlanningEventSink, C: LegResultStore> SessionShared<S, C> {
             });
 
         let mut uncached = SmallVec::new();
+        let mut replanned = SmallVec::new();
         for (chain, keys) in changed_chains {
+            replanned.push(chain.clone());
             let cached: Option<Vec<LegPlanningResult>> = keys
                 .iter()
-                .map(|key| {
-                    state.cached_results.get(key).cloned().or_else(|| {
-                        let stored = self.result_store.load(*key)?;
-                        state.cached_results.insert(*key, stored.clone());
-                        Some(stored)
-                    })
-                })
+                .map(|key| self.cached_result(state, *key))
                 .collect();
             match cached {
                 Some(results) => {
@@ -275,7 +391,11 @@ impl<S: PlanningEventSink, C: LegResultStore> SessionShared<S, C> {
                 None => uncached.push(chain),
             }
         }
-        StartedRun { run_id, uncached }
+        StartedRun {
+            run_id,
+            uncached,
+            replanned,
+        }
     }
 
     /// Records that the frontend holds a result for a leg and sends it.
@@ -310,6 +430,49 @@ struct StartedRun {
     run_id: PlanningRunId,
     /// Changed chains without cached results.
     uncached: SmallVec<[LegChainInput; 8]>,
+    /// Every changed chain, with or without a cached result.
+    replanned: SmallVec<[LegChainInput; 8]>,
+}
+
+/// Smallest gain in cost, in minutes of train travel, for which another day is suggested.
+const NEARBY_DAY_MINIMUM_GAIN: u32 = 90;
+
+/// Largest cost of another day, in percent of the current day's cost, for which it is
+/// suggested. Together with `NEARBY_DAY_MINIMUM_GAIN`, a small saving on a long leg and a
+/// large share of a short one both stay quiet.
+const NEARBY_DAY_MAXIMUM_COST_PERCENT: u32 = 85;
+
+/// Returns a chain with every leg moved by a number of days. Picks don't carry over, because
+/// they name trains at a time on the original day. Returns `None` at the edge of the calendar.
+fn shifted_chain(chain: &LegChainInput, day_offset: i8) -> Option<LegChainInput> {
+    let mut shifted = chain.clone();
+    for leg in &mut shifted.legs {
+        let days = chrono::Days::new(u64::from(day_offset.unsigned_abs()));
+        leg.input.departure_date = if day_offset < 0 {
+            leg.input.departure_date.checked_sub_days(days)?
+        } else {
+            leg.input.departure_date.checked_add_days(days)?
+        };
+        leg.input.chosen_journey = None;
+    }
+    Some(shifted)
+}
+
+/// Returns whether a plan on another day is much better than the current result of a leg,
+/// which holds when the current day has no journey or costs at least
+/// `NEARBY_DAY_MINIMUM_GAIN` minutes and `100 - NEARBY_DAY_MAXIMUM_COST_PERCENT` percent more.
+fn is_much_better(current: Option<&LegPlanningResult>, other: &LegPlan) -> bool {
+    match current {
+        Some(LegPlanningResult::Found(current)) => {
+            let other_cost = other.best_journey_cost;
+            let current_cost = current.best_journey_cost;
+            other_cost + NEARBY_DAY_MINIMUM_GAIN <= current_cost
+                && u64::from(other_cost) * 100
+                    <= u64::from(current_cost) * u64::from(NEARBY_DAY_MAXIMUM_COST_PERCENT)
+        }
+        Some(LegPlanningResult::NoJourneyFound(_)) => true,
+        None => false,
+    }
 }
 
 #[cfg(test)]
@@ -484,15 +647,20 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn a_new_session_answers_from_the_result_store() {
-        /// Counts loads that found a result.
+        /// Stored results, and the keys of loads that found one.
+        type MemoryStoreContents = (FxHashMap<LegCacheKey, LegPlanningResult>, Vec<LegCacheKey>);
+
+        /// Keeps results and records the keys of loads that found one.
         #[derive(Clone, Default)]
-        struct MemoryStore(Arc<Mutex<(FxHashMap<LegCacheKey, LegPlanningResult>, usize)>>);
+        struct MemoryStore(Arc<Mutex<MemoryStoreContents>>);
 
         impl LegResultStore for MemoryStore {
             fn load(&self, key: LegCacheKey) -> Option<LegPlanningResult> {
                 let mut contents = self.0.lock().unwrap();
                 let found = contents.0.get(&key).cloned();
-                contents.1 += usize::from(found.is_some());
+                if found.is_some() {
+                    contents.1.push(key);
+                }
                 found
             }
 
@@ -515,11 +683,15 @@ mod tests {
             let events = events_of_next_run(&mut receiver).await;
             assert_eq!(planned_places(&events).len(), 3);
         }
-        assert_eq!(
-            store.0.lock().unwrap().1,
-            3,
-            "the second session loaded all three legs"
-        );
+        // The second session loads the three legs from the store. The planning of nearby days
+        // loads other keys too.
+        let namespace = stub_backend().cache_namespace();
+        let loaded = store.0.lock().unwrap().1.clone();
+        for chain in crate::input::leg_chain_inputs(&trip) {
+            for index in 0..chain.legs.len() {
+                assert!(loaded.contains(&chain.leg_cache_key(namespace, index)));
+            }
+        }
     }
 
     #[tokio::test(start_paused = true)]
@@ -548,5 +720,48 @@ mod tests {
         session.trip_changed(trip.clone());
         let events = events_of_next_run(&mut receiver).await;
         assert_eq!(planned_places(&events).len(), 2);
+    }
+
+    #[test]
+    fn only_a_much_better_day_is_suggested() {
+        let plan_with_cost = |cost: u32| {
+            let LegPlanningResult::Found(mut plan) = stub_backend_plan() else {
+                panic!("the stub always finds a journey");
+            };
+            plan.best_journey_cost = cost;
+            plan
+        };
+        let current = LegPlanningResult::Found(plan_with_cost(1000));
+        // 90 minutes and 15% better is enough, less of either isn't.
+        assert!(is_much_better(Some(&current), &plan_with_cost(850)));
+        assert!(!is_much_better(Some(&current), &plan_with_cost(911)));
+        let short = LegPlanningResult::Found(plan_with_cost(400));
+        assert!(!is_much_better(Some(&short), &plan_with_cost(330)));
+        let none =
+            LegPlanningResult::NoJourneyFound(btt_model::NoJourneyReason::NoConnectionInWindow);
+        assert!(is_much_better(Some(&none), &plan_with_cost(5000)));
+    }
+
+    #[test]
+    fn a_shifted_chain_moves_every_leg_and_drops_picks() {
+        let trip = trip_with_places(&FOUR_CITIES);
+        let chain = crate::input::leg_chain_inputs(&trip)[0].clone();
+        let later = shifted_chain(&chain, 1).unwrap();
+        assert_eq!(
+            later.legs[0].input.departure_date,
+            chain.legs[0].input.departure_date.succ_opt().unwrap()
+        );
+        assert!(later.legs[0].input.chosen_journey.is_none());
+    }
+
+    /// Plans the first leg of the four cities with the stub.
+    fn stub_backend_plan() -> LegPlanningResult {
+        let trip = trip_with_places(&FOUR_CITIES);
+        let input = &crate::input::leg_planning_inputs(&trip)[0].input;
+        let backend = stub_backend();
+        let LegPlanningBackend::Stub(stub) = backend.as_ref() else {
+            panic!("the test backend is the stub");
+        };
+        stub.plan_leg(input)
     }
 }

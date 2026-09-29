@@ -1,5 +1,6 @@
 //! Planned journeys and the events that stream them to the frontend.
 
+use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 use smol_str::SmolStr;
@@ -152,6 +153,23 @@ pub struct LegPlan {
     pub station_table: SmallVec<[LegPlanStation; 8]>,
     /// Whether `chosen_journey` is the one the traveller picked, instead of the planner's pick.
     pub follows_traveller_choice: bool,
+    /// Cost of the planner's best journey for the leg on its own, in minutes of train travel,
+    /// which lets the planner compare the leg with the same leg on another day. For a leg joined
+    /// to others by same-day stops, the best journey is the one on the best chain.
+    #[serde(default)]
+    pub best_journey_cost: u32,
+}
+
+/// A day before or after a leg's date on which the leg can be travelled much better, such as
+/// the day a night train runs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct NearbyDaySuggestion {
+    /// Days from the leg's departure date, `-1` or `1`.
+    pub day_offset: i8,
+    /// The departure date on that day.
+    pub departure_date: NaiveDate,
+    /// The plan of the leg on that day.
+    pub plan: Box<LegPlan>,
 }
 
 /// A journey the traveller picked for a leg, recognised by its first departure and its trains.
@@ -236,5 +254,15 @@ pub enum PlanningSessionEvent {
     PlanningFinished {
         /// Identifies the run.
         run_id: PlanningRunId,
+    },
+    /// A day before or after a leg's date is much better for the leg. Sent after
+    /// `PlanningFinished`, and a leg that is planned again loses its suggestion.
+    NearbyDaySuggested {
+        /// Identifies the run.
+        run_id: PlanningRunId,
+        /// Place at which the leg arrives.
+        arrival_place_id: TripPlaceId,
+        /// The better day.
+        suggestion: NearbyDaySuggestion,
     },
 }

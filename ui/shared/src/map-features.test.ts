@@ -16,6 +16,7 @@ function viewState(legStates: [number, LegViewState][]): TripViewState {
   return {
     trip: amsterdamViennaRome(),
     legStatesByArrivalPlace: new Map(legStates),
+    nearbyDaysByArrivalPlace: new Map(),
     notices: [],
     errorMessage: null,
   };

@@ -80,6 +80,7 @@
         <LegRowView
           {leg}
           legState={legViewState(viewState, leg.arrivalPlace.id)}
+          nearbyDay={viewState.nearbyDaysByArrivalPlace.get(leg.arrivalPlace.id) ?? null}
           storedChoice={storedJourneyChoice(trip, leg)}
           {onEdit}
         />

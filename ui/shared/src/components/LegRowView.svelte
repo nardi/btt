@@ -6,6 +6,7 @@
     JourneyChoice,
     LegPlan,
     LegTravelMode,
+    NearbyDaySuggestion,
     NoJourneyReason,
     OvernightLegOptions,
     TrainRide,
@@ -27,12 +28,15 @@
     leg,
     legState,
     storedChoice,
+    nearbyDay,
     onEdit,
   }: {
     leg: LegRow;
     legState: LegViewState;
     /** The journey the traveller picked for this leg, or `null` for the planner's pick. */
     storedChoice: JourneyChoice | null;
+    /** A much better day before or after the leg's date, or `null`. */
+    nearbyDay: NearbyDaySuggestion | null;
     /** Missing in a read-only view. */
     onEdit?: (edit: TripEdit) => void;
   } = $props();
@@ -326,6 +330,18 @@
         </ol>
       {/if}
     {/if}
+    {#if nearbyDay !== null}
+      <!-- The traveller decides how to reach the other day, such as by adding a night. -->
+      {@const dayPlan = nearbyDay.plan}
+      {@const dayRides = journeyRides(dayPlan.chosen_journey)}
+      {@const dayLastRide = dayRides.at(-1) ?? dayPlan.chosen_journey.first_ride}
+      <span class="nearby-day">
+        {nearbyDay.day_offset < 0 ? "A day earlier" : "A day later"}, {formatDate(nearbyDay.departure_date)}:
+        {dayRides.map((ride) => `${ride.train_label.category} ${ride.train_label.number}`).join(", ")},
+        {transferSummary(dayPlan.chosen_journey)}, arrives
+        {stationTime(dayPlan, dayLastRide.alighting_station, dayLastRide.arrival_time)}.
+      </span>
+    {/if}
   </div>
 </li>
 
@@ -432,6 +448,15 @@
     padding: 0 0 0 var(--space-3);
     border-left: 2px solid var(--color-border);
     list-style: none;
+  }
+
+  .nearby-day {
+    display: block;
+    margin-top: var(--space-1);
+    padding: var(--space-1) var(--space-2);
+    border-radius: 4px;
+    background: var(--color-notice);
+    color: var(--color-text);
   }
 
   .choice-note {

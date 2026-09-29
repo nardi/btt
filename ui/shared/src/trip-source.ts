@@ -6,6 +6,7 @@
 import type {
   GeoCoordinates,
   LegPlan,
+  NearbyDaySuggestion,
   NoJourneyReason,
   PlaceSearchResult,
   Trip,
@@ -25,6 +26,8 @@ export interface TripViewState {
   readonly trip: Trip;
   /** Plan state per leg, keyed by the leg's arrival place. A missing leg is pending. */
   readonly legStatesByArrivalPlace: ReadonlyMap<TripPlaceId, LegViewState>;
+  /** A much better day before or after, per leg, keyed by the leg's arrival place. */
+  readonly nearbyDaysByArrivalPlace: ReadonlyMap<TripPlaceId, NearbyDaySuggestion>;
   /** Side effects of the last edit, such as a dropped overnight option. */
   readonly notices: readonly TripEditNotice[];
   /** Message of the last failed edit or search, or `null`. */

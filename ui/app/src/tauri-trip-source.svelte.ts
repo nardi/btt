@@ -4,6 +4,7 @@ import { commands } from "@btt/shared/bindings";
 import type {
   CommandError,
   GeoCoordinates,
+  NearbyDaySuggestion,
   PlaceSearchResult,
   PlanningRunId,
   PlanningSessionEvent,
@@ -41,6 +42,7 @@ export class TauriTripSource implements TripViewState {
   readonly kind = "editable";
   trip: Trip = $state()!;
   readonly legStatesByArrivalPlace = new SvelteMap<TripPlaceId, LegViewState>();
+  readonly nearbyDaysByArrivalPlace = new SvelteMap<TripPlaceId, NearbyDaySuggestion>();
   notices: TripEditNotice[] = $state([]);
   errorMessage: string | null = $state(null);
   /** Latest planning run. Events of older runs are stale and get dropped. */
@@ -126,6 +128,7 @@ export class TauriTripSource implements TripViewState {
       this.latestRunId = event.PlanningStarted.run_id;
       for (const placeId of event.PlanningStarted.replanned_arrival_place_ids) {
         this.legStatesByArrivalPlace.set(placeId, { status: "pending" });
+        this.nearbyDaysByArrivalPlace.delete(placeId);
       }
     } else if (event.LegPlanned !== undefined) {
       const { run_id, arrival_place_id, result } = event.LegPlanned;
@@ -138,6 +141,12 @@ export class TauriTripSource implements TripViewState {
           ? { status: "found", legPlan: result.Found }
           : { status: "none", reason: result.NoJourneyFound },
       );
+    } else if (event.NearbyDaySuggested !== undefined) {
+      const { run_id, arrival_place_id, suggestion } = event.NearbyDaySuggested;
+      if (run_id !== this.latestRunId) {
+        return;
+      }
+      this.nearbyDaysByArrivalPlace.set(arrival_place_id, suggestion);
     }
   }
 
@@ -147,6 +156,7 @@ export class TauriTripSource implements TripViewState {
     for (const placeId of this.legStatesByArrivalPlace.keys()) {
       if (!placeIds.has(placeId)) {
         this.legStatesByArrivalPlace.delete(placeId);
+        this.nearbyDaysByArrivalPlace.delete(placeId);
       }
     }
   }
