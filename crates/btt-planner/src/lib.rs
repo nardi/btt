@@ -4,6 +4,7 @@ pub mod backend;
 pub mod bundle_router;
 pub mod explanation;
 pub mod input;
+mod ride_path;
 pub mod scoring;
 pub mod session;
 #[cfg(feature = "stub")]

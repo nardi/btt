@@ -449,11 +449,14 @@ export type TrainRide = {
 	train_label: TrainLabel,
 	/**  Whether the train has couchettes or sleepers, whatever the leg's travel mode. */
 	offers_berths: boolean,
-	/**
-	 *  Stations the train passes between boarding and alighting, in order, so the map can
-	 *  draw its line along them.
-	 */
+	/**  Stations the train stops at between boarding and alighting, in order. */
 	intermediate_station_coordinates: GeoCoordinates[],
+	/**
+	 *  Every point of the line between boarding and alighting, in order: the stops and the
+	 *  stations the train most likely passes without stopping. Empty in plans stored
+	 *  without it, in which case the stops describe the line.
+	 */
+	path_coordinates?: GeoCoordinates[],
 };
 
 /**  A transfer from the previous ride, followed by the next ride. */

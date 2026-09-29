@@ -23,6 +23,7 @@ use smallvec::SmallVec;
 
 use crate::explanation::{CandidateExplanation, LegExplanation, RankedJourneyExplanation};
 use crate::input::{LegEndpoint, LegPlanningInput};
+use crate::ride_path::StationHopGraph;
 use crate::scoring::{JourneyCostInputs, ScoringWeights, journey_cost};
 
 /// Largest number of candidate stations per place, closest first.
@@ -86,6 +87,8 @@ pub struct TimetableBundleRouter {
     station_index: StationIndex,
     /// Lower bounds on travel times, which let the search skip hopeless stations.
     search_index: SearchIndex,
+    /// Consecutive stops of all routes, which show the stations a train passes.
+    station_hop_graph: StationHopGraph,
     /// Resolves the time zone of places for their local time windows.
     time_zone_finder: Arc<TimeZoneFinder>,
     /// The bundle's first day, in minutes since the Unix epoch.
@@ -117,6 +120,7 @@ impl TimetableBundleRouter {
     ) -> Self {
         let station_index = StationIndex::new(&bundle);
         let search_index = SearchIndex::new(&bundle);
+        let station_hop_graph = StationHopGraph::new(&bundle);
         let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap_or_default();
         let start_days = (bundle.validity_start() - epoch).num_days();
         let bundle_start_unix_minutes =
@@ -125,6 +129,7 @@ impl TimetableBundleRouter {
             bundle,
             station_index,
             search_index,
+            station_hop_graph,
             time_zone_finder,
             bundle_start_unix_minutes,
             spare_search_buffers: Mutex::new(Vec::new()),
@@ -647,13 +652,21 @@ impl TimetableBundleRouter {
     ) -> Option<TrainRide> {
         let (category, number, _) = self.bundle.trip_train_label(ride.trip);
         let route = self.bundle.route(ride.raptor_route);
+        let station_at = |position| self.bundle.pattern_stop(&route, position).station();
         let intermediate_station_coordinates = (ride.boarding_position + 1
             ..ride.alighting_position)
-            .map(|position| {
-                let station = self.bundle.pattern_stop(&route, position).station();
-                self.bundle.station_coordinates(station)
-            })
+            .map(|position| self.bundle.station_coordinates(station_at(position)))
             .collect();
+        // Each hop contributes the stations it passes and then the stop it ends at, except the
+        // last hop, whose stop is the alighting station.
+        let mut path_coordinates = Vec::new();
+        for position in ride.boarding_position + 1..=ride.alighting_position {
+            let (from, to) = (station_at(position - 1), station_at(position));
+            path_coordinates.extend(self.station_hop_graph.passed_station_coordinates(from, to));
+            if position < ride.alighting_position {
+                path_coordinates.push(self.bundle.station_coordinates(to));
+            }
+        }
         Some(TrainRide {
             boarding_station: stations.index_of(&self.bundle, ride.boarding_station)?,
             departure_time: UnixTimeMinutes(self.bundle_start_unix_minutes + ride.departure.0),
@@ -665,6 +678,7 @@ impl TimetableBundleRouter {
             },
             offers_berths: self.bundle.trip_offers_berths(ride.trip),
             intermediate_station_coordinates,
+            path_coordinates,
         })
     }
 }

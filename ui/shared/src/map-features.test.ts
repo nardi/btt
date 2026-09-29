@@ -79,6 +79,28 @@ describe("rideLines", () => {
   });
 });
 
+describe("rideLines with passed stations", () => {
+  it("draws the line through the path instead of only the stops", () => {
+    const passed = { latitude: 46.0, longitude: 13.5 };
+    const withPath: LegPlan = {
+      ...viennaToRome,
+      chosen_journey: {
+        ...viennaToRome.chosen_journey,
+        first_ride: {
+          ...viennaToRome.chosen_journey.first_ride,
+          path_coordinates: [passed, { latitude: 43.7, longitude: 11.2 }],
+        },
+      },
+    };
+    const line = rideLines(viewState([[3, { status: "found", legPlan: withPath }]])).features[0]!;
+    expect(
+      line.geometry.coordinates.some(([longitude, latitude]) => Math.abs(longitude! - 13.5) < 1e-5 && Math.abs(latitude! - 46.0) < 1e-5),
+    ).toBe(true);
+    // The stop dots still come from the stops only.
+    expect(intermediateStopPoints(viewState([[3, { status: "found", legPlan: withPath }]])).features).toHaveLength(1);
+  });
+});
+
 describe("intermediateStopPoints", () => {
   it("marks the stops between boarding and alighting", () => {
     const points = intermediateStopPoints(viewState([[3, { status: "found", legPlan: viennaToRome }]]));

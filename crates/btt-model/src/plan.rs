@@ -50,10 +50,14 @@ pub struct TrainRide {
     pub train_label: TrainLabel,
     /// Whether the train has couchettes or sleepers, whatever the leg's travel mode.
     pub offers_berths: bool,
-    /// Stations the train passes between boarding and alighting, in order, so the map can
-    /// draw its line along them.
+    /// Stations the train stops at between boarding and alighting, in order.
     #[specta(type = Vec<GeoCoordinates>)]
     pub intermediate_station_coordinates: SmallVec<[GeoCoordinates; 6]>,
+    /// Every point of the line between boarding and alighting, in order: the stops and the
+    /// stations the train most likely passes without stopping. Empty in plans stored
+    /// without it, in which case the stops describe the line.
+    #[serde(default)]
+    pub path_coordinates: Vec<GeoCoordinates>,
 }
 
 /// A transfer from the previous ride, followed by the next ride.

@@ -94,6 +94,15 @@ function chosenRides(legPlan: LegPlan): TrainRide[] {
 }
 
 /**
+ * Returns the points of a ride's line between boarding and alighting. Plans stored without the
+ * stations the train passes fall back to its stops.
+ */
+function ridePathPoints(ride: TrainRide): GeoCoordinates[] {
+  const path = ride.path_coordinates ?? [];
+  return path.length > 0 ? path : ride.intermediate_station_coordinates;
+}
+
+/**
  * Returns one line per planned train ride, from the boarding station through every station the
  * train passes to the alighting station, curved like a railway. Legs that are still planning or
  * have no journey draw nothing.
@@ -121,11 +130,7 @@ export function rideLines(viewState: TripViewState): FeatureCollection<LineStrin
         type: "Feature",
         geometry: {
           type: "LineString",
-          coordinates: curvedRidePath([
-            boarding.coordinates,
-            ...ride.intermediate_station_coordinates,
-            alighting.coordinates,
-          ]),
+          coordinates: curvedRidePath([boarding.coordinates, ...ridePathPoints(ride), alighting.coordinates]),
         },
         properties: { arrivalPlaceId: leg.arrivalPlace.id, offersBerths: ride.offers_berths, tooltip },
       });
