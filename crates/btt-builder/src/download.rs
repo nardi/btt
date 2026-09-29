@@ -1,7 +1,7 @@
 //! Downloads feeds, their Transitous configuration and the Trainline station list into a cache.
 
 use std::fs;
-use std::io;
+use std::io::{self, Seek};
 use std::path::{Path, PathBuf};
 
 use thiserror::Error;
@@ -110,8 +110,17 @@ impl Downloader {
             }
         }
         tracing::info!(url, "downloading");
-        self.download(url, &path)?;
-        if let Ok(Some(remote)) = remote_stamp {
+        let remote_stamp = remote_stamp.ok().flatten();
+        match self.download(url, &path, remote_stamp.as_deref()) {
+            Ok(()) => {}
+            // An older copy still builds a bundle, which beats no bundle at all.
+            Err(error) if path.exists() => {
+                tracing::warn!(url, %error, "could not download the newer version, using the cache");
+                return Ok(path);
+            }
+            Err(error) => return Err(error),
+        }
+        if let Some(remote) = remote_stamp {
             write_file(&stamp_path, remote.as_bytes())?;
         }
         Ok(path)
@@ -130,27 +139,92 @@ impl Downloader {
 
     /// Streams a URL into a file, through a temporary file so an interrupted download never
     /// replaces a good copy.
-    fn download(&self, url: &str, path: &Path) -> Result<(), DownloadError> {
+    ///
+    /// A connection that breaks off is resumed where it stopped, with a `Range` request. The
+    /// `If-Range` header carries `version_stamp`, so a server whose file changed in between
+    /// sends the whole new file instead of the rest of the old one.
+    fn download(
+        &self,
+        url: &str,
+        path: &Path,
+        version_stamp: Option<&str>,
+    ) -> Result<(), DownloadError> {
         let request_error = |source| DownloadError::Request {
             url: url.to_owned(),
             source,
         };
-        let mut response = self
-            .http_client
-            .get(url)
-            .send()
-            .and_then(reqwest::blocking::Response::error_for_status)
-            .map_err(request_error)?;
         let partial_path = path.with_extension("partial");
         let write_error = |source| DownloadError::Write {
             path: path.display().to_string(),
             source,
         };
         let mut file = fs::File::create(&partial_path).map_err(write_error)?;
-        response.copy_to(&mut file).map_err(request_error)?;
+        let mut received_bytes: u64 = 0;
+        let mut attempt = 1;
+        loop {
+            let mut request = self.http_client.get(url);
+            if received_bytes > 0 {
+                request =
+                    request.header(reqwest::header::RANGE, format!("bytes={received_bytes}-"));
+                if let Some(stamp) = version_stamp {
+                    request = request.header(reqwest::header::IF_RANGE, stamp);
+                }
+            }
+            let copied = request
+                .send()
+                .and_then(reqwest::blocking::Response::error_for_status)
+                .map_err(request_error)
+                .and_then(|mut response| {
+                    // A full answer to a range request means the server ignored the range or
+                    // the file changed, so the download starts over.
+                    if received_bytes > 0
+                        && response.status() != reqwest::StatusCode::PARTIAL_CONTENT
+                    {
+                        file.set_len(0).map_err(write_error)?;
+                        file.seek(io::SeekFrom::Start(0)).map_err(write_error)?;
+                        received_bytes = 0;
+                    }
+                    let mut counting = CountingWriter {
+                        inner: &mut file,
+                        written_bytes: &mut received_bytes,
+                    };
+                    response.copy_to(&mut counting).map_err(request_error)
+                });
+            match copied {
+                Ok(_) => break,
+                Err(error) if attempt < MAXIMUM_DOWNLOAD_ATTEMPTS => {
+                    tracing::warn!(url, %error, received_bytes, attempt, "download broke off, resuming");
+                    attempt += 1;
+                }
+                Err(error) => return Err(error),
+            }
+        }
         drop(file);
         fs::rename(&partial_path, path).map_err(write_error)?;
         Ok(())
+    }
+}
+
+/// How often a download that breaks off is tried again before the builder gives up on it.
+const MAXIMUM_DOWNLOAD_ATTEMPTS: u32 = 5;
+
+/// Passes writes on to a file and counts the bytes, so a broken download knows where to resume.
+struct CountingWriter<'a> {
+    /// The file that receives the bytes.
+    inner: &'a mut fs::File,
+    /// Bytes written so far, including those of earlier attempts.
+    written_bytes: &'a mut u64,
+}
+
+impl io::Write for CountingWriter<'_> {
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        let written = self.inner.write(buffer)?;
+        *self.written_bytes += written as u64;
+        Ok(written)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
     }
 }
 
