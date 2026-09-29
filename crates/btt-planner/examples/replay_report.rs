@@ -84,6 +84,11 @@ fn main() {
         } else {
             println!("  now:           {now}");
         }
+        if let LegPlanningResult::Found(plan) = &replanned {
+            for alternative in &plan.alternative_journeys {
+                println!("  alternative:   {}", describe_journey(plan, alternative));
+            }
+        }
     }
 }
 
