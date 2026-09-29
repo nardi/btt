@@ -35,6 +35,9 @@ const MAXIMUM_TRAIN_RIDES: NonZeroU8 = NonZeroU8::new(5).unwrap();
 /// Largest number of alternatives a leg plan shows next to the chosen journey.
 const MAXIMUM_ALTERNATIVES: usize = 4;
 
+/// Alternatives cost at most this many times the cost of the best journey.
+const MAXIMUM_ALTERNATIVE_COST_FACTOR: u32 = 2;
+
 /// Minutes in one day.
 const MINUTES_PER_DAY: u32 = 1440;
 
@@ -360,8 +363,28 @@ impl TimetableBundleRouter {
         else {
             return LegPlanningResult::NoJourneyFound(NoJourneyReason::NoConnectionInWindow);
         };
+        // Alternatives are the next journeys by cost, skipping ones that only repeat a shown
+        // journey at another time and ones far more costly than the best.
+        let lowest_cost = ranking
+            .journeys
+            .iter()
+            .map(|ranked| ranked.cost)
+            .min()
+            .unwrap_or(0);
+        let mut shown_routes = vec![self.journey_route(chosen.journey)];
         let alternative_journeys = alternatives
             .iter()
+            .filter(|ranked| {
+                ranked.cost <= lowest_cost.saturating_mul(MAXIMUM_ALTERNATIVE_COST_FACTOR)
+            })
+            .filter(|ranked| {
+                let route = self.journey_route(ranked.journey);
+                let is_new = !shown_routes.contains(&route);
+                if is_new {
+                    shown_routes.push(route);
+                }
+                is_new
+            })
             .take(MAXIMUM_ALTERNATIVES)
             .filter_map(|ranked| {
                 self.journey(ranked.journey, input, ranking.night.as_ref(), &mut stations)
@@ -373,6 +396,23 @@ impl TimetableBundleRouter {
             station_table: stations.table,
             follows_traveller_choice: ranking.follows_traveller_choice,
         }))
+    }
+
+    /// Returns what makes a journey a different option from another: the stations where the
+    /// traveller boards and leaves each train, and the train categories. Two journeys with the
+    /// same route differ only in time.
+    fn journey_route(
+        &self,
+        journey: &RaptorJourney,
+    ) -> Vec<(BundleStationIndex, BundleStationIndex, &str)> {
+        journey
+            .rides
+            .iter()
+            .map(|ride| {
+                let (category, _, _) = self.bundle.trip_train_label(ride.trip);
+                (ride.boarding_station, ride.alighting_station, category)
+            })
+            .collect()
     }
 
     /// Returns whether a journey has the first departure and the trains of a choice.
