@@ -272,7 +272,10 @@
     font-weight: 600;
   }
 
-  .dates,
+  .dates {
+    color: var(--color-text-muted);
+  }
+
   .stay input {
     width: 4em;
   }

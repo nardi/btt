@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { LegPlan } from "./bindings";
-import { placeBounds, radiusCircles, rideLines, stationWayLines } from "./map-features";
+import { placeBounds, radiusCircles, rideLines, stationWayLines, transferPoints } from "./map-features";
 import { amsterdamViennaRome } from "./test-fixtures";
 import type { LegViewState, TripViewState } from "./trip-source";
 
@@ -56,12 +56,52 @@ describe("rideLines", () => {
   it("draws planned rides and skips pending legs", () => {
     const lines = rideLines(viewState([[3, { status: "found", legPlan: viennaToRome }]]));
     expect(lines.features).toHaveLength(1);
-    expect(lines.features[0]!.properties).toEqual({ arrivalPlaceId: 3, offersBerths: true });
-    expect(lines.features[0]!.geometry.coordinates).toEqual([
-      [16.3761, 48.1852],
-      [11.2, 43.7],
-      [12.5007, 41.901],
-    ]);
+    const line = lines.features[0]!;
+    expect(line.properties).toMatchObject({ arrivalPlaceId: 3, offersBerths: true });
+    expect(line.properties.tooltip.split("\n")[0]).toBe("NJ 40233");
+    // The curve starts and ends at the stations and passes the station in between.
+    const coordinates = line.geometry.coordinates;
+    expect(coordinates[0]).toEqual([16.3761, 48.1852]);
+    expect(coordinates.at(-1)![0]).toBeCloseTo(12.5007, 6);
+    expect(coordinates.at(-1)![1]).toBeCloseTo(41.901, 6);
+    expect(
+      coordinates.some(([longitude, latitude]) => Math.abs(longitude! - 11.2) < 1e-5 && Math.abs(latitude! - 43.7) < 1e-5),
+    ).toBe(true);
+  });
+});
+
+describe("transferPoints", () => {
+  it("marks the start, the end and every transfer of a journey", () => {
+    const withTransfer: LegPlan = {
+      ...viennaToRome,
+      chosen_journey: {
+        ...viennaToRome.chosen_journey,
+        first_ride: { ...viennaToRome.chosen_journey.first_ride, alighting_station: 2, arrival_time: 300 },
+        later_rides: [
+          {
+            transfer_duration: 25,
+            ride: {
+              ...viennaToRome.chosen_journey.first_ride,
+              boarding_station: 2,
+              departure_time: 325,
+              train_label: { category: "FR", number: "9541" },
+              offers_berths: false,
+              intermediate_station_coordinates: [],
+            },
+          },
+        ],
+      },
+      station_table: [
+        ...viennaToRome.station_table,
+        { name: "Firenze SMN", coordinates: { latitude: 43.7765, longitude: 11.2478 }, time_zone: "Europe/Rome" },
+      ],
+    };
+    const points = transferPoints(viewState([[3, { status: "found", legPlan: withTransfer }]]));
+    expect(points.features.map((point) => point.properties.kind)).toEqual(["journey-end", "transfer", "journey-end"]);
+    const transfer = points.features[1]!.properties.tooltip.split("\n");
+    expect(transfer[0]).toBe("Transfer at Firenze SMN");
+    expect(transfer[2]).toContain("FR 9541");
+    expect(transfer[3]).toBe("25 min to change");
   });
 });
 

@@ -63,7 +63,6 @@
   <input
     type="text"
     inputmode="numeric"
-    size="5"
     placeholder={startPlaceholder}
     aria-invalid={invalid}
     bind:value={startText}
@@ -73,7 +72,6 @@
   <input
     type="text"
     inputmode="numeric"
-    size="5"
     placeholder={endPlaceholder}
     aria-invalid={invalid}
     bind:value={endText}
@@ -85,15 +83,22 @@
 </label>
 
 <style>
+  /* The field wraps rather than widening the itinerary column, which is narrow next to the map. */
   .time-window-override-field {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-2);
+    gap: var(--space-1) var(--space-2);
   }
 
   .label {
-    min-width: 10em;
+    min-width: 9em;
     color: var(--color-text-muted);
+  }
+
+  input {
+    width: 4.5em;
+    min-width: 0;
   }
 
   input[aria-invalid="true"] {
@@ -101,6 +106,7 @@
   }
 
   .error {
+    flex-basis: 100%;
     color: var(--color-danger);
   }
 </style>

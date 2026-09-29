@@ -5,8 +5,16 @@
   import "maplibre-gl/dist/maplibre-gl.css";
 
   import type { GeoCoordinates, TripEdit, TripPlace, TripPlaceId } from "../bindings";
-  import type { Map as MapLibreMap, MapMouseEvent } from "maplibre-gl";
-  import { FillLayer, GeoJSONSource, LineLayer, MapLibre, Marker } from "svelte-maplibre-gl";
+  import type { Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent } from "maplibre-gl";
+  import {
+    CircleLayer,
+    FillLayer,
+    GeoJSONSource,
+    LineLayer,
+    MapLibre,
+    Marker,
+    Popup,
+  } from "svelte-maplibre-gl";
 
   import { destinationPoint, haversineMeters } from "../geo";
   import { tripPlaces } from "../itinerary";
@@ -17,6 +25,7 @@
     radiusCircles,
     rideLines,
     stationWayLines,
+    transferPoints,
   } from "../map-features";
   import type { TripSource } from "../trip-source";
 
@@ -63,6 +72,29 @@
   const circles = $derived(radiusCircles(trip, selectedPlaceId, dragPreview));
   const rides = $derived(rideLines(source.viewState));
   const stationWays = $derived(stationWayLines(source.viewState));
+  const transfers = $derived(transferPoints(source.viewState));
+
+  /** The feature under the pointer and where its tooltip goes, or `null` when there is none. */
+  let tooltip: { lnglat: [number, number]; lines: string[] } | null = $state(null);
+
+  /** Shows the tooltip of the feature under the pointer, which carries its text as a property. */
+  function showTooltip(event: MapLayerMouseEvent) {
+    const text = event.features?.[0]?.properties?.["tooltip"];
+    if (typeof text !== "string") {
+      return;
+    }
+    tooltip = { lnglat: [event.lngLat.lng, event.lngLat.lat], lines: text.split("\n") };
+    if (map !== undefined) {
+      map.getCanvas().style.cursor = "pointer";
+    }
+  }
+
+  function hideTooltip() {
+    tooltip = null;
+    if (map !== undefined) {
+      map.getCanvas().style.cursor = "";
+    }
+  }
 
   // Zooms to all places when a trip opens.
   $effect(() => {
@@ -231,7 +263,43 @@
         "line-width": 3,
       }}
     />
+    <!-- A wide invisible line catches the pointer, because a 3 pixel line is hard to hit. -->
+    <LineLayer
+      paint={{ "line-color": "#000000", "line-opacity": 0, "line-width": 14 }}
+      onmousemove={showTooltip}
+      onmouseleave={hideTooltip}
+    />
   </GeoJSONSource>
+
+  <GeoJSONSource id="transfer-points" data={transfers}>
+    <CircleLayer
+      paint={{
+        "circle-radius": ["case", ["==", ["get", "kind"], "transfer"], 6, 4],
+        "circle-color": "#ffffff",
+        "circle-stroke-color": "#c2410c",
+        "circle-stroke-width": ["case", ["==", ["get", "kind"], "transfer"], 3, 2],
+      }}
+      onmousemove={showTooltip}
+      onmouseleave={hideTooltip}
+    />
+  </GeoJSONSource>
+
+  {#if tooltip !== null}
+    <Popup
+      lnglat={tooltip.lnglat}
+      open
+      closeButton={false}
+      closeOnClick={false}
+      offset={10}
+      maxWidth="280px"
+    >
+      <div class="map-tooltip">
+        {#each tooltip.lines as line, lineIndex (lineIndex)}
+          <div class:title={lineIndex === 0}>{line}</div>
+        {/each}
+      </div>
+    </Popup>
+  {/if}
 
   {#each places as place, index (place.id)}
     <Marker
@@ -289,6 +357,16 @@
 
   .place-marker.selected {
     background: #c2410c;
+  }
+
+  .map-tooltip {
+    color: #1b2430;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .map-tooltip .title {
+    font-weight: 600;
   }
 
   .radius-handle {
