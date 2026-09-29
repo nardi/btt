@@ -12,6 +12,6 @@ mod search;
 
 pub use index::SearchIndex;
 pub use search::{
-    BoardAnyTrip, BoardingFilter, CandidateStation, MinutesSinceBundleStart, ParetoJourneySet,
-    RaptorJourney, RaptorLegQuery, RaptorRide, RaptorSearchBuffers, search_leg_journeys,
+    AllowEveryRide, CandidateStation, MinutesSinceBundleStart, ParetoJourneySet, RaptorJourney,
+    RaptorLegQuery, RaptorRide, RaptorSearchBuffers, RideFilter, search_leg_journeys,
 };

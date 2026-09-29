@@ -11,8 +11,8 @@ use btt_model::{
     StationWay, TrainLabel, TrainRide, TransferAndRide, UnixTimeMinutes, WayToStationMode,
 };
 use btt_router::{
-    BoardAnyTrip, BoardingFilter, CandidateStation, MinutesSinceBundleStart, ParetoJourneySet,
-    RaptorJourney, RaptorLegQuery, RaptorSearchBuffers, SearchIndex, search_leg_journeys,
+    AllowEveryRide, CandidateStation, MinutesSinceBundleStart, ParetoJourneySet, RaptorJourney,
+    RaptorLegQuery, RaptorSearchBuffers, RideFilter, SearchIndex, search_leg_journeys,
 };
 use btt_timetable::{
     BundleLoadError, BundleStationIndex, BundleTripIndex, LoadedTimetableBundle, RaptorRouteIndex,
@@ -59,23 +59,48 @@ fn bedtime_minute(options: OvernightLegOptions) -> u32 {
     }
 }
 
-/// Allows trains with berths at any time and other trains only when they depart outside the
-/// night, so a seated train through the night cannot push a night train out of the Pareto set.
-struct NightBoardingFilter<'a> {
+/// Minutes before the wake-up time from which trains without berths may be boarded again in
+/// the night search. Seated trains through the night depart in the evening, while the trains
+/// that follow a night train depart in the early morning.
+const MORNING_BOARDING_MINUTES: u32 = 3 * 60;
+
+/// Keeps night trains in the Pareto set, where a seated train that leaves later or arrives
+/// earlier would otherwise beat them in time.
+///
+/// Trains with berths may be boarded at any time, other trains not in the core of the night,
+/// from bedtime to `MORNING_BOARDING_MINUTES` before wake-up. A train with berths may not be
+/// left before wake-up, except where it ends, so the search also finds the journeys that
+/// stay on it as long as the traveller wants to sleep.
+struct NightRideFilter<'a> {
     /// The bundle that says which trips have berths.
     bundle: &'a LoadedTimetableBundle,
     /// The night in bundle minutes.
     night: std::ops::Range<u32>,
 }
 
-impl BoardingFilter for NightBoardingFilter<'_> {
+impl RideFilter for NightRideFilter<'_> {
     fn may_board(
         &self,
         _: RaptorRouteIndex,
         trip: BundleTripIndex,
         departure: MinutesSinceBundleStart,
     ) -> bool {
-        !self.night.contains(&departure.0) || self.bundle.trip_offers_berths(trip)
+        let core_end = self
+            .night
+            .end
+            .saturating_sub(MORNING_BOARDING_MINUTES)
+            .max(self.night.start);
+        !(self.night.start..core_end).contains(&departure.0) || self.bundle.trip_offers_berths(trip)
+    }
+
+    fn may_alight(
+        &self,
+        _: RaptorRouteIndex,
+        trip: BundleTripIndex,
+        arrival: MinutesSinceBundleStart,
+        is_last_stop: bool,
+    ) -> bool {
+        is_last_stop || !self.night.contains(&arrival.0) || !self.bundle.trip_offers_berths(trip)
     }
 }
 
@@ -236,7 +261,7 @@ impl TimetableBundleRouter {
             &arrival_candidates,
             departure_window.clone(),
             input,
-            &BoardAnyTrip,
+            &AllowEveryRide,
             should_stop,
         );
         let night = self.night_in_bundle_minutes(input);
@@ -244,7 +269,7 @@ impl TimetableBundleRouter {
             // A second search keeps night trains that the first one prunes, because a seated
             // train that leaves later or arrives earlier beats them in time. The ranking then
             // weighs the sleep against the time.
-            let filter = NightBoardingFilter {
+            let filter = NightRideFilter {
                 bundle: &self.bundle,
                 night: night.clone(),
             };
@@ -279,7 +304,12 @@ impl TimetableBundleRouter {
         search: &'search LegSearch,
         input: &LegPlanningInput,
     ) -> JourneyRanking<'search> {
-        let arrival_window = self.arrival_window_in_bundle_minutes(input);
+        let mut arrival_window = self.arrival_window_in_bundle_minutes(input);
+        // Arriving before the wake-up time counts as arriving outside the window.
+        if let Some(night) = &search.night {
+            arrival_window.start = arrival_window.start.max(night.end);
+            arrival_window.end = arrival_window.end.max(arrival_window.start);
+        }
         let mut journeys: Vec<RankedJourney<'search>> = search
             .journeys
             .journeys
@@ -367,7 +397,7 @@ impl TimetableBundleRouter {
     /// Range search reuses labels from later departures within one part only, so the parts do
     /// more work in total than one search over the whole window. They finish sooner because
     /// they run at the same time, and the merged journeys are the same.
-    fn search_in_parallel<F: BoardingFilter + Sync>(
+    fn search_in_parallel<F: RideFilter + Sync>(
         &self,
         departure_candidates: &[CandidateStation],
         arrival_candidates: &[CandidateStation],
@@ -547,7 +577,13 @@ impl TimetableBundleRouter {
             let sleeping = self
                 .sleeping_ride(journey, night)
                 .map_or(0, |(_, covered)| covered);
-            (sleeping, (night.end - night.start) - sleeping)
+            // After arriving, the traveller is at the place, where the arrival window counts
+            // instead.
+            let travelling_night_end = arrival.min(night.end).max(night.start);
+            (
+                sleeping,
+                (travelling_night_end - night.start).saturating_sub(sleeping),
+            )
         });
         JourneyCostInputs {
             door_to_door_minutes: arrival.saturating_sub(journey.departure.0),

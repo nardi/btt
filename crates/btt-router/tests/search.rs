@@ -4,12 +4,12 @@ use std::num::NonZeroU8;
 
 use btt_model::GeoCoordinates;
 use btt_router::{
-    BoardAnyTrip, CandidateStation, MinutesSinceBundleStart, RaptorLegQuery, RaptorSearchBuffers,
-    SearchIndex, search_leg_journeys,
+    AllowEveryRide, CandidateStation, MinutesSinceBundleStart, RaptorLegQuery, RaptorSearchBuffers,
+    RideFilter, SearchIndex, search_leg_journeys,
 };
 use btt_timetable::{
-    BundleBuilder, BundleStationIndex, LoadedTimetableBundle, ServiceDayBitset, StationInput,
-    TrainLabelInput, TripInput, TripStopInput,
+    BundleBuilder, BundleStationIndex, BundleTripIndex, LoadedTimetableBundle, RaptorRouteIndex,
+    ServiceDayBitset, StationInput, TrainLabelInput, TripInput, TripStopInput,
 };
 use chrono::NaiveDate;
 
@@ -104,6 +104,18 @@ fn search(
     window_start: u32,
     window_end: u32,
 ) -> Vec<(u32, u32, usize, Vec<String>)> {
+    search_with_filter(bundle, from, to, window_start, window_end, &AllowEveryRide)
+}
+
+/// Searches like `search`, with a filter on boarding and alighting.
+fn search_with_filter(
+    bundle: &LoadedTimetableBundle,
+    from: &[CandidateStation],
+    to: &[CandidateStation],
+    window_start: u32,
+    window_end: u32,
+    filter: &impl RideFilter,
+) -> Vec<(u32, u32, usize, Vec<String>)> {
     let query = RaptorLegQuery {
         departure_candidates: from,
         arrival_candidates: to,
@@ -116,7 +128,7 @@ fn search(
         bundle,
         &SearchIndex::new(bundle),
         &query,
-        &BoardAnyTrip,
+        filter,
         &mut RaptorSearchBuffers::new(),
         || false,
     );
@@ -294,4 +306,53 @@ fn starts_from_the_best_of_several_departure_stations() {
             (595, 800, 1, vec!["slow".to_owned()])
         ]
     );
+}
+
+/// Forbids leaving any train before a moment, except where the train ends.
+struct NoAlightingBefore(u32);
+
+impl RideFilter for NoAlightingBefore {
+    fn may_board(
+        &self,
+        _: RaptorRouteIndex,
+        _: BundleTripIndex,
+        _: MinutesSinceBundleStart,
+    ) -> bool {
+        true
+    }
+
+    fn may_alight(
+        &self,
+        _: RaptorRouteIndex,
+        _: BundleTripIndex,
+        arrival: MinutesSinceBundleStart,
+        is_last_stop: bool,
+    ) -> bool {
+        is_last_stop || arrival.0 >= self.0
+    }
+}
+
+#[test]
+fn a_forbidden_stop_keeps_the_traveller_on_the_train() {
+    let mut network = Network::new();
+    let a = network.station("A");
+    let b = network.station("B");
+    let c = network.station("C");
+    let d = network.station("D");
+    network.trip("1", &[(a, 600, 600), (b, 700, 702), (c, 800, 800)]);
+    network.trip("2", &[(b, 720, 720), (d, 780, 780)]);
+    network.trip("3", &[(c, 810, 810), (d, 900, 900)]);
+    let bundle = network.build();
+    let from = [candidate(a, 0)];
+    let to = [candidate(d, 0)];
+
+    let free = search(&bundle, &from, &to, 590, 610);
+    assert_eq!(free[0].3, ["1", "2"]);
+
+    // Leaving train 1 at B at minute 700 is forbidden, so the traveller rides on to its end
+    // at C and changes there.
+    let kept_on = search_with_filter(&bundle, &from, &to, 590, 610, &NoAlightingBefore(750));
+    assert_eq!(kept_on.len(), 1);
+    assert_eq!(kept_on[0].3, ["1", "3"]);
+    assert_eq!(kept_on[0].1, 900);
 }

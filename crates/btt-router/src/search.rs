@@ -47,8 +47,8 @@ pub struct RaptorLegQuery<'a> {
     pub maximum_train_rides: NonZeroU8,
 }
 
-/// Decides which trips the router may board.
-pub trait BoardingFilter {
+/// Decides which trips the router may board, and where the traveller may leave them.
+pub trait RideFilter {
     /// Returns whether the traveller may board a trip that departs at a moment.
     fn may_board(
         &self,
@@ -56,13 +56,26 @@ pub trait BoardingFilter {
         trip: BundleTripIndex,
         departure: MinutesSinceBundleStart,
     ) -> bool;
+
+    /// Returns whether the traveller may leave a trip at a stop where it arrives at a moment.
+    /// `is_last_stop` says whether the trip ends there. Every stop is allowed by default.
+    #[inline]
+    fn may_alight(
+        &self,
+        _raptor_route: RaptorRouteIndex,
+        _trip: BundleTripIndex,
+        _arrival: MinutesSinceBundleStart,
+        _is_last_stop: bool,
+    ) -> bool {
+        true
+    }
 }
 
-/// Allows every trip.
+/// Allows every trip and every stop.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct BoardAnyTrip;
+pub struct AllowEveryRide;
 
-impl BoardingFilter for BoardAnyTrip {
+impl RideFilter for AllowEveryRide {
     #[inline]
     fn may_board(
         &self,
@@ -264,7 +277,7 @@ struct BoardedTrip {
 }
 
 /// One search, with the query, the bundle and the working memory.
-struct Search<'a, F: BoardingFilter> {
+struct Search<'a, F: RideFilter> {
     bundle: &'a LoadedTimetableBundle,
     index: &'a SearchIndex,
     query: &'a RaptorLegQuery<'a>,
@@ -278,7 +291,7 @@ struct Search<'a, F: BoardingFilter> {
 ///
 /// `index` must be built from the same bundle. `should_stop` is checked between
 /// departure times, and the search returns what it has when it returns `true`.
-pub fn search_leg_journeys<F: BoardingFilter>(
+pub fn search_leg_journeys<F: RideFilter>(
     bundle: &LoadedTimetableBundle,
     index: &SearchIndex,
     query: &RaptorLegQuery<'_>,
@@ -345,7 +358,7 @@ pub fn search_leg_journeys<F: BoardingFilter>(
     found
 }
 
-impl<F: BoardingFilter> Search<'_, F> {
+impl<F: RideFilter> Search<'_, F> {
     /// Returns the label of a station in a round.
     #[inline]
     fn label(&self, round: usize, station: BundleStationIndex) -> Option<Label> {
@@ -513,21 +526,29 @@ impl<F: BoardingFilter> Search<'_, F> {
                 let times = self.bundle.stop_event(&route, trip.trip_offset, position);
                 let arrival =
                     u32::from(trip.service_day) * MINUTES_PER_DAY + u32::from(times.arrival.0);
-                let ride = RideOrigin {
+                let may_alight = self.filter.may_alight(
                     raptor_route,
-                    trip_offset: trip.trip_offset,
-                    service_day: trip.service_day,
-                    boarding_position: trip.boarding_position,
-                };
-                self.record_ride_arrival(round, station, arrival, ride);
-                self.improve(
-                    round,
-                    station,
-                    Label {
-                        arrival,
-                        origin: LabelOrigin::TrainRide(ride),
-                    },
+                    BundleTripIndex(route.first_trip_index + trip.trip_offset),
+                    MinutesSinceBundleStart(arrival),
+                    position + 1 == route.stop_count,
                 );
+                if may_alight {
+                    let ride = RideOrigin {
+                        raptor_route,
+                        trip_offset: trip.trip_offset,
+                        service_day: trip.service_day,
+                        boarding_position: trip.boarding_position,
+                    };
+                    self.record_ride_arrival(round, station, arrival, ride);
+                    self.improve(
+                        round,
+                        station,
+                        Label {
+                            arrival,
+                            origin: LabelOrigin::TrainRide(ride),
+                        },
+                    );
+                }
             }
             if !pattern_stop.boarding_allowed() {
                 continue;

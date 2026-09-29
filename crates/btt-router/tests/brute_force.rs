@@ -9,7 +9,7 @@ use std::num::NonZeroU8;
 
 use btt_model::GeoCoordinates;
 use btt_router::{
-    BoardAnyTrip, CandidateStation, MinutesSinceBundleStart, ParetoJourneySet, RaptorLegQuery,
+    AllowEveryRide, CandidateStation, MinutesSinceBundleStart, ParetoJourneySet, RaptorLegQuery,
     RaptorSearchBuffers, SearchIndex, search_leg_journeys,
 };
 use btt_timetable::{
@@ -213,7 +213,7 @@ fn router_journeys(
             &bundle,
             &index,
             &query,
-            &BoardAnyTrip,
+            &AllowEveryRide,
             &mut RaptorSearchBuffers::new(),
             || false,
         )

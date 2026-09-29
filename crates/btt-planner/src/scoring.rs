@@ -50,7 +50,7 @@ pub struct JourneyCostInputs {
     /// Minutes of the night between bedtime and wake-up time spent on the train with berths the
     /// traveller sleeps on. They are part of the door-to-door time but cost nothing.
     pub sleeping_minutes: u32,
-    /// Minutes of the night not spent on that train.
+    /// Minutes of the night up to the arrival that are not spent on that train.
     pub night_minutes_awake: u32,
 }
 

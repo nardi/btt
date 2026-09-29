@@ -14,7 +14,7 @@ use crate::stub::StubBackend;
 /// Revision of the planner's results. Cached results are `postcard` bytes, which don't
 /// survive a change to the layout of `LegPlanningResult`, and a change to the planning logic
 /// makes them stale. Either change raises this number, so the app drops the old results.
-const LEG_PLAN_REVISION: u64 = 2;
+const LEG_PLAN_REVISION: u64 = 3;
 
 /// Plans single legs. An enum instead of a trait object, because the set of backends is fixed
 /// at compile time.
