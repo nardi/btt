@@ -256,5 +256,5 @@ export function explainSearch(plan: LegPlan): string {
     window === null || window === undefined
       ? "Only journeys in your departure window were compared"
       : `Only journeys leaving between ${formatTimeInZone(window.start, timeZone)} and ${formatTimeInZone(window.end, timeZone)} were compared`;
-  return `${leaving}, and a journey was left out when another leaves no earlier, arrives no later and has no more changes.`;
+  return `${leaving}, and a journey was left out when another leaves no earlier, arrives no later, has no more changes and costs no more.`;
 }

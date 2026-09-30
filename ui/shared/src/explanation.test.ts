@@ -124,7 +124,7 @@ describe("explanations", () => {
       "Each part counts as minutes on a train. A change counts as 1 h 5 min at your transfer aversion.",
     );
     expect(explainSearch(plan(fast, []))).toBe(
-      "Only journeys leaving between 07:00 and 20:00 were compared, and a journey was left out when another leaves no earlier, arrives no later and has no more changes.",
+      "Only journeys leaving between 07:00 and 20:00 were compared, and a journey was left out when another leaves no earlier, arrives no later, has no more changes and costs no more.",
     );
   });
 });

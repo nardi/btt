@@ -308,6 +308,9 @@ impl JourneyCostModel for WindowCostModel {
     ) -> i32 {
         self.elapsed_cost(departure, earliest_arrival)
     }
+    fn ride_cost_depends_on_time(&self, _: RaptorRouteIndex) -> bool {
+        false
+    }
 }
 
 /// Every journey as departure, arrival, number of trains and cost, with no two alike and none

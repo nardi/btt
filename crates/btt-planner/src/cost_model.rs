@@ -28,6 +28,11 @@ pub(crate) struct LegCostModel<'a> {
     pub(crate) arrival_window: Range<u32>,
     /// The night from bedtime to wake-up in bundle minutes, on an overnight leg.
     pub(crate) night: Option<Range<u32>>,
+    /// Journeys that cost more than this many times the cheapest one found are not searched
+    /// for, because the leg plan wouldn't show them.
+    pub(crate) cost_limit_factor: u32,
+    /// Whether each route has a trip with berths.
+    pub(crate) routes_with_berths: &'a [bool],
 }
 
 /// Converts a minute count or a percentage to the model's signed arithmetic.
@@ -140,6 +145,24 @@ impl JourneyCostModel for LegCostModel<'_> {
         let later_arrival_saving = signed(self.weights.arrival_before_window_percent.min(100));
         elapsed - sleep_before * self.sleep_per_minute() - sleep_after * later_arrival_saving
     }
+
+    /// A ride costs a change penalty, which doesn't depend on time, and takes off the night
+    /// minutes on a train with berths, which does. Without a night or berths, time doesn't
+    /// matter.
+    fn ride_cost_depends_on_time(&self, raptor_route: RaptorRouteIndex) -> bool {
+        self.night.is_some()
+            && self
+                .routes_with_berths
+                .get(raptor_route.as_usize())
+                .is_none_or(|&has_berths| has_berths)
+    }
+    /// The extra minute covers the rounding in which this cost and the ranking's differ.
+    fn cost_limit(&self, best_cost: i32) -> i32 {
+        best_cost
+            .max(0)
+            .saturating_mul(signed(self.cost_limit_factor))
+            .saturating_add(HUNDREDTHS)
+    }
 }
 
 #[cfg(test)]
@@ -209,6 +232,8 @@ mod tests {
             transfer_cost_minutes: transfer_cost_minutes(aversion, weights),
             arrival_window: 1800..1900,
             night: Some(1320..1800),
+            cost_limit_factor: 2,
+            routes_with_berths: &[],
         };
         let (berth_trip, seated_trip) = if bundle.trip_offers_berths(BundleTripIndex(0)) {
             (BundleTripIndex(0), BundleTripIndex(1))

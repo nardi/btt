@@ -62,15 +62,17 @@ Legs that meet at a place with nights are independent, because the traveller sle
 
 ## Algorithmic structure
 
-The planner doesn't solve the problem above directly. It splits it into a search that doesn't know the costs, followed by a ranking that does. This is the a posteriori approach of multi-objective optimization: first compute the set of solutions that no other solution beats on a few criteria, then pick among them with a weighted sum.
+The planner doesn't solve the problem above in one go. Per leg, a search finds the journeys that no other journey beats on departure, arrival, number of trains and cost. A ranking then picks among them, with the costs of the rest of the chain added in. This is the a posteriori approach of multi-objective optimization: first compute the set of solutions that no other solution beats on a few criteria, then pick among them with a weighted sum.
 
 ### Pareto search per leg
 
-The search is RAPTOR, the round-based algorithm of Delling, Pajor and Werneck ("Round-Based Public Transit Routing", 2012). RAPTOR doesn't build the time-expanded graph. It works on the timetable directly: round $k$ finds the earliest arrival at every station using at most $k$ trains, by scanning each route that serves a station improved in the round before. The rounds are exactly the ride constraint above, so the ride count comes for free.
+The search builds on RAPTOR, the round-based algorithm of Delling, Pajor and Werneck ("Round-Based Public Transit Routing", 2012). RAPTOR doesn't build the time-expanded graph. It works on the timetable directly: round $k$ finds the earliest arrival at every station using at most $k$ trains, by scanning each route that serves a station improved in the round before. The rounds are exactly the ride constraint above, so the ride count comes for free.
 
-The planner runs RAPTOR as a range query over the departure window, the variant known as rRAPTOR. It starts from the latest departure and works back, reusing the labels of later departures. The result is the set of journeys that no other journey beats on all three of: a later departure, an earlier arrival and fewer trains. For a typical leg that is between 10 and 30 journeys. The window is split into parts that run on separate threads, and the results are merged into one set.
+Plain RAPTOR keeps one label per station and round, the earliest arrival. The planner keeps a bag of labels instead, each with an arrival time and the cost added so far, as McRAPTOR from the same paper does. A label only drops another at the same station when it arrives no later and has cost no more. The added cost is every term of the table except the time itself: the extra weight of the ways to stations, the change penalties and the sleep on each ride. The time and the arrival window terms are added when a label reaches the arrival place, because they depend only on when the traveller left and arrived. Each term sits on single edges, so the cost adds up along the path as the standard form says.
 
-Two techniques from the literature keep this fast. A backward search from the arrival stations over the fastest times between stations gives a lower bound for every station, and a label that can't beat the best arrival found so far, even with that bound, is dropped. And the search skips the days on which no trip of a route runs. Both are exact: they never drop a journey the plain search would keep. MOTIS, whose routing core nigiri is also based on RAPTOR, uses similar techniques.
+The planner runs the search as a range query over the departure window, the variant known as rRAPTOR. It starts from the latest departure and works back, reusing the labels of later departures. The result is the set of journeys that no other journey beats on all four of: a later departure, an earlier arrival, fewer trains and a lower cost. For a typical leg that is between 10 and 50 journeys. The window is split into parts that run on separate threads, and the results are merged into one set.
+
+Three techniques keep this fast. A backward search from the arrival stations over the fastest times between stations gives a lower bound on the arrival for every station. With a lower bound on the cost still to come, a label is dropped when a journey already found arrives no later and costs no more than the label could at best. On a night leg the cost bound subtracts the sleep that is still possible, which makes it weak in the evening. The search also skips the days on which no trip of a route runs. And on routes without berths, where a ride's cost doesn't depend on its times, an earlier trip that was boarded with no more cost stands for the later trips of the same day. MOTIS, whose routing core nigiri is also based on RAPTOR, uses similar techniques.
 
 Other algorithms solve the same search problem. The Connection Scan Algorithm (Dibbelt et al., 2013) scans a sorted list of connections instead of routes, and Trip-Based Routing (Witt, 2015) precomputes the transfers between trips. RAPTOR fits well here because the ride count is a natural part of it, and because it works on a timetable that is rebuilt every few days without preprocessing.
 
@@ -78,16 +80,11 @@ Other algorithms solve the same search problem. The Connection Scan Algorithm (D
 
 The ranking computes each journey's cost from the table above and orders the journeys by it. The cheapest journey is the chosen one, unless the traveller picked another, and the alternatives are the next cheapest. An alternative that only repeats a shown journey at another time, with the same stations and train types, is left out, and so is one that costs more than twice the best.
 
-Because the cost is a sum of named terms, the difference between two journeys splits exactly into those terms. The planner gives every journey its cost broken into these parts, and for a leg of a chain one more part with everything the rest of the chain adds. From them, the traveller can see why a journey was chosen: the one or two parts that differ most from the best alternative, such as an earlier arrival that outweighs one more change, the same for each alternative and for the best journey on a nearby day, and which journeys the search left out before any costs were compared.
+Because the cost is a sum of named terms, the difference between two journeys splits exactly into those terms. The planner gives every journey its cost broken into these parts, and for a leg of a chain one more part with everything the rest of the chain adds. From them, the traveller can see why a journey was chosen: the one or two parts that differ most from the best alternative, such as an earlier arrival that outweighs one more change, the same for each alternative and for the best journey on a nearby day, and which journeys the search left out.
 
 ### Night legs
 
-For a leg with a night train, the departure window is the 8 hours before bedtime, and the arrival window moves to the morning after. Next to the normal search, a second search runs with two extra constraints:
-
-1. Trains without berths can't be boarded between bedtime and 3 hours before the wake-up time.
-2. A train with berths can't be left before the wake-up time, except at its last stop.
-
-The journeys of both searches are united without pruning, and the ranking weighs the sleep against the travel time. The section on heuristics explains why the second search is needed.
+For a leg with a night train, the departure window is the 8 hours before bedtime, and the arrival window moves to the morning after. Arriving before the wake-up time counts as arriving before the window. The search itself needs nothing else, because the sleep is part of the cost it adds up. A traveller who stays on a night train to a later stop arrives later but sleeps longer, and the search keeps both journeys because neither beats the other on arrival and cost.
 
 ### Chains of legs
 
@@ -103,16 +100,16 @@ After the plan, the planner solves each chain again with every date moved a day 
 
 The planner is exact for part of the cost and a heuristic for the rest. This section lists where it departs from the stated problem.
 
-### Pruning before costing
+### Pruning in the search
 
-The Pareto search drops a journey when another leaves no earlier, arrives no later and uses no more trains. That is only safe when a lower cost always comes with a later departure, an earlier arrival or fewer trains. The arrival window keeps to that condition, because arriving early costs no more than waiting. Two terms break it:
+The search is exact for the stated cost in all but two places.
 
-1. **Sleep.** Staying on a night train to a later stop arrives later, yet sleeps longer and can cost less. For example, a traveller with a wake-up time of 09:30 on a night train that reaches Basel at 06:21 and Zürich at 08:05 sleeps longer by staying on to Zürich, but the plain search keeps only the journey that gets off in Basel, because it arrives earlier with the same number of trains.
-2. **Ways to and from stations.** The search counts them as travel time, while the cost weighs them one and a half times, so a journey from a closer station can be dropped in favour of one that is a few minutes faster from a farther station.
+1. **Only the earliest trip.** At each stop, a label boards the earliest trip of a route it can reach, as in RAPTOR. A later trip of the same route is only tried from a later label. On a route with berths, a later trip can cover more of the night and cost less. A traveller who could wait for it at a station in the evening but doesn't leave the place later won't get it, which is rare because the search also starts from every later departure from the place.
+2. **Costly journeys.** Once a journey is found, labels that can't cost less than twice its cost are dropped, even when their journeys would leave later or arrive earlier. The ranking shows no alternative that costs more than twice the best, so these journeys would only matter for a chain, where the rest of the chain can make an otherwise costly journey the best.
 
-The second night search is a patch for the first case: its extra constraints remove the seated journeys that would push a night train out of the set, and the rule about leaving a berth keeps the journeys that stay on board. The 3-hour limit on boarding seated trains is a guess about when the night ends for a traveller who slept on a train, and it can still let a seated overnight journey through, or keep a traveller from an early seated train after a night train.
+The search counts cost in hundredths of a minute, while the ranking rounds the extra weight of the ways to stations to whole minutes once per journey. The two differ by less than a minute, and the ranking recomputes the cost of every journey the search returns.
 
-An exact method gives the search the cost as a fourth criterion, as McRAPTOR adds criteria to RAPTOR (Delling et al., 2012). Each station then keeps the labels that no other label beats on arrival time, cost so far and number of trains, and pruning stays safe for every term that the search can add up along the path. For the arrival window, the term is added when a label reaches the arrival place. McRAPTOR is usually a few times slower than RAPTOR. With single searches taking between 5 and 50 milliseconds, that is affordable.
+Searching with the cost as a criterion takes longer than the plain search on arrival and trains, because each station holds more labels and the cost bound prunes less. On the MOTIS benchmark queries planned as legs, the median planning time goes from 16 to 44 milliseconds for daytime legs, and from 26 to 231 milliseconds for night legs, with a slowest leg of about 1.3 seconds. In return, 187 of the 500 night legs and 21 of the 500 daytime legs get a cheaper journey, and none gets a costlier one. Most of the night gains come from night trains that a seated train arriving earlier had pushed out of the plain search's results.
 
 ### The sleep term
 

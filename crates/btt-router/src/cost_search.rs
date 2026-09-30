@@ -10,15 +10,17 @@
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 
-use btt_timetable::{BundleStationIndex, BundleTripIndex, LoadedTimetableBundle, RaptorRouteIndex};
+use btt_timetable::{
+    BundleStationIndex, BundleTripIndex, LoadedTimetableBundle, RaptorRoute, RaptorRouteIndex,
+};
 use fixedbitset::FixedBitSet;
 use smallvec::SmallVec;
 
 use crate::index::SearchIndex;
 use crate::lower_bound::UNREACHABLE;
 use crate::search::{
-    CandidateStation, MINUTES_PER_DAY, MinutesSinceBundleStart, RaptorJourney, RaptorLegQuery,
-    RaptorRide, RideOrigin, collect_departure_times, earliest_trip, raptor_ride,
+    BoardedTrip, CandidateStation, MINUTES_PER_DAY, MinutesSinceBundleStart, RaptorJourney,
+    RaptorLegQuery, RaptorRide, RideOrigin, collect_departure_times, earliest_trip, raptor_ride,
 };
 
 /// Marks a route that is not queued for scanning in the current round.
@@ -71,6 +73,22 @@ pub trait JourneyCostModel {
         moment: MinutesSinceBundleStart,
         earliest_arrival: MinutesSinceBundleStart,
     ) -> i32;
+
+    /// Returns the highest cost worth searching for once a journey that costs `best_cost` is
+    /// known. The search drops labels whose lower bound lies above it, even when their journeys
+    /// would not be beaten on every criterion. The default keeps all such journeys.
+    fn cost_limit(&self, best_cost: i32) -> i32 {
+        let _ = best_cost;
+        i32::MAX
+    }
+
+    /// Returns whether the cost of a ride on a route can depend on the trip's times. When it
+    /// can't, the search lets an earlier trip of the route stand for the later ones. The
+    /// default assumes it can.
+    fn ride_cost_depends_on_time(&self, raptor_route: RaptorRouteIndex) -> bool {
+        let _ = raptor_route;
+        true
+    }
 }
 
 /// A journey with its cost under the model that found it.
@@ -214,15 +232,56 @@ struct RouteLabel {
 
 impl RouteLabel {
     /// Returns whether riding this is at least as good as riding another at every later stop.
-    /// Labels on different trips never cover each other, because the ride cost depends on the
-    /// trip's times.
+    ///
+    /// On the same trip, boarding earlier with no more cost is. On another trip, only when
+    /// the ride cost doesn't depend on the trip's times, and the trip runs earlier on the same
+    /// service day, so it reaches every later stop no later.
     #[inline]
-    fn covers(&self, other: &Self) -> bool {
-        self.trip_offset == other.trip_offset
+    fn covers(&self, other: &Self, ride_cost_depends_on_time: bool) -> bool {
+        let no_worse_start = self.cost_before_ride <= other.cost_before_ride
+            && (self.is_first_ride || !other.is_first_ride);
+        let same_trip =
+            self.trip_offset == other.trip_offset && self.service_day == other.service_day;
+        if same_trip {
+            return no_worse_start && self.departure <= other.departure;
+        }
+        !ride_cost_depends_on_time
+            && no_worse_start
             && self.service_day == other.service_day
-            && self.departure <= other.departure
-            && self.cost_before_ride <= other.cost_before_ride
-            && (self.is_first_ride || !other.is_first_ride)
+            && self.trip_offset < other.trip_offset
+    }
+}
+
+/// Arrivals at the arrival place, as the arrival and a cost that the journey's cost doesn't
+/// exceed, keeping only those no other arrival beats on both. Sorted by arrival, the costs
+/// fall, so the cheapest arrival by a moment is the last one before it.
+#[derive(Debug, Default)]
+struct ArrivalStaircase {
+    entries: Vec<(u32, i32)>,
+}
+
+impl ArrivalStaircase {
+    /// Returns whether an arrival no later than `arrival` costs no more than `cost`.
+    #[inline]
+    fn beats(&self, arrival: u32, cost: i32) -> bool {
+        let after = self.entries.partition_point(|&(other, _)| other <= arrival);
+        after > 0 && self.entries[after - 1].1 <= cost
+    }
+
+    /// Adds an arrival unless another beats it, and removes the arrivals it beats. Returns
+    /// whether it was added.
+    fn insert(&mut self, arrival: u32, cost: i32) -> bool {
+        if self.beats(arrival, cost) {
+            return false;
+        }
+        let start = self.entries.partition_point(|&(other, _)| other < arrival);
+        let end = start
+            + self.entries[start..]
+                .iter()
+                .take_while(|&&(_, other_cost)| other_cost >= cost)
+                .count();
+        self.entries.splice(start..end, [(arrival, cost)]);
+        true
     }
 }
 
@@ -249,9 +308,10 @@ pub struct CostSearchBuffers {
     /// Label positions per bag. Only the first `bag_count` are in use.
     bags: Vec<SmallVec<[u32; 4]>>,
     bag_count: usize,
-    /// Arrivals at the arrival place found per round, as the arrival and a cost that the
-    /// journey's cost doesn't exceed. Labels that can't beat them are pruned.
-    targets_by_round: Vec<Vec<(u32, i32)>>,
+    /// Arrivals at the arrival place found per round. Labels that can't beat them are pruned.
+    targets_by_round: Vec<ArrivalStaircase>,
+    /// Highest cost worth searching for, from the model and the cheapest arrival found so far.
+    cost_limit: i32,
     /// Stations with labels the current round created, and a mark per station against
     /// repeats.
     stations_created: Vec<BundleStationIndex>,
@@ -297,9 +357,11 @@ impl CostSearchBuffers {
         }
         self.bag_by_slot.resize(station_count * rounds, NONE);
         self.bag_count = 0;
-        self.targets_by_round.resize_with(rounds, Vec::new);
+        self.targets_by_round
+            .resize_with(rounds, ArrivalStaircase::default);
+        self.cost_limit = i32::MAX;
         for targets in &mut self.targets_by_round {
-            targets.clear();
+            targets.entries.clear();
         }
         self.stations_created.clear();
         self.stations_changed.clear();
@@ -465,10 +527,12 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                 MinutesSinceBundleStart(earliest_arrival),
             )
             .saturating_add(label.cost);
+        if cost_bound > self.buffers.cost_limit {
+            return false;
+        }
         !self.buffers.targets_by_round[1..=round]
             .iter()
-            .flatten()
-            .any(|&(arrival, cost)| arrival <= earliest_arrival && cost <= cost_bound)
+            .any(|targets| targets.beats(earliest_arrival, cost_bound))
     }
 
     /// Returns the bag of a slot for changing, creating it when the slot has none.
@@ -496,16 +560,19 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
     /// stored. Returns the label's position when the bag took it.
     fn insert(&mut self, round: usize, label: CostLabel, existing: Option<u32>) -> Option<u32> {
         let slot = round * self.station_count + label.station.as_usize();
-        let bag = self.bag_for_insert(slot);
         let labels = &self.buffers.labels;
-        let entries = &mut self.buffers.bags[bag];
-        if entries
-            .iter()
-            .any(|&other| labels[other as usize].covers(&label))
-        {
-            return None;
+        let existing_bag = self.buffers.bag_by_slot[slot];
+        if existing_bag != NONE {
+            let entries = &mut self.buffers.bags[existing_bag as usize];
+            if entries
+                .iter()
+                .any(|&other| labels[other as usize].covers(&label))
+            {
+                return None;
+            }
+            entries.retain(|other| !label.covers(&labels[*other as usize]));
         }
-        entries.retain(|other| !label.covers(&labels[*other as usize]));
+        let bag = self.bag_for_insert(slot);
         let position = existing.unwrap_or_else(|| {
             let position = u32::try_from(self.buffers.labels.len()).unwrap_or(NONE);
             self.buffers.labels.push(label);
@@ -530,15 +597,8 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                     MinutesSinceBundleStart(arrival),
                 )
                 .saturating_add(label.cost_with_egress);
-            let targets = &mut self.buffers.targets_by_round[round];
-            if !targets
-                .iter()
-                .any(|&(other_arrival, other_cost)| other_arrival <= arrival && other_cost <= cost)
-            {
-                targets.retain(|&(other_arrival, other_cost)| {
-                    !(arrival <= other_arrival && cost <= other_cost)
-                });
-                targets.push((arrival, cost));
+            if self.buffers.targets_by_round[round].insert(arrival, cost) {
+                self.buffers.cost_limit = self.buffers.cost_limit.min(self.model.cost_limit(cost));
             }
         }
         Some(position)
@@ -661,6 +721,7 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
     fn scan_route(&mut self, round: usize, raptor_route: RaptorRouteIndex, start: u16) {
         let route = self.bundle.route(raptor_route);
         let mut route_labels = std::mem::take(&mut self.buffers.route_labels);
+        let ride_cost_depends_on_time = self.model.ride_cost_depends_on_time(raptor_route);
         route_labels.clear();
         let minimum_transfer = u32::from(self.query.minimum_transfer_minutes);
         for position in start..route.stop_count {
@@ -718,57 +779,108 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
             if !pattern_stop.boarding_allowed() {
                 continue;
             }
-            let previous_round = u8::try_from(round - 1).unwrap_or(u8::MAX);
-            let positions: SmallVec<[u32; 8]> = self
-                .bag(round - 1, station)
-                .iter()
-                .copied()
-                .filter(|&label_position| {
-                    let label = &self.buffers.labels[label_position as usize];
-                    label.run == self.run && label.round == previous_round
-                })
-                .collect();
-            for parent in positions {
-                let label = self.buffers.labels[parent as usize];
-                let Some(trip) = earliest_trip(
-                    self.bundle,
-                    self.index,
-                    raptor_route,
-                    &route,
-                    position,
-                    label.ready,
-                    |_, _| true,
-                ) else {
-                    continue;
-                };
-                let route_label = RouteLabel {
-                    trip_offset: trip.trip_offset,
-                    service_day: trip.service_day,
-                    boarding_position: trip.boarding_position,
-                    departure: trip.departure,
-                    parent,
-                    cost_before_ride: label.cost,
-                    is_first_ride: matches!(
-                        label.origin,
-                        CostLabelOrigin::DepartureCandidate { .. }
-                    ),
-                };
-                if route_labels.iter().any(|other| other.covers(&route_label)) {
-                    continue;
-                }
-                route_labels.retain(|other| !route_label.covers(other));
-                route_labels.push(route_label);
-            }
+            self.board_route(
+                round,
+                raptor_route,
+                &route,
+                position,
+                &mut route_labels,
+                ride_cost_depends_on_time,
+            );
         }
         self.buffers.route_labels = route_labels;
     }
 
-    /// Walks footpaths from every train arrival of this round. Footpaths are one hop, so
+    /// Lets each label the previous round created at a stop of a route board the earliest
+    /// trip it can reach there, and adds the rides to the route's labels unless one there
+    /// covers them.
+    fn board_route(
+        &self,
+        round: usize,
+        raptor_route: RaptorRouteIndex,
+        route: &RaptorRoute,
+        position: u16,
+        route_labels: &mut Vec<RouteLabel>,
+        ride_cost_depends_on_time: bool,
+    ) {
+        let station = self.bundle.pattern_stop(route, position).station();
+        let previous_round = u8::try_from(round - 1).unwrap_or(u8::MAX);
+        let mut positions: SmallVec<[(u32, u32); 8]> = self
+            .bag(round - 1, station)
+            .iter()
+            .map(|&label_position| (self.buffers.labels[label_position as usize], label_position))
+            .filter(|(label, _)| label.run == self.run && label.round == previous_round)
+            .map(|(label, label_position)| (label.ready, label_position))
+            .collect();
+        // Labels in order of readiness share one trip lookup until they are ready after its
+        // departure.
+        positions.sort_unstable();
+        let mut boarded: Option<BoardedTrip> = None;
+        for (ready, parent) in positions {
+            let trip = match boarded {
+                Some(trip) if ready <= trip.departure => trip,
+                _ => {
+                    let Some(trip) = earliest_trip(
+                        self.bundle,
+                        self.index,
+                        raptor_route,
+                        route,
+                        position,
+                        ready,
+                        |_, _| true,
+                    ) else {
+                        // Labels that are ready later find no trip either.
+                        break;
+                    };
+                    boarded = Some(trip);
+                    trip
+                }
+            };
+            let label = self.buffers.labels[parent as usize];
+            let route_label = RouteLabel {
+                trip_offset: trip.trip_offset,
+                service_day: trip.service_day,
+                boarding_position: trip.boarding_position,
+                departure: trip.departure,
+                parent,
+                cost_before_ride: label.cost,
+                is_first_ride: matches!(label.origin, CostLabelOrigin::DepartureCandidate { .. }),
+            };
+            if route_labels
+                .iter()
+                .any(|other| other.covers(&route_label, ride_cost_depends_on_time))
+            {
+                continue;
+            }
+            route_labels.retain(|other| !route_label.covers(other, ride_cost_depends_on_time));
+            route_labels.push(route_label);
+        }
+    }
+
+    /// Walks footpaths from the train arrivals of this round. Footpaths are one hop, so
     /// arrivals on foot are not walked on. A walk between stations adds no cost of its own
     /// until it ends at an arrival candidate.
     fn relax_footpaths(&mut self, round: usize) {
-        let arrivals = std::mem::take(&mut self.buffers.ride_arrivals);
+        let mut arrivals = std::mem::take(&mut self.buffers.ride_arrivals);
+        // Walking on from an arrival that another at the same station beats on time and cost
+        // leads nowhere new, so in order of arrival only arrivals cheaper than all before walk.
+        arrivals.sort_unstable_by_key(|ride_arrival| {
+            (
+                ride_arrival.station,
+                ride_arrival.arrival,
+                ride_arrival.cost,
+            )
+        });
+        let mut cheapest_before: Option<(BundleStationIndex, i32)> = None;
         for ride_arrival in &arrivals {
+            match cheapest_before {
+                Some((station, cost))
+                    if station == ride_arrival.station && cost <= ride_arrival.cost =>
+                {
+                    continue;
+                }
+                _ => cheapest_before = Some((ride_arrival.station, ride_arrival.cost)),
+            }
             for footpath in self.bundle.footpaths_from(ride_arrival.station) {
                 let arrival = ride_arrival.arrival + u32::from(footpath.duration_minutes);
                 let label = CostLabel {
