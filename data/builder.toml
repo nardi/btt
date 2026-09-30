@@ -137,3 +137,42 @@ source_url = "https://raw.githubusercontent.com/deryclem/italo-gtfs/main/gtfs-it
 field = "trip_short_name"
 pattern = '^0*(?<number>\d+)$'
 category_field = "route_short_name"
+
+[[feed]]
+# Stop IDs such as czptt:stop:CZ:57076 hold the five digits that follow the country code 54 in
+# the UIC code. Stops in other countries have other prefixes and match by name and distance.
+mirror_name = "cz_CZPTT"
+station_code = "uic_in_stop_id"
+station_code_pattern = '^czptt:stop:CZ:(\d{5})$'
+station_code_prefix = "54"
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^(?<category>[A-Za-z]+)\s*(?<number>\d+)$'
+category_field = "route_short_name"
+
+[[feed]]
+# MÁV fills the long name of routes with the train, as in "IC 935 SAVARIA", and the short name
+# of suburban lines, as in "S70".
+mirror_name = "hu_mav"
+[feed.train_label]
+field = "route_long_name"
+fallback_field = "route_short_name"
+pattern = '^(?:(?<category>\p{L}+)\s*)?(?<number>\d+)\b'
+category_field = "agency_name"
+category_pattern = '^(?<category>\p{L}+)'
+
+[[feed]]
+mirror_name = "si_nap"
+[feed.train_label]
+field = "route_short_name"
+pattern = '^(?:(?<category>[A-Za-z]+)\s*)?(?<number>\d+)$'
+category_field = "agency_name"
+category_pattern = '^(?<category>S\p{L})'
+
+[[feed]]
+mirror_name = "hr_hz"
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^(?<number>\d+)$'
+category_field = "agency_name"
+category_pattern = '^(?<category>H\p{L})'

@@ -3,7 +3,9 @@
 //! Run with `cargo run --release -p btt-planner --example plan_on_bundle -- <bundle> <date>`,
 //! where the date is a travel date inside the bundle's validity window. Five more arguments plan
 //! one custom leg instead: the departure latitude and longitude, the arrival latitude and
-//! longitude, and the station search radius in meters.
+//! longitude, and the station search radius in meters. One path to a tab-separated file plans
+//! the legs in it instead, one per line as the departure name, latitude and longitude and then
+//! the arrival name, latitude and longitude, and prints only the chosen journey of each.
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -35,10 +37,31 @@ fn main() {
         .parse()
         .expect("date as YYYY-MM-DD");
 
-    let custom_arguments: Vec<f64> = arguments
-        .map(|argument| argument.parse().expect("coordinates and radius as numbers"))
-        .collect();
+    let remaining: Vec<String> = arguments.collect();
+    let leg_file = match remaining.as_slice() {
+        [path] if std::path::Path::new(path).is_file() => Some(path.clone()),
+        _ => None,
+    };
+    let custom_arguments: Vec<f64> = if leg_file.is_some() {
+        Vec::new()
+    } else {
+        remaining
+            .iter()
+            .map(|argument| argument.parse().expect("coordinates and radius as numbers"))
+            .collect()
+    };
+    let file_legs = leg_file
+        .map(|path| read_leg_file(&path))
+        .unwrap_or_default();
+    let from_file = !file_legs.is_empty();
     let (legs, radius) = match custom_arguments[..] {
+        [] if from_file => (
+            file_legs
+                .iter()
+                .map(|(from, a, b, to, c, d)| (from.as_str(), *a, *b, to.as_str(), *c, *d))
+                .collect(),
+            StationSearchRadius::DEFAULT,
+        ),
         [] => (LEGS.to_vec(), StationSearchRadius::DEFAULT),
         [
             from_latitude,
@@ -96,17 +119,23 @@ fn main() {
         );
         match result {
             LegPlanningResult::NoJourneyFound(reason) => println!("  no journey: {reason:?}"),
-            LegPlanningResult::Found(plan) => print_plan(&plan),
+            LegPlanningResult::Found(plan) => print_plan(&plan, from_file),
         }
     }
 }
 
-/// Prints the chosen journey of a leg plan, marked with a star, and its alternatives.
-fn print_plan(plan: &LegPlan) {
+/// Prints the chosen journey of a leg plan, marked with a star, and its alternatives unless
+/// `chosen_only` is set.
+fn print_plan(plan: &LegPlan, chosen_only: bool) {
     let station =
         |index: LegPlanStationIndex| plan.station_table[usize::from(index.0)].name.as_str();
     let clock = |minutes: u32| format!("{:02}:{:02}", (minutes / 60) % 24, minutes % 60);
-    let journeys = std::iter::once(&plan.chosen_journey).chain(&plan.alternative_journeys);
+    let alternatives = if chosen_only {
+        &[][..]
+    } else {
+        &plan.alternative_journeys[..]
+    };
+    let journeys = std::iter::once(&plan.chosen_journey).chain(alternatives);
     for (index, journey) in journeys.enumerate() {
         let rides: Vec<String> = journey
             .rides()
@@ -137,4 +166,28 @@ fn print_plan(plan: &LegPlan) {
             journey.egress.duration.0,
         );
     }
+}
+
+/// A leg from a leg file, as departure name and coordinates, then arrival name and coordinates.
+type FileLeg = (String, f64, f64, String, f64, f64);
+
+/// Reads the legs of a tab-separated file.
+fn read_leg_file(path: &str) -> Vec<FileLeg> {
+    std::fs::read_to_string(path)
+        .expect("leg file reads")
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| {
+            let fields: Vec<&str> = line.split('\t').collect();
+            let number = |index: usize| fields[index].parse::<f64>().expect("a number");
+            (
+                fields[0].to_owned(),
+                number(1),
+                number(2),
+                fields[3].to_owned(),
+                number(4),
+                number(5),
+            )
+        })
+        .collect()
 }

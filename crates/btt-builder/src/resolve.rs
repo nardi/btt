@@ -256,7 +256,16 @@ fn train_label(rule: &TrainLabelRule, header: &FeedTripHeader) -> (String, Train
         TrainLabelField::AgencyName => header.agency_name.as_str(),
         TrainLabelField::FirstStopId => header.first_stop_id.as_deref().unwrap_or(""),
     };
-    let text = field_text(rule.field).trim();
+    // The fallback field is only read when the first field does not match the pattern.
+    let first_text = field_text(rule.field).trim();
+    let text = match rule.fallback_field.map(|field| field_text(field).trim()) {
+        Some(fallback_text)
+            if !rule.pattern.is_match(first_text) && rule.pattern.is_match(fallback_text) =>
+        {
+            fallback_text
+        }
+        _ => first_text,
+    };
     let captures = rule.pattern.captures(text);
     let number = captures
         .as_ref()
@@ -487,6 +496,7 @@ mod tests {
         };
         let rule = TrainLabelRule {
             field: TrainLabelField::TripShortName,
+            fallback_field: None,
             pattern: Regex::new(r"^0*(?<number>\d+)$").unwrap(),
             category_field: TrainLabelField::RouteShortName,
             category_pattern: None,
@@ -516,6 +526,7 @@ mod tests {
         };
         let rule = TrainLabelRule {
             field: TrainLabelField::TripHeadsign,
+            fallback_field: None,
             pattern: Regex::new(r"^(?<number>\d+)$").unwrap(),
             category_field: TrainLabelField::FirstStopId,
             category_pattern: Some(Regex::new(r"^StopPoint:OCE(?<category>.+)-\d+$").unwrap()),
@@ -532,5 +543,47 @@ mod tests {
         assert!(offers_berths(2, "nj", &night_categories));
         assert!(offers_berths(2, "Intercités de nuit", &night_categories));
         assert!(!offers_berths(102, "IC", &night_categories));
+    }
+
+    #[test]
+    fn labels_fall_back_to_the_short_name_without_a_long_name() {
+        // MÁV fills the long name of long-distance trains and the short name of suburban lines.
+        let header = |long: &str, short: &str| FeedTripHeader {
+            service_id: String::new(),
+            trip_short_name: None,
+            route_short_name: Some(short.into()),
+            route_type: 2,
+            agency_name: "MÁV".into(),
+            time_zone: Tz::Europe__Budapest,
+            trip_headsign: None,
+            route_desc: None,
+            route_long_name: Some(long.into()),
+            first_stop_id: None,
+        };
+        let rule = TrainLabelRule {
+            field: TrainLabelField::RouteLongName,
+            fallback_field: Some(TrainLabelField::RouteShortName),
+            pattern: Regex::new(r"^(?:(?<category>\p{L}+)\s*)?(?<number>\d+)\b").unwrap(),
+            category_field: TrainLabelField::RouteShortName,
+            category_pattern: None,
+        };
+        let (number, label) = train_label(&rule, &header("IC 935 SAVARIA", ""));
+        assert_eq!(
+            (
+                number.as_str(),
+                label.category.as_str(),
+                label.number.as_str()
+            ),
+            ("935", "IC", "935")
+        );
+        let (number, label) = train_label(&rule, &header("", "S70"));
+        assert_eq!(
+            (
+                number.as_str(),
+                label.category.as_str(),
+                label.number.as_str()
+            ),
+            ("70", "S", "70")
+        );
     }
 }

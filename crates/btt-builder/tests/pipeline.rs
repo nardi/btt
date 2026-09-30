@@ -560,8 +560,7 @@ const TRANSITOUS_DE_LOCATION: &str = r#"{"sources": [
      "license": {"spdx-identifier": "CC0-1.0"}}
 ]}"#;
 
-const NO_TRAINLINE_STATIONS: &str =
-    "id;name;uic;latitude;longitude;is_city;db_id;time_zone;same_as;parent_station_id;uic8_sncf;entur_id\n";
+const NO_TRAINLINE_STATIONS: &str = "id;name;uic;latitude;longitude;is_city;db_id;time_zone;same_as;parent_station_id;uic8_sncf;entur_id\n";
 
 #[test]
 fn stations_and_trains_merge_by_location() {

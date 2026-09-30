@@ -14,4 +14,8 @@ stopwords = [
     "stazione di",
     "stazione",
     "estacion",
+    "kolodvor",
+    "zeleznicka postaja",
+    "centralstation",
+    "central",
 ]

@@ -174,6 +174,9 @@ pub enum TrainLabelField {
 pub struct TrainLabelRule {
     /// Field the pattern reads.
     pub field: TrainLabelField,
+    /// Field the pattern reads when the first one does not match it, such as the short name of a
+    /// route whose long name is empty.
+    pub fallback_field: Option<TrainLabelField>,
     /// Pattern with a `number` group and an optional `category` group.
     pub pattern: Regex,
     /// Field that holds the category when the pattern has no `category` group or it does not
@@ -231,6 +234,7 @@ enum StationCodeFile {
 #[serde(deny_unknown_fields)]
 struct TrainLabelFile {
     field: TrainLabelField,
+    fallback_field: Option<TrainLabelField>,
     pattern: String,
     category_field: TrainLabelField,
     category_pattern: Option<String>,
@@ -337,6 +341,7 @@ impl TryFrom<FeedConfigFile> for FeedConfig {
             },
             train_label: TrainLabelRule {
                 field: file.train_label.field,
+                fallback_field: file.train_label.fallback_field,
                 pattern,
                 category_field: file.train_label.category_field,
                 category_pattern,
