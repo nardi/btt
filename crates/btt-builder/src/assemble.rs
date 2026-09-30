@@ -125,3 +125,23 @@ pub fn feed_attribution(
         url: url.unwrap_or_default(),
     }
 }
+
+/// Writes which bundle station each feed stop became, as a CSV file with the columns
+/// `feed`, `stop_id` and `bundle_station`. The bundle doesn't need it, but tools that compare
+/// the bundle with its feeds, such as the comparison with MOTIS, look stops up in it.
+///
+/// # Errors
+///
+/// Returns an error when the query or the file fails.
+pub fn write_station_map(database: &WorkDatabase, path: &Path) -> Result<(), BuildError> {
+    database.run(&format!(
+        "COPY (
+             SELECT stops.feed_id AS feed, stops.stop_id, bundle.bundle_station_id AS bundle_station
+             FROM feed_stops AS stops
+             JOIN feed_station_bundle_ids AS bundle USING (feed_id, station_key)
+             ORDER BY feed, stop_id
+         ) TO {} (HEADER, DELIMITER ',');",
+        sql_string(&path.display().to_string().replace('\\', "/"))
+    ))?;
+    Ok(())
+}

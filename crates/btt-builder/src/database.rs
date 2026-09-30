@@ -66,6 +66,17 @@ impl WorkDatabase {
         })
     }
 
+    /// Replaces the memory limit set on opening, such as `4GB`. DuckDB spills to the temporary
+    /// directory beyond it, so a lower limit lets a build finish while other programs use the
+    /// memory, at the cost of time.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when DuckDB rejects the limit.
+    pub fn set_memory_limit(&self, limit: &str) -> Result<(), DatabaseError> {
+        self.run(&format!("SET memory_limit = {};", sql_string(limit)))
+    }
+
     /// Runs one or more SQL statements.
     ///
     /// # Errors

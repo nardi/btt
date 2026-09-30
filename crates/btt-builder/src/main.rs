@@ -10,7 +10,7 @@ use btt_builder::download::{
     Downloader, TRAINLINE_STATIONS_URL, TRANSITOUS_FEED_CONFIG_URL, TRANSITOUS_MIRROR_URL,
 };
 use btt_builder::load::ValidityWindow;
-use btt_builder::{BuildError, FeedInput, PipelineInputs, report, run_pipeline};
+use btt_builder::{BuildError, FeedInput, PipelineInputs, assemble, report, run_pipeline};
 use btt_timetable::LoadedTimetableBundle;
 use chrono::{Datelike, NaiveDate, Utc};
 use clap::Parser;
@@ -39,6 +39,10 @@ struct Arguments {
     /// Unpacks feed files instead of reading them in place with the `zipfs` extension.
     #[arg(long)]
     no_zipfs: bool,
+    /// Memory DuckDB may use before it spills to disk, such as `4GB`. Lower it when other
+    /// programs need the memory. The default is 10GB.
+    #[arg(long)]
+    memory_limit: Option<String>,
 }
 
 fn main() -> ExitCode {
@@ -113,6 +117,9 @@ fn build(arguments: &Arguments) -> Result<(), BuildError> {
         }
     }
     let database = WorkDatabase::open(Some(&database_path), &work_directory, !arguments.no_zipfs)?;
+    if let Some(limit) = &arguments.memory_limit {
+        database.set_memory_limit(limit)?;
+    }
 
     let inputs = PipelineInputs {
         feeds,
@@ -128,6 +135,7 @@ fn build(arguments: &Arguments) -> Result<(), BuildError> {
         .output_directory
         .join(format!("timetable-{bundle_version}.bundle"));
     LoadedTimetableBundle::write_bundle(&outcome.bundle, &bundle_path)?;
+    assemble::write_station_map(&database, &bundle_path.with_extension("stations.csv"))?;
     // Reading the file back checks it with the same validation the app runs.
     let loaded = LoadedTimetableBundle::open(&bundle_path)?;
     let bundle_file_bytes = u64::try_from(loaded.byte_size()).unwrap_or(u64::MAX);
