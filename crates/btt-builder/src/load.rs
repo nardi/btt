@@ -17,7 +17,7 @@ pub struct ValidityWindow {
 }
 
 /// GTFS route types that count as rail: the basic type 2 and the extended types 100 to 117.
-const RAIL_ROUTE_TYPE_FILTER: &str =
+pub const RAIL_ROUTE_TYPE_FILTER: &str =
     "(TRY_CAST(route_type AS INTEGER) = 2 OR TRY_CAST(route_type AS INTEGER) BETWEEN 100 AND 117)";
 
 /// Loads the rail routes, their trips, stop times, all stops and the service days of a feed.
