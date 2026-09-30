@@ -75,6 +75,9 @@ pub struct FeedConfig {
     /// Where to download the feed when it isn't on the Transitous mirror, which only serves
     /// GTFS.
     pub source_url: Option<String>,
+    /// Readable names of the brands a NeTEx feed puts on its journeys, such as `TGV INOUI` for
+    /// `OUI`. A brand without a name here shows as its code.
+    pub netex_brand_names: std::collections::BTreeMap<String, String>,
 }
 
 /// Format of a feed file.
@@ -188,6 +191,8 @@ struct FeedConfigFile {
     #[serde(default)]
     format: FeedFormat,
     source_url: Option<String>,
+    #[serde(default)]
+    netex_brand_names: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -303,6 +308,7 @@ impl TryFrom<FeedConfigFile> for FeedConfig {
             },
             format: file.format,
             source_url: file.source_url,
+            netex_brand_names: file.netex_brand_names,
             mirror_name: file.mirror_name,
         })
     }

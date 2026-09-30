@@ -4,6 +4,7 @@
 //! The reader streams the XML once and keeps the elements the profile uses for timetables.
 //! A Trenitalia file of 389 MB holds about 21,000 journeys, which fit in memory easily.
 
+use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
@@ -88,6 +89,14 @@ struct NetexJourney {
     pattern: Option<String>,
     day_types: Vec<String>,
     passing_times: Vec<NetexPassingTime>,
+    /// Code of the journey's brand, such as `OUI` for TGV INOUI.
+    branding: Option<String>,
+    /// Submode of the transport mode, such as `highSpeedRail`.
+    submode: Option<String>,
+    /// The separate train number object, for feeds that give the number there.
+    train_number_ref: Option<String>,
+    /// Whether the journey is a planned cancellation.
+    cancelled: bool,
 }
 
 /// The days of an operating period.
@@ -117,6 +126,8 @@ struct NetexDocument {
     operating_periods: FxHashMap<String, NetexOperatingPeriod>,
     /// Pairs of day type and operating period.
     day_type_assignments: Vec<(String, String)>,
+    /// Advertised train number of each train number object.
+    train_numbers: FxHashMap<String, String>,
 }
 
 /// The element the reader is filling in, besides the stack of element names.
@@ -136,6 +147,7 @@ struct ParserState {
     operating_period: Option<(String, NetexOperatingPeriod)>,
     day_type_assignment: (Option<String>, Option<String>),
     operator: Option<(String, String)>,
+    train_number: Option<(String, String)>,
 }
 
 /// Reads the first XML file of a NeTEx ZIP.
@@ -295,10 +307,26 @@ fn start_element(element: &BytesStart<'_>, state: &mut ParserState) -> Result<()
             }
         }
         "TimetabledPassingTime" => state.passing_time = Some(NetexPassingTime::default()),
-        "StopPointInJourneyPatternRef" => {
+        // The French profile names the reference without "Stop".
+        "StopPointInJourneyPatternRef" | "PointInJourneyPatternRef" => {
             if let Some(passing_time) = &mut state.passing_time {
                 passing_time.point = attribute("ref")?.unwrap_or_default();
             }
+        }
+        "BrandingRef" => {
+            if let Some(journey) = &mut state.journey {
+                journey.branding = attribute("ref")?;
+            }
+        }
+        "TrainNumberRef" => {
+            if let Some(journey) = &mut state.journey
+                && journey.train_number_ref.is_none()
+            {
+                journey.train_number_ref = attribute("ref")?;
+            }
+        }
+        "TrainNumber" => {
+            state.train_number = Some((attribute("id")?.unwrap_or_default(), String::new()));
         }
         "DayType" => state.day_type = Some((attribute("id")?.unwrap_or_default(), Vec::new())),
         "UicOperatingPeriod" | "OperatingPeriod" => {
@@ -493,6 +521,26 @@ fn end_element(state: &mut ParserState, document: &mut NetexDocument) {
             }
         }
         ("Operator", _) => document.operators.extend(state.operator.take()),
+        ("RailSubmode" | "CoachSubmode" | "BusSubmode", _) => {
+            if let Some(journey) = &mut state.journey {
+                journey.submode = Some(text.to_owned());
+            }
+        }
+        ("ServiceAlteration", Some("ServiceJourney")) => {
+            if let Some(journey) = &mut state.journey {
+                journey.cancelled = text == "cancellation";
+            }
+        }
+        ("ForAdvertisement", Some("TrainNumber")) => {
+            if let Some((_, number)) = &mut state.train_number {
+                text.clone_into(number);
+            }
+        }
+        ("TrainNumber", _) => {
+            if let Some((id, number)) = state.train_number.take() {
+                document.train_numbers.insert(id, number);
+            }
+        }
         ("TimeZone", _) if document.time_zone.is_none() => {
             document.time_zone = Some(text.to_owned());
         }
@@ -695,33 +743,100 @@ fn journey_stop_times(
     stops
 }
 
-/// Turns a document into table rows: rail lines, their journeys with stops in pattern order,
-/// the stop places they use and their days within the validity window.
+/// Returns the GTFS route type of a rail submode, or `None` for a submode that says little,
+/// such as `unknown`.
+fn route_type_of_submode(submode: &str) -> Option<i32> {
+    Some(match submode {
+        "highSpeedRail" => 101,
+        "longDistance" | "crossCountryRail" => 102,
+        "interregionalRail" => 103,
+        "regionalRail" => 106,
+        "suburbanRailway" => 109,
+        _ => return None,
+    })
+}
+
+/// Returns the route a journey belongs to: its line, or, when the journey has a brand, its line
+/// together with the brand, because the French profile puts the product on the journey.
+fn journey_route(
+    journey: &NetexJourney,
+    line_id: &str,
+    line: &NetexLine,
+    brand_names: &BTreeMap<String, String>,
+) -> RouteRow {
+    let (route_id, short_name) = match &journey.branding {
+        Some(branding) => (
+            format!("{line_id}|{branding}"),
+            brand_names
+                .get(branding)
+                .cloned()
+                .unwrap_or_else(|| branding.clone()),
+        ),
+        None => (line_id.to_owned(), line.short_name.clone()),
+    };
+    let product_type = route_type_of_product(&short_name);
+    // A night train keeps its type, which flags its berths, whatever its submode.
+    let route_type = if product_type == 105 {
+        product_type
+    } else {
+        journey
+            .submode
+            .as_deref()
+            .and_then(route_type_of_submode)
+            .unwrap_or(product_type)
+    };
+    RouteRow {
+        route_id,
+        short_name,
+        description: line.name.clone(),
+        route_type,
+    }
+}
+
+/// Returns the station code of each stop place from the scheduled stop points assigned to it,
+/// for feeds whose scheduled stop point IDs end in an eight-digit UIC code with its check
+/// digit, as SNCF's `FR:ScheduledStopPoint::87571240`.
+fn station_codes_from_stop_points(document: &NetexDocument) -> FxHashMap<String, String> {
+    let mut codes = FxHashMap::default();
+    for (stop_point, assigned) in &document.stop_assignments {
+        let digits: String = stop_point
+            .chars()
+            .rev()
+            .take_while(char::is_ascii_digit)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
+        if digits.len() < 8 {
+            continue;
+        }
+        let stop_place = document.quay_stop_places.get(assigned).unwrap_or(assigned);
+        codes
+            .entry(stop_place.clone())
+            .or_insert_with(|| digits[digits.len() - 8..].to_owned());
+    }
+    codes
+}
+
+/// Turns a document into table rows: rail journeys with stops in pattern order, their routes,
+/// the stop places they use and their days within the validity window. Cancelled journeys and
+/// journeys by coach or bus are left out.
 fn netex_rows(
     document: &NetexDocument,
     window: ValidityWindow,
     station_code_scheme: FeedStationCodeScheme,
+    brand_names: &BTreeMap<String, String>,
 ) -> NetexRows {
     let mut rows = NetexRows {
         agencies: document.operators.clone(),
         ..NetexRows::default()
     };
-    let is_rail = |line: &NetexLine| line.transport_mode == "rail";
-    rows.routes = document
-        .lines
-        .iter()
-        .filter(|(_, line)| is_rail(line))
-        .map(|(id, line)| RouteRow {
-            route_id: id.clone(),
-            short_name: line.short_name.clone(),
-            description: line.name.clone(),
-            route_type: route_type_of_product(&line.short_name),
-        })
-        .collect();
-    rows.routes.sort();
-
+    let mut routes: BTreeMap<String, RouteRow> = BTreeMap::new();
     let mut used_stops = rustc_hash::FxHashSet::default();
     for journey in &document.journeys {
+        if journey.cancelled {
+            continue;
+        }
         let Some(pattern) = journey
             .pattern
             .as_ref()
@@ -732,12 +847,14 @@ fn netex_rows(
         let Some(line_id) = journey.line.as_ref().or(pattern.line.as_ref()) else {
             continue;
         };
-        let is_rail_journey = document.lines.get(line_id).is_some_and(is_rail)
-            && journey
-                .transport_mode
-                .as_deref()
-                .is_none_or(|mode| mode == "rail");
-        if !is_rail_journey {
+        let Some(line) = document.lines.get(line_id) else {
+            continue;
+        };
+        let mode = journey
+            .transport_mode
+            .as_deref()
+            .unwrap_or(&line.transport_mode);
+        if mode != "rail" {
             continue;
         }
         let mut days: Vec<i16> = journey
@@ -751,17 +868,37 @@ fn netex_rows(
         if days.is_empty() || stop_times.len() < 2 {
             continue;
         }
+        let route = journey_route(journey, line_id, line, brand_names);
+        let route_id = route.route_id.clone();
+        routes.entry(route_id.clone()).or_insert(route);
+        // The French profile gives the number in a separate object instead of the name.
+        let train_number = if journey.name.is_empty() {
+            journey
+                .train_number_ref
+                .as_ref()
+                .and_then(|reference| document.train_numbers.get(reference))
+                .cloned()
+                .unwrap_or_default()
+        } else {
+            journey.name.clone()
+        };
         rows.trips.push(TripRow {
             trip_id: journey.id.clone(),
-            route_id: line_id.clone(),
-            train_number: journey.name.clone(),
+            route_id,
+            train_number,
         });
         rows.service_days
             .extend(days.into_iter().map(|day| (journey.id.clone(), day)));
         used_stops.extend(stop_times.iter().map(|stop| stop.stop_id.clone()));
         rows.stop_times.extend(stop_times);
     }
+    rows.routes = routes.into_values().collect();
 
+    let stop_point_codes = if station_code_scheme == FeedStationCodeScheme::Uic8InStopId {
+        station_codes_from_stop_points(document)
+    } else {
+        FxHashMap::default()
+    };
     rows.stops = document
         .stop_places
         .iter()
@@ -771,7 +908,10 @@ fn netex_rows(
             name: stop_place.name.clone(),
             latitude: stop_place.latitude,
             longitude: stop_place.longitude,
-            station_code: station_code(stop_place, station_code_scheme),
+            station_code: stop_point_codes
+                .get(&stop_place.id)
+                .cloned()
+                .or_else(|| station_code(stop_place, station_code_scheme)),
         })
         .collect();
     rows
@@ -789,7 +929,12 @@ pub fn load_netex_feed(
     window: ValidityWindow,
 ) -> Result<usize, BuildError> {
     let document = read_netex_archive(zip_path)?;
-    let rows = netex_rows(&document, window, feed.station_code);
+    let rows = netex_rows(
+        &document,
+        window,
+        feed.station_code,
+        &feed.netex_brand_names,
+    );
     let feed_id = feed.mirror_name.as_str();
     let time_zone = document.time_zone.as_deref();
     let connection = &database.connection;
@@ -939,7 +1084,12 @@ mod tests {
             start: NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(),
             days: 30,
         };
-        let rows = netex_rows(&document, window, FeedStationCodeScheme::UicInPrivateCode);
+        let rows = netex_rows(
+            &document,
+            window,
+            FeedStationCodeScheme::UicInPrivateCode,
+            &BTreeMap::new(),
+        );
 
         assert_eq!(document.time_zone.as_deref(), Some("Europe/Rome"));
         let routes: Vec<_> = rows
@@ -986,5 +1136,67 @@ mod tests {
             "the stop place's own centroid counts, not its quay's"
         );
         assert_eq!(rows.stops[1].name, "ROMA TERMINI & CO");
+    }
+
+    /// A small file in the shape SNCF publishes: journeys share a pattern, point to it with
+    /// `PointInJourneyPatternRef`, carry a brand and a submode, and give their number in a
+    /// separate train number object. The second journey is cancelled.
+    const FRENCH_FIXTURE: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<PublicationDelivery xmlns="http://www.netex.org.uk/netex"><dataObjects><GeneralFrame id="g"><members>
+  <StopPlace id="FR::LMO:paris:"><Name lang="fr">Paris Gare de Lyon</Name><Centroid><Location><Longitude>2.373</Longitude><Latitude>48.844</Latitude></Location></Centroid></StopPlace>
+  <StopPlace id="FR::LMO:lyon:"><Name lang="fr">Lyon Part-Dieu</Name><Centroid><Location><Longitude>4.859</Longitude><Latitude>45.760</Latitude></Location></Centroid></StopPlace>
+  <PassengerStopAssignment id="a1"><ScheduledStopPointRef ref="FR:ScheduledStopPoint::87686006"/><StopPlaceRef ref="FR::LMO:paris:"/></PassengerStopAssignment>
+  <PassengerStopAssignment id="a2"><ScheduledStopPointRef ref="FR:ScheduledStopPoint::87723197"/><StopPlaceRef ref="FR::LMO:lyon:"/></PassengerStopAssignment>
+  <Line id="FR:Line::paris-lyon:"><Name>Paris - Lyon</Name><TransportMode>rail</TransportMode></Line>
+  <ServiceJourneyPattern id="p"><RouteView><LineRef ref="FR:Line::paris-lyon:"/></RouteView><pointsInSequence>
+    <StopPointInJourneyPattern id="p:1" order="1"><ScheduledStopPointRef ref="FR:ScheduledStopPoint::87686006"/></StopPointInJourneyPattern>
+    <StopPointInJourneyPattern id="p:2" order="2"><ScheduledStopPointRef ref="FR:ScheduledStopPoint::87723197"/></StopPointInJourneyPattern>
+  </pointsInSequence></ServiceJourneyPattern>
+  <DayType id="dt"/>
+  <UicOperatingPeriod id="op"><FromDate>2026-10-01T00:00:00</FromDate><ToDate>2026-10-02T23:59:59</ToDate><ValidDayBits>11</ValidDayBits></UicOperatingPeriod>
+  <DayTypeAssignment id="dta"><OperatingPeriodRef ref="op"/><DayTypeRef ref="dt"/></DayTypeAssignment>
+  <TrainNumber id="FR:TrainNumber::6611"><ForAdvertisement>6611</ForAdvertisement></TrainNumber>
+  <ServiceJourney id="sj:6611"><BrandingRef ref="OUI"/><TransportMode>rail</TransportMode><TransportSubmode><RailSubmode>highSpeedRail</RailSubmode></TransportSubmode><ServiceAlteration>planned</ServiceAlteration>
+    <dayTypes><DayTypeRef ref="dt"/></dayTypes><JourneyPatternRef ref="p"/><LineRef ref="FR:Line::paris-lyon:"/>
+    <trainNumbers><TrainNumberRef ref="FR:TrainNumber::6611"/></trainNumbers>
+    <passingTimes>
+      <TimetabledPassingTime><PointInJourneyPatternRef ref="p:1"/><DepartureTime>08:00:00</DepartureTime></TimetabledPassingTime>
+      <TimetabledPassingTime><PointInJourneyPatternRef ref="p:2"/><ArrivalTime>10:00:00</ArrivalTime></TimetabledPassingTime>
+    </passingTimes></ServiceJourney>
+  <ServiceJourney id="sj:6613"><BrandingRef ref="OUI"/><TransportMode>rail</TransportMode><ServiceAlteration>cancellation</ServiceAlteration>
+    <dayTypes><DayTypeRef ref="dt"/></dayTypes><JourneyPatternRef ref="p"/><LineRef ref="FR:Line::paris-lyon:"/>
+    <passingTimes>
+      <TimetabledPassingTime><PointInJourneyPatternRef ref="p:1"/><DepartureTime>09:00:00</DepartureTime></TimetabledPassingTime>
+      <TimetabledPassingTime><PointInJourneyPatternRef ref="p:2"/><ArrivalTime>11:00:00</ArrivalTime></TimetabledPassingTime>
+    </passingTimes></ServiceJourney>
+</members></GeneralFrame></dataObjects></PublicationDelivery>"#;
+
+    #[test]
+    fn a_french_journey_takes_its_number_brand_and_station_codes() {
+        let document = parse_netex(FRENCH_FIXTURE.as_bytes()).unwrap();
+        let window = ValidityWindow {
+            start: NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(),
+            days: 30,
+        };
+        let brand_names = BTreeMap::from([("OUI".to_owned(), "TGV INOUI".to_owned())]);
+        let rows = netex_rows(
+            &document,
+            window,
+            FeedStationCodeScheme::Uic8InStopId,
+            &brand_names,
+        );
+
+        assert_eq!(rows.trips.len(), 1, "the cancelled journey is left out");
+        assert_eq!(rows.trips[0].train_number, "6611");
+        assert_eq!(rows.routes.len(), 1);
+        assert_eq!(rows.routes[0].short_name, "TGV INOUI");
+        assert_eq!(rows.routes[0].route_type, 101);
+        assert_eq!(rows.service_days.len(), 2);
+        let codes: Vec<_> = rows
+            .stops
+            .iter()
+            .map(|stop| stop.station_code.as_deref())
+            .collect();
+        assert_eq!(codes, [Some("87686006"), Some("87723197")]);
     }
 }
