@@ -90,7 +90,7 @@ The journeys of both searches are united without pruning, and the ranking weighs
 
 ### Chains of legs
 
-For a chain, the first leg is searched with its own windows. Each later leg is searched in a window derived from the arrivals of the leg before it: from the earliest arrival plus the shortest stay to the latest arrival plus the longest stay. A departure window the traveller set, or a night train's window, bounds it further.
+For a chain, the first leg is searched with its own windows. Each later leg is searched in a window derived from the arrivals of the leg before it: from an hour before the earliest arrival plus the shortest stay, to the latest arrival plus the longest stay. The hour lets a stay a little short of the minimum compete, with its penalty, against a later train that arrives much later at the next place. A departure window the traveller set, or a night train's window, bounds it further.
 
 The pairing across the chain is dynamic programming over the layered problem, in two passes. A forward pass gives each journey the cost of the best partial chain ending with it, and a backward pass gives the cost of the best rest of the chain after it. Their sum is the cost of the best complete chain through the journey, which ranks the journeys of every leg. The chosen journeys then lie on one cheapest chain, and the alternatives of each leg are ordered by how good a chain they allow.
 
@@ -120,7 +120,7 @@ The sleep term takes the single train with berths that covers most of the night,
 
 ### Chains
 
-Each later leg of a chain is searched only from the earliest arrival plus the shortest stay. A stay a little shorter than the minimum is never searched, even when it would fit the next place's arrival window much better, so the penalty for a short stay never gets to weigh it. The dynamic programming across the chain is exact for the journeys the searches found, but the searches themselves are the limit.
+Each later leg of a chain is searched from an hour before the shortest stay ends. A stay more than an hour short of the minimum is never searched, even when the penalty would allow it, and a stay without a maximum ends with the leg's own departure window. The dynamic programming across the chain is exact for the journeys the searches found, but the searches themselves are the limit.
 
 ### Walking and stations
 

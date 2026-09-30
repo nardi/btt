@@ -36,6 +36,10 @@ const MAXIMUM_TRAIN_RIDES: NonZeroU8 = NonZeroU8::new(5).unwrap();
 /// Largest number of alternatives a leg plan shows next to the chosen journey.
 const MAXIMUM_ALTERNATIVES: usize = 4;
 
+/// How far below the shortest stay at a same-day stop the next leg is still searched, in
+/// minutes. The stay penalty decides whether such a short stay is worth it.
+const SHORT_STAY_SEARCH_MINUTES: u32 = 60;
+
 /// Alternatives cost at most this many times the cost of the best journey.
 const MAXIMUM_ALTERNATIVE_COST_FACTOR: u32 = 2;
 
@@ -345,10 +349,10 @@ impl TimetableBundleRouter {
     }
 
     /// Returns the departure window of a leg that follows a same-day stop: from the earliest
-    /// arrival of the leg before plus the shortest stay, to the latest arrival plus the longest
-    /// stay. Without a longest stay it ends with the leg's own departure window. A departure
-    /// window the traveller set, or the window of a night train, also bounds it. Returns `None`
-    /// when the leg before has no journeys.
+    /// arrival of the leg before plus the shortest stay less `SHORT_STAY_SEARCH_MINUTES`, to the
+    /// latest arrival plus the longest stay. Without a longest stay it ends with the leg's own
+    /// departure window. A departure window the traveller set, or the window of a night train,
+    /// also bounds it. Returns `None` when the leg before has no journeys.
     fn window_after_stay(
         &self,
         previous: &LegSearch,
@@ -364,7 +368,9 @@ impl TimetableBundleRouter {
         let latest_arrival = arrivals.max()?;
         let own_window = self.departure_window(input);
         let minimum = u32::from(stop.stay_range.minimum.minutes());
-        let start = earliest_arrival + minimum;
+        // A stay a little short of the minimum is searched too, so the pairing can weigh its
+        // penalty against, for example, arriving much later at the next place.
+        let start = earliest_arrival + minimum.saturating_sub(SHORT_STAY_SEARCH_MINUTES);
         let end = match stop.stay_range.maximum_beyond_minimum {
             Some(beyond) => latest_arrival + minimum + u32::from(beyond.minutes()),
             None => own_window.as_ref().map_or(start, |window| window.end.0),

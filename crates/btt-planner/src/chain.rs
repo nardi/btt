@@ -217,4 +217,35 @@ mod tests {
         );
         assert_eq!(costs[1], [Some(400), Some(400)]);
     }
+
+    #[test]
+    fn a_short_stay_wins_when_the_later_train_arrives_much_too_late() {
+        // The first leg arrives at 600 and the stay should last two hours. Leaving at 700 is
+        // 20 minutes short, which costs 40. The train that respects the stay arrives 90
+        // minutes after the next place's window, which its own cost holds as 180.
+        let legs = vec![
+            vec![journey(300, 600, 300)],
+            vec![journey(700, 900, 100), journey(720, 990, 100 + 180)],
+        ];
+        let costs = chain_through_costs(
+            &legs,
+            &[TWO_TO_FIVE_HOURS],
+            &[None, None],
+            ScoringWeights::DEFAULT,
+        );
+        assert_eq!(costs[1], [Some(300 + 100 + 40), Some(300 + 280)]);
+
+        // When respecting the stay only costs 5 minutes outside the window, it wins.
+        let legs = vec![
+            vec![journey(300, 600, 300)],
+            vec![journey(700, 900, 100), journey(720, 905, 100 + 10)],
+        ];
+        let costs = chain_through_costs(
+            &legs,
+            &[TWO_TO_FIVE_HOURS],
+            &[None, None],
+            ScoringWeights::DEFAULT,
+        );
+        assert!(costs[1][1] < costs[1][0]);
+    }
 }
