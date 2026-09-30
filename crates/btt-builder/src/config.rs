@@ -177,6 +177,9 @@ pub struct TrainLabelRule {
     /// Field the pattern reads when the first one does not match it, such as the short name of a
     /// route whose long name is empty.
     pub fallback_field: Option<TrainLabelField>,
+    /// Whether the number is the name of a line shared by many trips instead of a train number.
+    /// Such trips don't merge with copies in other feeds or join across borders by number.
+    pub number_is_line: bool,
     /// Pattern with a `number` group and an optional `category` group.
     pub pattern: Regex,
     /// Field that holds the category when the pattern has no `category` group or it does not
@@ -235,6 +238,8 @@ enum StationCodeFile {
 struct TrainLabelFile {
     field: TrainLabelField,
     fallback_field: Option<TrainLabelField>,
+    #[serde(default)]
+    number_is_line: bool,
     pattern: String,
     category_field: TrainLabelField,
     category_pattern: Option<String>,
@@ -342,6 +347,7 @@ impl TryFrom<FeedConfigFile> for FeedConfig {
             train_label: TrainLabelRule {
                 field: file.train_label.field,
                 fallback_field: file.train_label.fallback_field,
+                number_is_line: file.train_label.number_is_line,
                 pattern,
                 category_field: file.train_label.category_field,
                 category_pattern,

@@ -287,7 +287,7 @@ fn train_label(rule: &TrainLabelRule, header: &FeedTripHeader) -> (String, Train
             },
             |category| category.as_str(),
         );
-    let train_number = if captures.is_some() {
+    let train_number = if captures.is_some() && !rule.number_is_line {
         number.trim_start_matches('0').to_owned()
     } else {
         String::new()
@@ -497,6 +497,7 @@ mod tests {
         let rule = TrainLabelRule {
             field: TrainLabelField::TripShortName,
             fallback_field: None,
+            number_is_line: false,
             pattern: Regex::new(r"^0*(?<number>\d+)$").unwrap(),
             category_field: TrainLabelField::RouteShortName,
             category_pattern: None,
@@ -527,6 +528,7 @@ mod tests {
         let rule = TrainLabelRule {
             field: TrainLabelField::TripHeadsign,
             fallback_field: None,
+            number_is_line: false,
             pattern: Regex::new(r"^(?<number>\d+)$").unwrap(),
             category_field: TrainLabelField::FirstStopId,
             category_pattern: Some(Regex::new(r"^StopPoint:OCE(?<category>.+)-\d+$").unwrap()),
@@ -563,6 +565,7 @@ mod tests {
         let rule = TrainLabelRule {
             field: TrainLabelField::RouteLongName,
             fallback_field: Some(TrainLabelField::RouteShortName),
+            number_is_line: false,
             pattern: Regex::new(r"^(?:(?<category>\p{L}+)\s*)?(?<number>\d+)\b").unwrap(),
             category_field: TrainLabelField::RouteShortName,
             category_pattern: None,

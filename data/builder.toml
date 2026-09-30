@@ -176,3 +176,36 @@ field = "trip_short_name"
 pattern = '^(?<number>\d+)$'
 category_field = "agency_name"
 category_pattern = '^(?<category>H\p{L})'
+
+[[feed]]
+# Stop IDs hold the seven-digit UIC code of the station. A station's own stop ID has five zeros
+# before it, and a platform has three zeros before it and two digits of platform number after.
+mirror_name = "dk_rejseplanen"
+station_key_pattern = '^0{3,5}(86\d{5})(?:\d{2})?$'
+station_code = "uic_in_stop_id"
+station_code_pattern = '^0{3,5}(86\d{5})(?:\d{2})?$'
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^0*(?<number>\d+)$'
+# Route short names are lines, so the agency names the category, such as "DSB".
+category_field = "agency_name"
+
+[[feed]]
+# Stops are national stop IDs without UIC codes. Trains carry their number in the trip short
+# name, or in the route short name when the trip has none.
+mirror_name = "se_Trafiklab"
+[feed.train_label]
+field = "trip_short_name"
+fallback_field = "route_short_name"
+pattern = '^(?<number>\d+)$'
+category_field = "agency_name"
+
+[[feed]]
+# Norwegian trains have no numbers, so the line is the label.
+mirror_name = "no_Entur"
+station_code = "entur_stop_place"
+[feed.train_label]
+field = "route_short_name"
+pattern = '^(?<number>.+)$'
+category_field = "agency_name"
+number_is_line = true
