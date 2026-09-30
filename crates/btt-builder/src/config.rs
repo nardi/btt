@@ -156,6 +156,8 @@ pub enum TrainLabelField {
     TripHeadsign,
     /// `routes.txt` `route_short_name`.
     RouteShortName,
+    /// `routes.txt` `route_id`, which Trenitalia France sets to the train number.
+    RouteId,
     /// `routes.txt` `route_long_name`, which some feeds fill with the train, such as
     /// `IC 935 SAVARIA`.
     RouteLongName,

@@ -209,3 +209,22 @@ field = "route_short_name"
 pattern = '^(?<number>.+)$'
 category_field = "agency_name"
 number_is_line = true
+
+[[feed]]
+# Île-de-France Mobilités runs the RER and Transilien trains, which SNCF's own file leaves out.
+# Trip short names are train numbers, sometimes two joined by a dash for a train that changes
+# number. The same file has the TER trains of the region, which merge with SNCF's copies.
+mirror_name = "fr_reseau-urbain-et-interurbain-dile-de-france-mobilites"
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^(?<number>\d+)'
+category_field = "agency_name"
+
+[[feed]]
+# Trenitalia's own trains between Paris, Lyon, Marseille and Milan. The route ID is the train
+# number.
+mirror_name = "fr_horaires-des-trains-trenitalia-france"
+[feed.train_label]
+field = "route_id"
+pattern = '^(?<number>\d+)$'
+category_field = "agency_name"
