@@ -42,7 +42,13 @@ SELECT CAST(coalesce(parents.id, rows.id) AS INTEGER) AS trainline_station_id,
        nullif(coalesce(parents.time_zone, rows.time_zone), '') AS time_zone,
        normalized_station_name(rows.name) AS normalized_name
 FROM usable_rows AS rows
-LEFT JOIN usable_rows AS parents ON parents.id = nullif(rows.parent_station_id, '');
+LEFT JOIN usable_rows AS parents
+  ON parents.id = nullif(rows.parent_station_id, '')
+  -- Trainline also files separate stations under a main station, such as Genève Aéroport
+  -- under Genève, 5 km away. Only a row close to its parent is a part of it.
+ AND haversine_meters(CAST(rows.latitude AS DOUBLE), CAST(rows.longitude AS DOUBLE),
+                      CAST(parents.latitude AS DOUBLE), CAST(parents.longitude AS DOUBLE))
+     <= getvariable('station_part_radius_meters');
 
 -- The name and position of each station a match can point to, which is never a station part.
 CREATE TABLE trainline_whole_stations AS

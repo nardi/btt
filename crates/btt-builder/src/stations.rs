@@ -16,6 +16,11 @@ use crate::dedup::{NearbyStationPairs, SAME_STOP_RADIUS_METERS};
 /// distance nigiri uses for equivalent stops.
 const STATION_MERGE_RADIUS_METERS: f64 = 100.0;
 
+/// Largest distance between a Trainline row and its parent for the row to count as a part of
+/// the parent, such as a group of platforms. Farther rows are separate stations that Trainline
+/// files under a main station.
+const STATION_PART_RADIUS_METERS: f64 = 1000.0;
+
 /// Largest distance at which a Trainline station with a similar name matches.
 const MATCH_RADIUS_METERS: f64 = 300.0;
 
@@ -54,7 +59,8 @@ pub fn match_stations(
          SET VARIABLE same_name_radius_meters = {SAME_NAME_RADIUS_METERS};
          SET VARIABLE accepted_similarity = {ACCEPTED_SIMILARITY};
          SET VARIABLE uncertain_similarity = {UNCERTAIN_SIMILARITY};
-         SET VARIABLE station_merge_radius_meters = {STATION_MERGE_RADIUS_METERS};",
+         SET VARIABLE station_merge_radius_meters = {STATION_MERGE_RADIUS_METERS};
+         SET VARIABLE station_part_radius_meters = {STATION_PART_RADIUS_METERS};",
         sql_string(&trainline_path),
         sql_string(&stopword_pattern(stopwords)),
     ))?;
