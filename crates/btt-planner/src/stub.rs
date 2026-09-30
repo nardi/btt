@@ -88,6 +88,7 @@ impl StubBackend {
             arrival_footpath: None,
             egress: STUB_STATION_WAY,
             sleeping_ride: offers_berths.then_some(0),
+            cost_parts: None,
         };
         LegPlanningResult::Found(Box::new(LegPlan {
             chosen_journey: journey,
@@ -106,6 +107,7 @@ impl StubBackend {
             ],
             follows_traveller_choice: false,
             best_journey_cost: u32::from(ride_minutes),
+            departure_window: None,
         }))
     }
 }

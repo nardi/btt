@@ -26,9 +26,10 @@ pub use itinerary::{
 };
 pub use place_search::PlaceSearchResult;
 pub use plan::{
-    ArrivalFootpath, Journey, JourneyChoice, LegPlan, LegPlanStation, LegPlanStationIndex,
-    LegPlanningResult, NearbyDaySuggestion, NoJourneyReason, PlanningRunId, PlanningSessionEvent,
-    StationWay, TrainLabel, TrainRide, TransferAndRide, WayToStationMode,
+    ArrivalFootpath, Journey, JourneyChoice, JourneyCostParts, LegPlan, LegPlanStation,
+    LegPlanStationIndex, LegPlanningResult, NearbyDaySuggestion, NoJourneyReason, PlanningRunId,
+    PlanningSessionEvent, SearchedWindow, StationWay, TrainLabel, TrainRide, TransferAndRide,
+    WayToStationMode,
 };
 pub use time::{
     DailyTimeWindow, DailyWindowLength, DurationMinutes, LocalTimeOfDay, TravelDayWindows,

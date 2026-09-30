@@ -6,9 +6,10 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use btt_geo::{TimeZoneFinder, local_time_to_unix_minutes};
 use btt_model::{
-    ArrivalFootpath, DurationMinutes, Journey, JourneyChoice, LegPlan, LegPlanStation,
-    LegPlanStationIndex, LegPlanningResult, LegTravelMode, NoJourneyReason, OvernightLegOptions,
-    StationWay, TrainLabel, TrainRide, TransferAndRide, UnixTimeMinutes, WayToStationMode,
+    ArrivalFootpath, DurationMinutes, Journey, JourneyChoice, JourneyCostParts, LegPlan,
+    LegPlanStation, LegPlanStationIndex, LegPlanningResult, LegTravelMode, NoJourneyReason,
+    OvernightLegOptions, SearchedWindow, StationWay, TrainLabel, TrainRide, TransferAndRide,
+    UnixTimeMinutes, WayToStationMode,
 };
 use btt_router::{
     AllowEveryRide, CandidateStation, MinutesSinceBundleStart, ParetoJourneySet, RaptorJourney,
@@ -25,7 +26,7 @@ use crate::chain::{ChainJourney, ChainStay, chain_through_costs};
 use crate::explanation::{CandidateExplanation, LegExplanation, RankedJourneyExplanation};
 use crate::input::{LegChainInput, LegEndpoint, LegPlanningInput, SameDayStop};
 use crate::ride_path::StationHopGraph;
-use crate::scoring::{JourneyCostInputs, ScoringWeights, journey_cost};
+use crate::scoring::{JourneyCostInputs, ScoringWeights, journey_cost, journey_cost_parts};
 
 /// Largest number of candidate stations per place, closest first.
 const MAXIMUM_CANDIDATE_STATIONS: usize = 16;
@@ -342,6 +343,7 @@ impl TimetableBundleRouter {
                     journeys: ranked,
                     follows_traveller_choice: pick_position.is_some(),
                     night: searches[leg].night.clone(),
+                    departure_window: searches[leg].departure_window.clone(),
                 };
                 self.leg_plan(&ranking, inputs[leg])
             })
@@ -420,12 +422,7 @@ impl TimetableBundleRouter {
             .iter()
             .filter_map(|ranked| {
                 Some(RankedJourneyExplanation {
-                    journey: self.journey(
-                        ranked.journey,
-                        input,
-                        ranking.night.as_ref(),
-                        &mut stations,
-                    )?,
+                    journey: self.journey(ranked, input, ranking.night.as_ref(), &mut stations)?,
                     cost: ranked.cost,
                     cost_inputs: ranked.cost_inputs,
                 })
@@ -469,6 +466,7 @@ impl TimetableBundleRouter {
         departure_window: std::ops::Range<MinutesSinceBundleStart>,
         should_stop: &(impl Fn() -> bool + Sync),
     ) -> Result<LegSearch, NoJourneyReason> {
+        let searched_window = departure_window.clone();
         let bundle_end = u32::from(self.bundle.validity_days()) * MINUTES_PER_DAY;
         if departure_window.start.0 >= bundle_end {
             return Err(NoJourneyReason::TravelDateOutsideTimetable);
@@ -519,6 +517,7 @@ impl TimetableBundleRouter {
             arrival_candidates,
             journeys,
             night,
+            departure_window: searched_window,
         })
     }
 
@@ -545,6 +544,7 @@ impl TimetableBundleRouter {
             journeys,
             follows_traveller_choice: chosen_position.is_some(),
             night: search.night.clone(),
+            departure_window: search.departure_window.clone(),
         }
     }
 
@@ -593,7 +593,7 @@ impl TimetableBundleRouter {
         };
         let mut stations = LegPlanStations::default();
         let Some(chosen_journey) =
-            self.journey(chosen.journey, input, ranking.night.as_ref(), &mut stations)
+            self.journey(chosen, input, ranking.night.as_ref(), &mut stations)
         else {
             return LegPlanningResult::NoJourneyFound(NoJourneyReason::NoConnectionInWindow);
         };
@@ -627,9 +627,7 @@ impl TimetableBundleRouter {
                 is_new
             })
             .take(MAXIMUM_ALTERNATIVES)
-            .filter_map(|ranked| {
-                self.journey(ranked.journey, input, ranking.night.as_ref(), &mut stations)
-            })
+            .filter_map(|ranked| self.journey(ranked, input, ranking.night.as_ref(), &mut stations))
             .collect();
         LegPlanningResult::Found(Box::new(LegPlan {
             chosen_journey,
@@ -637,6 +635,14 @@ impl TimetableBundleRouter {
             station_table: stations.table,
             follows_traveller_choice: ranking.follows_traveller_choice,
             best_journey_cost: best_own_cost,
+            departure_window: Some(SearchedWindow {
+                start: UnixTimeMinutes(
+                    self.bundle_start_unix_minutes + ranking.departure_window.start.0,
+                ),
+                end: UnixTimeMinutes(
+                    self.bundle_start_unix_minutes + ranking.departure_window.end.0,
+                ),
+            }),
         }))
     }
 
@@ -905,11 +911,12 @@ impl TimetableBundleRouter {
     /// Turns a router journey into a model journey, adding its stations to the table.
     fn journey(
         &self,
-        journey: &RaptorJourney,
+        ranked: &RankedJourney<'_>,
         input: &LegPlanningInput,
         night: Option<&std::ops::Range<u32>>,
         stations: &mut LegPlanStations,
     ) -> Option<Journey> {
+        let journey = ranked.journey;
         let mut rides = journey.rides.iter();
         let first = rides.next()?;
         let first_ride = self.train_ride(first, stations)?;
@@ -959,6 +966,7 @@ impl TimetableBundleRouter {
                     .then(|| u8::try_from(position).ok())
                     .flatten()
             }),
+            cost_parts: Some(cost_parts(ranked, input)),
         })
     }
 
@@ -1097,6 +1105,8 @@ struct LegSearch {
     journeys: ParetoJourneySet,
     /// The night of an overnight leg in bundle minutes.
     night: Option<std::ops::Range<u32>>,
+    /// The moments between which the traveller could leave the departure place.
+    departure_window: std::ops::Range<MinutesSinceBundleStart>,
 }
 
 /// A journey of a search with its cost.
@@ -1120,10 +1130,27 @@ struct JourneyRanking<'search> {
     follows_traveller_choice: bool,
     /// The night of an overnight leg in bundle minutes.
     night: Option<std::ops::Range<u32>>,
+    /// The moments between which the traveller could leave the departure place.
+    departure_window: std::ops::Range<MinutesSinceBundleStart>,
 }
 
 /// Rounds a distance to whole meters. Distances here stay far below the range of `u32`.
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn rounded_meters(distance_meters: f64) -> u32 {
     distance_meters.round() as u32
+}
+
+/// Returns what the cost of a ranked journey is made of. For a leg of a chain, everything the
+/// rest of the chain adds goes into `rest_of_chain_cost`, so the parts add up to the cost the
+/// journey was ranked by.
+fn cost_parts(ranked: &RankedJourney<'_>, input: &LegPlanningInput) -> JourneyCostParts {
+    let mut parts = journey_cost_parts(
+        ranked.cost_inputs,
+        input.transfer_aversion,
+        ScoringWeights::DEFAULT,
+    );
+    let cost = i32::try_from(ranked.cost).unwrap_or(i32::MAX);
+    parts.rest_of_chain_cost = cost - parts.total_cost;
+    parts.total_cost = cost;
+    parts
 }

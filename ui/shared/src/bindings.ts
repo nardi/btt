@@ -235,6 +235,11 @@ export type Journey = {
 	 *  at least half of the night of an overnight leg.
 	 */
 	sleeping_ride?: number | null,
+	/**
+	 *  What the planner's cost of the journey is made of, for explaining the choice. `None`
+	 *  in plans stored without it and from backends that don't rank journeys.
+	 */
+	cost_parts?: JourneyCostParts | null,
 };
 
 /**
@@ -246,6 +251,43 @@ export type JourneyChoice = {
 	first_departure_time: UnixTimeMinutes,
 	/**  Every train of the journey in travel order. */
 	trains: TrainLabel[],
+};
+
+/**
+ *  The parts of a journey's cost, each in minutes of train travel, so the difference between
+ *  two journeys splits into what causes it. The parts add up to `total_cost`.
+ */
+export type JourneyCostParts = {
+	/**
+	 *  Minutes from leaving the departure place to reaching the arrival place, which the cost
+	 *  counts once.
+	 */
+	door_to_door_minutes: number,
+	/**  Minutes of those spent on the ways to and from stations. */
+	way_to_station_minutes: number,
+	/**  What the ways to and from stations cost on top of their duration. */
+	way_to_station_extra_cost: number,
+	/**  Number of changes between trains, and walks between stations at the end. */
+	transfer_count: number,
+	/**  What each change costs at the traveller's transfer aversion. */
+	transfer_cost_each: number,
+	/**  Minutes by which the arrival falls before or after the arrival window. */
+	minutes_outside_arrival_window: number,
+	/**  What those minutes cost. */
+	arrival_window_cost: number,
+	/**  Minutes of the night spent asleep in a berth, which the cost takes off. */
+	sleeping_minutes: number,
+	/**  Minutes of the night before arrival spent without a berth. */
+	night_minutes_awake: number,
+	/**  What those minutes cost. */
+	night_awake_cost: number,
+	/**
+	 *  For a leg joined to others by same-day stops, what the best rest of the chain costs with
+	 *  this journey: the other legs and the stays between them. Zero for a leg on its own.
+	 */
+	rest_of_chain_cost: number,
+	/**  The cost the planner ranked the journey by. */
+	total_cost: number,
 };
 
 /**
@@ -271,6 +313,11 @@ export type LegPlan = {
 	 *  to others by same-day stops, the best journey is the one on the best chain.
 	 */
 	best_journey_cost?: number,
+	/**
+	 *  The moments between which the planner let the traveller leave the departure place.
+	 *  `None` in plans stored without it.
+	 */
+	departure_window?: SearchedWindow | null,
 };
 
 /**  A station used by the journeys of one leg plan. */
@@ -468,6 +515,14 @@ export type SameDayStayRange = {
 	minimum: DurationMinutes,
 	/**  How much longer than `minimum` the stay may be. `None` means no upper bound. */
 	maximum_beyond_minimum: DurationMinutes | null,
+};
+
+/**  A span of time the planner searched in, such as a departure window. */
+export type SearchedWindow = {
+	/**  First moment of the span. */
+	start: UnixTimeMinutes,
+	/**  Moment the span ends. */
+	end: UnixTimeMinutes,
 };
 
 /**  Largest distance from a place to a station the planner may use, from 100 m to 50 km. */

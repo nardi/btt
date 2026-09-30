@@ -23,6 +23,7 @@
   } from "../format";
   import type { LegRow } from "../itinerary";
   import type { LegViewState } from "../trip-source";
+  import JourneyExplanation from "./JourneyExplanation.svelte";
 
   let {
     leg,
@@ -135,6 +136,9 @@
 
   /** Whether the list of alternative journeys is open. */
   let showAlternatives = $state(false);
+
+  /** Whether the explanation of the chosen journey is open. */
+  let showExplanation = $state(false);
 
   /** Returns the rides of a journey in travel order. */
   function journeyRides(journey: Journey): TrainRide[] {
@@ -277,7 +281,22 @@
             {legPlan.alternative_journeys.length === 1 ? "alternative" : "alternatives"}
           </button>
         {/if}
+        {#if journey.cost_parts !== null && journey.cost_parts !== undefined}
+          <button
+            type="button"
+            class="explain"
+            aria-expanded={showExplanation}
+            aria-label="Why this journey"
+            title="Why this journey"
+            onclick={() => (showExplanation = !showExplanation)}
+          >
+            ?
+          </button>
+        {/if}
       </span>
+      {#if showExplanation}
+        <JourneyExplanation {legPlan} {nearbyDay} />
+      {/if}
       {#if overnightOptions !== null && journey.sleeping_ride === null}
         <span class="night-note">
           No night train with berths covers most of the night from
@@ -432,6 +451,20 @@
   }
 
   /* The alternatives button reads as part of the summary text. */
+  /* A small round button, so the explanation stays out of the way until asked for. */
+  .explain {
+    width: 1.4em;
+    height: 1.4em;
+    margin-left: var(--space-2);
+    padding: 0;
+    border: 1px solid var(--color-border);
+    border-radius: 50%;
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+    font-size: 0.85em;
+    line-height: 1;
+  }
+
   .link {
     padding: 0;
     border: none;

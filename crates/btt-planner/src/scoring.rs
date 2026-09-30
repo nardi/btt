@@ -1,7 +1,7 @@
 //! Turns a journey into one cost in minutes, so the planner can pick among Pareto-optimal
 //! journeys.
 
-use btt_model::TransferAversion;
+use btt_model::{JourneyCostParts, TransferAversion};
 
 /// Weights of the journey cost. All values count in minutes of train travel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,22 +69,47 @@ pub fn journey_cost(
     transfer_aversion: TransferAversion,
     weights: ScoringWeights,
 ) -> u32 {
-    let transfer_penalty = weights.transfer_base_minutes
+    let total = journey_cost_parts(inputs, transfer_aversion, weights).total_cost;
+    u32::try_from(total).unwrap_or(0)
+}
+
+/// Returns what the cost of a journey on its own is made of, with the total that
+/// `journey_cost` returns.
+pub fn journey_cost_parts(
+    inputs: JourneyCostInputs,
+    transfer_aversion: TransferAversion,
+    weights: ScoringWeights,
+) -> JourneyCostParts {
+    let transfer_cost_each = weights.transfer_base_minutes
         + weights.transfer_aversion_minutes * u32::from(transfer_aversion.percent()) / 100;
     // The door-to-door time already counts the way to the stations once, so only the extra
     // part of its weight is added.
-    let way_to_station_extra =
+    let way_to_station_extra_cost =
         inputs.way_to_station_minutes * weights.way_to_station_percent.saturating_sub(100) / 100;
-    let arrival_window_miss =
+    let arrival_window_cost =
         inputs.minutes_outside_arrival_window * weights.arrival_window_miss_percent / 100;
-    let night_awake = inputs.night_minutes_awake * weights.night_awake_percent / 100;
-    inputs
+    let night_awake_cost = inputs.night_minutes_awake * weights.night_awake_percent / 100;
+    let total = inputs
         .door_to_door_minutes
         .saturating_sub(inputs.sleeping_minutes)
-        + way_to_station_extra
-        + inputs.transfer_count * transfer_penalty
-        + arrival_window_miss
-        + night_awake
+        + way_to_station_extra_cost
+        + inputs.transfer_count * transfer_cost_each
+        + arrival_window_cost
+        + night_awake_cost;
+    JourneyCostParts {
+        door_to_door_minutes: inputs.door_to_door_minutes,
+        way_to_station_minutes: inputs.way_to_station_minutes,
+        way_to_station_extra_cost,
+        transfer_count: inputs.transfer_count,
+        transfer_cost_each,
+        minutes_outside_arrival_window: inputs.minutes_outside_arrival_window,
+        arrival_window_cost,
+        sleeping_minutes: inputs.sleeping_minutes.min(inputs.door_to_door_minutes),
+        night_minutes_awake: inputs.night_minutes_awake,
+        night_awake_cost,
+        rest_of_chain_cost: 0,
+        total_cost: i32::try_from(total).unwrap_or(i32::MAX),
+    }
 }
 
 #[cfg(test)]
@@ -162,5 +187,30 @@ mod tests {
         let nearby = cost(400, 5, 1, 50);
         let far = cost(395, 20, 1, 50);
         assert!(nearby < far, "nearby {nearby}, far {far}");
+    }
+
+    #[test]
+    fn the_cost_parts_add_up_to_the_cost() {
+        let inputs = JourneyCostInputs {
+            door_to_door_minutes: 900,
+            way_to_station_minutes: 30,
+            transfer_count: 2,
+            minutes_outside_arrival_window: 25,
+            sleeping_minutes: 400,
+            night_minutes_awake: 50,
+        };
+        let aversion = TransferAversion::new(50).unwrap();
+        let parts = journey_cost_parts(inputs, aversion, ScoringWeights::DEFAULT);
+        let sum = i64::from(parts.door_to_door_minutes) - i64::from(parts.sleeping_minutes)
+            + i64::from(parts.way_to_station_extra_cost)
+            + i64::from(parts.transfer_count * parts.transfer_cost_each)
+            + i64::from(parts.arrival_window_cost)
+            + i64::from(parts.night_awake_cost);
+        assert_eq!(sum, i64::from(parts.total_cost));
+        assert_eq!(
+            parts.total_cost,
+            i32::try_from(journey_cost(inputs, aversion, ScoringWeights::DEFAULT)).unwrap()
+        );
+        assert_eq!(parts.transfer_cost_each, 65);
     }
 }

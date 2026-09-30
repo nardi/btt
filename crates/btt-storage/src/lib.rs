@@ -419,11 +419,13 @@ mod tests {
                     mode: WayToStationMode::LocalTransport,
                 },
                 sleeping_ride: None,
+                cost_parts: None,
             },
             alternative_journeys: smallvec::SmallVec::new(),
             station_table: smallvec::smallvec![station("Köln Hbf"), station("Frankfurt Hbf")],
             follows_traveller_choice: true,
             best_journey_cost: 300,
+            departure_window: None,
         }));
         // A key with the highest bit set checks the conversion to SQLite's signed integers.
         let high_key = u64::MAX - 7;

@@ -124,6 +124,10 @@ pub struct Journey {
     /// at least half of the night of an overnight leg.
     #[serde(default)]
     pub sleeping_ride: Option<u8>,
+    /// What the planner's cost of the journey is made of, for explaining the choice. `None`
+    /// in plans stored without it and from backends that don't rank journeys.
+    #[serde(default)]
+    pub cost_parts: Option<JourneyCostParts>,
 }
 
 impl Journey {
@@ -138,6 +142,47 @@ impl Journey {
             .last()
             .map_or(&self.first_ride, |later| &later.ride)
     }
+}
+
+/// The parts of a journey's cost, each in minutes of train travel, so the difference between
+/// two journeys splits into what causes it. The parts add up to `total_cost`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub struct JourneyCostParts {
+    /// Minutes from leaving the departure place to reaching the arrival place, which the cost
+    /// counts once.
+    pub door_to_door_minutes: u32,
+    /// Minutes of those spent on the ways to and from stations.
+    pub way_to_station_minutes: u32,
+    /// What the ways to and from stations cost on top of their duration.
+    pub way_to_station_extra_cost: u32,
+    /// Number of changes between trains, and walks between stations at the end.
+    pub transfer_count: u32,
+    /// What each change costs at the traveller's transfer aversion.
+    pub transfer_cost_each: u32,
+    /// Minutes by which the arrival falls before or after the arrival window.
+    pub minutes_outside_arrival_window: u32,
+    /// What those minutes cost.
+    pub arrival_window_cost: u32,
+    /// Minutes of the night spent asleep in a berth, which the cost takes off.
+    pub sleeping_minutes: u32,
+    /// Minutes of the night before arrival spent without a berth.
+    pub night_minutes_awake: u32,
+    /// What those minutes cost.
+    pub night_awake_cost: u32,
+    /// For a leg joined to others by same-day stops, what the best rest of the chain costs with
+    /// this journey: the other legs and the stays between them. Zero for a leg on its own.
+    pub rest_of_chain_cost: i32,
+    /// The cost the planner ranked the journey by.
+    pub total_cost: i32,
+}
+
+/// A span of time the planner searched in, such as a departure window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub struct SearchedWindow {
+    /// First moment of the span.
+    pub start: UnixTimeMinutes,
+    /// Moment the span ends.
+    pub end: UnixTimeMinutes,
 }
 
 /// The planned journey for one leg and its alternatives.
@@ -158,6 +203,10 @@ pub struct LegPlan {
     /// to others by same-day stops, the best journey is the one on the best chain.
     #[serde(default)]
     pub best_journey_cost: u32,
+    /// The moments between which the planner let the traveller leave the departure place.
+    /// `None` in plans stored without it.
+    #[serde(default)]
+    pub departure_window: Option<SearchedWindow>,
 }
 
 /// A day before or after a leg's date on which the leg can be travelled much better, such as
