@@ -128,7 +128,13 @@ The ways between a place and a station, and between nearby stations, are estimat
 
 ### The timetable
 
-The costs are only as good as the timetable. Stations from different feeds are matched by code, by name and distance, and by distance alone, and copies of the same train in different feeds are merged. A mistake in either step shows up as a train that is missing, a change that isn't possible in reality, or a change that the traveller doesn't need. A comparison with MOTIS on the same rail data found the same earliest arrival in 356 of 500 random queries. The differences examined in detail came from how the comparison matched stops between the two systems, not from the search.
+The costs are only as good as the timetable. Stations from different feeds are matched by code, by name and distance, and by distance alone, and copies of the same train in different feeds are merged. A mistake in either step shows up as a train that is missing, a change that isn't possible in reality, or a change that the traveller doesn't need. A station that the Trainline dataset lists as part of another only joins it when the two lie within one kilometre, because the dataset also files separate stations under a main station, such as an airport station under the city's main station.
+
+The minimum time for a change is the traveller's setting at every station. Feeds that give a longer time for particular stations or trains are not followed, so a change that the setting allows can be too short in reality. This matters most for trains with check-in, such as Eurostar, which closes boarding well before departure.
+
+### Comparison with MOTIS
+
+MOTIS, run on the same rail feeds with its own benchmark queries, gives a check on both the search and the timetable. Of 500 random queries between stops, 363 have the same earliest arrival. In 84 more, the planner arrives earlier by walking or taking local transport between stations up to five kilometres apart, which MOTIS without street data doesn't link. Of the remaining differences, most are a few minutes and come from the minimum change time above, and the rest from trains that only one of the two finds in the feeds.
 
 ## References
 
