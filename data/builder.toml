@@ -228,3 +228,190 @@ mirror_name = "fr_horaires-des-trains-trenitalia-france"
 field = "route_id"
 pattern = '^(?<number>\d+)$'
 category_field = "agency_name"
+
+[[feed]]
+mirror_name = "pl_PKP-Intercity"
+[feed.train_label]
+# Trip short names put the number first, as in "306 Porta Moravica".
+field = "trip_short_name"
+pattern = '^(?<number>\d+)'
+category_field = "route_short_name"
+
+[[feed]]
+mirror_name = "pl_Polish-Trains"
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^(?<number>\d+)'
+# Route short names are lines, so the operator names the category.
+category_field = "agency_name"
+
+[[feed]]
+mirror_name = "pl_PKP-Intercity-Germany"
+[feed.train_label]
+field = "route_short_name"
+pattern = '^(?<category>[A-Za-z]+)\s*(?<number>\d+)$'
+category_field = "route_short_name"
+
+[[feed]]
+# Stop IDs are UIC codes.
+mirror_name = "sk_zsr"
+station_code = "uic_in_stop_id"
+[feed.train_label]
+field = "route_short_name"
+pattern = '^(?<category>[A-Za-z]+)\s*(?<number>\d+)$'
+category_field = "route_short_name"
+
+[[feed]]
+# Stop IDs are the five digits of the UIC code after the country code 53.
+mirror_name = "ro_railway"
+station_code = "uic_in_stop_id"
+station_code_pattern = '^(\d{5})$'
+station_code_prefix = "53"
+[feed.train_label]
+field = "route_short_name"
+pattern = '^(?<category>[A-Za-z]+)\s*(?<number>\d+)$'
+category_field = "route_short_name"
+
+[[feed]]
+# Station names are in Cyrillic, which Trainline's Latin names never match.
+mirror_name = "bg_bdz"
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^(?<number>\d+)$'
+category_field = "route_short_name"
+
+[[feed]]
+# Stop IDs are UIC codes. The feed also holds Montenegrin and Hungarian trains.
+mirror_name = "rs_Srbijavoz"
+station_code = "uic_in_stop_id"
+[feed.train_label]
+field = "route_short_name"
+pattern = '^(?<category>[A-Za-z]+)\s*(?<number>\d+)$'
+category_field = "route_short_name"
+
+[[feed]]
+mirror_name = "me_zpcg"
+[feed.train_label]
+field = "route_short_name"
+pattern = '^(?<number>\d+)$'
+category_field = "agency_name"
+
+[[feed]]
+mirror_name = "mk_zr-north-macedonia"
+[feed.train_label]
+field = "route_short_name"
+pattern = '^(?<category>[A-Za-z]+)\s*(?<number>\d+)$'
+category_field = "route_short_name"
+
+[[feed]]
+# Stop IDs are UIC codes.
+mirror_name = "gr_Hellenic-Train"
+station_code = "uic_in_stop_id"
+[feed.train_label]
+field = "route_short_name"
+pattern = '^(?<number>\d+)$'
+category_field = "agency_name"
+
+[[feed]]
+mirror_name = "tr_tcdd"
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^(?<number>\d+)$'
+category_field = "agency_name"
+
+[[feed]]
+# Stop IDs are the five digits of the UIC code after the country code 71.
+mirror_name = "es_RENFE-Larga-Distancia-y-AVE"
+station_code = "uic_in_stop_id"
+station_code_pattern = '^(\d{5})$'
+station_code_prefix = "71"
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^0*(?<number>\d+)$'
+category_field = "route_short_name"
+
+[[feed]]
+# Stop IDs are two zeros and the seven-digit UIC code.
+mirror_name = "es_Ouigo"
+station_code = "uic_in_stop_id"
+station_code_pattern = '^00(\d{7})$'
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^\D*(?<number>\d+)$'
+category_field = "agency_name"
+
+[[feed]]
+# Commuter trains have lines and no train numbers.
+mirror_name = "es_Cercanías-Renfe"
+station_code = "uic_in_stop_id"
+station_code_pattern = '^(\d{5})$'
+station_code_prefix = "71"
+[feed.train_label]
+field = "route_short_name"
+pattern = '^(?<number>.+)$'
+category_field = "agency_name"
+number_is_line = true
+
+[[feed]]
+mirror_name = "es_Ferrocarriles-de-la-Generalitat-de-Cataluña"
+[feed.train_label]
+field = "route_short_name"
+pattern = '^(?<number>.+)$'
+category_field = "agency_name"
+number_is_line = true
+
+[[feed]]
+mirror_name = "es_Euskotren"
+[feed.train_label]
+field = "route_short_name"
+pattern = '^(?<number>.+)$'
+category_field = "agency_name"
+number_is_line = true
+
+[[feed]]
+# Stop IDs are 94, an underscore and the five digits of the UIC code after the country code.
+mirror_name = "pt_Comboios-de-Portugal(CP)"
+station_code = "uic_in_stop_id"
+station_code_pattern = '^94_(\d{5})$'
+station_code_prefix = "94"
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^(?<number>\d+)$'
+category_field = "route_short_name"
+
+[[feed]]
+# The file holds the national railway among 700 bus routes.
+mirror_name = "lu_administration-des-transports-publics"
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^0*(?<number>\d+)$'
+category_field = "route_short_name"
+
+[[feed]]
+mirror_name = "fi_digitraffic"
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^(?<category>[A-Za-z]+)\s*(?<number>\d+)$'
+category_field = "route_short_name"
+
+[[feed]]
+mirror_name = "ee_elron"
+[feed.train_label]
+field = "route_short_name"
+pattern = '^(?<number>.+)$'
+category_field = "agency_name"
+number_is_line = true
+
+[[feed]]
+mirror_name = "lt_LTG-Link"
+[feed.train_label]
+field = "route_short_name"
+pattern = '^(?<number>\d+)$'
+category_field = "agency_name"
+
+[[feed]]
+mirror_name = "lv_pieturas"
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^(?<number>\d+)$'
+category_field = "agency_name"

@@ -3,12 +3,15 @@
 -- and the variables stopword_pattern, match_radius_meters, same_name_radius_meters,
 -- accepted_similarity, uncertain_similarity and station_merge_radius_meters.
 
+-- Rewrites Cyrillic and Greek letters in a lowercase name as the Latin letters a transliteration
+-- would use, so "софия" and "sofia" compare on similar strings. Other scripts pass unchanged.
+CREATE MACRO latin_letters(name) AS replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(name, 'щ', 'sht'), 'ж', 'zh'), 'ч', 'ch'), 'ш', 'sh'), 'ю', 'yu'), 'я', 'ya'), 'ц', 'ts'), 'ъ', 'a'), 'ь', ''), 'ј', 'j'), 'љ', 'lj'), 'њ', 'nj'), 'ђ', 'dj'), 'ћ', 'c'), 'џ', 'dz'), 'ѓ', 'gj'), 'ќ', 'kj'), 'ѕ', 'dz'), 'а', 'a'), 'б', 'b'), 'в', 'v'), 'г', 'g'), 'д', 'd'), 'е', 'e'), 'з', 'z'), 'и', 'i'), 'й', 'y'), 'к', 'k'), 'л', 'l'), 'м', 'm'), 'н', 'n'), 'о', 'o'), 'п', 'p'), 'р', 'r'), 'с', 's'), 'т', 't'), 'у', 'u'), 'ф', 'f'), 'х', 'h'), 'ы', 'y'), 'э', 'e'), 'θ', 'th'), 'χ', 'ch'), 'ψ', 'ps'), 'ξ', 'x'), 'α', 'a'), 'ά', 'a'), 'β', 'v'), 'γ', 'g'), 'δ', 'd'), 'ε', 'e'), 'έ', 'e'), 'ζ', 'z'), 'η', 'i'), 'ή', 'i'), 'ι', 'i'), 'ί', 'i'), 'ϊ', 'i'), 'ΐ', 'i'), 'κ', 'k'), 'λ', 'l'), 'μ', 'm'), 'ν', 'n'), 'ο', 'o'), 'ό', 'o'), 'π', 'p'), 'ρ', 'r'), 'σ', 's'), 'ς', 's'), 'τ', 't'), 'υ', 'y'), 'ύ', 'y'), 'ϋ', 'y'), 'ΰ', 'y'), 'φ', 'f'), 'ω', 'o'), 'ώ', 'o'), 'ı', 'i');
 -- Lowercases, removes diacritics and punctuation, and strips words such as "hbf", so
 -- "Köln Hbf" and "Koeln Hauptbahnhof" compare on "koln" and "koeln".
 CREATE MACRO normalized_station_name(name) AS
     trim(regexp_replace(
         regexp_replace(
-            regexp_replace(strip_accents(lower(name)), '[^a-z0-9]+', ' ', 'g'),
+            regexp_replace(strip_accents(latin_letters(lower(name))), '[^a-z0-9]+', ' ', 'g'),
             getvariable('stopword_pattern'), ' ', 'g'),
         ' +', ' ', 'g'));
 
