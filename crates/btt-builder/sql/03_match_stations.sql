@@ -39,6 +39,7 @@ SELECT CAST(coalesce(parents.id, rows.id) AS INTEGER) AS trainline_station_id,
        nullif(rows.uic, '') AS uic,
        nullif(rows.db_id, '') AS db_id,
        nullif(rows.uic8_sncf, '') AS uic8_sncf,
+       nullif(rows.entur_id, '') AS entur_id,
        nullif(coalesce(parents.time_zone, rows.time_zone), '') AS time_zone,
        normalized_station_name(rows.name) AS normalized_name
 FROM usable_rows AS rows
@@ -110,6 +111,11 @@ code_candidates AS (
     FROM coded_stations AS coded
     JOIN trainline_stations AS trainline ON trainline.uic8_sncf = coded.station_code
     WHERE coded.station_code_scheme = 'uic8'
+    UNION ALL
+    SELECT coded.feed_id, coded.station_key, trainline.trainline_station_id
+    FROM coded_stations AS coded
+    JOIN trainline_stations AS trainline ON trainline.entur_id = coded.station_code
+    WHERE coded.station_code_scheme = 'entur'
 )
 SELECT * FROM code_candidates
 QUALIFY row_number() OVER (PARTITION BY feed_id, station_key ORDER BY trainline_station_id) = 1;

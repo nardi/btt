@@ -31,6 +31,9 @@ pub enum ConfigError {
     /// A category pattern has no `category` group.
     #[error("the category pattern of feed {0} has no `category` group")]
     MissingCategoryGroup(String),
+    /// A station code pattern has no single capture group.
+    #[error("the station code pattern of feed {0} needs exactly one capture group")]
+    StationCodeGroupCount(String),
     /// A train label pattern has no `number` group.
     #[error("the train label pattern of feed {0} has no `number` group")]
     MissingNumberGroup(String),
@@ -68,6 +71,12 @@ pub struct FeedConfig {
     pub station_key_namespace: Option<String>,
     /// Which official station code the stops carry.
     pub station_code: FeedStationCodeScheme,
+    /// Pattern with one capture group that picks the station code out of the stop ID, in place
+    /// of the scheme's own rule. Only for the schemes that read a code from the stop ID.
+    pub station_code_pattern: Option<String>,
+    /// Digits put before the code that the pattern picks, such as the country code `54` that
+    /// Czech stop IDs leave out.
+    pub station_code_prefix: String,
     /// How to read category and number of a train.
     pub train_label: TrainLabelRule,
     /// Format of the feed file.
@@ -129,6 +138,9 @@ pub enum FeedStationCodeScheme {
     EvaInStopId,
     /// The stop ID ends with an eight-digit UIC code with its check digit, as SNCF uses.
     Uic8InStopId,
+    /// The parent station, or the stop itself when it has none, is a Norwegian stop place ID such
+    /// as `NSR:StopPlace:337`, which the Trainline dataset lists as `NSR|StopPlace|337`.
+    EnturStopPlace,
     /// A NeTEx stop place's private code holds the country code, two zeros and the five-digit
     /// station number, as Trenitalia's 830001700 for UIC 8301700.
     UicInPrivateCode,
@@ -144,6 +156,9 @@ pub enum TrainLabelField {
     TripHeadsign,
     /// `routes.txt` `route_short_name`.
     RouteShortName,
+    /// `routes.txt` `route_long_name`, which some feeds fill with the train, such as
+    /// `IC 935 SAVARIA`.
+    RouteLongName,
     /// `routes.txt` `route_desc`, which some feeds fill with the product, such as "IC".
     RouteDesc,
     /// A product name derived from `routes.txt` `route_type`, such as "ICE" for 101.
@@ -187,6 +202,9 @@ struct FeedConfigFile {
     station_key_namespace: Option<String>,
     #[serde(default)]
     station_code: StationCodeFile,
+    station_code_pattern: Option<String>,
+    #[serde(default)]
+    station_code_prefix: String,
     train_label: TrainLabelFile,
     #[serde(default)]
     format: FeedFormat,
@@ -203,6 +221,9 @@ enum StationCodeFile {
     UicInStopId,
     EvaInStopId,
     Uic8InStopId,
+    /// The parent station, or the stop itself when it has none, is a Norwegian stop place ID such
+    /// as `NSR:StopPlace:337`, which the Trainline dataset lists as `NSR|StopPlace|337`.
+    EnturStopPlace,
     UicInPrivateCode,
 }
 
@@ -268,6 +289,17 @@ impl TryFrom<FeedConfigFile> for FeedConfig {
             }
             None => StationKeyRule::ParentStation,
         };
+        let station_code_pattern = match file.station_code_pattern {
+            Some(pattern) => {
+                let compiled = Regex::new(&pattern).map_err(pattern_error)?;
+                // The capture count includes the whole match, so one group makes two.
+                if compiled.captures_len() != 2 {
+                    return Err(ConfigError::StationCodeGroupCount(file.mirror_name));
+                }
+                Some(pattern)
+            }
+            None => None,
+        };
         let pattern = Regex::new(&file.train_label.pattern).map_err(pattern_error)?;
         if !pattern
             .capture_names()
@@ -293,11 +325,14 @@ impl TryFrom<FeedConfigFile> for FeedConfig {
         Ok(Self {
             station_key,
             station_key_namespace: file.station_key_namespace,
+            station_code_pattern,
+            station_code_prefix: file.station_code_prefix,
             station_code: match file.station_code {
                 StationCodeFile::None => FeedStationCodeScheme::NoStationCodes,
                 StationCodeFile::UicInStopId => FeedStationCodeScheme::UicInStopId,
                 StationCodeFile::EvaInStopId => FeedStationCodeScheme::EvaInStopId,
                 StationCodeFile::Uic8InStopId => FeedStationCodeScheme::Uic8InStopId,
+                StationCodeFile::EnturStopPlace => FeedStationCodeScheme::EnturStopPlace,
                 StationCodeFile::UicInPrivateCode => FeedStationCodeScheme::UicInPrivateCode,
             },
             train_label: TrainLabelRule {
@@ -361,5 +396,40 @@ mod tests {
             "#,
         );
         assert!(matches!(result, Err(ConfigError::MissingNumberGroup(_))));
+    }
+
+    #[test]
+    fn reads_a_station_code_pattern_with_a_prefix() {
+        let feed = feed(
+            r#"
+            mirror_name = "cz_CZPTT"
+            station_code = "uic_in_stop_id"
+            station_code_pattern = '^czptt:stop:CZ:(\d{5})'
+            station_code_prefix = "54"
+            [train_label]
+            field = "trip_short_name"
+            pattern = '^(?<number>\d+)$'
+            category_field = "route_short_name"
+            "#,
+        )
+        .unwrap();
+        assert_eq!(feed.station_code, FeedStationCodeScheme::UicInStopId);
+        assert_eq!(feed.station_code_prefix, "54");
+    }
+
+    #[test]
+    fn rejects_a_station_code_pattern_without_one_group() {
+        let result = feed(
+            r#"
+            mirror_name = "cz_CZPTT"
+            station_code = "uic_in_stop_id"
+            station_code_pattern = '^czptt:stop:CZ:\d{5}'
+            [train_label]
+            field = "trip_short_name"
+            pattern = '^(?<number>\d+)$'
+            category_field = "route_short_name"
+            "#,
+        );
+        assert!(matches!(result, Err(ConfigError::StationCodeGroupCount(_))));
     }
 }

@@ -127,14 +127,14 @@ const FEED_B: &[(&str, &str)] = &[
 ];
 
 const TRAINLINE_STATIONS: &str = "\
-id;name;uic;latitude;longitude;is_city;db_id;time_zone;same_as;parent_station_id;uic8_sncf
-1;Köln Hbf;8000207;50.943029;6.958729;f;8000207;Europe/Berlin;;;
-2;Frankfurt (Main) Hbf;8000105;50.107145;8.663789;f;8000105;Europe/Berlin;;;
-3;Wien Hbf;8103000;48.185184;16.376413;f;;Europe/Vienna;;;
-4;Frankfurt (Main) Süd;8002041;50.099365;8.686457;f;8002041;Europe/Berlin;;;
-5;Frankfurt;;50.110922;8.682127;t;;Europe/Berlin;;;
-6;Köln Hauptbahnhof;;50.943;6.959;f;;Europe/Berlin;1;;
-7;Köln Hbf Gleis 1;;50.9429;6.9587;f;;;;1;
+id;name;uic;latitude;longitude;is_city;db_id;time_zone;same_as;parent_station_id;uic8_sncf;entur_id
+1;Köln Hbf;8000207;50.943029;6.958729;f;8000207;Europe/Berlin;;;;
+2;Frankfurt (Main) Hbf;8000105;50.107145;8.663789;f;8000105;Europe/Berlin;;;;
+3;Wien Hbf;8103000;48.185184;16.376413;f;;Europe/Vienna;;;;
+4;Frankfurt (Main) Süd;8002041;50.099365;8.686457;f;8002041;Europe/Berlin;;;;
+5;Frankfurt;;50.110922;8.682127;t;;Europe/Berlin;;;;
+6;Köln Hauptbahnhof;;50.943;6.959;f;;Europe/Berlin;1;;;
+7;Köln Hbf Gleis 1;;50.9429;6.9587;f;;;;1;;
 ";
 
 const TRANSITOUS_DE: &str = r#"{"sources": [
@@ -407,9 +407,9 @@ const FEED_D: &[(&str, &str)] = &[
 ];
 
 const BERLIN_TRAINLINE_STATIONS: &str = "\
-id;name;uic;latitude;longitude;is_city;db_id;time_zone;same_as;parent_station_id;uic8_sncf
-7540;Berlin Ostbahnhof;8003004;52.510972;13.434567;f;8010255;Europe/Berlin;;;
-7630;Berlin Hbf;8065969;52.534589;13.369548;f;8011160;Europe/Berlin;;;
+id;name;uic;latitude;longitude;is_city;db_id;time_zone;same_as;parent_station_id;uic8_sncf;entur_id
+7540;Berlin Ostbahnhof;8003004;52.510972;13.434567;f;8010255;Europe/Berlin;;;;
+7630;Berlin Hbf;8065969;52.534589;13.369548;f;8011160;Europe/Berlin;;;;
 ";
 
 const TRANSITOUS_DE_SHARED: &str = r#"{"sources": [
@@ -561,7 +561,7 @@ const TRANSITOUS_DE_LOCATION: &str = r#"{"sources": [
 ]}"#;
 
 const NO_TRAINLINE_STATIONS: &str =
-    "id;name;uic;latitude;longitude;is_city;db_id;time_zone;same_as;parent_station_id;uic8_sncf\n";
+    "id;name;uic;latitude;longitude;is_city;db_id;time_zone;same_as;parent_station_id;uic8_sncf;entur_id\n";
 
 #[test]
 fn stations_and_trains_merge_by_location() {

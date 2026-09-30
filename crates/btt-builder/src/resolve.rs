@@ -48,6 +48,7 @@ struct FeedTripHeader {
     time_zone: Tz,
     trip_headsign: Option<String>,
     route_desc: Option<String>,
+    route_long_name: Option<String>,
     /// Stop ID of the trip's first stop, which some feeds use to name the train's product.
     first_stop_id: Option<String>,
 }
@@ -192,7 +193,7 @@ fn read_trip_headers(
                 routes.route_short_name, coalesce(agencies.agency_name, ''),
                 coalesce(agencies.agency_timezone, feed_config.default_time_zone, 'UTC'),
                 routes.route_type, trips.trip_headsign, routes.route_desc,
-                first_stops.first_stop_id
+                first_stops.first_stop_id, routes.route_long_name
          FROM feed_trips AS trips
          JOIN feed_routes AS routes USING (feed_id, route_id)
          JOIN feed_config USING (feed_id)
@@ -222,6 +223,7 @@ fn read_trip_headers(
                 trip_headsign: row.get(8)?,
                 route_desc: row.get(9)?,
                 first_stop_id: row.get(10)?,
+                route_long_name: row.get(11)?,
             },
         );
     }
@@ -249,6 +251,7 @@ fn train_label(rule: &TrainLabelRule, header: &FeedTripHeader) -> (String, Train
         TrainLabelField::TripHeadsign => header.trip_headsign.as_deref().unwrap_or(""),
         TrainLabelField::RouteShortName => header.route_short_name.as_deref().unwrap_or(""),
         TrainLabelField::RouteDesc => header.route_desc.as_deref().unwrap_or(""),
+        TrainLabelField::RouteLongName => header.route_long_name.as_deref().unwrap_or(""),
         TrainLabelField::RouteType => route_type_category(header.route_type),
         TrainLabelField::AgencyName => header.agency_name.as_str(),
         TrainLabelField::FirstStopId => header.first_stop_id.as_deref().unwrap_or(""),
@@ -479,6 +482,7 @@ mod tests {
             time_zone: Tz::Europe__Berlin,
             trip_headsign: None,
             route_desc: None,
+            route_long_name: None,
             first_stop_id: None,
         };
         let rule = TrainLabelRule {
@@ -507,6 +511,7 @@ mod tests {
             time_zone: Tz::Europe__Paris,
             trip_headsign: Some("6201".into()),
             route_desc: None,
+            route_long_name: None,
             first_stop_id: Some("StopPoint:OCETGV INOUI-87686006".into()),
         };
         let rule = TrainLabelRule {

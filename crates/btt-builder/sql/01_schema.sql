@@ -22,6 +22,7 @@ CREATE TABLE feed_routes (
     agency_id VARCHAR,
     route_short_name VARCHAR,
     route_desc VARCHAR,
+    route_long_name VARCHAR,
     route_type INTEGER NOT NULL
 );
 

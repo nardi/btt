@@ -52,6 +52,7 @@ pub fn load_feed(
 
          INSERT INTO feed_routes
          SELECT {feed_id}, route_id, {route_agency_id}, {route_short_name}, {route_desc},
+                {route_long_name},
                 TRY_CAST(route_type AS INTEGER)
          FROM {routes}
          WHERE {RAIL_ROUTE_TYPE_FILTER};
@@ -67,6 +68,7 @@ pub fn load_feed(
         route_agency_id = column_or_null(&route_columns, "agency_id"),
         route_short_name = column_or_null(&route_columns, "route_short_name"),
         route_desc = column_or_null(&route_columns, "route_desc"),
+        route_long_name = column_or_null(&route_columns, "route_long_name"),
         routes = csv("routes.txt")?,
         trip_short_name = column_or_null(&trip_columns, "trip_short_name"),
         trip_headsign = column_or_null(&trip_columns, "trip_headsign"),
@@ -98,16 +100,7 @@ pub fn load_feed(
             sql_string(pattern)
         ),
     };
-    // Platform IDs often add a suffix to the station code, as in 8891140_1, so the code is
-    // the leading digits. SNCF IDs end in the code, as in StopArea:OCE87313759.
-    let station_code = match feed.station_code {
-        FeedStationCodeScheme::NoStationCodes | FeedStationCodeScheme::UicInPrivateCode => "NULL",
-        FeedStationCodeScheme::UicInStopId => "nullif(regexp_extract(stop_id, '^(\\d{7})', 1), '')",
-        FeedStationCodeScheme::EvaInStopId => "nullif(regexp_extract(stop_id, '^(\\d+)', 1), '')",
-        FeedStationCodeScheme::Uic8InStopId => {
-            "nullif(regexp_extract(stop_id, '(\\d{8})$', 1), '')"
-        }
-    };
+    let station_code = station_code_expression(feed, &parent_station);
     database.run(&format!(
         "INSERT INTO feed_stops
          SELECT {feed_id}, stop_id, {stop_name}, TRY_CAST(stop_lat AS DOUBLE),
@@ -207,5 +200,42 @@ pub(crate) fn station_code_scheme_name(scheme: FeedStationCodeScheme) -> &'stati
         FeedStationCodeScheme::UicInStopId | FeedStationCodeScheme::UicInPrivateCode => "uic",
         FeedStationCodeScheme::EvaInStopId => "eva",
         FeedStationCodeScheme::Uic8InStopId => "uic8",
+        FeedStationCodeScheme::EnturStopPlace => "entur",
+    }
+}
+
+/// Returns the SQL expression that reads the station code of a stop, or `NULL` when the feed's
+/// stops carry none. `parent_station` is the expression for the stop's parent station.
+///
+/// Platform IDs often add a suffix to the station code, as in `8891140_1`, so the default is
+/// the leading digits. SNCF IDs end in the code, as in `StopArea:OCE87313759`.
+fn station_code_expression(feed: &FeedConfig, parent_station: &str) -> String {
+    let code_from_stop_id = |default_pattern: &str| {
+        let pattern = feed
+            .station_code_pattern
+            .as_deref()
+            .unwrap_or(default_pattern);
+        format!(
+            "nullif(regexp_extract(stop_id, {}, 1), '')",
+            sql_string(pattern)
+        )
+    };
+    let code = match feed.station_code {
+        FeedStationCodeScheme::NoStationCodes | FeedStationCodeScheme::UicInPrivateCode => {
+            return "NULL".to_owned();
+        }
+        FeedStationCodeScheme::UicInStopId => code_from_stop_id(r"^(\d{7})"),
+        FeedStationCodeScheme::EvaInStopId => code_from_stop_id(r"^(\d+)"),
+        FeedStationCodeScheme::Uic8InStopId => code_from_stop_id(r"(\d{8})$"),
+        // The Trainline dataset writes the separators of a stop place ID as bars.
+        FeedStationCodeScheme::EnturStopPlace => {
+            format!("replace(coalesce(nullif({parent_station}, ''), stop_id), ':', '|')")
+        }
+    };
+    if feed.station_code_prefix.is_empty() {
+        code
+    } else {
+        // A stop without a code stays without one, because joining a missing value gives one.
+        format!("{} || {code}", sql_string(&feed.station_code_prefix))
     }
 }

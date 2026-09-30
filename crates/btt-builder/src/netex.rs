@@ -952,6 +952,7 @@ pub fn load_netex_feed(
             None::<String>,
             route.short_name,
             route.description,
+            None::<String>,
             route.route_type
         ])?;
     }
