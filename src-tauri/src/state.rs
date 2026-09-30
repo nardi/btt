@@ -4,7 +4,10 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use btt_geo::{PUBLIC_PHOTON_BASE_URL, PhotonClient, TimeZoneFinder};
-use btt_model::{LegPlanningResult, PlanningSessionEvent, Trip, TripEdit, TripEditOutcome, TripId};
+use btt_model::{
+    LegPlanningResult, PlanningSessionEvent, Trip, TripEdit, TripEditNotices, TripEditOutcome,
+    TripHistory, TripId,
+};
 use btt_planner::{
     DEFAULT_PLANNING_DEBOUNCE, LegCacheKey, LegPlanningBackend, LegResultStore, PlanningEventSink,
     StubBackend, TimetableBundleRouter, TripPlanningSession,
@@ -60,6 +63,9 @@ pub struct OpenTrip {
     pub trip: Trip,
     /// Plans the trip and streams results to the frontend.
     pub planning_session: TripPlanningSession<ChannelEventSink, StorageLegResultStore>,
+    /// Earlier and undone states of the trip, for undo and redo. Kept in memory only, so it
+    /// ends when the trip closes.
+    pub history: TripHistory,
 }
 
 /// Everything the commands share.
@@ -157,6 +163,7 @@ impl AppState {
             OpenTrip {
                 trip,
                 planning_session,
+                history: TripHistory::default(),
             },
         );
     }
@@ -179,6 +186,7 @@ impl AppState {
             .get_mut(&trip_id)
             .ok_or(CommandError::TripNotOpen(trip_id))?;
         let mut trip = open_trip.trip.clone();
+        let description = edit.describe(&trip);
         let provisional_rename = match &edit {
             TripEdit::MovePlace {
                 place_id,
@@ -201,9 +209,59 @@ impl AppState {
         }
         // Saving under the lock keeps the stored order of edits the same as the applied order.
         self.storage.save_trip(&trip)?;
+        let before = std::mem::replace(&mut open_trip.trip, trip.clone());
+        open_trip.history.record(before, &trip, description);
+        open_trip.planning_session.trip_changed(trip.clone());
+        Ok(TripEditOutcome {
+            trip,
+            notices,
+            history: open_trip.history.state(),
+        })
+    }
+
+    /// Takes back the most recent edit of an open trip, saves the trip and replans it. Returns
+    /// `None` when there is nothing to undo.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the trip is not open or saving fails.
+    pub fn undo_edit(&self, trip_id: TripId) -> Result<Option<TripEditOutcome>, CommandError> {
+        self.step_through_history(trip_id, TripHistory::undo)
+    }
+
+    /// Applies the most recently undone edit of an open trip again, saves the trip and replans
+    /// it. Returns `None` when there is nothing to redo.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the trip is not open or saving fails.
+    pub fn redo_edit(&self, trip_id: TripId) -> Result<Option<TripEditOutcome>, CommandError> {
+        self.step_through_history(trip_id, TripHistory::redo)
+    }
+
+    /// Moves an open trip one step through its history with `step`, and saves and replans the
+    /// trip it arrives at. The planning session keeps earlier results, so a step back shows the
+    /// earlier plan without a search.
+    fn step_through_history(
+        &self,
+        trip_id: TripId,
+        step: impl FnOnce(&mut TripHistory, Trip) -> Option<Trip>,
+    ) -> Result<Option<TripEditOutcome>, CommandError> {
+        let mut open_trips = self.open_trips();
+        let open_trip = open_trips
+            .get_mut(&trip_id)
+            .ok_or(CommandError::TripNotOpen(trip_id))?;
+        let Some(trip) = step(&mut open_trip.history, open_trip.trip.clone()) else {
+            return Ok(None);
+        };
+        self.storage.save_trip(&trip)?;
         open_trip.trip = trip.clone();
         open_trip.planning_session.trip_changed(trip.clone());
-        Ok(TripEditOutcome { trip, notices })
+        Ok(Some(TripEditOutcome {
+            trip,
+            notices: TripEditNotices::default(),
+            history: open_trip.history.state(),
+        }))
     }
 
     /// Applies an edit that the backend makes on its own, such as a name from reverse geocoding,

@@ -12,6 +12,7 @@ import type {
   TripEdit,
   TripEditNotice,
   TripEditOutcome,
+  TripHistoryState,
   TripId,
   TripPlaceId,
 } from "@btt/shared/bindings";
@@ -45,6 +46,8 @@ export class TauriTripSource implements TripViewState {
   readonly nearbyDaysByArrivalPlace = new SvelteMap<TripPlaceId, NearbyDaySuggestion>();
   notices: TripEditNotice[] = $state([]);
   errorMessage: string | null = $state(null);
+  /** What undo and redo would do. A newly opened trip has no history. */
+  history: TripHistoryState = $state({ undo_description: null, redo_description: null });
   /** Latest planning run. Events of older runs are stale and get dropped. */
   private latestRunId: PlanningRunId = -1;
 
@@ -93,6 +96,28 @@ export class TauriTripSource implements TripViewState {
     this.acceptEditResult(await commands.addPlaceAtCoordinates(this.trip.id, coordinates));
   }
 
+  async undo(): Promise<void> {
+    this.acceptHistoryStep(await commands.undoTripEdit(this.trip.id));
+  }
+
+  async redo(): Promise<void> {
+    this.acceptHistoryStep(await commands.redoTripEdit(this.trip.id));
+  }
+
+  /** Takes the trip from an undo or redo, which returns nothing when its stack is empty. */
+  private acceptHistoryStep(
+    result:
+      | { status: "ok"; data: TripEditOutcome | null }
+      | { status: "error"; error: CommandError },
+  ): void {
+    if (result.status === "ok" && result.data === null) {
+      return;
+    }
+    this.acceptEditResult(
+      result.status === "ok" ? { status: "ok", data: result.data! } : result,
+    );
+  }
+
   /** Takes the trip and notices from an edit command, or shows its error. */
   private acceptEditResult(
     result: { status: "ok"; data: TripEditOutcome } | { status: "error"; error: CommandError },
@@ -104,6 +129,7 @@ export class TauriTripSource implements TripViewState {
     this.errorMessage = null;
     this.trip = result.data.trip;
     this.notices = result.data.notices;
+    this.history = result.data.history;
     this.forgetRemovedLegs();
   }
 

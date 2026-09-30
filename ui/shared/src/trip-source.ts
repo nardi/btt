@@ -12,6 +12,7 @@ import type {
   Trip,
   TripEdit,
   TripEditNotice,
+  TripHistoryState,
   TripPlaceId,
 } from "./bindings";
 
@@ -41,6 +42,12 @@ export type TripSource =
       readonly viewState: TripViewState;
       applyEdit(edit: TripEdit): Promise<void>;
       searchPlaces(query: string): Promise<PlaceSearchResult[]>;
+      /** What undo and redo would do. */
+      readonly history: TripHistoryState;
+      /** Takes back the most recent edit. */
+      undo(): Promise<void>;
+      /** Applies the most recently undone edit again. */
+      redo(): Promise<void>;
       /** Adds a place at a position picked on the map. */
       addPlaceAt(coordinates: GeoCoordinates): Promise<void>;
     }

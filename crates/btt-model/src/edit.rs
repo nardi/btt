@@ -8,6 +8,7 @@ use specta::Type;
 use thiserror::Error;
 
 use crate::coordinates::GeoCoordinates;
+use crate::history::TripHistoryState;
 use crate::itinerary::{
     Itinerary, ItineraryRoute, LegTravelMode, PlaceStay, PlaceWindowOverride, StationSearchRadius,
     TripPlace, TripPlaceId, ViaPlace,
@@ -115,6 +116,70 @@ pub enum TripEdit {
     },
 }
 
+impl TripEdit {
+    /// Describes the edit in a few words for the undo and redo buttons, such as "Move Berlin".
+    /// `trip` is the trip before the edit, which still has the names of the places it touches.
+    pub fn describe(&self, trip: &Trip) -> SmolStr {
+        let place_name = |place_id: &TripPlaceId| {
+            trip.itinerary
+                .place(*place_id)
+                .map_or_else(|| SmolStr::new("a place"), |place| place.name.clone())
+        };
+        let text = match self {
+            Self::RenameTrip(_) => "Rename the trip".to_owned(),
+            Self::SetStartDate(_) => "Change the start date".to_owned(),
+            Self::AddPlace { place, .. } => format!("Add {}", place.name),
+            Self::MovePlace { place_id, .. } => format!("Move {}", place_name(place_id)),
+            Self::RenamePlace { place_id, name } => {
+                format!("Rename {} to {name}", place_name(place_id))
+            }
+            Self::SetStationSearchRadius { place_id, .. } => {
+                format!("Change the station radius of {}", place_name(place_id))
+            }
+            Self::SetPlaceWindowOverride {
+                place_id,
+                window_override: Some(_),
+            } => format!("Change the times of {}", place_name(place_id)),
+            Self::SetPlaceWindowOverride {
+                place_id,
+                window_override: None,
+            } => format!("Use the default times at {}", place_name(place_id)),
+            Self::RemovePlace(place_id) => format!("Remove {}", place_name(place_id)),
+            Self::ReorderPlace { place_id, .. } => format!("Reorder {}", place_name(place_id)),
+            Self::SetPlaceStay {
+                place_id,
+                stay: PlaceStay::Nights(nights),
+            } => {
+                let unit = if nights.get() == 1 { "night" } else { "nights" };
+                format!("Stay {nights} {unit} in {}", place_name(place_id))
+            }
+            Self::SetPlaceStay { place_id, .. } => {
+                format!("Visit {} on the same day", place_name(place_id))
+            }
+            Self::SetLegTravelMode {
+                arrival_place_id,
+                travel_mode: LegTravelMode::Overnight(_),
+            } => format!("Take a night train to {}", place_name(arrival_place_id)),
+            Self::SetLegTravelMode {
+                arrival_place_id, ..
+            } => format!("Travel to {} by day", place_name(arrival_place_id)),
+            Self::SetTripPreferences(_) => "Change the preferences".to_owned(),
+            Self::ChooseJourney {
+                arrival_place_id,
+                choice: Some(_),
+            } => format!("Pick a journey to {}", place_name(arrival_place_id)),
+            Self::ChooseJourney {
+                arrival_place_id,
+                choice: None,
+            } => format!(
+                "Use the planner's journey to {}",
+                place_name(arrival_place_id)
+            ),
+        };
+        SmolStr::new(text)
+    }
+}
+
 /// Something an edit changed besides what it asked for, shown to the user.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub enum TripEditNotice {
@@ -131,7 +196,8 @@ pub enum TripEditNotice {
 /// Notices of one edit. Most edits have none.
 pub type TripEditNotices = SmallVec<[TripEditNotice; 2]>;
 
-/// The trip after an edit, with the notices the edit produced.
+/// The trip after an edit, with the notices the edit produced and the state of the undo
+/// history. Undo and redo return it too, with no notices.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct TripEditOutcome {
     /// The trip after the edit.
@@ -139,6 +205,8 @@ pub struct TripEditOutcome {
     /// Side effects of the edit, shown to the user.
     #[specta(type = Vec<TripEditNotice>)]
     pub notices: TripEditNotices,
+    /// What undo and redo would do after the edit.
+    pub history: TripHistoryState,
 }
 
 /// Reasons an edit can be rejected. A rejected edit leaves the trip unchanged.
@@ -770,5 +838,27 @@ mod tests {
         })
         .unwrap();
         assert_ne!(id_of(&trip, "Rome"), vienna);
+    }
+
+    #[test]
+    fn edits_describe_themselves_with_place_names() {
+        let trip = trip_with_places(&[("Amsterdam", 52.37, 4.90), ("Berlin", 52.52, 13.37)]);
+        let berlin = trip.itinerary.trip_places().nth(1).unwrap().id;
+        let describe = |edit: TripEdit| edit.describe(&trip).to_string();
+        assert_eq!(describe(TripEdit::RemovePlace(berlin)), "Remove Berlin");
+        assert_eq!(
+            describe(TripEdit::SetLegTravelMode {
+                arrival_place_id: berlin,
+                travel_mode: overnight(),
+            }),
+            "Take a night train to Berlin"
+        );
+        assert_eq!(
+            describe(TripEdit::RenamePlace {
+                place_id: berlin,
+                name: "Berlin Hbf".into(),
+            }),
+            "Rename Berlin to Berlin Hbf"
+        );
     }
 }

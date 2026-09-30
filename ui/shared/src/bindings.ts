@@ -25,6 +25,34 @@ export const commands = {
 	 */
 	applyTripEdit: (tripId: TripId, edit: TripEdit) => typedError<TripEditOutcome, CommandError>(__TAURI_INVOKE("apply_trip_edit", { tripId, edit })),
 	/**
+	 *  Takes back the most recent edit of an open trip. Returns `None` when there is nothing to
+	 *  undo.
+	 * 
+	 *  Async, so it runs on the Tokio runtime the planning session spawns its tasks on.
+	 */
+	undoTripEdit: (tripId: TripId) => typedError<{
+	/**  The trip after the edit. */
+	trip: Trip,
+	/**  Side effects of the edit, shown to the user. */
+	notices: TripEditNotice[],
+	/**  What undo and redo would do after the edit. */
+	history: TripHistoryState,
+} | null, CommandError>(__TAURI_INVOKE("undo_trip_edit", { tripId })),
+	/**
+	 *  Applies the most recently undone edit of an open trip again. Returns `None` when there is
+	 *  nothing to redo.
+	 * 
+	 *  Async, so it runs on the Tokio runtime the planning session spawns its tasks on.
+	 */
+	redoTripEdit: (tripId: TripId) => typedError<{
+	/**  The trip after the edit. */
+	trip: Trip,
+	/**  Side effects of the edit, shown to the user. */
+	notices: TripEditNotice[],
+	/**  What undo and redo would do after the edit. */
+	history: TripHistoryState,
+} | null, CommandError>(__TAURI_INVOKE("redo_trip_edit", { tripId })),
+	/**
 	 *  Adds a place where the user clicked on the map, at the position in the itinerary that adds
 	 *  the least distance. The place gets a name from its coordinates until reverse geocoding finds
 	 *  the town.
@@ -645,12 +673,25 @@ export type TripEditNotice =
 	arrival_place_id: TripPlaceId,
 } };
 
-/**  The trip after an edit, with the notices the edit produced. */
+/**
+ *  The trip after an edit, with the notices the edit produced and the state of the undo
+ *  history. Undo and redo return it too, with no notices.
+ */
 export type TripEditOutcome = {
 	/**  The trip after the edit. */
 	trip: Trip,
 	/**  Side effects of the edit, shown to the user. */
 	notices: TripEditNotice[],
+	/**  What undo and redo would do after the edit. */
+	history: TripHistoryState,
+};
+
+/**  What the frontend shows about the history of an open trip. */
+export type TripHistoryState = {
+	/**  What undo would take back, or `None` when there is nothing to undo. */
+	undo_description: string | null,
+	/**  What redo would apply again, or `None` when there is nothing to redo. */
+	redo_description: string | null,
 };
 
 /**  Identifies a trip. A UUID v7, so trips imported from another machine never collide. */

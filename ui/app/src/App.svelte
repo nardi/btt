@@ -76,10 +76,39 @@
     focusRequest = { placeId, requestNumber: (focusRequest?.requestNumber ?? 0) + 1 };
   }
 
+  /**
+   * Undoes on Ctrl+Z and redoes on Ctrl+Shift+Z or Ctrl+Y. A text field keeps its own undo for
+   * typing, so the shortcuts only act when the focus is elsewhere.
+   */
+  function handleHistoryShortcut(event: KeyboardEvent) {
+    if (openSource === null || !(event.ctrlKey || event.metaKey) || event.altKey) {
+      return;
+    }
+    const target = event.target;
+    const isTextField =
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLSelectElement ||
+      (target instanceof HTMLElement && target.isContentEditable);
+    if (isTextField) {
+      return;
+    }
+    const key = event.key.toLowerCase();
+    if (key === "z" && !event.shiftKey) {
+      event.preventDefault();
+      void openSource.undo();
+    } else if ((key === "z" && event.shiftKey) || key === "y") {
+      event.preventDefault();
+      void openSource.redo();
+    }
+  }
+
   onMount(() => {
     void refreshTrips();
   });
 </script>
+
+<svelte:window onkeydown={handleHistoryShortcut} />
 
 <main class:trip-open={openSource !== null}>
   {#if errorMessage !== null}
@@ -110,6 +139,28 @@
           }}
         />
       </label>
+      <div class="history-buttons">
+        <button
+          type="button"
+          disabled={openSource.history.undo_description === null}
+          title={openSource.history.undo_description === null
+            ? "Nothing to undo"
+            : `Undo: ${openSource.history.undo_description} (Ctrl+Z)`}
+          onclick={() => void openSource?.undo()}
+        >
+          Undo
+        </button>
+        <button
+          type="button"
+          disabled={openSource.history.redo_description === null}
+          title={openSource.history.redo_description === null
+            ? "Nothing to redo"
+            : `Redo: ${openSource.history.redo_description} (Ctrl+Shift+Z)`}
+          onclick={() => void openSource?.redo()}
+        >
+          Redo
+        </button>
+      </div>
       <button type="button" onclick={() => (showProblemReport = true)}>Report a problem</button>
     </header>
     {#if showProblemReport}
@@ -169,6 +220,11 @@
     flex: 1;
     font-size: 1.3rem;
     font-weight: 600;
+  }
+
+  .history-buttons {
+    display: flex;
+    gap: var(--space-1);
   }
 
   .workspace {

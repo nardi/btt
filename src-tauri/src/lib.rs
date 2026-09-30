@@ -27,6 +27,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::open_trip,
         commands::close_trip,
         commands::apply_trip_edit,
+        commands::undo_trip_edit,
+        commands::redo_trip_edit,
         commands::add_place_at_coordinates,
         commands::delete_trip,
         commands::search_places,

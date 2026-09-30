@@ -6,6 +6,7 @@
 mod bounded;
 pub mod coordinates;
 pub mod edit;
+pub mod history;
 pub mod itinerary;
 pub mod place_search;
 pub mod plan;
@@ -17,6 +18,7 @@ pub use coordinates::{GeoCoordinates, Latitude, Longitude};
 pub use edit::{
     PlaceInsertionPoint, TripEdit, TripEditError, TripEditNotice, TripEditNotices, TripEditOutcome,
 };
+pub use history::{MAXIMUM_HISTORY_STEPS, TripHistory, TripHistoryState};
 pub use itinerary::{
     AcceptedBerths, BerthType, Itinerary, ItineraryLeg, ItineraryRoute, LegTravelMode,
     OvernightLegOptions, PlaceStay, PlaceWindowOverride, SameDayStayRange, StationSearchRadius,

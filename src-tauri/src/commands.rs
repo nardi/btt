@@ -114,6 +114,43 @@ pub async fn apply_trip_edit(
     Ok(outcome)
 }
 
+/// Takes back the most recent edit of an open trip. Returns `None` when there is nothing to
+/// undo.
+///
+/// Async, so it runs on the Tokio runtime the planning session spawns its tasks on.
+#[tauri::command]
+#[specta::specta]
+pub async fn undo_trip_edit(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    trip_id: TripId,
+) -> Result<Option<TripEditOutcome>, CommandError> {
+    let outcome = state.undo_edit(trip_id)?;
+    // A place restored with its provisional name gets a name from reverse geocoding again.
+    if let Some(outcome) = &outcome {
+        name_provisional_places(&app, &outcome.trip);
+    }
+    Ok(outcome)
+}
+
+/// Applies the most recently undone edit of an open trip again. Returns `None` when there is
+/// nothing to redo.
+///
+/// Async, so it runs on the Tokio runtime the planning session spawns its tasks on.
+#[tauri::command]
+#[specta::specta]
+pub async fn redo_trip_edit(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    trip_id: TripId,
+) -> Result<Option<TripEditOutcome>, CommandError> {
+    let outcome = state.redo_edit(trip_id)?;
+    if let Some(outcome) = &outcome {
+        name_provisional_places(&app, &outcome.trip);
+    }
+    Ok(outcome)
+}
+
 /// Adds a place where the user clicked on the map, at the position in the itinerary that adds
 /// the least distance. The place gets a name from its coordinates until reverse geocoding finds
 /// the town.
