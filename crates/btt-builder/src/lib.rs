@@ -146,11 +146,13 @@ pub fn run_pipeline(
     let nearby = stations::nearby_station_pairs(database)?;
     let (mut trips, merge_counts) = dedup::merge_duplicate_trips(resolved, &nearby);
     let linked = dedup::link_berths(&mut trips, &nearby);
+    let joined = dedup::join_continuations(&mut trips, &nearby);
     tracing::info!(
         trips = trips.len(),
         linked,
+        joined,
         elapsed = ?started.elapsed(),
-        "merged duplicate trips and linked split night trains"
+        "merged duplicate trips, linked split night trains and joined continuations"
     );
 
     let attributions = inputs

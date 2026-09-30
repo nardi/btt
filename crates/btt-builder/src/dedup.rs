@@ -390,6 +390,135 @@ fn touches(first: &ResolvedTrip, second: &ResolvedTrip, nearby: &NearbyStationPa
     })
 }
 
+/// Longest wait between the end of one copy of a train and the departure of its continuation
+/// for `join_continuations`. Trains that change crews or locomotives at a border stand for up
+/// to about half an hour.
+const LONGEST_CONTINUATION_WAIT_MINUTES: i32 = 60;
+
+/// Adds a joined trip for each trip that ends where another copy of the same train stops and
+/// continues, and returns how many it added.
+///
+/// Feeds often cover a cross-border train up to the border only, such as ÖBB's EC 83 to
+/// Brennero and Trenitalia's from Brennero to Verona. The merge needs two shared stations, so
+/// it keeps such copies apart, and a traveller would have to change trains within the dwell
+/// time. A trip that ends at a station where another trip with the same train number key stops
+/// and leaves within `LONGEST_CONTINUATION_WAIT_MINUTES` gets a joined copy on their shared
+/// days: its own stops, then the other trip's stops after that station. The ending trip loses
+/// those days, and the continuing trip stays as it is, because travellers can also board it
+/// before the joint.
+///
+/// A train in three parts, such as DB's EC 81 to Kufstein, ÖBB's on to Brennero and
+/// Trenitalia's on to Venezia, needs a second pass that joins the joined parts again. The
+/// passes stop when one joins nothing, or after `MAXIMUM_JOIN_PASSES`.
+pub fn join_continuations(trips: &mut Vec<ResolvedTrip>, nearby: &NearbyStationPairs) -> usize {
+    let mut joined = 0;
+    for _ in 0..MAXIMUM_JOIN_PASSES {
+        let joined_in_pass = join_continuations_once(trips, nearby);
+        joined += joined_in_pass;
+        if joined_in_pass == 0 {
+            break;
+        }
+    }
+    joined
+}
+
+/// Most passes of `join_continuations`. A train crosses at most a few feed boundaries.
+const MAXIMUM_JOIN_PASSES: usize = 4;
+
+/// Runs one pass of `join_continuations` and returns how many joined trips it added.
+fn join_continuations_once(trips: &mut Vec<ResolvedTrip>, nearby: &NearbyStationPairs) -> usize {
+    let mut positions_by_key: FxHashMap<String, Vec<usize>> = FxHashMap::default();
+    for (position, trip) in trips.iter().enumerate() {
+        if !trip.train_number.is_empty() {
+            positions_by_key
+                .entry(train_number_key(&trip.train_number).to_owned())
+                .or_default()
+                .push(position);
+        }
+    }
+    let mut joined_trips = Vec::new();
+    let mut day_removals = Vec::new();
+    for positions in positions_by_key.values() {
+        for &ending in positions {
+            for &continuing in positions {
+                if ending == continuing {
+                    continue;
+                }
+                if let Some((joined, shared_days)) =
+                    joined_trip(&trips[ending], &trips[continuing], nearby)
+                {
+                    day_removals.push((ending, shared_days));
+                    joined_trips.push(joined);
+                    // One continuation per ending trip is enough.
+                    break;
+                }
+            }
+        }
+    }
+    for (position, shared_days) in day_removals {
+        let trip = &mut trips[position].trip;
+        trip.service_days = subtract(trip.service_days, shared_days);
+    }
+    trips.retain(|trip| !trip.trip.service_days.is_empty());
+    let joined = joined_trips.len();
+    trips.extend(joined_trips);
+    joined
+}
+
+/// Returns the joined trip of an ending trip and its continuation, with the days of the ending
+/// trip it replaces, or `None` when the second trip doesn't continue the first.
+fn joined_trip(
+    ending: &ResolvedTrip,
+    continuing: &ResolvedTrip,
+    nearby: &NearbyStationPairs,
+) -> Option<(ResolvedTrip, ServiceDayBitset)> {
+    let last_stop = ending.trip.stops.last()?;
+    for date_offset_days in -1..=1 {
+        let shared_days = intersect(
+            ending.trip.service_days,
+            shift_days(continuing.trip.service_days, -date_offset_days),
+        );
+        if shared_days.is_empty() {
+            continue;
+        }
+        let offset_minutes = date_offset_days * MINUTES_PER_DAY;
+        let Some(joint) = continuing.trip.stops.iter().position(|stop| {
+            let wait = i32::from(stop.departure) + offset_minutes - i32::from(last_stop.arrival);
+            nearby.same_stop(stop.station, last_stop.station)
+                && (0..=LONGEST_CONTINUATION_WAIT_MINUTES).contains(&wait)
+        }) else {
+            continue;
+        };
+        // A continuation that stops at the joint as its last stop continues nothing.
+        let rest = &continuing.trip.stops[joint + 1..];
+        if rest.is_empty() {
+            continue;
+        }
+        let mut stops = ending.trip.stops.clone();
+        if let Some(last) = stops.last_mut() {
+            last.departure =
+                u16::try_from(i32::from(continuing.trip.stops[joint].departure) + offset_minutes)
+                    .ok()?;
+            last.boarding_allowed = continuing.trip.stops[joint].boarding_allowed;
+        }
+        for stop in rest {
+            stops.push(TripStopInput {
+                arrival: u16::try_from(i32::from(stop.arrival) + offset_minutes).ok()?,
+                departure: u16::try_from(i32::from(stop.departure) + offset_minutes).ok()?,
+                ..*stop
+            });
+        }
+        let mut joined = ending.clone();
+        joined.trip.stops = stops;
+        joined.trip.service_days = shared_days;
+        if continuing.trip.train_label.offers_berths && !ending.trip.train_label.offers_berths {
+            joined.trip.train_label = continuing.trip.train_label.clone();
+        }
+        return Some((joined, shared_days));
+    }
+    None
+}
+
 /// Moves every day of a bitset by a number of days. Days that leave the window drop out.
 fn shift_days(days: ServiceDayBitset, offset: i32) -> ServiceDayBitset {
     let mut shifted = ServiceDayBitset::default();
@@ -684,5 +813,71 @@ mod tests {
         let mut trips = vec![berth_portion("421"), berth_portion("40421"), seated_copy];
         assert_eq!(link_berths(&mut trips, &NearbyStationPairs::default()), 1);
         assert_eq!(trips[2].trip.train_label.number, "40421");
+    }
+
+    #[test]
+    fn a_train_that_continues_across_a_border_is_joined() {
+        // ÖBB runs EuroCity 83 from München (0) to Brennero (1), and Trenitalia from Brennero
+        // on to Verona (2), leaving nine minutes after the Austrian copy arrives.
+        let mut austrian_part = trip(0, vec![stop(0, 400, 400), stop(1, 605, 605)], days(&[3, 4]));
+        austrian_part.train_number = "83".into();
+        let mut italian_part = trip(1, vec![stop(1, 614, 614), stop(2, 781, 781)], days(&[3]));
+        italian_part.train_number = "83".into();
+        // A train with the same number that leaves Brennero two hours later isn't the same.
+        let mut later = trip(1, vec![stop(1, 725, 725), stop(2, 900, 900)], days(&[4]));
+        later.train_number = "83".into();
+
+        let mut trips = vec![austrian_part, italian_part, later];
+        assert_eq!(
+            join_continuations(&mut trips, &NearbyStationPairs::default()),
+            1
+        );
+        let joined = trips
+            .iter()
+            .find(|trip| trip.trip.stops.len() == 3)
+            .unwrap();
+        assert_eq!(joined.trip.service_days, days(&[3]));
+        let joint = joined.trip.stops[1];
+        assert_eq!((joint.arrival, joint.departure), (605, 614));
+        // The Austrian copy keeps the day without a continuation, and the Italian copy stays.
+        assert!(trips.iter().any(|trip| trip.feed_index == 0
+            && trip.trip.stops.len() == 2
+            && trip.trip.service_days == days(&[4])));
+        assert!(trips.iter().any(|trip| trip.trip.stops[0].arrival == 614));
+    }
+
+    #[test]
+    fn a_train_in_three_parts_is_joined_end_to_end() {
+        // München (0) to Kufstein (1), Kufstein to Brennero (2), Brennero to Venezia (3).
+        let part = |feed_index, first: (u32, u16), last: (u32, u16)| {
+            let mut part = trip(
+                feed_index,
+                vec![
+                    stop(first.0, first.1, first.1),
+                    stop(last.0, last.1, last.1),
+                ],
+                days(&[8]),
+            );
+            part.train_number = "81".into();
+            part
+        };
+        let mut trips = vec![
+            part(0, (0, 323), (1, 394)),
+            part(1, (1, 396), (2, 480)),
+            part(2, (2, 494), (3, 794)),
+        ];
+        join_continuations(&mut trips, &NearbyStationPairs::default());
+        let through = trips
+            .iter()
+            .find(|trip| trip.trip.stops.first().unwrap().station == BundleStationIndex(0))
+            .unwrap();
+        let stations: Vec<u32> = through
+            .trip
+            .stops
+            .iter()
+            .map(|stop| stop.station.0)
+            .collect();
+        assert_eq!(stations, [0, 1, 2, 3]);
+        assert_eq!(through.trip.service_days, days(&[8]));
     }
 }
