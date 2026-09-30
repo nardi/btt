@@ -113,6 +113,8 @@ fn main() {
     // station within `LARGEST_STATION_DISTANCE_METERS`, and is counted. None when neither
     // finds a station, which means the stop is missing from the bundle.
     let mut fallbacks = 0_usize;
+    // Journeys, and journeys that change between two copies of one train.
+    let (mut journey_count, mut same_train_changes) = (0_usize, 0_usize);
     let mut nearby_stations = |place: &MotisPlace| -> Option<Vec<CandidateStation>> {
         let coordinates = GeoCoordinates::from_degrees(place.lat, place.lon).ok()?;
         let nearby = station_index.stations_within(&bundle, coordinates, WALKING_DISTANCE_METERS);
@@ -216,6 +218,12 @@ fn main() {
             departure.max(start + TIMED_WINDOW_MINUTES) + 60
         });
         let (journeys, _) = search(&from, &to, start, end);
+        journey_count += journeys.journeys.len();
+        same_train_changes += journeys
+            .journeys
+            .iter()
+            .filter(|journey| changes_within_one_train(&bundle, journey))
+            .count();
         let our_earliest = journeys
             .journeys
             .iter()
@@ -247,6 +255,9 @@ fn main() {
     }
 
     println!("{fallbacks} stops were matched by distance, because the station map lacks them");
+    println!(
+        "{same_train_changes} of {journey_count} journeys change between two trains with the same number at one station"
+    );
     print_summary(&outcomes, &mut our_times, &mut motis_times);
 }
 
@@ -454,4 +465,19 @@ fn walks_between_stations(
         || journey.arrival_candidate.station != end.station
         || last_station != Some(journey.arrival_candidate.station)
         || changes_station
+}
+
+/// Returns whether a journey leaves a train and boards another with the same number at the
+/// same station, which is usually one train that the feeds split into two trips.
+fn changes_within_one_train(
+    bundle: &LoadedTimetableBundle,
+    journey: &btt_router::RaptorJourney,
+) -> bool {
+    journey.rides.windows(2).any(|pair| {
+        let (_, first_number, _) = bundle.trip_train_label(pair[0].trip);
+        let (_, second_number, _) = bundle.trip_train_label(pair[1].trip);
+        pair[0].alighting_station == pair[1].boarding_station
+            && !first_number.is_empty()
+            && first_number == second_number
+    })
 }
