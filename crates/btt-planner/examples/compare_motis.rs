@@ -6,7 +6,8 @@
 //! `cargo run --release -p btt-planner --example compare_motis -- <bundle> <queries.txt> <responses.txt>`.
 //!
 //! Both sides start at a stop and end at a stop, so ways to and from stations don't count. Our
-//! side uses the bundle station nearest to each MOTIS stop, and the same transfer time and
+//! side finds each MOTIS stop in the station map the builder writes next to the bundle, falls
+//! back to the nearest station for stops the map lacks, and uses the same transfer time and
 //! number of trains as MOTIS's defaults.
 
 use std::num::NonZeroU8;
@@ -56,6 +57,9 @@ struct MotisDebugOutput {
 #[derive(Deserialize)]
 struct MotisPlace {
     name: String,
+    /// The dataset tag, an underscore and the feed's stop ID.
+    #[serde(rename = "stopId")]
+    stop_id: Option<String>,
     lat: f64,
     lon: f64,
 }
@@ -73,6 +77,7 @@ struct MotisItinerary {
 enum Outcome {
     Equal,
     OursEarlier,
+    OursEarlierWithWalk,
     OursLater,
     OnlyOurs,
     OnlyMotis,
@@ -94,36 +99,50 @@ fn main() {
     let bundle = LoadedTimetableBundle::open(bundle_path.as_ref()).expect("bundle loads");
     let search_index = SearchIndex::new(&bundle);
     let station_index = StationIndex::new(&bundle);
+    let stop_map = motis_stop_map(
+        &std::path::Path::new(&bundle_path).with_extension("stations.csv"),
+        &std::path::Path::new(&queries_path).with_file_name("config.yml"),
+    );
+    println!("{} MOTIS stop IDs map to bundle stations", stop_map.len());
     let bundle_start = bundle.validity_start().and_time(NaiveTime::MIN).and_utc();
     let minutes_since_start =
         |moment: DateTime<Utc>| u32::try_from((moment - bundle_start).num_minutes()).unwrap_or(0);
-    // Every station within walking distance of a stop, with the planner's walking estimate,
-    // because MOTIS also walks from its stop to nearby stops. None when no station lies
-    // within `LARGEST_STATION_DISTANCE_METERS`, which means the stop is missing from the bundle.
-    let nearby_stations = |place: &MotisPlace| -> Option<Vec<CandidateStation>> {
+    // The bundle station of a MOTIS stop from the station map, then every other station
+    // within walking distance with the planner's walking estimate, because MOTIS also walks
+    // from its stop to nearby stops. A stop missing from the map falls back to the nearest
+    // station within `LARGEST_STATION_DISTANCE_METERS`, and is counted. None when neither
+    // finds a station, which means the stop is missing from the bundle.
+    let mut fallbacks = 0_usize;
+    let mut nearby_stations = |place: &MotisPlace| -> Option<Vec<CandidateStation>> {
         let coordinates = GeoCoordinates::from_degrees(place.lat, place.lon).ok()?;
         let nearby = station_index.stations_within(&bundle, coordinates, WALKING_DISTANCE_METERS);
-        if nearby
-            .first()
-            .is_none_or(|nearest| nearest.distance_meters > LARGEST_STATION_DISTANCE_METERS)
-        {
-            return None;
-        }
-        Some(
+        let mapped = place
+            .stop_id
+            .as_deref()
+            .and_then(|stop_id| stop_map.get(stop_id).copied());
+        let own_station = if let Some(station) = mapped {
+            station
+        } else {
+            fallbacks += 1;
+            nearby
+                .first()
+                .filter(|nearest| nearest.distance_meters <= LARGEST_STATION_DISTANCE_METERS)?
+                .station
+        };
+        let mut candidates = vec![CandidateStation {
+            station: own_station,
+            time_to_place_minutes: 0,
+        }];
+        candidates.extend(
             nearby
                 .iter()
-                .enumerate()
-                .map(|(position, station)| CandidateStation {
+                .filter(|station| station.station != own_station)
+                .map(|station| CandidateStation {
                     station: station.station,
-                    // The nearest station stands for the stop itself.
-                    time_to_place_minutes: if position == 0 {
-                        0
-                    } else {
-                        walking_minutes(station.distance_meters)
-                    },
-                })
-                .collect(),
-        )
+                    time_to_place_minutes: walking_minutes(station.distance_meters),
+                }),
+        );
+        Some(candidates)
     };
     let mut buffers = RaptorSearchBuffers::new();
     let mut search = |from: &[CandidateStation], to: &[CandidateStation], start: u32, end: u32| {
@@ -197,13 +216,21 @@ fn main() {
             departure.max(start + TIMED_WINDOW_MINUTES) + 60
         });
         let (journeys, _) = search(&from, &to, start, end);
-        let our_arrival = journeys
+        let our_earliest = journeys
             .journeys
             .iter()
             .filter(|journey| journey.departure.0 >= start)
-            .map(|journey| journey.arrival.0)
-            .min();
-        let (outcome, difference) = compare_arrivals(our_arrival, motis_arrival);
+            .min_by_key(|journey| journey.arrival.0);
+        let our_arrival = our_earliest.map(|journey| journey.arrival.0);
+        let (mut outcome, difference) = compare_arrivals(our_arrival, motis_arrival);
+        // MOTIS without street data only links stops within 100 m, while the bundle links
+        // stations up to 5 km apart, so an earlier arrival with a walk is a difference in the
+        // footpath model rather than in the search.
+        if outcome == Outcome::OursEarlier
+            && our_earliest.is_some_and(|journey| walks_between_stations(journey, from[0], to[0]))
+        {
+            outcome = Outcome::OursEarlierWithWalk;
+        }
         if shown
             .as_deref()
             .is_some_and(|text| description.contains(text))
@@ -219,6 +246,7 @@ fn main() {
         outcomes.push((outcome, difference, description));
     }
 
+    println!("{fallbacks} stops were matched by distance, because the station map lacks them");
     print_summary(&outcomes, &mut our_times, &mut motis_times);
 }
 
@@ -354,4 +382,76 @@ fn print_both_sides(
 fn walking_minutes(distance_meters: f64) -> u16 {
     // Walks are at most `WALKING_DISTANCE_METERS`, so the minutes fit easily.
     (distance_meters * 1.3 / 83.3).ceil() as u16
+}
+
+/// Maps MOTIS stop IDs to bundle stations, from the station map the builder writes next to
+/// the bundle and the dataset tags in MOTIS's configuration. A dataset's tag stands for the
+/// feed whose file name it was made from, such as `nl_OpenOV.gtfs.zip`. NeTEx quays map to
+/// their stop place, because the bundle reads NeTEx stops at the stop place.
+fn motis_stop_map(
+    station_map_path: &std::path::Path,
+    config_path: &std::path::Path,
+) -> rustc_hash::FxHashMap<String, btt_timetable::BundleStationIndex> {
+    let config = std::fs::read_to_string(config_path).unwrap_or_default();
+    // Dataset entries are a tag line followed by an indented `path:` line.
+    let mut tags_by_feed: rustc_hash::FxHashMap<String, Vec<String>> =
+        rustc_hash::FxHashMap::default();
+    let mut tag: Option<String> = None;
+    for line in config.lines() {
+        let trimmed = line.trim();
+        if let Some(path) = trimmed.strip_prefix("path: ") {
+            let file_name = path.rsplit(['/', '\\']).next().unwrap_or(path);
+            let feed = file_name.split('.').next().unwrap_or(file_name).to_owned();
+            if let Some(tag) = tag.take() {
+                tags_by_feed.entry(feed).or_default().push(tag);
+            }
+        } else if let Some(name) = trimmed.strip_suffix(':')
+            && !name.contains(' ')
+        {
+            tag = Some(name.to_owned());
+        }
+    }
+    let mut stop_map = rustc_hash::FxHashMap::default();
+    let station_map = std::fs::read_to_string(station_map_path).unwrap_or_default();
+    for line in station_map.lines().skip(1) {
+        let mut fields = line.rsplitn(2, ',');
+        let (Some(station), Some(rest)) = (fields.next(), fields.next()) else {
+            continue;
+        };
+        let Some((feed, stop_id)) = rest.split_once(',') else {
+            continue;
+        };
+        let Ok(station) = station.parse() else {
+            continue;
+        };
+        let stop_id = stop_id.trim_matches('"');
+        for tag in tags_by_feed.get(feed).into_iter().flatten() {
+            let station = btt_timetable::BundleStationIndex(station);
+            stop_map.insert(format!("{tag}_{stop_id}"), station);
+            if stop_id.contains("StopPlace") {
+                let quay = stop_id.replace("StopPlace", "Quay");
+                stop_map.insert(format!("{tag}_{quay}"), station);
+            }
+        }
+    }
+    stop_map
+}
+
+/// Returns whether a journey walks between stations anywhere: from the MOTIS start stop to
+/// another station, between two stations at a change, or from its last station to another
+/// one than the MOTIS end stop.
+fn walks_between_stations(
+    journey: &btt_router::RaptorJourney,
+    start: CandidateStation,
+    end: CandidateStation,
+) -> bool {
+    let changes_station = journey
+        .rides
+        .windows(2)
+        .any(|pair| pair[0].alighting_station != pair[1].boarding_station);
+    let last_station = journey.rides.last().map(|ride| ride.alighting_station);
+    journey.departure_candidate.station != start.station
+        || journey.arrival_candidate.station != end.station
+        || last_station != Some(journey.arrival_candidate.station)
+        || changes_station
 }
