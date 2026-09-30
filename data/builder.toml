@@ -78,16 +78,16 @@ category_field = "route_short_name"
 
 [[feed]]
 mirror_name = "fr_horaires-sncf"
-# Stop IDs end with the UIC code and its check digit, as in StopArea:OCE87313759.
+format = "netex"
+source_url = "https://mirror.traines.eu/french-netex/sncf-netex.fixed.zip"
+# Scheduled stop point IDs end with the UIC code and its check digit.
 station_code = "uic8_in_stop_id"
+# Journeys carry brand codes instead of product names.
+netex_brand_names = { TER = "TER", OUI = "TGV INOUI", TGVOUIGO = "OUIGO", OUIGO_TC = "OUIGO Train Classique", IC = "INTERCITES", ICN = "INTERCITES de nuit", LYR = "Lyria", DBS = "DB SNCF", SNF = "SNCF" }
 [feed.train_label]
-# The headsign holds the train number, and trip_short_name is missing.
-field = "trip_headsign"
-pattern = '^(?<number>\d+)$'
-# Route short names are line codes. The product is part of every stop point ID, as in
-# StopPoint:OCETGV INOUI-87686006.
-category_field = "first_stop_id"
-category_pattern = '^StopPoint:OCE(?<category>.+)-\d+$'
+field = "trip_short_name"
+pattern = '^0*(?<number>\d+)$'
+category_field = "route_short_name"
 
 [[feed]]
 mirror_name = "fr_eurostar-gtfs-plan-de-transport-et-temps-reel"
