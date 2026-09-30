@@ -820,8 +820,23 @@ impl TimetableBundleRouter {
         bundle_minutes(start_minute)..bundle_minutes(end_minute)
     }
 
+    /// Returns the night minutes covered by all trains with berths on the journey together.
+    fn sleeping_minutes(&self, journey: &RaptorJourney, night: &std::ops::Range<u32>) -> u32 {
+        journey
+            .rides
+            .iter()
+            .filter(|ride| self.bundle.trip_offers_berths(ride.trip))
+            .map(|ride| {
+                ride.arrival
+                    .0
+                    .min(night.end)
+                    .saturating_sub(ride.departure.0.max(night.start))
+            })
+            .sum()
+    }
+
     /// Finds the train with berths that covers most of the night, with the minutes it covers.
-    /// Only one train counts, because changing trains wakes the traveller up.
+    /// The leg row marks this train as the one to sleep on.
     fn sleeping_ride(
         &self,
         journey: &RaptorJourney,
@@ -862,9 +877,7 @@ impl TimetableBundleRouter {
             u32::try_from(journey.ride_count().saturating_sub(1)).unwrap_or(u32::MAX);
         let arrival = journey.arrival.0;
         let (sleeping_minutes, night_minutes_awake) = night.map_or((0, 0), |night| {
-            let sleeping = self
-                .sleeping_ride(journey, night)
-                .map_or(0, |(_, covered)| covered);
+            let sleeping = self.sleeping_minutes(journey, night);
             // After arriving, the traveller is at the place, where the arrival window counts
             // instead.
             let travelling_night_end = arrival.min(night.end).max(night.start);
@@ -877,8 +890,8 @@ impl TimetableBundleRouter {
             door_to_door_minutes: arrival.saturating_sub(journey.departure.0),
             way_to_station_minutes,
             transfer_count: train_changes + u32::from(footpath_minutes.is_some()),
-            minutes_outside_arrival_window: arrival_window.start.saturating_sub(arrival)
-                + arrival.saturating_sub(arrival_window.end),
+            minutes_before_arrival_window: arrival_window.start.saturating_sub(arrival),
+            minutes_after_arrival_window: arrival.saturating_sub(arrival_window.end),
             sleeping_minutes,
             night_minutes_awake,
         }

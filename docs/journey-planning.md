@@ -28,11 +28,12 @@ Every edge gets a cost in minutes of train travel, and the cost of a journey is 
 | Time from leaving the place to reaching the next | every edge, by its duration | 1 |
 | Extra weight of the way to and from a station | access, egress and final walk edges | 0.5 on top of the duration |
 | Change penalty | change edges | 10 minutes, plus up to 110 by transfer aversion |
-| Arriving outside the arrival window | egress edges, by the arrival moment | 2 per minute outside |
-| Sleep in a berth between bedtime and wake-up | ride edges of trains with berths | −1 per minute of night covered |
+| Arriving before the arrival window | egress edges, by the arrival moment | 1 per minute before |
+| Arriving after the arrival window | egress edges, by the arrival moment | 2 per minute after |
+| Sleep in a berth between bedtime and wake-up | ride edges of trains with berths | −1 per minute of night covered, summed over all such trains |
 | Night minutes not in a berth, until arrival | ride, wait and change edges during the night | 3 per minute |
 
-With these weights, one change at a middling transfer aversion counts as 65 minutes of travel, and a whole night of 7.5 hours without a berth counts as almost a day.
+With these weights, one change at a middling transfer aversion counts as 65 minutes of travel, and a whole night of 7.5 hours without a berth counts as almost a day. Arriving early costs as much as the wait until the window opens, so an earlier arrival after the same departure never costs more than a later one.
 
 Legs joined by a same-day stop share one more kind of edge: a stay edge from the arrival on one leg to the departure on the next, at the same place. Its cost is 2 per minute outside the stay range the traveller set. When the traveller marked the stop "longer is better", it is also −0.25 per minute beyond the minimum stay, up to the maximum.
 
@@ -53,7 +54,7 @@ where $N$ is the node-edge incidence matrix of the time-expanded graph, $b$ has 
 
 Without the ride constraint, this is a plain shortest path problem. Its constraint matrix is totally unimodular, so the linear relaxation already has an integral optimum, and label-setting algorithms such as Dijkstra's solve it directly. The ride constraint turns it into a resource-constrained shortest path problem, which is hard in general. With a small $K$ and ride counts that only grow by one at a time, it is easy in practice, because the search can proceed round by round, one train at a time.
 
-Two terms don't fit this form exactly. The sleep term counts only the single train with berths that covers most of the night, not the sum over all trains with berths. That is a maximum over rides instead of a sum. And the arrival window term depends on the arrival moment, which the egress edges carry, but it makes the cost not grow with arrival time: arriving too early costs more than arriving just in time.
+Every term sits on single edges, so the cost of a path is the sum of its edge costs. The sleep term counts each train with berths for the night minutes it covers, and the arrival window term depends only on the arrival moment, which the egress edges carry.
 
 ### From legs to a trip
 
@@ -104,19 +105,18 @@ The planner is exact for part of the cost and a heuristic for the rest. This sec
 
 ### Pruning before costing
 
-The Pareto search drops a journey when another leaves no earlier, arrives no later and uses no more trains. That is only safe when a lower cost always comes with a later departure, an earlier arrival or fewer trains. Three terms break that condition:
+The Pareto search drops a journey when another leaves no earlier, arrives no later and uses no more trains. That is only safe when a lower cost always comes with a later departure, an earlier arrival or fewer trains. The arrival window keeps to that condition, because arriving early costs no more than waiting. Two terms break it:
 
-1. **Arriving too early.** The search always prefers the earlier arrival, while the cost can prefer a later one that falls inside the arrival window.
-2. **Sleep.** Staying on a night train to a later stop arrives later, yet sleeps longer and can cost less. For example, a traveller with a wake-up time of 09:30 on a night train that reaches Basel at 06:21 and Zürich at 08:05 sleeps longer by staying on to Zürich, but the plain search keeps only the journey that gets off in Basel, because it arrives earlier with the same number of trains.
-3. **Ways to and from stations.** The search counts them as travel time, while the cost weighs them one and a half times, so a journey from a closer station can be dropped in favour of one that is a few minutes faster from a farther station.
+1. **Sleep.** Staying on a night train to a later stop arrives later, yet sleeps longer and can cost less. For example, a traveller with a wake-up time of 09:30 on a night train that reaches Basel at 06:21 and Zürich at 08:05 sleeps longer by staying on to Zürich, but the plain search keeps only the journey that gets off in Basel, because it arrives earlier with the same number of trains.
+2. **Ways to and from stations.** The search counts them as travel time, while the cost weighs them one and a half times, so a journey from a closer station can be dropped in favour of one that is a few minutes faster from a farther station.
 
-The second night search is a patch for the second case: its extra constraints remove the seated journeys that would push a night train out of the set, and the rule about leaving a berth keeps the journeys that stay on board. The 3-hour limit on boarding seated trains is a guess about when the night ends for a traveller who slept on a train, and it can still let a seated overnight journey through, or keep a traveller from an early seated train after a night train.
+The second night search is a patch for the first case: its extra constraints remove the seated journeys that would push a night train out of the set, and the rule about leaving a berth keeps the journeys that stay on board. The 3-hour limit on boarding seated trains is a guess about when the night ends for a traveller who slept on a train, and it can still let a seated overnight journey through, or keep a traveller from an early seated train after a night train.
 
 An exact method gives the search the cost as a fourth criterion, as McRAPTOR adds criteria to RAPTOR (Delling et al., 2012). Each station then keeps the labels that no other label beats on arrival time, cost so far and number of trains, and pruning stays safe for every term that the search can add up along the path. For the arrival window, the term is added when a label reaches the arrival place. McRAPTOR is usually a few times slower than RAPTOR. With single searches taking between 5 and 50 milliseconds, that is affordable.
 
 ### The sleep term
 
-The sleep term takes the single train with berths that covers most of the night, because changing trains during the night wakes the traveller up. A sum over rides would fit the standard form and a label-based search, and differs only for journeys that change between two trains with berths during the night, which are rare and poor anyway.
+The sleep term sums the night minutes over every train with berths. A journey that changes between two night trains in the middle of the night gets the sleep on both counted in full, while in reality the change wakes the traveller up. Such journeys are rare, and the minutes of the change itself still count as awake.
 
 ### Chains
 
