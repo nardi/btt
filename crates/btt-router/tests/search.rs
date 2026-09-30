@@ -4,8 +4,9 @@ use std::num::NonZeroU8;
 
 use btt_model::GeoCoordinates;
 use btt_router::{
-    AllowEveryRide, CandidateStation, MinutesSinceBundleStart, RaptorLegQuery, RaptorSearchBuffers,
-    RideFilter, SearchIndex, search_leg_journeys,
+    AllowEveryRide, CandidateStation, CostSearchBuffers, JourneyCostModel, MinutesSinceBundleStart,
+    RaptorLegQuery, RaptorSearchBuffers, RideFilter, SearchIndex, search_leg_journeys,
+    search_leg_journeys_by_cost,
 };
 use btt_timetable::{
     BundleBuilder, BundleStationIndex, BundleTripIndex, LoadedTimetableBundle, RaptorRouteIndex,
@@ -355,4 +356,136 @@ fn a_forbidden_stop_keeps_the_traveller_on_the_train() {
     assert_eq!(kept_on.len(), 1);
     assert_eq!(kept_on[0].3, ["1", "3"]);
     assert_eq!(kept_on[0].1, 900);
+}
+
+/// Night from 22:00 to 07:00 the next morning, in minutes since the start of day 0.
+const NIGHT: std::ops::Range<u32> = 1320..1860;
+
+/// A cost model with the planner's night terms. A minute of the night before arriving costs
+/// three minutes, a minute of it on the train with berths takes four off, and a change costs 65
+/// minutes.
+struct NightCostModel<'a> {
+    bundle: &'a LoadedTimetableBundle,
+}
+
+impl NightCostModel<'_> {
+    fn night_minutes_until(moment: u32) -> i32 {
+        i32::try_from(moment.clamp(NIGHT.start, NIGHT.end) - NIGHT.start).unwrap()
+    }
+}
+
+impl JourneyCostModel for NightCostModel<'_> {
+    fn access_cost(&self, _: &CandidateStation) -> i32 {
+        0
+    }
+
+    fn ride_cost(
+        &self,
+        _: RaptorRouteIndex,
+        trip: BundleTripIndex,
+        departure: MinutesSinceBundleStart,
+        arrival: MinutesSinceBundleStart,
+        is_first_ride: bool,
+    ) -> i32 {
+        let sleep = if self.bundle.trip_train_label(trip).1 == "night" {
+            Self::night_minutes_until(arrival.0) - Self::night_minutes_until(departure.0)
+        } else {
+            0
+        };
+        let change = if is_first_ride { 0 } else { 65 };
+        change - 4 * sleep
+    }
+
+    fn egress_cost(&self, _: &CandidateStation, _: Option<u16>) -> i32 {
+        0
+    }
+
+    fn elapsed_cost(
+        &self,
+        departure: MinutesSinceBundleStart,
+        arrival: MinutesSinceBundleStart,
+    ) -> i32 {
+        i32::try_from(arrival.0 - departure.0).unwrap() + 3 * Self::night_minutes_until(arrival.0)
+    }
+
+    fn remaining_cost_lower_bound(
+        &self,
+        departure: MinutesSinceBundleStart,
+        moment: MinutesSinceBundleStart,
+        earliest_arrival: MinutesSinceBundleStart,
+    ) -> i32 {
+        let sleep_still_possible =
+            Self::night_minutes_until(NIGHT.end) - Self::night_minutes_until(moment.0);
+        self.elapsed_cost(departure, earliest_arrival) - 4 * sleep_still_possible
+    }
+}
+
+#[test]
+fn the_cost_search_stays_on_a_night_train_to_sleep_longer() {
+    let mut network = Network::new();
+    let amsterdam = network.station("Amsterdam");
+    let basel = network.station("Basel");
+    let zurich = network.station("Zürich");
+    let bern = network.station("Bern");
+    network.trip(
+        "night",
+        &[
+            (amsterdam, 1141, 1141),
+            (basel, 1701, 1705),
+            (zurich, 1805, 1805),
+        ],
+    );
+    // The connecting trains run on day 1, at 04:58 from Basel and 06:32 from Zürich.
+    network.trip_with_flags(
+        "early",
+        &[(basel, 298, 298, true, true), (bern, 356, 356, true, true)],
+        &[1],
+    );
+    network.trip_with_flags(
+        "late",
+        &[(zurich, 392, 392, true, true), (bern, 448, 448, true, true)],
+        &[1],
+    );
+    let bundle = network.build();
+    let from = [candidate(amsterdam, 0)];
+    let to = [candidate(bern, 0)];
+
+    // The plain search only keeps the change in Basel, which arrives earlier.
+    let plain = search(&bundle, &from, &to, 1100, 1200);
+    assert_eq!(plain.len(), 1);
+    assert_eq!(plain[0].3, ["night", "early"]);
+
+    let query = RaptorLegQuery {
+        departure_candidates: &from,
+        arrival_candidates: &to,
+        departure_window: MinutesSinceBundleStart(1100)..MinutesSinceBundleStart(1200),
+        minimum_transfer_minutes: 10,
+        maximum_train_rides: NonZeroU8::new(5).unwrap(),
+    };
+    let found = search_leg_journeys_by_cost(
+        &bundle,
+        &SearchIndex::new(&bundle),
+        &query,
+        &NightCostModel { bundle: &bundle },
+        &mut CostSearchBuffers::new(),
+        || false,
+    );
+    let trains_and_costs: Vec<(Vec<&str>, i32)> = found
+        .journeys
+        .iter()
+        .map(|costed| {
+            let trains = costed
+                .journey
+                .rides
+                .iter()
+                .map(|ride| bundle.trip_train_label(ride.trip).1)
+                .collect();
+            (trains, costed.cost)
+        })
+        .collect();
+    // Staying on to Zürich sleeps 104 minutes longer, which outweighs arriving 92 minutes later.
+    assert_eq!(
+        trains_and_costs,
+        [(vec!["night", "early"], 624), (vec!["night", "late"], 492)]
+    );
 }

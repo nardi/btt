@@ -80,6 +80,12 @@ pub fn journey_cost(
     u32::try_from(total).unwrap_or(0)
 }
 
+/// Returns the minutes one transfer costs at a transfer aversion.
+pub fn transfer_cost_minutes(transfer_aversion: TransferAversion, weights: ScoringWeights) -> u32 {
+    weights.transfer_base_minutes
+        + weights.transfer_aversion_minutes * u32::from(transfer_aversion.percent()) / 100
+}
+
 /// Returns what the cost of a journey on its own is made of, with the total that
 /// `journey_cost` returns.
 pub fn journey_cost_parts(
@@ -87,16 +93,14 @@ pub fn journey_cost_parts(
     transfer_aversion: TransferAversion,
     weights: ScoringWeights,
 ) -> JourneyCostParts {
-    let transfer_cost_each = weights.transfer_base_minutes
-        + weights.transfer_aversion_minutes * u32::from(transfer_aversion.percent()) / 100;
+    let transfer_cost_each = transfer_cost_minutes(transfer_aversion, weights);
     // The door-to-door time already counts the way to the stations once, so only the extra
     // part of its weight is added.
     let way_to_station_extra_cost =
         inputs.way_to_station_minutes * weights.way_to_station_percent.saturating_sub(100) / 100;
-    let arrival_window_cost = inputs.minutes_before_arrival_window
-        * weights.arrival_before_window_percent
-        / 100
-        + inputs.minutes_after_arrival_window * weights.arrival_after_window_percent / 100;
+    let arrival_window_cost =
+        inputs.minutes_before_arrival_window * weights.arrival_before_window_percent / 100
+            + inputs.minutes_after_arrival_window * weights.arrival_after_window_percent / 100;
     let night_awake_cost = inputs.night_minutes_awake * weights.night_awake_percent / 100;
     let sleeping_minutes = inputs.sleeping_minutes.min(inputs.door_to_door_minutes);
     let total = inputs.door_to_door_minutes - sleeping_minutes

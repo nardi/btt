@@ -3,6 +3,7 @@
 //!
 //! Run with `cargo run --release -p btt-planner --example replay_report -- <report.zip> <bundle>`.
 //! With the bundle the report was made with, a difference points at a change in the planner.
+//! A third argument `cost` plans with the cost-aware search.
 
 use std::fmt::Write as _;
 use std::io::Read;
@@ -37,6 +38,7 @@ fn main() {
     let mut arguments = std::env::args().skip(1);
     let report_path = arguments.next().expect("pass the report ZIP");
     let bundle_path = arguments.next().expect("pass the bundle path");
+    let cost_aware_search = arguments.next().as_deref() == Some("cost");
 
     let mut archive =
         zip::ZipArchive::new(std::fs::File::open(&report_path).expect("report opens"))
@@ -68,7 +70,8 @@ fn main() {
     }
 
     let router = TimetableBundleRouter::open(bundle_path.as_ref(), Arc::new(TimeZoneFinder::new()))
-        .expect("bundle loads");
+        .expect("bundle loads")
+        .with_cost_aware_search(cost_aware_search);
     // Legs joined by same-day stops are planned together, as the app does. The chains come
     // from the report's trip, which older reports have too.
     let trip = btt_storage::trip_from_document(&read_entry(&mut archive, "trip.json"))

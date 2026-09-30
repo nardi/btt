@@ -3,6 +3,7 @@
 pub mod backend;
 pub mod bundle_router;
 mod chain;
+mod cost_model;
 pub mod explanation;
 pub mod input;
 mod ride_path;

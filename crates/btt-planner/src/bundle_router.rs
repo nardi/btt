@@ -12,8 +12,9 @@ use btt_model::{
     UnixTimeMinutes, WayToStationMode,
 };
 use btt_router::{
-    AllowEveryRide, CandidateStation, MinutesSinceBundleStart, ParetoJourneySet, RaptorJourney,
-    RaptorLegQuery, RaptorSearchBuffers, RideFilter, SearchIndex, search_leg_journeys,
+    AllowEveryRide, CandidateStation, CostParetoJourneySet, CostSearchBuffers,
+    MinutesSinceBundleStart, ParetoJourneySet, RaptorJourney, RaptorLegQuery, RaptorSearchBuffers,
+    RideFilter, SearchIndex, search_leg_journeys, search_leg_journeys_by_cost,
 };
 use btt_timetable::{
     BundleLoadError, BundleStationIndex, BundleTripIndex, LoadedTimetableBundle, RaptorRouteIndex,
@@ -23,10 +24,13 @@ use chrono::NaiveDate;
 use smallvec::SmallVec;
 
 use crate::chain::{ChainJourney, ChainStay, chain_through_costs};
+use crate::cost_model::LegCostModel;
 use crate::explanation::{CandidateExplanation, LegExplanation, RankedJourneyExplanation};
 use crate::input::{LegChainInput, LegEndpoint, LegPlanningInput, SameDayStop};
 use crate::ride_path::StationHopGraph;
-use crate::scoring::{JourneyCostInputs, ScoringWeights, journey_cost, journey_cost_parts};
+use crate::scoring::{
+    JourneyCostInputs, ScoringWeights, journey_cost, journey_cost_parts, transfer_cost_minutes,
+};
 
 /// Largest number of candidate stations per place, closest first.
 const MAXIMUM_CANDIDATE_STATIONS: usize = 16;
@@ -113,6 +117,22 @@ impl RideFilter for NightRideFilter<'_> {
     }
 }
 
+/// Splits a departure window into the parts that are searched on their own threads.
+fn window_slices(
+    departure_window: std::ops::Range<MinutesSinceBundleStart>,
+) -> impl Iterator<Item = std::ops::Range<MinutesSinceBundleStart>> {
+    let start = departure_window.start.0;
+    let length = departure_window.end.0.saturating_sub(start);
+    let slice_count = PARALLEL_WINDOW_SLICES
+        .min(length / SHORTEST_WINDOW_SLICE_MINUTES)
+        .max(1);
+    (0..slice_count).map(move |slice| {
+        let slice_start = start + length * slice / slice_count;
+        let slice_end = start + length * (slice + 1) / slice_count;
+        MinutesSinceBundleStart(slice_start)..MinutesSinceBundleStart(slice_end)
+    })
+}
+
 /// Plans legs on a loaded bundle.
 pub struct TimetableBundleRouter {
     /// The loaded bundle.
@@ -129,6 +149,11 @@ pub struct TimetableBundleRouter {
     bundle_start_unix_minutes: u32,
     /// Search buffers of finished searches, reused by later ones to avoid allocating.
     spare_search_buffers: Mutex<Vec<RaptorSearchBuffers>>,
+    /// Buffers of finished cost-aware searches, reused like the ones above.
+    spare_cost_search_buffers: Mutex<Vec<CostSearchBuffers>>,
+    /// Whether legs are searched with the journey cost as a criterion, instead of with the
+    /// plain search and the night search.
+    cost_aware_search: bool,
 }
 
 impl TimetableBundleRouter {
@@ -167,7 +192,16 @@ impl TimetableBundleRouter {
             time_zone_finder,
             bundle_start_unix_minutes,
             spare_search_buffers: Mutex::new(Vec::new()),
+            spare_cost_search_buffers: Mutex::new(Vec::new()),
+            cost_aware_search: false,
         }
+    }
+
+    /// Returns the router with the cost-aware search switched on or off.
+    #[must_use]
+    pub fn with_cost_aware_search(mut self, enabled: bool) -> Self {
+        self.cost_aware_search = enabled;
+        self
     }
 
     /// Returns the version of the bundle's data.
@@ -480,6 +514,41 @@ impl TimetableBundleRouter {
         if arrival_candidates.is_empty() {
             return Err(NoJourneyReason::NoStationNearArrivalPlace);
         }
+        let night = self.night_in_bundle_minutes(input);
+        if self.cost_aware_search {
+            let model = LegCostModel {
+                bundle: &self.bundle,
+                weights: ScoringWeights::DEFAULT,
+                transfer_cost_minutes: transfer_cost_minutes(
+                    input.transfer_aversion,
+                    ScoringWeights::DEFAULT,
+                ),
+                arrival_window: self.ranking_arrival_window(input, night.as_ref()),
+                night: night.clone(),
+            };
+            let found = self.search_by_cost_in_parallel(
+                &departure_candidates,
+                &arrival_candidates,
+                departure_window,
+                input,
+                &model,
+                should_stop,
+            );
+            let journeys = ParetoJourneySet {
+                journeys: found
+                    .journeys
+                    .into_iter()
+                    .map(|costed| costed.journey)
+                    .collect(),
+            };
+            return Ok(LegSearch {
+                departure_candidates,
+                arrival_candidates,
+                journeys,
+                night,
+                departure_window: searched_window,
+            });
+        }
         let mut journeys = self.search_in_parallel(
             &departure_candidates,
             &arrival_candidates,
@@ -488,7 +557,6 @@ impl TimetableBundleRouter {
             &AllowEveryRide,
             should_stop,
         );
-        let night = self.night_in_bundle_minutes(input);
         if let Some(night) = &night {
             // A second search keeps night trains that the first one prunes, because a seated
             // train that leaves later or arrives earlier beats them in time. The ranking then
@@ -554,12 +622,7 @@ impl TimetableBundleRouter {
         search: &'search LegSearch,
         input: &LegPlanningInput,
     ) -> Vec<RankedJourney<'search>> {
-        let mut arrival_window = self.arrival_window_in_bundle_minutes(input);
-        // Arriving before the wake-up time counts as arriving outside the window.
-        if let Some(night) = &search.night {
-            arrival_window.start = arrival_window.start.max(night.end);
-            arrival_window.end = arrival_window.end.max(arrival_window.start);
-        }
+        let arrival_window = self.ranking_arrival_window(input, search.night.as_ref());
         search
             .journeys
             .journeys
@@ -580,6 +643,21 @@ impl TimetableBundleRouter {
                 }
             })
             .collect()
+    }
+
+    /// Returns the arrival window the cost uses, in bundle minutes. On an overnight leg,
+    /// arriving before the wake-up time counts as arriving before the window.
+    fn ranking_arrival_window(
+        &self,
+        input: &LegPlanningInput,
+        night: Option<&std::ops::Range<u32>>,
+    ) -> std::ops::Range<u32> {
+        let mut arrival_window = self.arrival_window_in_bundle_minutes(input);
+        if let Some(night) = night {
+            arrival_window.start = arrival_window.start.max(night.end);
+            arrival_window.end = arrival_window.end.max(arrival_window.start);
+        }
+        arrival_window
     }
 
     /// Turns ranked journeys into a leg plan, with the first as the chosen journey.
@@ -694,16 +772,6 @@ impl TimetableBundleRouter {
         boarding_filter: &F,
         should_stop: &(impl Fn() -> bool + Sync),
     ) -> ParetoJourneySet {
-        let start = departure_window.start.0;
-        let length = departure_window.end.0.saturating_sub(start);
-        let slice_count = PARALLEL_WINDOW_SLICES
-            .min(length / SHORTEST_WINDOW_SLICE_MINUTES)
-            .max(1);
-        let slices = (0..slice_count).map(|slice| {
-            let slice_start = start + length * slice / slice_count;
-            let slice_end = start + length * (slice + 1) / slice_count;
-            MinutesSinceBundleStart(slice_start)..MinutesSinceBundleStart(slice_end)
-        });
         let search_slice = |slice_window| {
             let query = RaptorLegQuery {
                 departure_candidates,
@@ -733,10 +801,58 @@ impl TimetableBundleRouter {
             found
         };
         std::thread::scope(|scope| {
-            let searches: Vec<_> = slices
+            let searches: Vec<_> = window_slices(departure_window)
                 .map(|slice_window| scope.spawn(|| search_slice(slice_window)))
                 .collect();
             ParetoJourneySet::merge(searches.into_iter().filter_map(|search| search.join().ok()))
+        })
+    }
+
+    /// Searches like `search_in_parallel` with the journey cost as a criterion.
+    fn search_by_cost_in_parallel(
+        &self,
+        departure_candidates: &[CandidateStation],
+        arrival_candidates: &[CandidateStation],
+        departure_window: std::ops::Range<MinutesSinceBundleStart>,
+        input: &LegPlanningInput,
+        model: &LegCostModel<'_>,
+        should_stop: &(impl Fn() -> bool + Sync),
+    ) -> CostParetoJourneySet {
+        let search_slice = |slice_window| {
+            let query = RaptorLegQuery {
+                departure_candidates,
+                arrival_candidates,
+                departure_window: slice_window,
+                minimum_transfer_minutes: input.minimum_transfer_time.minutes(),
+                maximum_train_rides: MAXIMUM_TRAIN_RIDES,
+            };
+            let mut buffers = self
+                .spare_cost_search_buffers
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .pop()
+                .unwrap_or_default();
+            let found = search_leg_journeys_by_cost(
+                &self.bundle,
+                &self.search_index,
+                &query,
+                model,
+                &mut buffers,
+                should_stop,
+            );
+            self.spare_cost_search_buffers
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .push(buffers);
+            found
+        };
+        std::thread::scope(|scope| {
+            let searches: Vec<_> = window_slices(departure_window)
+                .map(|slice_window| scope.spawn(|| search_slice(slice_window)))
+                .collect();
+            CostParetoJourneySet::merge(
+                searches.into_iter().filter_map(|search| search.join().ok()),
+            )
         })
     }
 

@@ -14,7 +14,7 @@ use smallvec::SmallVec;
 use crate::index::SearchIndex;
 
 /// Minutes in one day.
-const MINUTES_PER_DAY: u32 = 1440;
+pub(crate) const MINUTES_PER_DAY: u32 = 1440;
 
 /// Marks a route that is not queued for scanning in the current round.
 const NOT_QUEUED: u16 = u16::MAX;
@@ -165,11 +165,11 @@ impl ParetoJourneySet {
 
 /// A ride on a trip from a boarding stop, as a label records it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct RideOrigin {
-    raptor_route: RaptorRouteIndex,
-    trip_offset: u32,
-    service_day: u16,
-    boarding_position: u16,
+pub(crate) struct RideOrigin {
+    pub(crate) raptor_route: RaptorRouteIndex,
+    pub(crate) trip_offset: u32,
+    pub(crate) service_day: u16,
+    pub(crate) boarding_position: u16,
 }
 
 /// How the arrival label at a station in a round was reached.
@@ -268,12 +268,12 @@ impl RaptorSearchBuffers {
 
 /// A trip the scan currently rides.
 #[derive(Debug, Clone, Copy)]
-struct BoardedTrip {
-    trip_offset: u32,
-    service_day: u16,
-    boarding_position: u16,
+pub(crate) struct BoardedTrip {
+    pub(crate) trip_offset: u32,
+    pub(crate) service_day: u16,
+    pub(crate) boarding_position: u16,
     /// Departure from the boarding stop, in minutes since the bundle start.
-    departure: u32,
+    pub(crate) departure: u32,
 }
 
 /// One search, with the query, the bundle and the working memory.
@@ -606,11 +606,7 @@ impl<F: RideFilter> Search<'_, F> {
     }
 
     /// Finds the earliest trip of a route that departs from a stop position at or after
-    /// `ready` and runs on the matching day.
-    ///
-    /// A trip with service day `d` departs at `d * 1440 + departure`. Trips that run past
-    /// midnight can depart up to `longest_trip_days` days after their service day, so the
-    /// search looks at that many earlier service days, and at the next day.
+    /// `ready`, runs on the matching day and passes the ride filter.
     fn earliest_trip(
         &self,
         raptor_route: RaptorRouteIndex,
@@ -618,63 +614,18 @@ impl<F: RideFilter> Search<'_, F> {
         position: u16,
         ready: u32,
     ) -> Option<BoardedTrip> {
-        let ready_day = ready / MINUTES_PER_DAY;
-        let first_day = ready_day.saturating_sub(u32::from(route.longest_trip_days));
-        let last_day =
-            (ready_day + 1).min(u32::from(self.bundle.validity_days()).saturating_sub(1));
-        let departure_at = |trip_offset: u32| {
-            self.bundle
-                .stop_event(route, trip_offset, position)
-                .departure
-                .0
-        };
-        let mut best: Option<BoardedTrip> = None;
-        let last_trip = route.trip_count.checked_sub(1)?;
-        let route_days = self.index.service_days_by_route[raptor_route.as_usize()];
-        for day in first_day..=last_day {
-            let service_day = u16::try_from(day).unwrap_or(u16::MAX);
-            if !route_days.runs_on(service_day) {
-                continue;
-            }
-            let day_start = day * MINUTES_PER_DAY;
-            // Trips of a later service date all depart after any trip found on an earlier one.
-            if best.is_some_and(|best| day_start + u32::from(departure_at(0)) >= best.departure) {
-                break;
-            }
-            let Ok(earliest_minute) = u16::try_from(ready.saturating_sub(day_start)) else {
-                continue;
-            };
-            // Most routes have no trip that is still underway a day later at this stop, which
-            // the last trip shows without a search.
-            if departure_at(last_trip) < earliest_minute {
-                continue;
-            }
-            let mut offset = partition_point(route.trip_count, |trip_offset| {
-                departure_at(trip_offset) < earliest_minute
-            });
-            while offset < route.trip_count {
-                let departure = day_start + u32::from(departure_at(offset));
-                if best.is_some_and(|best| departure >= best.departure) {
-                    break;
-                }
-                let trip = BundleTripIndex(route.first_trip_index + offset);
-                if self.bundle.trip_service_days(trip).runs_on(service_day)
-                    && self
-                        .filter
-                        .may_board(raptor_route, trip, MinutesSinceBundleStart(departure))
-                {
-                    best = Some(BoardedTrip {
-                        trip_offset: offset,
-                        service_day,
-                        boarding_position: position,
-                        departure,
-                    });
-                    break;
-                }
-                offset += 1;
-            }
-        }
-        best
+        earliest_trip(
+            self.bundle,
+            self.index,
+            raptor_route,
+            route,
+            position,
+            ready,
+            |trip, departure| {
+                self.filter
+                    .may_board(raptor_route, trip, MinutesSinceBundleStart(departure))
+            },
+        )
     }
 
     /// Walks footpaths from every train arrival of this round, whether or not the arrival
@@ -761,58 +712,119 @@ impl<F: RideFilter> Search<'_, F> {
                     alighting_station,
                 } => (ride, alighting_station),
             };
-            let raptor_ride = self.raptor_ride(ride, alighting_station)?;
+            let raptor_ride = raptor_ride(self.bundle, ride, alighting_station)?;
             station = raptor_ride.boarding_station;
             rides.push(raptor_ride);
             current_round = current_round.checked_sub(1)?;
         }
         None
     }
+}
 
-    /// Turns a recorded ride into its boarding and alighting stops and times.
-    fn raptor_ride(
-        &self,
-        ride: RideOrigin,
-        alighting_station: BundleStationIndex,
-    ) -> Option<RaptorRide> {
-        let route = self.bundle.route(ride.raptor_route);
-        let boarding_station = self
-            .bundle
-            .pattern_stop(&route, ride.boarding_position)
-            .station();
-        let alighting_position =
-            (ride.boarding_position + 1..route.stop_count).find(|&position| {
-                self.bundle.pattern_stop(&route, position).station() == alighting_station
-            })?;
-        let day_start = u32::from(ride.service_day) * MINUTES_PER_DAY;
-        let departure = self
-            .bundle
-            .stop_event(&route, ride.trip_offset, ride.boarding_position)
-            .departure
-            .0;
-        let arrival = self
-            .bundle
-            .stop_event(&route, ride.trip_offset, alighting_position)
-            .arrival
-            .0;
-        Some(RaptorRide {
-            raptor_route: ride.raptor_route,
-            trip: BundleTripIndex(route.first_trip_index + ride.trip_offset),
-            service_day: ride.service_day,
-            boarding_station,
-            boarding_position: ride.boarding_position,
-            alighting_station,
-            alighting_position,
-            departure: MinutesSinceBundleStart(day_start + u32::from(departure)),
-            arrival: MinutesSinceBundleStart(day_start + u32::from(arrival)),
-        })
+/// Finds the earliest trip of a route that departs from a stop position at or after `ready`,
+/// runs on the matching day and for which `may_board` returns `true`. `may_board` receives the
+/// trip and its departure in minutes since the bundle start.
+///
+/// A trip with service day `d` departs at `d * 1440 + departure`. Trips that run past midnight
+/// can depart up to `longest_trip_days` days after their service day, so the search looks at
+/// that many earlier service days, and at the next day.
+pub(crate) fn earliest_trip(
+    bundle: &LoadedTimetableBundle,
+    index: &SearchIndex,
+    raptor_route: RaptorRouteIndex,
+    route: &RaptorRoute,
+    position: u16,
+    ready: u32,
+    may_board: impl Fn(BundleTripIndex, u32) -> bool,
+) -> Option<BoardedTrip> {
+    let ready_day = ready / MINUTES_PER_DAY;
+    let first_day = ready_day.saturating_sub(u32::from(route.longest_trip_days));
+    let last_day = (ready_day + 1).min(u32::from(bundle.validity_days()).saturating_sub(1));
+    let departure_at =
+        |trip_offset: u32| bundle.stop_event(route, trip_offset, position).departure.0;
+    let mut best: Option<BoardedTrip> = None;
+    let last_trip = route.trip_count.checked_sub(1)?;
+    let route_days = index.service_days_by_route[raptor_route.as_usize()];
+    for day in first_day..=last_day {
+        let service_day = u16::try_from(day).unwrap_or(u16::MAX);
+        if !route_days.runs_on(service_day) {
+            continue;
+        }
+        let day_start = day * MINUTES_PER_DAY;
+        // Trips of a later service date all depart after any trip found on an earlier one.
+        if best.is_some_and(|best| day_start + u32::from(departure_at(0)) >= best.departure) {
+            break;
+        }
+        let Ok(earliest_minute) = u16::try_from(ready.saturating_sub(day_start)) else {
+            continue;
+        };
+        // Most routes have no trip that is still underway a day later at this stop, which the
+        // last trip shows without a search.
+        if departure_at(last_trip) < earliest_minute {
+            continue;
+        }
+        let mut offset = partition_point(route.trip_count, |trip_offset| {
+            departure_at(trip_offset) < earliest_minute
+        });
+        while offset < route.trip_count {
+            let departure = day_start + u32::from(departure_at(offset));
+            if best.is_some_and(|best| departure >= best.departure) {
+                break;
+            }
+            let trip = BundleTripIndex(route.first_trip_index + offset);
+            if bundle.trip_service_days(trip).runs_on(service_day) && may_board(trip, departure) {
+                best = Some(BoardedTrip {
+                    trip_offset: offset,
+                    service_day,
+                    boarding_position: position,
+                    departure,
+                });
+                break;
+            }
+            offset += 1;
+        }
     }
+    best
+}
+
+/// Turns a recorded ride into its boarding and alighting stops and times.
+pub(crate) fn raptor_ride(
+    bundle: &LoadedTimetableBundle,
+    ride: RideOrigin,
+    alighting_station: BundleStationIndex,
+) -> Option<RaptorRide> {
+    let route = bundle.route(ride.raptor_route);
+    let boarding_station = bundle
+        .pattern_stop(&route, ride.boarding_position)
+        .station();
+    let alighting_position = (ride.boarding_position + 1..route.stop_count)
+        .find(|&position| bundle.pattern_stop(&route, position).station() == alighting_station)?;
+    let day_start = u32::from(ride.service_day) * MINUTES_PER_DAY;
+    let departure = bundle
+        .stop_event(&route, ride.trip_offset, ride.boarding_position)
+        .departure
+        .0;
+    let arrival = bundle
+        .stop_event(&route, ride.trip_offset, alighting_position)
+        .arrival
+        .0;
+    Some(RaptorRide {
+        raptor_route: ride.raptor_route,
+        trip: BundleTripIndex(route.first_trip_index + ride.trip_offset),
+        service_day: ride.service_day,
+        boarding_station,
+        boarding_position: ride.boarding_position,
+        alighting_station,
+        alighting_position,
+        departure: MinutesSinceBundleStart(day_start + u32::from(departure)),
+        arrival: MinutesSinceBundleStart(day_start + u32::from(arrival)),
+    })
 }
 
 /// Returns every departure from the departure place within the window, from the latest to the
 /// earliest, as the time the traveller leaves the place for a train that leaves then, with the
 /// candidate station the train leaves from.
-fn collect_departure_times(
+pub(crate) fn collect_departure_times(
     bundle: &LoadedTimetableBundle,
     query: &RaptorLegQuery<'_>,
 ) -> Vec<(u32, u16)> {

@@ -1,1 +1,1 @@
-doc-valid-idents = ["..", "SQLite", "GeoJSON", "TypeScript", "OpenStreetMap", "MapLibre", "OpenFreeMap", "BigTrainTrip", "DuckDB", "RAPTOR", "rRAPTOR", "NeTEx"]
+doc-valid-idents = ["..", "SQLite", "GeoJSON", "TypeScript", "OpenStreetMap", "MapLibre", "OpenFreeMap", "BigTrainTrip", "DuckDB", "RAPTOR", "rRAPTOR", "McRAPTOR", "NeTEx"]
