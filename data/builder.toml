@@ -126,3 +126,14 @@ field = "trip_short_name"
 pattern = '^0*(?<number>\d+)$'
 # Lines are products, such as FR for Frecciarossa or REG for regional trains.
 category_field = "route_short_name"
+
+[[feed]]
+# Italo's own NeTEx needs many fixes: it marks coaches as rail, hides changes of train in long
+# dwells and keeps train numbers in journey IDs. A weekly community conversion to GTFS does
+# that work, so the builder reads its GTFS instead.
+mirror_name = "it_italo"
+source_url = "https://raw.githubusercontent.com/deryclem/italo-gtfs/main/gtfs-italo.zip"
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^0*(?<number>\d+)$'
+category_field = "route_short_name"
