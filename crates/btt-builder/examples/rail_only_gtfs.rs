@@ -43,7 +43,9 @@ fn write_rail_only_feed(feed_path: &Path, output_path: &Path) {
              escape = '\"', null_padding = true, strict_mode = false)"
         )
     };
-    let stop_columns = archive.columns("stops.txt").expect("stops.txt has a header");
+    let stop_columns = archive
+        .columns("stops.txt")
+        .expect("stops.txt has a header");
     let parent_station = column_or_null(&stop_columns, "parent_station");
 
     database
@@ -74,14 +76,25 @@ fn write_rail_only_feed(feed_path: &Path, output_path: &Path) {
     let mut written = vec![
         copy_table(&database, "rail_routes", &files_directory, "routes.txt"),
         copy_table(&database, "rail_trips", &files_directory, "trips.txt"),
-        copy_table(&database, "rail_stop_times", &files_directory, "stop_times.txt"),
+        copy_table(
+            &database,
+            "rail_stop_times",
+            &files_directory,
+            "stop_times.txt",
+        ),
         copy_table(&database, "rail_stops", &files_directory, "stops.txt"),
     ];
     for (file_name, filter) in [
         ("agency.txt", None),
         ("feed_info.txt", None),
-        ("calendar.txt", Some("service_id IN (SELECT service_id FROM rail_trips)")),
-        ("calendar_dates.txt", Some("service_id IN (SELECT service_id FROM rail_trips)")),
+        (
+            "calendar.txt",
+            Some("service_id IN (SELECT service_id FROM rail_trips)"),
+        ),
+        (
+            "calendar_dates.txt",
+            Some("service_id IN (SELECT service_id FROM rail_trips)"),
+        ),
     ] {
         if !archive.has(file_name) {
             continue;
@@ -102,7 +115,10 @@ fn write_rail_only_feed(feed_path: &Path, output_path: &Path) {
     let options = zip::write::SimpleFileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated);
     for path in written {
-        let name = path.file_name().expect("written file has a name").to_string_lossy();
+        let name = path
+            .file_name()
+            .expect("written file has a name")
+            .to_string_lossy();
         zip.start_file(name, options).expect("ZIP entry starts");
         zip.write_all(&std::fs::read(&path).expect("written file reads"))
             .expect("ZIP entry writes");
