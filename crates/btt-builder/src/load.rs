@@ -101,7 +101,7 @@ pub fn load_feed(
     // Platform IDs often add a suffix to the station code, as in 8891140_1, so the code is
     // the leading digits. SNCF IDs end in the code, as in StopArea:OCE87313759.
     let station_code = match feed.station_code {
-        FeedStationCodeScheme::NoStationCodes => "NULL",
+        FeedStationCodeScheme::NoStationCodes | FeedStationCodeScheme::UicInPrivateCode => "NULL",
         FeedStationCodeScheme::UicInStopId => "nullif(regexp_extract(stop_id, '^(\\d{7})', 1), '')",
         FeedStationCodeScheme::EvaInStopId => "nullif(regexp_extract(stop_id, '^(\\d+)', 1), '')",
         FeedStationCodeScheme::Uic8InStopId => {
@@ -201,10 +201,10 @@ fn load_service_days(
 }
 
 /// Returns the name the SQL steps use for a station code scheme.
-fn station_code_scheme_name(scheme: FeedStationCodeScheme) -> &'static str {
+pub(crate) fn station_code_scheme_name(scheme: FeedStationCodeScheme) -> &'static str {
     match scheme {
         FeedStationCodeScheme::NoStationCodes => "none",
-        FeedStationCodeScheme::UicInStopId => "uic",
+        FeedStationCodeScheme::UicInStopId | FeedStationCodeScheme::UicInPrivateCode => "uic",
         FeedStationCodeScheme::EvaInStopId => "eva",
         FeedStationCodeScheme::Uic8InStopId => "uic8",
     }

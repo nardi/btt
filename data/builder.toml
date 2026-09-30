@@ -113,3 +113,16 @@ mirror_name = "ch_opentransportdataswiss27"
 field = "trip_short_name"
 pattern = '^(?<number>\d+)$'
 category_field = "route_desc"
+
+[[feed]]
+# Trenitalia publishes NeTEx in the Italian profile only. Transitous converts nothing, so this
+# is the NeTEx file its preprocessor collects from the Italian access point.
+mirror_name = "it_trenitalia"
+format = "netex"
+source_url = "https://public-transport.github.io/transitous-trenitalia-preprocessor/trenitalia-netex.zip"
+station_code = "uic_in_private_code"
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^0*(?<number>\d+)$'
+# Lines are products, such as FR for Frecciarossa or REG for regional trains.
+category_field = "route_short_name"

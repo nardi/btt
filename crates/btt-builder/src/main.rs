@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
-use btt_builder::config::BuilderConfig;
+use btt_builder::config::{BuilderConfig, FeedFormat};
 use btt_builder::database::WorkDatabase;
 use btt_builder::download::{
     Downloader, TRAINLINE_STATIONS_URL, TRANSITOUS_FEED_CONFIG_URL, TRANSITOUS_MIRROR_URL,
@@ -76,9 +76,16 @@ fn build(arguments: &Arguments) -> Result<(), BuildError> {
     let downloader = Downloader::new(arguments.cache_directory.join("feeds"))?;
     let mut feeds = Vec::with_capacity(config.feeds.len());
     for feed in &config.feeds {
-        let zip_name = format!("{}.gtfs.zip", feed.mirror_name);
-        let zip_path =
-            downloader.fetch(&format!("{TRANSITOUS_MIRROR_URL}/{zip_name}"), &zip_name)?;
+        let extension = match feed.format {
+            FeedFormat::Gtfs => "gtfs",
+            FeedFormat::Netex => "netex",
+        };
+        let zip_name = format!("{}.{extension}.zip", feed.mirror_name);
+        let url = feed
+            .source_url
+            .clone()
+            .unwrap_or_else(|| format!("{TRANSITOUS_MIRROR_URL}/{zip_name}"));
+        let zip_path = downloader.fetch(&url, &zip_name)?;
         let country_file = format!("{}.json", feed.country());
         let country_config_path = downloader.fetch(
             &format!("{TRANSITOUS_FEED_CONFIG_URL}/{country_file}"),

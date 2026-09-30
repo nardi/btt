@@ -70,6 +70,22 @@ pub struct FeedConfig {
     pub station_code: FeedStationCodeScheme,
     /// How to read category and number of a train.
     pub train_label: TrainLabelRule,
+    /// Format of the feed file.
+    pub format: FeedFormat,
+    /// Where to download the feed when it isn't on the Transitous mirror, which only serves
+    /// GTFS.
+    pub source_url: Option<String>,
+}
+
+/// Format of a feed file.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FeedFormat {
+    /// A GTFS ZIP.
+    #[default]
+    Gtfs,
+    /// A ZIP with one NeTEx XML file in the Italian profile.
+    Netex,
 }
 
 impl FeedConfig {
@@ -110,6 +126,9 @@ pub enum FeedStationCodeScheme {
     EvaInStopId,
     /// The stop ID ends with an eight-digit UIC code with its check digit, as SNCF uses.
     Uic8InStopId,
+    /// A NeTEx stop place's private code holds the country code, two zeros and the five-digit
+    /// station number, as Trenitalia's 830001700 for UIC 8301700.
+    UicInPrivateCode,
 }
 
 /// A GTFS field that can hold the category or number of a train.
@@ -166,6 +185,9 @@ struct FeedConfigFile {
     #[serde(default)]
     station_code: StationCodeFile,
     train_label: TrainLabelFile,
+    #[serde(default)]
+    format: FeedFormat,
+    source_url: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -176,6 +198,7 @@ enum StationCodeFile {
     UicInStopId,
     EvaInStopId,
     Uic8InStopId,
+    UicInPrivateCode,
 }
 
 #[derive(Debug, Deserialize)]
@@ -270,6 +293,7 @@ impl TryFrom<FeedConfigFile> for FeedConfig {
                 StationCodeFile::UicInStopId => FeedStationCodeScheme::UicInStopId,
                 StationCodeFile::EvaInStopId => FeedStationCodeScheme::EvaInStopId,
                 StationCodeFile::Uic8InStopId => FeedStationCodeScheme::Uic8InStopId,
+                StationCodeFile::UicInPrivateCode => FeedStationCodeScheme::UicInPrivateCode,
             },
             train_label: TrainLabelRule {
                 field: file.train_label.field,
@@ -277,6 +301,8 @@ impl TryFrom<FeedConfigFile> for FeedConfig {
                 category_field: file.train_label.category_field,
                 category_pattern,
             },
+            format: file.format,
+            source_url: file.source_url,
             mirror_name: file.mirror_name,
         })
     }

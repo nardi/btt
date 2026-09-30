@@ -51,6 +51,7 @@ tokio-util = "0.7.19"
 toml = "1.1.6"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+quick-xml = "0.42.0"
 regex = "1.13.1"
 tzf-rs = { version = "2.1.2", default-features = false, features = ["bundled"] }
 uuid = { version = "1.26.1", features = ["v7", "serde"] }

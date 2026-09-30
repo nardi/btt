@@ -523,6 +523,7 @@ dependencies = [
  "chrono-tz",
  "clap",
  "duckdb",
+ "quick-xml",
  "regex",
  "reqwest",
  "rustc-hash",

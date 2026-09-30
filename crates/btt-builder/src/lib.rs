@@ -11,6 +11,7 @@ pub mod dedup;
 pub mod download;
 pub mod feed_archive;
 pub mod load;
+pub mod netex;
 pub mod report;
 pub mod resolve;
 pub mod stations;
@@ -21,7 +22,7 @@ use std::time::Instant;
 use btt_timetable::{BundleBuildError, TimetableBundle};
 use thiserror::Error;
 
-use crate::config::FeedConfig;
+use crate::config::{FeedConfig, FeedFormat};
 use crate::database::WorkDatabase;
 use crate::dedup::MergeCounts;
 use crate::feed_archive::FeedArchive;
@@ -42,6 +43,9 @@ pub enum BuildError {
     /// A feed ZIP could not be read.
     #[error(transparent)]
     FeedArchive(#[from] feed_archive::FeedArchiveError),
+    /// A NeTEx feed could not be read.
+    #[error(transparent)]
+    Netex(#[from] netex::NetexError),
     /// The bundle builder rejected the input.
     #[error("bundle: {0}")]
     BundleBuild(#[from] BundleBuildError),
@@ -105,8 +109,17 @@ pub fn run_pipeline(
     database.run(include_str!("../sql/01_schema.sql"))?;
     for feed in &inputs.feeds {
         let started = Instant::now();
-        let archive = FeedArchive::open(&feed.zip_path)?;
-        load::load_feed(database, &archive, feed.config, inputs.window)?;
+        match feed.config.format {
+            FeedFormat::Gtfs => {
+                let archive = FeedArchive::open(&feed.zip_path)?;
+                load::load_feed(database, &archive, feed.config, inputs.window)?;
+            }
+            FeedFormat::Netex => {
+                let trips =
+                    netex::load_netex_feed(database, &feed.zip_path, feed.config, inputs.window)?;
+                tracing::info!(feed = feed.config.mirror_name, trips, "read NeTEx feed");
+            }
+        }
         tracing::info!(feed = feed.config.mirror_name, elapsed = ?started.elapsed(), "loaded feed");
     }
 
