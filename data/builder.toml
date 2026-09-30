@@ -415,3 +415,30 @@ mirror_name = "lv_pieturas"
 field = "trip_short_name"
 pattern = '^(?<number>\d+)$'
 category_field = "agency_name"
+
+[[feed]]
+# Trip short names are the headcodes of train services, which repeat from day to day and are
+# not numbers that other feeds share.
+mirror_name = "gb_great-britain"
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^(?<number>.+)$'
+category_field = "agency_name"
+number_is_line = true
+
+[[feed]]
+# The same file family holds the trains of Northern Ireland, whose trips have no numbers.
+mirror_name = "gb_northern-ireland"
+[feed.train_label]
+field = "route_short_name"
+pattern = '^(?<number>.+)$'
+category_field = "agency_name"
+number_is_line = true
+
+[[feed]]
+mirror_name = "ie_transport-for-ireland"
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^(?<number>.+)$'
+category_field = "agency_name"
+number_is_line = true
