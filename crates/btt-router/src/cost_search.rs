@@ -20,7 +20,8 @@ use crate::index::SearchIndex;
 use crate::lower_bound::UNREACHABLE;
 use crate::search::{
     BoardedTrip, CandidateStation, MINUTES_PER_DAY, MinutesSinceBundleStart, RaptorJourney,
-    RaptorLegQuery, RaptorRide, RideOrigin, collect_departure_times, earliest_trip, raptor_ride,
+    RaptorLegQuery, RaptorRide, RideOrigin, WindowDeparture, collect_departures, earliest_trip,
+    raptor_ride,
 };
 
 /// Marks a route that is not queued for scanning in the current round.
@@ -177,6 +178,13 @@ enum CostLabelOrigin {
     },
 }
 
+impl CostLabelOrigin {
+    /// Returns whether the label is the walk from the departure place.
+    fn is_walk(&self) -> bool {
+        matches!(self, Self::DepartureCandidate { .. })
+    }
+}
+
 /// One way of being at a station, with what it cost so far.
 #[derive(Debug, Clone, Copy)]
 struct CostLabel {
@@ -285,6 +293,52 @@ impl ArrivalStaircase {
     }
 }
 
+/// A hasher for keys that are already well mixed integers, such as a trip number with a day.
+#[derive(Debug, Default)]
+struct TripKeyHasher(u64);
+
+impl std::hash::Hasher for TripKeyHasher {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        for &byte in bytes {
+            self.0 = (self.0 ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3);
+        }
+    }
+
+    fn write_u64(&mut self, value: u64) {
+        let mixed = (value ^ (value >> 32)).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+        self.0 = mixed ^ (mixed >> 29);
+    }
+}
+
+/// A way a trip was boarded earlier in the search. Another boarding of the same trip at the same
+/// stop or later, with no lower cost and no fewer rides, reaches nothing that this one did not.
+#[derive(Debug, Clone, Copy)]
+struct BoardedBefore {
+    /// Position of the boarding stop in the route's stop sequence.
+    position: u16,
+    /// Added cost before the ride.
+    cost: i32,
+    /// Whether the ride was the first of its journey, which has no change penalty.
+    is_first_ride: bool,
+    /// The round of the ride.
+    round: u8,
+}
+
+impl BoardedBefore {
+    /// Returns whether this boarding reaches everything that another one does, at no more cost
+    /// and no more rides.
+    fn covers(self, other: Self) -> bool {
+        self.position <= other.position
+            && self.cost <= other.cost
+            && (self.is_first_ride || !other.is_first_ride)
+            && self.round <= other.round
+    }
+}
+
 /// A train arrival that footpaths start from.
 #[derive(Debug, Clone, Copy)]
 struct RideArrival {
@@ -326,6 +380,14 @@ pub struct CostSearchBuffers {
     scan_start_by_route: Vec<u16>,
     /// Routes to scan in the current round.
     queued_routes: Vec<RaptorRouteIndex>,
+    /// Stations with labels from the previous round, which are the only ones that can board.
+    boardable_stations: FixedBitSet,
+    /// How each trip was boarded in earlier runs and rounds, by trip number and service day.
+    boarded_before: std::collections::HashMap<
+        u64,
+        SmallVec<[BoardedBefore; 2]>,
+        std::hash::BuildHasherDefault<TripKeyHasher>,
+    >,
     /// Trips the current route scan rides.
     route_labels: Vec<RouteLabel>,
     /// Train arrivals of the current round at stations with footpaths.
@@ -374,7 +436,10 @@ impl CostSearchBuffers {
         self.scan_start_by_route.clear();
         self.scan_start_by_route.resize(route_count, NOT_QUEUED);
         self.queued_routes.clear();
+        self.boardable_stations.clear();
+        self.boardable_stations.grow(station_count);
         self.route_labels.clear();
+        self.boarded_before.clear();
         self.ride_arrivals.clear();
         self.arrival_candidate_by_station
             .resize(station_count, u16::MAX);
@@ -443,7 +508,7 @@ pub fn search_leg_journeys_by_cost<M: JourneyCostModel>(
             *slot = candidate_index;
         }
     }
-    let departure_times = collect_departure_times(bundle, query);
+    let window_departures = collect_departures(bundle, query);
     let mut search = CostSearch {
         bundle,
         index,
@@ -455,14 +520,16 @@ pub fn search_leg_journeys_by_cost<M: JourneyCostModel>(
         run: 0,
     };
     let mut found = CostParetoJourneySet::default();
-    for departures in departure_times.chunk_by(|left, right| left.0 == right.0) {
+    for departures in window_departures.chunk_by(|left, right| left.time == right.time) {
         if should_stop() {
             break;
         }
-        search.departure = departures[0].0;
-        let departing_candidates: SmallVec<[u16; 4]> =
-            departures.iter().map(|&(_, candidate)| candidate).collect();
-        search.run_rounds(&departing_candidates);
+        search.departure = departures[0].time;
+        let departing_candidates: SmallVec<[u16; 4]> = departures
+            .iter()
+            .map(|departure| departure.candidate)
+            .collect();
+        search.run_rounds(&departing_candidates, departures);
         search.collect_journeys(&mut found.journeys);
         search.run += 1;
     }
@@ -560,14 +627,18 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
     /// stored. Returns the label's position when the bag took it.
     fn insert(&mut self, round: usize, label: CostLabel, existing: Option<u32>) -> Option<u32> {
         let slot = round * self.station_count + label.station.as_usize();
+        // A walk from the departure place at a station that is also an arrival station is not a
+        // journey to it, so it can't keep a ride from arriving there.
+        let is_ride_to_arrival_station =
+            !label.origin.is_walk() && self.arrival_candidate(label.station).is_some();
         let labels = &self.buffers.labels;
         let existing_bag = self.buffers.bag_by_slot[slot];
         if existing_bag != NONE {
             let entries = &mut self.buffers.bags[existing_bag as usize];
-            if entries
-                .iter()
-                .any(|&other| labels[other as usize].covers(&label))
-            {
+            if entries.iter().any(|&other| {
+                let other = &labels[other as usize];
+                other.covers(&label) && !(is_ride_to_arrival_station && other.origin.is_walk())
+            }) {
                 return None;
             }
             entries.retain(|other| !label.covers(&labels[*other as usize]));
@@ -586,7 +657,9 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
         if existing.is_none() && !self.buffers.created_marks.put(index) {
             self.buffers.stations_created.push(label.station);
         }
-        if round > 0
+        // A walk from the departure place that a later round copies is not a journey, even when
+        // the arrival place shares the station.
+        if !label.origin.is_walk()
             && let Some(candidate) = self.arrival_candidate(label.station)
         {
             let arrival = label.arrival + u32::from(candidate.time_to_place_minutes);
@@ -628,7 +701,7 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
 
     /// Runs all rounds for the current departure time. Labels from runs for later departure
     /// times stay, and a new label only enters a bag when no label there covers it.
-    fn run_rounds(&mut self, departing_candidates: &[u16]) {
+    fn run_rounds(&mut self, departing_candidates: &[u16], departures: &[WindowDeparture]) {
         self.buffers.stations_created_before.clear();
         self.buffers.stations_changed_before.clear();
         for &candidate_index in departing_candidates {
@@ -660,8 +733,23 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
         let rounds = usize::from(self.query.maximum_train_rides.get()) + 1;
         for round in 1..rounds {
             self.carry_labels_forward(round);
-            if !self.buffers.stations_created_before.is_empty() {
+            // The first ride boards a train that leaves when the traveller is at the station.
+            // A train that leaves later is reached by the run for its own departure time, which
+            // leaves later and so beats this one, so the first round scans only the routes of
+            // the trains that leave now.
+            let has_routes = if round == 1 {
+                self.queue_departing_routes(departures);
+                !self.buffers.queued_routes.is_empty()
+            } else if self.buffers.stations_created_before.is_empty() {
+                false
+            } else {
                 self.queue_routes();
+                true
+            };
+            if has_routes {
+                for &station in &self.buffers.stations_created_before {
+                    self.buffers.boardable_stations.insert(station.as_usize());
+                }
                 let queued = std::mem::take(&mut self.buffers.queued_routes);
                 for &raptor_route in &queued {
                     let start = self.buffers.scan_start_by_route[raptor_route.as_usize()];
@@ -670,6 +758,11 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                 }
                 self.buffers.queued_routes = queued;
                 self.buffers.queued_routes.clear();
+                for &station in &self.buffers.stations_created_before {
+                    self.buffers
+                        .boardable_stations
+                        .set(station.as_usize(), false);
+                }
                 self.relax_footpaths(round);
             }
             self.end_round();
@@ -698,20 +791,57 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
         self.buffers.stations_changed_before = changed;
     }
 
+    /// Returns whether a boarding repeats one from an earlier run or round, and remembers it
+    /// when it doesn't. Labels of the earlier boarding are in the bags already, so riding on
+    /// from the later one can only produce labels they cover.
+    fn repeats_boarding(
+        &mut self,
+        trip: BundleTripIndex,
+        route_label: &RouteLabel,
+        round: usize,
+    ) -> bool {
+        let boarding = BoardedBefore {
+            position: route_label.boarding_position,
+            cost: route_label.cost_before_ride,
+            is_first_ride: route_label.is_first_ride,
+            round: u8::try_from(round).unwrap_or(u8::MAX),
+        };
+        let key = (u64::from(trip.0) << 16) | u64::from(route_label.service_day);
+        let known = self.buffers.boarded_before.entry(key).or_default();
+        if known.iter().any(|earlier| earlier.covers(boarding)) {
+            return true;
+        }
+        known.retain(|earlier| !boarding.covers(*earlier));
+        known.push(boarding);
+        false
+    }
+
+    /// Queues the routes of the trains that leave now, from the stop where each is boarded.
+    fn queue_departing_routes(&mut self, departures: &[WindowDeparture]) {
+        for departure in departures {
+            self.queue_route_stop(departure.route, departure.position);
+        }
+    }
+
     /// Queues every route that stops at a station with labels created in the previous round,
     /// from the earliest such stop.
     fn queue_routes(&mut self) {
-        for &station in &self.buffers.stations_created_before {
+        for index in 0..self.buffers.stations_created_before.len() {
+            let station = self.buffers.stations_created_before[index];
             for route_stop in self.bundle.route_stops_at(station) {
-                let slot =
-                    &mut self.buffers.scan_start_by_route[route_stop.raptor_route.as_usize()];
-                if *slot == NOT_QUEUED {
-                    self.buffers.queued_routes.push(route_stop.raptor_route);
-                    *slot = route_stop.stop_position;
-                } else {
-                    *slot = (*slot).min(route_stop.stop_position);
-                }
+                self.queue_route_stop(route_stop.raptor_route, route_stop.stop_position);
             }
+        }
+    }
+
+    /// Queues a route to be scanned from a stop position, or from an earlier one it has.
+    fn queue_route_stop(&mut self, raptor_route: RaptorRouteIndex, position: u16) {
+        let slot = &mut self.buffers.scan_start_by_route[raptor_route.as_usize()];
+        if *slot == NOT_QUEUED {
+            self.buffers.queued_routes.push(raptor_route);
+            *slot = position;
+        } else {
+            *slot = (*slot).min(position);
         }
     }
 
@@ -776,17 +906,19 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                     self.insert(round, label, None);
                 }
             }
-            if !pattern_stop.boarding_allowed() {
-                continue;
+            // Only stations with labels from the previous round can board.
+            if pattern_stop.boarding_allowed()
+                && self.buffers.boardable_stations.contains(station.as_usize())
+            {
+                self.board_route(
+                    round,
+                    raptor_route,
+                    &route,
+                    position,
+                    &mut route_labels,
+                    ride_cost_depends_on_time,
+                );
             }
-            self.board_route(
-                round,
-                raptor_route,
-                &route,
-                position,
-                &mut route_labels,
-                ride_cost_depends_on_time,
-            );
         }
         self.buffers.route_labels = route_labels;
     }
@@ -795,7 +927,7 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
     /// trip it can reach there, and adds the rides to the route's labels unless one there
     /// covers them.
     fn board_route(
-        &self,
+        &mut self,
         round: usize,
         raptor_route: RaptorRouteIndex,
         route: &RaptorRoute,
@@ -846,6 +978,10 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                 cost_before_ride: label.cost,
                 is_first_ride: matches!(label.origin, CostLabelOrigin::DepartureCandidate { .. }),
             };
+            let trip_index = BundleTripIndex(route.first_trip_index + trip.trip_offset);
+            if self.repeats_boarding(trip_index, &route_label, round) {
+                continue;
+            }
             if route_labels
                 .iter()
                 .any(|other| other.covers(&route_label, ride_cost_depends_on_time))

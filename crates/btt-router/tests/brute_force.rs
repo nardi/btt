@@ -502,6 +502,44 @@ proptest! {
     }
 
     #[test]
+    fn cost_search_over_split_windows_gives_the_same_journeys(
+        trips in proptest::collection::vec(random_trip(), 1..10),
+        footpaths in proptest::collection::vec(random_footpath(), 0..4),
+        start in 0..300u32,
+        split in 0..600u32,
+        first_access in 0..30u16,
+        second_access in 0..30u16,
+        window_start in 0..500u32,
+    ) {
+        let origins = [(0, first_access), (1, second_access)];
+        let model = WindowCostModel { window_start, window_end: window_start + 60 };
+        let target = STATION_COUNT - 1;
+        let middle = start + split;
+        let whole = cost_router(&trips, &footpaths, &origins, target, (start, 1440), &model);
+        let mut parts = cost_router(&trips, &footpaths, &origins, target, (start, middle), &model);
+        parts.extend(cost_router(&trips, &footpaths, &origins, target, (middle, 1440), &model));
+        prop_assert_eq!(pareto_front(parts), whole);
+    }
+
+    #[test]
+    fn cost_search_matches_brute_force_when_both_places_use_a_station(
+        trips in proptest::collection::vec(random_trip(), 1..10),
+        footpaths in proptest::collection::vec(random_footpath(), 0..4),
+        start in 0..300u32,
+        first_access in 0..30u16,
+        second_access in 0..30u16,
+        window_start in 0..500u32,
+        target in 0..2u32,
+    ) {
+        let origins = [(0, first_access), (1, second_access)];
+        let model = WindowCostModel { window_start, window_end: window_start + 60 };
+        let expected =
+            brute_force_costs(&trips, &footpaths, &origins, target, (start, 1440), &model);
+        let actual = cost_router(&trips, &footpaths, &origins, target, (start, 1440), &model);
+        prop_assert_eq!(actual, expected);
+    }
+
+    #[test]
     fn router_matches_connection_scan(
         trips in proptest::collection::vec(random_trip(), 1..12),
         footpaths in proptest::collection::vec(random_footpath(), 0..4),

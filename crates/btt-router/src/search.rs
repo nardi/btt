@@ -289,6 +289,13 @@ struct Search<'a, F: RideFilter> {
 /// Searches journeys for one leg and returns the Pareto set over departure, arrival and number
 /// of trains.
 ///
+/// The search has two known limits. A station that a ride and a walk reach at the same moment
+/// keeps the ride's label, which needs the minimum transfer time, so a connection that only the
+/// walk allows can be missed. And a journey it returns for a window with several departure times
+/// follows the labels as they are at the end of the search, and can show a change without the
+/// minimum transfer time. `search_leg_journeys_by_cost` keeps the time to be ready in each label
+/// and a parent for each, and has neither limit. The planner uses that one.
+///
 /// `index` must be built from the same bundle. `should_stop` is checked between
 /// departure times, and the search returns what it has when it returns `true`.
 pub fn search_leg_journeys<F: RideFilter>(
@@ -828,7 +835,34 @@ pub(crate) fn collect_departure_times(
     bundle: &LoadedTimetableBundle,
     query: &RaptorLegQuery<'_>,
 ) -> Vec<(u32, u16)> {
-    let mut departure_times = Vec::new();
+    let mut departure_times: Vec<(u32, u16)> = collect_departures(bundle, query)
+        .into_iter()
+        .map(|departure| (departure.time, departure.candidate))
+        .collect();
+    departure_times.dedup();
+    departure_times
+}
+
+/// A train that leaves a candidate station within the departure window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct WindowDeparture {
+    /// Time the traveller leaves the place for the train.
+    pub(crate) time: u32,
+    /// Position in `RaptorLegQuery::departure_candidates` of the station the train leaves from.
+    pub(crate) candidate: u16,
+    /// The train's route.
+    pub(crate) route: RaptorRouteIndex,
+    /// Position of the candidate station in the route's stop sequence.
+    pub(crate) position: u16,
+}
+
+/// Returns every train that leaves a departure candidate within the window, from the latest
+/// departure to the earliest, with its route and the position of the stop where it is boarded.
+pub(crate) fn collect_departures(
+    bundle: &LoadedTimetableBundle,
+    query: &RaptorLegQuery<'_>,
+) -> Vec<WindowDeparture> {
+    let mut departures = Vec::new();
     let window_start = query.departure_window.start.0;
     let window_end = query.departure_window.end.0;
     let last_day = u32::from(bundle.validity_days()).saturating_sub(1);
@@ -859,16 +893,21 @@ pub(crate) fn collect_departure_times(
                     }
                     let trip = BundleTripIndex(route.first_trip_index + offset);
                     if bundle.trip_service_days(trip).runs_on(service_day) {
-                        departure_times.push((departure - access, candidate_index));
+                        departures.push(WindowDeparture {
+                            time: departure - access,
+                            candidate: candidate_index,
+                            route: route_stop.raptor_route,
+                            position,
+                        });
                     }
                     offset += 1;
                 }
             }
         }
     }
-    departure_times.sort_unstable_by(|left, right| right.cmp(left));
-    departure_times.dedup();
-    departure_times
+    departures.sort_unstable_by(|left, right| right.cmp(left));
+    departures.dedup();
+    departures
 }
 
 /// Returns the first trip offset for which `is_before` is false. Trips of a route are sorted by
