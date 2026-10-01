@@ -135,15 +135,40 @@ impl JourneyCostModel for LegCostModel<'_> {
         departure: MinutesSinceBundleStart,
         moment: MinutesSinceBundleStart,
         earliest_arrival: MinutesSinceBundleStart,
+        credit_minutes_cap: Option<u32>,
     ) -> i32 {
         let elapsed = self.elapsed_cost(departure, earliest_arrival);
         let Some(night) = &self.night else {
             return elapsed;
         };
-        let sleep_before = self.night_minutes_within(moment.0..earliest_arrival.0);
-        let sleep_after = self.night_minutes_within(moment.0.max(earliest_arrival.0)..night.end);
+        // The sleep can't exceed the credit that rides from this station can still give.
+        let cap = credit_minutes_cap.map_or(i32::MAX, signed);
+        let sleep_before = self
+            .night_minutes_within(moment.0..earliest_arrival.0)
+            .min(cap);
+        let sleep_after = self
+            .night_minutes_within(moment.0.max(earliest_arrival.0)..night.end)
+            .min(cap - sleep_before);
         let later_arrival_saving = signed(self.weights.arrival_before_window_percent.min(100));
         elapsed - sleep_before * self.sleep_per_minute() - sleep_after * later_arrival_saving
+    }
+
+    fn credit_window(&self) -> Option<Range<u32>> {
+        self.night.clone()
+    }
+
+    fn ride_credit_minutes(
+        &self,
+        _: RaptorRouteIndex,
+        trip: BundleTripIndex,
+        departure: MinutesSinceBundleStart,
+        trip_end: MinutesSinceBundleStart,
+    ) -> u32 {
+        if self.bundle.trip_offers_berths(trip) {
+            u32::try_from(self.night_minutes_within(departure.0..trip_end.0)).unwrap_or(0)
+        } else {
+            0
+        }
     }
 
     /// A ride costs a change penalty, which doesn't depend on time, and takes off the night
@@ -156,6 +181,7 @@ impl JourneyCostModel for LegCostModel<'_> {
                 .get(raptor_route.as_usize())
                 .is_none_or(|&has_berths| has_berths)
     }
+
     /// The extra minute covers the rounding in which this cost and the ranking's differ.
     fn cost_limit(&self, best_cost: i32) -> i32 {
         best_cost
@@ -278,8 +304,12 @@ mod tests {
         let ranking_cost = journey_cost(inputs, aversion, weights);
         assert_eq!(steps.iter().sum::<i32>(), signed(ranking_cost) * HUNDREDTHS);
         // The bound from the start never exceeds the journey's cost.
-        let bound = model.remaining_cost_lower_bound(minutes(1000), minutes(1010), minutes(1600))
-            + steps[0];
+        let bound = model.remaining_cost_lower_bound(
+            minutes(1000),
+            minutes(1010),
+            minutes(1600),
+            Some(450),
+        ) + steps[0];
         assert!(bound <= steps.iter().sum::<i32>());
     }
 }

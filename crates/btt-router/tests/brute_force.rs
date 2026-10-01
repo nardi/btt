@@ -305,6 +305,7 @@ impl JourneyCostModel for WindowCostModel {
         departure: MinutesSinceBundleStart,
         _: MinutesSinceBundleStart,
         earliest_arrival: MinutesSinceBundleStart,
+        _: Option<u32>,
     ) -> i32 {
         self.elapsed_cost(departure, earliest_arrival)
     }

@@ -30,6 +30,9 @@ const NOT_QUEUED: u16 = u16::MAX;
 /// Marks a station and round without a bag, or a label without a parent.
 const NONE: u32 = u32::MAX;
 
+/// Marks a station from which no ride that lowers the cost can be reached.
+const NO_CREDIT: i32 = i32::MIN;
+
 /// Costs that a search adds up along a journey, in a unit the model chooses.
 ///
 /// The search relies on three properties. `elapsed_cost` never falls when the arrival moves
@@ -67,12 +70,15 @@ pub trait JourneyCostModel {
 
     /// Returns a lower bound on the elapsed cost plus every added cost still to come, for a
     /// traveller who left at `departure`, is at a station at `moment` and can't reach the
-    /// arrival place before `earliest_arrival`.
+    /// arrival place before `earliest_arrival`. `credit_minutes_cap` is the most credit minutes
+    /// that rides from this station at `moment` can still give, and is only given when
+    /// `credit_window` is.
     fn remaining_cost_lower_bound(
         &self,
         departure: MinutesSinceBundleStart,
         moment: MinutesSinceBundleStart,
         earliest_arrival: MinutesSinceBundleStart,
+        credit_minutes_cap: Option<u32>,
     ) -> i32;
 
     /// Returns the highest cost worth searching for once a journey that costs `best_cost` is
@@ -89,6 +95,28 @@ pub trait JourneyCostModel {
     fn ride_cost_depends_on_time(&self, raptor_route: RaptorRouteIndex) -> bool {
         let _ = raptor_route;
         true
+    }
+
+    /// Returns the moments during which a ride can lower the cost, such as the night, or `None`
+    /// when no ride can. With a window, the search finds how much credit rides that leave
+    /// before the window ends can still give a traveller at each station, and passes that to
+    /// `remaining_cost_lower_bound`. The default has no window.
+    fn credit_window(&self) -> Option<std::ops::Range<u32>> {
+        None
+    }
+
+    /// Returns the most minutes of credit that a trip gives a traveller who boards at
+    /// `departure` and rides to its last stop, which it reaches at `trip_end`. Only trips of
+    /// routes whose `ride_cost_depends_on_time` is `true` are asked. The default gives none.
+    fn ride_credit_minutes(
+        &self,
+        raptor_route: RaptorRouteIndex,
+        trip: BundleTripIndex,
+        departure: MinutesSinceBundleStart,
+        trip_end: MinutesSinceBundleStart,
+    ) -> u32 {
+        let _ = (raptor_route, trip, departure, trip_end);
+        0
     }
 }
 
@@ -401,6 +429,8 @@ pub struct CostSearchBuffers {
     lower_bound_by_station: Vec<u32>,
     /// Priority queue of the lower bound search.
     lower_bound_queue: BinaryHeap<Reverse<(u32, u32)>>,
+    /// For each tier of cost-lowering rides, from where it can still be reached.
+    credit_reach: CreditReach,
 }
 
 impl CostSearchBuffers {
@@ -468,6 +498,147 @@ struct CostSearch<'a, M: JourneyCostModel> {
     run: u32,
 }
 
+/// Number of tiers of cost-lowering rides, by how many minutes of credit they give.
+const CREDIT_TIERS: usize = 4;
+
+/// For each tier of ride, the latest moment at every station from which a ride of the tier can
+/// still be reached, and the credit minutes the tiers start at.
+#[derive(Debug, Default)]
+struct CreditReach {
+    /// Whether the model has a credit window, which makes the rest valid.
+    enabled: bool,
+    /// Minutes of credit a ride needs to belong to tier `k`, and the most credit any ride gives.
+    thresholds: [u32; CREDIT_TIERS],
+    /// The most credit minutes any ride gives.
+    maximum_credit: u32,
+    /// The latest moment at each station per tier, or `NO_CREDIT`.
+    latest_by_tier: [Vec<i32>; CREDIT_TIERS],
+    /// Priority queue of the search, latest moment first.
+    queue: BinaryHeap<(i32, u32)>,
+}
+
+impl CreditReach {
+    /// Returns an upper bound on the credit minutes that a traveller at a station at a moment
+    /// can still earn. A tier that can't be reached means the credit stays below its threshold.
+    fn credit_cap(&self, station: BundleStationIndex, moment: u32) -> Option<u32> {
+        if !self.enabled {
+            return None;
+        }
+        let moment = i32::try_from(moment).unwrap_or(i32::MAX);
+        let mut cap = 0;
+        for tier in (0..CREDIT_TIERS).rev() {
+            if self.latest_by_tier[tier][station.as_usize()] >= moment {
+                cap = match self.thresholds.get(tier + 1) {
+                    Some(&next) => next.saturating_sub(1),
+                    None => self.maximum_credit,
+                };
+                break;
+            }
+        }
+        Some(cap)
+    }
+
+    /// Finds the latest moments for a model. A ride counts when it departs before the window
+    /// ends and gives credit. Travel between stations takes at least the fastest time of the
+    /// lower bound graph, which makes each moment an upper bound.
+    fn compute<M: JourneyCostModel>(
+        &mut self,
+        bundle: &LoadedTimetableBundle,
+        index: &SearchIndex,
+        model: &M,
+    ) {
+        let Some(window) = model.credit_window() else {
+            self.enabled = false;
+            return;
+        };
+        self.enabled = true;
+        let mut boardings: Vec<(u32, i32, u32)> = Vec::new();
+        let last_day = (window.end / MINUTES_PER_DAY).min(u32::from(bundle.validity_days()));
+        for route_index in 0..bundle.route_count() {
+            let raptor_route = RaptorRouteIndex(u32::try_from(route_index).unwrap_or(u32::MAX));
+            if !model.ride_cost_depends_on_time(raptor_route) {
+                continue;
+            }
+            let route = bundle.route(raptor_route);
+            let first_day = (window.start / MINUTES_PER_DAY)
+                .saturating_sub(u32::from(route.longest_trip_days) + 1);
+            for trip_offset in 0..route.trip_count {
+                let trip = BundleTripIndex(route.first_trip_index + trip_offset);
+                let service_days = bundle.trip_service_days(trip);
+                let end_stop = bundle.stop_event(&route, trip_offset, route.stop_count - 1);
+                for day in first_day..=last_day {
+                    if !service_days.runs_on(u16::try_from(day).unwrap_or(u16::MAX)) {
+                        continue;
+                    }
+                    let day_start = day * MINUTES_PER_DAY;
+                    let trip_end = day_start + u32::from(end_stop.arrival.0);
+                    for position in 0..route.stop_count {
+                        let pattern_stop = bundle.pattern_stop(&route, position);
+                        if !pattern_stop.boarding_allowed() {
+                            continue;
+                        }
+                        let departure = day_start
+                            + u32::from(
+                                bundle.stop_event(&route, trip_offset, position).departure.0,
+                            );
+                        let credit = model.ride_credit_minutes(
+                            raptor_route,
+                            trip,
+                            MinutesSinceBundleStart(departure),
+                            MinutesSinceBundleStart(trip_end),
+                        );
+                        if credit > 0 && departure < window.end {
+                            boardings.push((
+                                pattern_stop.station().0,
+                                i32::try_from(departure).unwrap_or(i32::MAX),
+                                credit,
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        self.maximum_credit = boardings
+            .iter()
+            .map(|&(_, _, credit)| credit)
+            .max()
+            .unwrap_or(0);
+        let top = self.maximum_credit.max(1);
+        self.thresholds = [1, (top / 4).max(2), (top / 2).max(3), (top * 3 / 4).max(4)];
+        for tier in 0..CREDIT_TIERS {
+            let latest = &mut self.latest_by_tier[tier];
+            latest.clear();
+            latest.resize(bundle.station_count(), NO_CREDIT);
+            for &(station, departure, credit) in &boardings {
+                if credit >= self.thresholds[tier] {
+                    let slot = &mut latest[station as usize];
+                    *slot = (*slot).max(departure);
+                }
+            }
+            self.queue.clear();
+            for (station, &moment) in latest.iter().enumerate() {
+                if moment != NO_CREDIT {
+                    self.queue
+                        .push((moment, u32::try_from(station).unwrap_or(u32::MAX)));
+                }
+            }
+            while let Some((moment, station)) = self.queue.pop() {
+                if moment < latest[station as usize] {
+                    continue;
+                }
+                for &(from, minutes) in index.lower_bounds.incoming(station as usize) {
+                    let earlier = moment - i32::from(minutes);
+                    let slot = &mut latest[from.as_usize()];
+                    if earlier > *slot {
+                        *slot = earlier;
+                        self.queue.push((earlier, from.0));
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Searches journeys for one leg and returns the Pareto set over departure, arrival, number of
 /// trains and cost under `model`.
 ///
@@ -489,6 +660,7 @@ pub fn search_leg_journeys_by_cost<M: JourneyCostModel>(
         &mut buffers.lower_bound_by_station,
         &mut buffers.lower_bound_queue,
     );
+    buffers.credit_reach.compute(bundle, index, model);
     for (candidate_index, candidate) in (0_u16..).zip(query.arrival_candidates) {
         let Some(slot) = buffers
             .arrival_candidate_by_station
@@ -592,6 +764,7 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                 MinutesSinceBundleStart(self.departure),
                 MinutesSinceBundleStart(label.arrival),
                 MinutesSinceBundleStart(earliest_arrival),
+                self.buffers.credit_reach.credit_cap(station, label.arrival),
             )
             .saturating_add(label.cost);
         if cost_bound > self.buffers.cost_limit {

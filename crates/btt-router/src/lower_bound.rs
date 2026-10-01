@@ -86,7 +86,7 @@ impl LowerBoundGraph {
     }
 
     /// Returns the edges into a station.
-    fn incoming(&self, station: usize) -> &[(BundleStationIndex, u16)] {
+    pub(crate) fn incoming(&self, station: usize) -> &[(BundleStationIndex, u16)] {
         let start = self.row_offsets[station] as usize;
         let end = self.row_offsets[station + 1] as usize;
         &self.incoming_edges[start..end]

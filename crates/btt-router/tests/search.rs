@@ -413,10 +413,34 @@ impl JourneyCostModel for NightCostModel<'_> {
         departure: MinutesSinceBundleStart,
         moment: MinutesSinceBundleStart,
         earliest_arrival: MinutesSinceBundleStart,
+        credit_minutes_cap: Option<u32>,
     ) -> i32 {
+        let elapsed = self.elapsed_cost(departure, earliest_arrival);
+        let cap = i32::try_from(credit_minutes_cap.unwrap_or(u32::MAX)).unwrap_or(i32::MAX);
         let sleep_still_possible =
             Self::night_minutes_until(NIGHT.end) - Self::night_minutes_until(moment.0);
-        self.elapsed_cost(departure, earliest_arrival) - 4 * sleep_still_possible
+        elapsed - 4 * sleep_still_possible.min(cap)
+    }
+
+    fn credit_window(&self) -> Option<std::ops::Range<u32>> {
+        Some(NIGHT)
+    }
+
+    fn ride_credit_minutes(
+        &self,
+        _: RaptorRouteIndex,
+        trip: BundleTripIndex,
+        departure: MinutesSinceBundleStart,
+        trip_end: MinutesSinceBundleStart,
+    ) -> u32 {
+        if self.bundle.trip_train_label(trip).1 == "night" {
+            u32::try_from(
+                Self::night_minutes_until(trip_end.0) - Self::night_minutes_until(departure.0),
+            )
+            .unwrap()
+        } else {
+            0
+        }
     }
 }
 
