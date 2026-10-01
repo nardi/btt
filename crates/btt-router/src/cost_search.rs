@@ -916,7 +916,7 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
             } else if self.buffers.stations_created_before.is_empty() {
                 false
             } else {
-                self.queue_routes();
+                self.queue_routes(round);
                 true
             };
             if has_routes {
@@ -997,12 +997,37 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
     }
 
     /// Queues every route that stops at a station with labels created in the previous round,
-    /// from the earliest such stop.
-    fn queue_routes(&mut self) {
+    /// from the earliest such stop. A route is left out when it runs on none of the days on
+    /// which a train could be boarded, because the scan would find no trip.
+    fn queue_routes(&mut self, round: usize) {
+        let previous_round = u8::try_from(round - 1).unwrap_or(u8::MAX);
         for index in 0..self.buffers.stations_created_before.len() {
             let station = self.buffers.stations_created_before[index];
+            let mut ready_range: Option<(u32, u32)> = None;
+            for &position in self.bag(round - 1, station) {
+                let label = &self.buffers.labels[position as usize];
+                if label.run == self.run && label.round == previous_round {
+                    ready_range = Some(
+                        ready_range.map_or((label.ready, label.ready), |(low, high)| {
+                            (low.min(label.ready), high.max(label.ready))
+                        }),
+                    );
+                }
+            }
+            let Some((earliest_ready, latest_ready)) = ready_range else {
+                continue;
+            };
+            let last_day = u16::try_from(latest_ready / MINUTES_PER_DAY + 1).unwrap_or(u16::MAX);
             for route_stop in self.bundle.route_stops_at(station) {
-                self.queue_route_stop(route_stop.raptor_route, route_stop.stop_position);
+                let route_days =
+                    self.index.service_days_by_route[route_stop.raptor_route.as_usize()];
+                let first_day = u16::try_from((earliest_ready / MINUTES_PER_DAY).saturating_sub(
+                    u32::from(self.bundle.route(route_stop.raptor_route).longest_trip_days),
+                ))
+                .unwrap_or(u16::MAX);
+                if (first_day..=last_day).any(|day| route_days.runs_on(day)) {
+                    self.queue_route_stop(route_stop.raptor_route, route_stop.stop_position);
+                }
             }
         }
     }
