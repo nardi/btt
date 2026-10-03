@@ -76,11 +76,11 @@ impl Passengers {
 
 /// Builds the address of a search on the Italo booking site.
 ///
-/// The parameters are `osc` and `dsc` for the station codes, `jt` for `return` or `oneway`, `od`
+/// The parameters are `osc` and `dsc` for the station codes, `jt` for `return` or `single`, `od`
 /// and `id` for the outbound and the return date as `dd/mm/yyyy`, and the number of travellers in
 /// `adt`, `yng`, `chd`, `snr` and `inf`. A search with `startSearch=true` runs when the page opens.
-/// The form of a return search comes from an address of the site. The one-way form is the same
-/// without the return date, which has not been checked on the site.
+/// A one-way search has `jt=single` and an empty `id`. Both forms come from addresses of the
+/// site.
 pub fn italo_search_url(
     origin_code: &str,
     destination_code: &str,
@@ -88,15 +88,15 @@ pub fn italo_search_url(
     return_date: Option<NaiveDate>,
     passengers: Passengers,
 ) -> String {
-    let date = |date: NaiveDate| date.format("%d%%2F%m%%2F%Y").to_string();
+    let date = |date: NaiveDate| date.format("%d/%m/%Y").to_string();
     let journey_type = if return_date.is_some() {
         "return"
     } else {
-        "oneway"
+        "single"
     };
-    let return_part = return_date.map_or_else(String::new, |day| format!("&id={}", date(day)));
+    let return_date = return_date.map_or_else(String::new, date);
     format!(
-        "https://biglietti.italotreno.com/en/booking/ricerca-treni?osc={origin_code}&dsc={destination_code}&jt={journey_type}&od={}{return_part}&adt={}&yng={}&chd={}&snr={}&inf={}&pet=0&promo=&lang=en&startSearch=true",
+        "https://biglietti.italotreno.com/en/booking/ricerca-treni?osc={origin_code}&dsc={destination_code}&jt={journey_type}&od={}&id={return_date}&adt={}&yng={}&chd={}&snr={}&inf={}&pet=0&promo=&lang=en&startSearch=true",
         date(outbound),
         passengers.adults,
         passengers.youth,
@@ -192,12 +192,12 @@ mod tests {
         };
         assert_eq!(
             italo_search_url("RG_", "RMT", date(16), Some(date(17)), passengers),
-            "https://biglietti.italotreno.com/en/booking/ricerca-treni?osc=RG_&dsc=RMT&jt=return&od=16%2F10%2F2026&id=17%2F10%2F2026&adt=1&yng=1&chd=1&snr=1&inf=0&pet=0&promo=&lang=en&startSearch=true"
+            "https://biglietti.italotreno.com/en/booking/ricerca-treni?osc=RG_&dsc=RMT&jt=return&od=16/10/2026&id=17/10/2026&adt=1&yng=1&chd=1&snr=1&inf=0&pet=0&promo=&lang=en&startSearch=true"
         );
     }
 
     #[test]
-    fn a_one_way_search_has_no_return_date() {
+    fn a_one_way_search_has_an_empty_return_date() {
         let url = italo_search_url(
             "MC_",
             "NAC",
@@ -205,8 +205,7 @@ mod tests {
             None,
             Passengers::one(AgeGroup::Senior),
         );
-        assert!(url.contains("jt=oneway&od=05%2F03%2F2026&adt=0&yng=0&chd=0&snr=1&inf=0"));
-        assert!(!url.contains("&id="));
+        assert!(url.contains("jt=single&od=05/03/2026&id=&adt=0&yng=0&chd=0&snr=1&inf=0"));
     }
 
     #[test]

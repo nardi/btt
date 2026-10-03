@@ -406,8 +406,5 @@ fn an_italo_ticket_links_to_the_italo_site_with_station_codes() {
     let plan = plan(vec![italo], None);
     let link = plan.strategies[0].items[0].booking_link.as_ref().unwrap();
     assert!(link.url.starts_with("https://biglietti.italotreno.com/"));
-    assert!(
-        link.url
-            .contains("osc=RG_&dsc=RMT&jt=oneway&od=01%2F07%2F2026")
-    );
+    assert!(link.url.contains("osc=RG_&dsc=RMT&jt=single&od=01/07/2026"));
 }
