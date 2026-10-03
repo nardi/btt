@@ -1,0 +1,29 @@
+# Interrail pass rules that the ticket optimizer applies.
+#
+# Source: the Interrail conditions of use and the help pages at interrail.eu, checked in 2026.
+
+# A travel day on a flexi pass runs from midnight to midnight in local time.
+[travel_day]
+starts = "00:00"
+ends = "23:59"
+
+# A night train counts for the travel day of its departure. A change after midnight onto another
+# train can use the second day, and the arrival must fall within the validity of the pass.
+[night_train]
+day_used = "departure"
+change_after_midnight_uses_second_day = true
+arrival_must_be_within_validity = true
+
+# Every pass allows one outbound and one inbound journey in the country of residence.
+[residence]
+outbound_journeys = 1
+inbound_journeys = 1
+
+# Interrail sells seat reservations for a fee for each passenger and train.
+[booking_service]
+fee_per_passenger_per_train = 2.0
+currency = "EUR"
+
+[classes]
+first = "A first class pass is valid in first and second class."
+second = "A second class pass is valid in second class only."

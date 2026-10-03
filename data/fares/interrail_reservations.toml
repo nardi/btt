@@ -1,0 +1,313 @@
+# Seat reservation rules for passholders, by country, operator and train category.
+#
+# Fees are in euro for one passenger and one train. Each fee is a range of the lowest and highest
+# price seen. Sources are the domestic, international and night train reservation pages at
+# interrail.eu, checked in 2026. A rule with the scope "international" covers a route between
+# countries, and a rule with the scope "night" covers sleeping accommodation.
+#
+# A rule with `unverified = true` has a fee that is a rough value and has to be checked against the
+# Interrail page before the planner shows it as more than an estimate.
+#
+# Modes:
+#   mandatory   - a passholder can't board without a reservation.
+#   recommended - a reservation is possible and advised.
+#   optional    - a reservation is possible and not needed.
+#   free        - no reservation exists, and the pass is enough.
+#   supplement  - a fee that is not a reservation, which a passholder pays on top.
+#   varies      - depends on the train, so the fee is the range.
+
+[[rule]]
+id = "at-domestic"
+unverified = true
+scope = "domestic"
+country = "AT"
+operator = "ÖBB"
+mode = "optional"
+fee = { second = [3.0, 3.0], first = [3.0, 3.0] }
+notes = "Reservations are optional on most trains."
+
+[[rule]]
+id = "be-diabolo"
+scope = "domestic"
+country = "BE"
+operator = "SNCB"
+categories = ["Diabolo"]
+mode = "supplement"
+fee = { second = [6.4, 6.4], first = [6.4, 6.4] }
+notes = "Supplement for the Diabolo connection to Brussels Airport."
+
+[[rule]]
+id = "hr-domestic"
+unverified = true
+scope = "domestic"
+country = "HR"
+operator = "HŽPP"
+mode = "mandatory"
+fee = { second = [1.0, 3.0], first = [1.0, 3.0] }
+notes = "Reservation required on intercity trains."
+
+[[rule]]
+id = "cz-domestic"
+unverified = true
+scope = "domestic"
+country = "CZ"
+operator = "ČD"
+categories = ["EC", "IC", "SC", "Ex"]
+mode = "optional"
+fee = { second = [1.5, 3.0], first = [1.5, 3.0] }
+notes = "Reservations optional on most trains."
+
+[[rule]]
+id = "dk-domestic"
+unverified = true
+scope = "domestic"
+country = "DK"
+operator = "DSB"
+categories = ["IC", "ICL"]
+mode = "optional"
+fee = { second = [3.0, 8.0], first = [3.0, 8.0] }
+
+[[rule]]
+id = "fr-ter"
+scope = "domestic"
+country = "FR"
+operator = "SNCF"
+categories = ["TER"]
+mode = "free"
+fee = { second = [0.0, 0.0], first = [0.0, 0.0] }
+notes = "No reservation is needed on regional trains."
+
+[[rule]]
+id = "fr-intercites"
+scope = "domestic"
+country = "FR"
+operator = "SNCF"
+categories = ["Intercités"]
+mode = "mandatory"
+fee = { second = [10.0, 20.0], first = [10.0, 20.0] }
+
+[[rule]]
+id = "fr-tgv-inoui"
+scope = "domestic"
+country = "FR"
+operator = "SNCF"
+categories = ["TGV INOUI"]
+mode = "mandatory"
+fee = { second = [10.0, 20.0], first = [10.0, 20.0] }
+
+[[rule]]
+id = "fr-ouigo"
+scope = "domestic"
+country = "FR"
+operator = "SNCF"
+categories = ["OUIGO"]
+mode = "mandatory"
+fee = { second = [10.0, 20.0], first = [10.0, 20.0] }
+notes = "A passholder reservation on OUIGO Train Classique costs 5 to 10 euro."
+
+[[rule]]
+id = "de-domestic"
+scope = "domestic"
+country = "DE"
+operator = "DB"
+mode = "optional"
+fee = { second = [5.5, 5.5], first = [6.9, 6.9] }
+notes = "Optional on ICE and IC, and not available on regional trains."
+
+[[rule]]
+id = "it-frecce"
+scope = "domestic"
+country = "IT"
+operator = "Trenitalia"
+categories = ["FR", "FA"]
+mode = "mandatory"
+fee = { second = [13.0, 13.0], first = [13.0, 13.0] }
+
+[[rule]]
+id = "it-frecciabianca"
+scope = "domestic"
+country = "IT"
+operator = "Trenitalia"
+categories = ["FB"]
+mode = "mandatory"
+fee = { second = [10.0, 10.0], first = [10.0, 10.0] }
+
+[[rule]]
+id = "it-intercity"
+scope = "domestic"
+country = "IT"
+operator = "Trenitalia"
+categories = ["IC"]
+mode = "mandatory"
+fee = { second = [3.0, 3.0], first = [3.0, 3.0] }
+
+[[rule]]
+id = "nl-intercity-direct"
+scope = "domestic"
+country = "NL"
+operator = "NS"
+categories = ["ICD"]
+mode = "supplement"
+fee = { second = [3.0, 3.0], first = [3.0, 3.0] }
+notes = "Supplement on the high speed line between Amsterdam and Rotterdam or Breda."
+
+[[rule]]
+id = "pt-domestic"
+scope = "domestic"
+country = "PT"
+operator = "CP"
+categories = ["AP", "IC", "IN"]
+mode = "mandatory"
+fee = { second = [5.0, 5.0], first = [5.0, 5.0] }
+
+[[rule]]
+id = "si-domestic"
+scope = "domestic"
+country = "SI"
+operator = "SŽ"
+categories = ["ICS", "IC"]
+mode = "mandatory"
+fee = { second = [2.0, 2.0], first = [4.0, 4.0] }
+
+[[rule]]
+id = "es-ave"
+scope = "domestic"
+country = "ES"
+operator = "Renfe"
+categories = ["AVE"]
+mode = "mandatory"
+fee = { second = [10.0, 23.5], first = [13.0, 23.5] }
+
+[[rule]]
+id = "es-longdistance"
+scope = "domestic"
+country = "ES"
+operator = "Renfe"
+categories = ["Euromed", "Alvia", "Intercity"]
+mode = "mandatory"
+fee = { second = [6.5, 6.5], first = [10.0, 10.0] }
+
+[[rule]]
+id = "es-iryo"
+scope = "domestic"
+country = "ES"
+operator = "iryo"
+mode = "mandatory"
+fee = { second = [10.0, 10.0], first = [13.0, 13.0] }
+
+[[rule]]
+id = "es-avant"
+scope = "domestic"
+country = "ES"
+operator = "Renfe"
+categories = ["Avant", "MD"]
+mode = "mandatory"
+fee = { second = [4.0, 4.0], first = [4.0, 4.0] }
+
+[[rule]]
+id = "ch-intercity"
+scope = "domestic"
+country = "CH"
+operator = "SBB"
+categories = ["IC"]
+mode = "optional"
+fee = { second = [4.4, 4.4], first = [4.4, 4.4] }
+
+[[rule]]
+id = "se-domestic"
+unverified = true
+scope = "domestic"
+country = "SE"
+operator = "SJ"
+categories = ["SJ Snabbtåg"]
+mode = "varies"
+fee = { second = [0.0, 10.0], first = [0.0, 10.0] }
+notes = "A fee applies on some trains and the seat is not always needed."
+
+[[rule]]
+id = "intl-paris-barcelona"
+scope = "international"
+route = ["FR", "ES"]
+operator = "SNCF"
+mode = "mandatory"
+fee = { second = [35.0, 35.0], first = [35.0, 35.0] }
+
+[[rule]]
+id = "intl-paris-germany"
+scope = "international"
+route = ["FR", "DE"]
+operator = "SNCF"
+mode = "mandatory"
+fee = { second = [19.0, 19.0], first = [19.0, 19.0] }
+notes = "The passholder fare."
+
+[[rule]]
+id = "intl-paris-milan"
+scope = "international"
+route = ["FR", "IT"]
+operator = "SNCF"
+categories = ["TGV INOUI"]
+mode = "mandatory"
+fee = { second = [31.0, 31.0], first = [45.0, 45.0] }
+
+[[rule]]
+id = "intl-lyria"
+scope = "international"
+route = ["FR", "CH"]
+operator = "Lyria"
+mode = "mandatory"
+fee = { second = [29.0, 29.0], first = [39.0, 39.0] }
+
+[[rule]]
+id = "intl-eurostar"
+scope = "international"
+route = ["GB", "FR", "BE", "NL"]
+operator = "Eurostar"
+mode = "mandatory"
+fee = { second = [27.0, 37.0], first = [35.0, 40.0] }
+notes = "Fee depends on the route: 32 to 37 euro in second class to Paris and Brussels, 27 to 32 on other routes, and 35 to 43 from London to Amsterdam."
+
+[[rule]]
+id = "intl-ec-italy-switzerland"
+scope = "international"
+route = ["IT", "CH"]
+categories = ["EC"]
+mode = "mandatory"
+fee = { second = [13.0, 17.0], first = [13.0, 17.0] }
+
+[[rule]]
+id = "intl-railjet-brenner"
+scope = "international"
+route = ["AT", "IT"]
+operator = "ÖBB"
+categories = ["RJ", "RJX"]
+mode = "mandatory"
+fee = { second = [10.0, 10.0], first = [15.0, 15.0] }
+notes = "Includes the supplement."
+
+[[rule]]
+id = "intl-austria"
+scope = "international"
+route = ["AT"]
+operator = "ÖBB"
+mode = "optional"
+fee = { second = [3.0, 3.0], first = [3.0, 3.0] }
+
+[[rule]]
+id = "night-nightjet"
+unverified = true
+scope = "night"
+operator = "ÖBB"
+categories = ["NJ"]
+mode = "mandatory"
+fee = { second = [30.0, 150.0], first = [60.0, 250.0] }
+notes = "Sleeping accommodation. The range runs from a seat or a couchette berth to a private sleeper."
+
+[[rule]]
+id = "night-euronight"
+unverified = true
+scope = "night"
+categories = ["EN"]
+mode = "mandatory"
+fee = { second = [30.0, 100.0], first = [60.0, 150.0] }
+notes = "Euro Night trains such as the Romanian and Hungarian ones."

@@ -1,0 +1,93 @@
+# Interrail passes and their prices.
+#
+# Prices are the Interrail Global Pass prices valid as of 5 January 2026, in euro, from the price
+# list of Deutsche Bahn at assets.static-bahn.de (PreiseIRGlobal2026BahnDeIntBahnDeEN_05012026.pdf),
+# which matches the table on seat61.com. The Interrail shop loads its prices with scripts, and
+# they can differ by country of residence and by promotion, so the shop is the final word. The age
+# group is the age on the first day of travel.
+
+source = "https://assets.static-bahn.de/dam/jcr:6fc22f3d-72c4-473b-a15a-7b234ba0f03c/PreiseIRGlobal2026BahnDeIntBahnDeEN_05012026.pdf"
+checked_against = "https://www.seat61.com/how-to-use-an-interrail-pass.htm"
+as_of = "2026-01-05"
+currency = "EUR"
+
+# Age groups. Children under 4 travel free without a pass.
+[age_groups]
+child = { from = 4, to = 11, note = "Free Child Pass, with a paying adult, youth of 18 or older, or senior. At most two children for each of them, in the class of the adult." }
+youth = { from = 12, to = 27 }
+adult = { from = 28, to = 59 }
+senior = { from = 60 }
+
+# The Global Plus Pass costs a fixed amount more and comes with reservation credits. It is in beta.
+[global_plus]
+extra_price = 100.0
+reservation_credits = 3
+note = "Most reservations cost no credit. High-demand trains such as Eurostar and the TGV to other countries cost one or two. Sleeping accommodation on night trains is not covered."
+source = "https://plus.interrail.com/en/global-plus-pass"
+
+# A flexi pass has travel days to pick within its validity. A continuous pass makes every day of
+# its validity a travel day.
+[[pass]]
+id = "global-flexi-4-in-1-month"
+kind = "flexi"
+travel_days = 4
+validity_months = 1
+prices = { adult = { second = 283.0, first = 367.0 }, youth = { second = 212.0, first = 275.0 }, senior = { second = 255.0, first = 330.0 } }
+
+[[pass]]
+id = "global-flexi-5-in-1-month"
+kind = "flexi"
+travel_days = 5
+validity_months = 1
+prices = { adult = { second = 318.0, first = 413.0 }, youth = { second = 239.0, first = 309.0 }, senior = { second = 286.0, first = 371.0 } }
+
+[[pass]]
+id = "global-flexi-7-in-1-month"
+kind = "flexi"
+travel_days = 7
+validity_months = 1
+prices = { adult = { second = 381.0, first = 495.0 }, youth = { second = 286.0, first = 371.0 }, senior = { second = 343.0, first = 445.0 } }
+
+[[pass]]
+id = "global-flexi-10-in-2-months"
+kind = "flexi"
+travel_days = 10
+validity_months = 2
+prices = { adult = { second = 447.0, first = 581.0 }, youth = { second = 335.0, first = 435.0 }, senior = { second = 402.0, first = 522.0 } }
+
+[[pass]]
+id = "global-flexi-15-in-2-months"
+kind = "flexi"
+travel_days = 15
+validity_months = 2
+prices = { adult = { second = 553.0, first = 718.0 }, youth = { second = 415.0, first = 538.0 }, senior = { second = 498.0, first = 646.0 } }
+
+[[pass]]
+id = "global-continuous-15-days"
+kind = "continuous"
+validity_days = 15
+prices = { adult = { second = 476.0, first = 618.0 }, youth = { second = 357.0, first = 463.0 }, senior = { second = 428.0, first = 556.0 } }
+
+[[pass]]
+id = "global-continuous-22-days"
+kind = "continuous"
+validity_days = 22
+prices = { adult = { second = 586.0, first = 761.0 }, youth = { second = 440.0, first = 570.0 }, senior = { second = 527.0, first = 684.0 } }
+
+[[pass]]
+id = "global-continuous-1-month"
+kind = "continuous"
+validity_months = 1
+prices = { adult = { second = 696.0, first = 904.0 }, youth = { second = 522.0, first = 678.0 }, senior = { second = 626.0, first = 813.0 } }
+
+[[pass]]
+id = "global-continuous-2-months"
+kind = "continuous"
+validity_months = 2
+prices = { adult = { second = 826.0, first = 1073.0 }, youth = { second = 620.0, first = 804.0 }, senior = { second = 743.0, first = 965.0 } }
+
+[[pass]]
+id = "global-continuous-3-months"
+kind = "continuous"
+validity_months = 3
+prices = { adult = { second = 956.0, first = 1242.0 }, youth = { second = 717.0, first = 931.0 }, senior = { second = 860.0, first = 1117.0 } }
