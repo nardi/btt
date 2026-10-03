@@ -35,6 +35,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::list_travellers,
         commands::save_traveller,
         commands::delete_traveller,
+        commands::plan_tickets,
         problem_report::export_problem_report,
     ])
 }
@@ -76,6 +77,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(specta_builder.invoke_handler())
         .setup(move |app| {
             specta_builder.mount_events(app);

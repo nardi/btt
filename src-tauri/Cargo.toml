@@ -15,10 +15,12 @@ crate-type = ["rlib"]
 tauri-build.workspace = true
 
 [dependencies]
+btt-fares.workspace = true
 btt-geo.workspace = true
 btt-model.workspace = true
 btt-planner.workspace = true
 btt-storage.workspace = true
+btt-ticketing.workspace = true
 chrono.workspace = true
 rustc-hash.workspace = true
 serde.workspace = true
@@ -27,6 +29,7 @@ specta.workspace = true
 specta-typescript.workspace = true
 tauri.workspace = true
 tauri-plugin-dialog.workspace = true
+tauri-plugin-opener.workspace = true
 tauri-specta.workspace = true
 thiserror.workspace = true
 tokio.workspace = true

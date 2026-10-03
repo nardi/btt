@@ -27,3 +27,9 @@ currency = "EUR"
 [classes]
 first = "A first class pass is valid in first and second class."
 second = "A second class pass is valid in second class only."
+
+# Categories of trains that an Interrail pass does not cover, in upper case. The planner has the
+# category and not the operator of a train, so this list stands in for the list of operators that
+# do not take the pass.
+[coverage]
+not_accepted_categories = ["OUIGO", "ITALO", "FLX", "FLIXTRAIN"]

@@ -2,6 +2,69 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Permissions of the main window",
-  "windows": ["main"],
-  "permissions": ["core:default"]
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "https://www.interrail.eu/*"
+        },
+        {
+          "url": "https://int.bahn.de/*"
+        },
+        {
+          "url": "https://shop.oebb.at/*"
+        },
+        {
+          "url": "https://www.sbb.ch/*"
+        },
+        {
+          "url": "https://www.sncf-connect.com/*"
+        },
+        {
+          "url": "https://www.trenitalia.com/*"
+        },
+        {
+          "url": "https://www.renfe.com/*"
+        },
+        {
+          "url": "https://www.ns.nl/*"
+        },
+        {
+          "url": "https://www.belgiantrain.be/*"
+        },
+        {
+          "url": "https://www.cd.cz/*"
+        },
+        {
+          "url": "https://www.intercity.pl/*"
+        },
+        {
+          "url": "https://jegy.mav.hu/*"
+        },
+        {
+          "url": "https://predaj.zssk.sk/*"
+        },
+        {
+          "url": "https://www.dsb.dk/*"
+        },
+        {
+          "url": "https://www.sj.se/*"
+        },
+        {
+          "url": "https://www.vy.no/*"
+        },
+        {
+          "url": "https://www.nationalrail.co.uk/*"
+        },
+        {
+          "url": "https://www.thetrainline.com/*"
+        }
+      ]
+    }
+  ]
 }

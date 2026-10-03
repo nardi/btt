@@ -10,12 +10,14 @@ publish = false
 license-file = "LICENSE.md"
 
 [workspace.dependencies]
+btt-fares = { path = "crates/btt-fares" }
 btt-geo = { path = "crates/btt-geo" }
 btt-model = { path = "crates/btt-model" }
 btt-planner = { path = "crates/btt-planner" }
 btt-router = { path = "crates/btt-router" }
 btt-storage = { path = "crates/btt-storage" }
 btt-builder = { path = "crates/btt-builder" }
+btt-ticketing = { path = "crates/btt-ticketing" }
 btt-timetable = { path = "crates/btt-timetable" }
 
 chrono = { version = "0.4.45", default-features = false, features = ["std", "serde"] }
@@ -43,6 +45,7 @@ specta-serde = "0.0.12"
 specta-typescript = "0.0.12"
 tauri = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
 tauri-build = "2"
 tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
 thiserror = "2.0.21"

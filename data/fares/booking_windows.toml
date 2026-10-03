@@ -1,0 +1,15 @@
+# How far ahead single tickets can be bought, by country of the first train.
+
+[[window]]
+country = "DE"
+days = 180
+operator = "Deutsche Bahn"
+source = "https://www.finanztip.de/bahntickets/"
+notes = "Long distance tickets can be booked up to 180 days ahead, and the days after a timetable change open later."
+
+[[window]]
+country = "AT"
+days = 180
+operator = "ÖBB"
+source = "https://www.oebb.at/static/tarife/de/relationspreise/index.html"
+notes = "The relation price tables of ÖBB list prices from 180 days ahead."

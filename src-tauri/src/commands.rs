@@ -6,7 +6,8 @@
 use btt_model::edit::NewTripPlace;
 use btt_model::{
     GeoCoordinates, PlaceInsertionPoint, PlaceSearchResult, PlanningSessionEvent,
-    StationSearchRadius, Traveller, TravellerId, Trip, TripEdit, TripEditError, TripEditOutcome, TripId, TripSummary,
+    StationSearchRadius, TicketLeg, TicketPlan, Traveller, TravellerId, Trip, TripEdit,
+    TripEditError, TripEditOutcome, TripId, TripSummary,
 };
 use chrono::NaiveDate;
 use serde::Serialize;
@@ -213,6 +214,52 @@ pub fn delete_traveller(
 ) -> Result<(), CommandError> {
     state.storage.delete_traveller(traveller_id)?;
     Ok(())
+}
+
+/// Returns today's date in UTC, which is close enough to decide whether sales have opened.
+fn today_utc() -> NaiveDate {
+    let seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| i64::try_from(elapsed.as_secs()).unwrap_or(0));
+    chrono::DateTime::from_timestamp(seconds, 0)
+        .map_or(NaiveDate::MIN, |moment| moment.date_naive())
+}
+
+/// Finds the cheapest tickets for the journeys of a trip's legs, for the first traveller of the
+/// trip.
+#[tauri::command]
+#[specta::specta]
+pub fn plan_tickets(
+    state: State<'_, AppState>,
+    trip_id: TripId,
+    legs: Vec<TicketLeg>,
+) -> Result<TicketPlan, CommandError> {
+    let preferences = state
+        .open_trips()
+        .get(&trip_id)
+        .map(|open_trip| open_trip.trip.preferences.clone())
+        .ok_or(CommandError::TripNotOpen(trip_id))?;
+    let travellers = state.storage.list_travellers()?;
+    let traveller = preferences
+        .traveller_ids
+        .iter()
+        .find_map(|id| travellers.iter().find(|traveller| traveller.id == *id));
+    let rides = legs
+        .iter()
+        .flat_map(|leg| {
+            btt_ticketing::rides_of_journey(leg.arrival_place_id, &leg.journey, &leg.stations)
+        })
+        .collect();
+    Ok(btt_ticketing::plan_tickets(
+        &btt_ticketing::TicketRequest {
+            rides,
+            traveller,
+            preferences: &preferences.ticket_preferences,
+            today: today_utc(),
+        },
+        &state.fare_data,
+        &state.price_book,
+    ))
 }
 
 /// Searches settlements and railway stations by name. Answers repeated searches from the

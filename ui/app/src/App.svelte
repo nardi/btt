@@ -5,13 +5,18 @@
     type GeoCoordinates,
     type Traveller,
     type TravellerId,
+    type TicketLeg,
+    type TicketPlan,
     type TripId,
     type TripSummary,
   } from "@btt/shared/bindings";
   import ItineraryView from "@btt/shared/components/ItineraryView.svelte";
   import SetupView from "@btt/shared/components/SetupView.svelte";
+  import TicketsView from "@btt/shared/components/TicketsView.svelte";
   import TripMap from "@btt/shared/components/TripMap.svelte";
+  import { itineraryRows } from "@btt/shared/itinerary";
   import type { PlaceFocusRequest } from "@btt/shared/map-features";
+  import { openUrl } from "@tauri-apps/plugin-opener";
   import { onMount } from "svelte";
 
   import { commandErrorMessage, TauriTripSource } from "./tauri-trip-source.svelte";
@@ -30,9 +35,16 @@
   const screens: { screen: Screen; label: string; enabled: boolean }[] = [
     { screen: "setup", label: "Setup", enabled: true },
     { screen: "planning", label: "Planning", enabled: true },
-    { screen: "tickets", label: "Tickets", enabled: false },
+    { screen: "tickets", label: "Tickets", enabled: true },
   ];
   let travellers: Traveller[] = $state([]);
+  /** The tickets of the open trip, as the backend last priced them. */
+  let ticketPlan: TicketPlan | null = $state(null);
+  let ticketsLoading = $state(false);
+  /** Legs of the open trip that have no journey, which the ticket plan leaves out. */
+  let unplannedLegs = $state(0);
+  /** Numbers the pricing requests, so that a late answer to an old request is dropped. */
+  let ticketRequestNumber = 0;
   /** Where the map of the open trip looks, for problem reports. */
   let mapView: { center: GeoCoordinates; zoom: number } | null = $state(null);
 
@@ -151,6 +163,54 @@
     }
   }
 
+  /** Prices the trip whenever the tickets screen is open and the journeys or travellers change. */
+  $effect(() => {
+    const source = openSource;
+    if (screen !== "tickets" || source === null) {
+      return;
+    }
+    // The plan depends on the saved travellers, so a change to them prices the trip again.
+    void travellers;
+    const legs: TicketLeg[] = [];
+    let missing = 0;
+    for (const leg of itineraryRows(source.trip).legs) {
+      const state = source.legStatesByArrivalPlace.get(leg.arrivalPlace.id);
+      if (state?.status === "found") {
+        legs.push({
+          arrival_place_id: leg.arrivalPlace.id,
+          journey: state.legPlan.chosen_journey,
+          stations: state.legPlan.station_table,
+        });
+      } else {
+        missing += 1;
+      }
+    }
+    unplannedLegs = missing;
+    ticketsLoading = true;
+    ticketRequestNumber += 1;
+    const requestNumber = ticketRequestNumber;
+    void commands.planTickets(source.trip.id, legs).then((result) => {
+      if (requestNumber !== ticketRequestNumber) {
+        return;
+      }
+      ticketsLoading = false;
+      if (result.status === "ok") {
+        ticketPlan = result.data;
+      } else {
+        errorMessage = commandErrorMessage(result.error);
+      }
+    });
+  });
+
+  /** Opens a booking link in the system browser. */
+  async function openBookingLink(url: string) {
+    try {
+      await openUrl(url);
+    } catch {
+      errorMessage = "The link could not be opened.";
+    }
+  }
+
   onMount(() => {
     void refreshTrips();
     void refreshTravellers();
@@ -240,7 +300,14 @@
         onSaveTraveller={saveTraveller}
         onDeleteTraveller={deleteTraveller}
       />
-    {:else if screen === "planning"}
+    {:else if screen === "tickets"}
+      <TicketsView
+        plan={ticketPlan}
+        loading={ticketsLoading}
+        {unplannedLegs}
+        onOpenLink={openBookingLink}
+      />
+    {:else}
     <div class="workspace">
       <div class="itinerary-column">
         <ItineraryView

@@ -1,18 +1,28 @@
 # Distance based tariffs of operators, as formulas.
 #
 # A formula gives the price of a full fare single ticket in second class from the tariff distance
-# in kilometres. These are fits to published prices and not the operators' own tables, so the app
-# marks a price from a formula as an estimate.
+# in kilometres. The app labels a price from a formula as a published price and says which
+# fare it is for.
 
 [[tariff]]
 id = "cd-basic"
 operator = "ČD"
 country = "CZ"
 currency = "CZK"
-# The price is `base + per_kilometre * distance`, rounded to whole crowns.
+# The price is `base + per_kilometre * distance`.
 base = 17.0
 per_kilometre = 2.04
-source = "https://www.cd.cz/en/jizdenky/"
-notes = "Fitted to published single fares in second class. Domestic trains only. The fit has not been checked against the tariff table."
-# The exchange rate is a rough fixed value, to be replaced by a rate the user can set.
+source = "https://www.mesec.cz/clanky/ceske-drahy-zmeni-ceny-nabidnou-vice-slev-lepsich-vlaku/"
+as_of = "2026-01-01"
+notes = "Basic fare of the 2026 tariff, which applies when no better offer exists. It fits the published prices of 68 Kč for 25 km, 221 Kč for 100 km and 527 Kč for 250 km."
+# The exchange rate is a fixed rough value.
 euro_per_crown = 0.041
+
+# A rough price per kilometre for every ride that no other source prices. Single fares on long
+# distance trains in Europe mostly fall between these two values, from a cheap saver fare to a
+# flexible one. It is an estimate and the app labels it as one.
+[distance_model]
+low_per_kilometre = 0.07
+high_per_kilometre = 0.20
+minimum_fare = 2.5
+currency = "EUR"

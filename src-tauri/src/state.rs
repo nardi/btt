@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
+use btt_fares::{FareData, PriceBook};
 use btt_geo::{PUBLIC_PHOTON_BASE_URL, PhotonClient, TimeZoneFinder};
 use btt_model::{
     LegPlanningResult, PlanningSessionEvent, Trip, TripEdit, TripEditNotices, TripEditOutcome,
@@ -76,6 +77,10 @@ pub struct AppState {
     pub planning_backend: Arc<LegPlanningBackend>,
     /// Searches places by name and position.
     pub photon: PhotonClient,
+    /// The pass list, reservation rules and price model for tickets.
+    pub fare_data: FareData,
+    /// The sources that price single tickets.
+    pub price_book: PriceBook,
     /// The timetable bundle the planner loaded, if any.
     pub bundle_path: Option<PathBuf>,
     /// The most recent log lines, for problem reports.
@@ -128,7 +133,12 @@ impl AppState {
             Ok(deleted) => tracing::info!(deleted, "removed planned legs of an older timetable"),
             Err(error) => tracing::warn!(%error, "could not clean up planned legs"),
         }
+        // The data files are compiled in and a test in `btt-fares` loads them, so this cannot fail.
+        let fare_data = FareData::bundled().expect("the bundled fare data is valid");
+        let price_book = PriceBook::from_data(&fare_data);
         Ok(Self {
+            fare_data,
+            price_book,
             storage: Arc::new(storage),
             planning_backend,
             photon: PhotonClient::new(PUBLIC_PHOTON_BASE_URL, USER_AGENT)?,

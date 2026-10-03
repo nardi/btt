@@ -169,7 +169,10 @@ mod tests {
         assert_eq!(options.wake_up_time.minutes_since_midnight(), 360);
 
         let trip = trip_from_document(TRIP_DOCUMENT_VERSION_3).unwrap();
-        assert_eq!(trip.preferences.ticket_preferences, TicketPreferences::default());
+        assert_eq!(
+            trip.preferences.ticket_preferences,
+            TicketPreferences::default()
+        );
     }
 
     #[test]

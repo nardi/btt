@@ -10,6 +10,7 @@ pub mod history;
 pub mod itinerary;
 pub mod place_search;
 pub mod plan;
+pub mod tickets;
 pub mod time;
 pub mod traveller;
 pub mod trip;
@@ -31,6 +32,10 @@ pub use plan::{
     LegPlanStationIndex, LegPlanningResult, NearbyDaySuggestion, NoJourneyReason, PlanningRunId,
     PlanningSessionEvent, SearchedWindow, StationWay, TrainLabel, TrainRide, TransferAndRide,
     WayToStationMode,
+};
+pub use tickets::{
+    BookingLink, BookingLinkKind, EuroCents, Price, PriceKind, PriceSource, PriceTotal,
+    StrategyKind, TicketItem, TicketLeg, TicketPlan, TicketProduct, TicketRide, TicketStrategy,
 };
 pub use time::{
     DailyTimeWindow, DailyWindowLength, DurationMinutes, LocalTimeOfDay, TravelDayWindows,

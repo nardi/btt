@@ -74,6 +74,11 @@ export const commands = {
 	/**  Deletes a traveller profile. */
 	deleteTraveller: (travellerId: TravellerId) => typedError<null, CommandError>(__TAURI_INVOKE("delete_traveller", { travellerId })),
 	/**
+	 *  Finds the cheapest tickets for the journeys of a trip's legs, for the first traveller of the
+	 *  trip.
+	 */
+	planTickets: (tripId: TripId, legs: TicketLeg[]) => typedError<TicketPlan, CommandError>(__TAURI_INVOKE("plan_tickets", { tripId, legs })),
+	/**
 	 *  Asks where to save a problem report for a trip and writes it there. Returns the path of the
 	 *  saved file, or `None` when the traveller cancelled.
 	 * 
@@ -112,6 +117,23 @@ export type BerthType =
 "Couchette" | 
 /**  A bed in a compartment of one to three. */
 "Sleeper";
+
+/**  A link to the place where a ticket is bought. */
+export type BookingLink = {
+	/**  Text of the link, such as "Open the Deutsche Bahn shop". */
+	label: string,
+	/**  Address of the page. */
+	url: string,
+	/**  What the link leads to. */
+	kind: BookingLinkKind,
+};
+
+/**  Where a link leads. */
+export type BookingLinkKind = 
+/**  The shop of the operator, where the traveller starts a search. */
+"Search" | 
+/**  The page that sells the product. */
+"Product";
 
 /**
  *  A journey the traveller picked for the leg between two places. A reorder that separates the
@@ -164,11 +186,11 @@ export type DailyWindowLength = number;
 
 /**  A discount card that lowers the price of single tickets. */
 export type DiscountCard = 
-/**  Deutsche Bahn BahnCard 25. */
+/**  Deutsche Bahn `BahnCard` 25. */
 "BahnCard25" | 
-/**  Deutsche Bahn BahnCard 50. */
+/**  Deutsche Bahn `BahnCard` 50. */
 "BahnCard50" | 
-/**  Deutsche Bahn BahnCard 100, which covers all trains of Deutsche Bahn. */
+/**  Deutsche Bahn `BahnCard` 100, which covers all trains of Deutsche Bahn. */
 "BahnCard100" | 
 /**  Swiss Half Fare Card. */
 "SwissHalfFare" | 
@@ -179,6 +201,9 @@ export type DiscountCard =
 
 /**  A length of time in whole minutes, up to 65,535, which is about 45 days. */
 export type DurationMinutes = number;
+
+/**  An amount of money in euro cents. */
+export type EuroCents = number;
 
 /**  The kind of single ticket the optimizer prices. */
 export type FareType = 
@@ -527,6 +552,52 @@ export type PlanningSessionEvent =
 	suggestion: NearbyDaySuggestion,
 } }) & { LegPlanned?: never; PlanningFinished?: never; PlanningStarted?: never; TripChanged?: never };
 
+/**  A price with the confidence in it and its source. */
+export type Price = {
+	/**  The lowest price the source allows. Equal to `high` for a formula. */
+	low: EuroCents,
+	/**  The highest price the source allows. */
+	high: EuroCents,
+	/**  How sure the price is. */
+	kind: PriceKind,
+	/**  Where the price comes from. */
+	source: PriceSource,
+};
+
+/**
+ *  How sure a price is, from the most to the least. The order is the order of confidence, so the
+ *  lowest confidence of several prices is their maximum.
+ */
+export type PriceKind = 
+/**  A published price list or a function of the distance. It is exact for the fare it names. */
+"Formula" | 
+/**  A quote from an operator's interface for a train and a date. */
+"Live" | 
+/**  A rough estimate with a lowest and a highest price. */
+"Range";
+
+/**  Where a price comes from. */
+export type PriceSource = {
+	/**  Name of the source, such as "Interrail price list". */
+	name: string,
+	/**  What the source says about how the price was found, for the tooltip. */
+	note: string,
+	/**  The day the source was valid or fetched. */
+	as_of: string | null,
+	/**  A page where the traveller can check the price. */
+	page: string | null,
+};
+
+/**  A sum of prices with the lowest confidence among its parts. */
+export type PriceTotal = {
+	/**  The sum of the lowest prices. */
+	low: EuroCents,
+	/**  The sum of the highest prices. */
+	high: EuroCents,
+	/**  The lowest confidence of any part. */
+	kind: PriceKind,
+};
+
 /**  How many minutes of travel time one euro is worth in scoring, in hundredths of a minute. */
 export type PriceWeight = number;
 
@@ -577,6 +648,53 @@ export type StationWay = {
 	mode: WayToStationMode,
 };
 
+/**  What a strategy is. */
+export type StrategyKind = 
+/**  Single tickets for every ride. */
+"SingleTickets" | 
+/**  An Interrail pass for the days where it pays, with single tickets for the other rides. */
+"Pass";
+
+/**  One ticket to buy. */
+export type TicketItem = {
+	/**  Identifies the ticket within its strategy, and is what a ride's cover refers to. */
+	id: number,
+	/**  What the ticket is. */
+	product: TicketProduct,
+	/**  Short name, such as "Interrail Global Pass, 7 days in 1 month, 2nd class, adult". */
+	title: string,
+	/**  What the ticket covers, in words. */
+	detail: string,
+	/**  Indices into `TicketPlan::rides` of the rides the ticket covers. */
+	ride_indices: number[],
+	/**  What the ticket costs. */
+	price: Price,
+	/**  Where to buy it. */
+	booking_link: BookingLink | null,
+};
+
+/**  The chosen journey of one leg, as the frontend hands it over to price the trip. */
+export type TicketLeg = {
+	/**  The place the leg arrives at. */
+	arrival_place_id: TripPlaceId,
+	/**  The journey the traveller rides. */
+	journey: Journey,
+	/**  The stations the journey's rides refer to. */
+	stations: LegPlanStation[],
+};
+
+/**  The tickets a trip needs for one traveller. */
+export type TicketPlan = {
+	/**  The trains of the trip in travel order. */
+	rides: TicketRide[],
+	/**  The ways to cover them, the cheapest at the middle of the ranges first. */
+	strategies: TicketStrategy[],
+	/**  Name of the traveller the plan is for, or `None` when the plan assumes an adult. */
+	traveller_name: string | null,
+	/**  Remarks about the plan as a whole, such as an assumed traveller. */
+	notes: string[],
+};
+
 /**  How tickets for the trip are chosen. */
 export type TicketPreferences = {
 	/**  Whether the optimizer compares an Interrail pass with single tickets. */
@@ -592,6 +710,60 @@ export type TicketPreferences = {
 	 *  today.
 	 */
 	assumed_purchase_date: string | null,
+};
+
+/**  What a ticket is. */
+export type TicketProduct = 
+/**  A ticket for one train or a run of trains on one day. */
+"SingleTicket" | 
+/**  An Interrail pass. */
+{ InterrailPass: {
+	/**  The `id` of the pass in the price list. */
+	pass_id: string,
+	/**  The first day of validity. */
+	first_valid_date: string,
+	/**  The days the pass is used on. For a continuous pass, every day of validity. */
+	travel_days: string[],
+} } | 
+/**  A seat reservation for a train that a pass covers. */
+"Reservation" | 
+/**  Berth or sleeper accommodation on a night train. */
+"NightAccommodation";
+
+/**  A train of the trip as the tickets screen shows it. */
+export type TicketRide = {
+	/**  The place the leg of the ride arrives at. */
+	leg_arrival_place_id: TripPlaceId,
+	/**  How the train is shown. */
+	train_label: TrainLabel,
+	/**  Name of the station where the traveller boards. */
+	from_name: string,
+	/**  Name of the station where the traveller leaves the train. */
+	to_name: string,
+	/**  Departure. */
+	departure_time: UnixTimeMinutes,
+	/**  Arrival. */
+	arrival_time: UnixTimeMinutes,
+	/**  IANA time zone of the boarding station. */
+	time_zone: string,
+	/**  Whether the train has berths. */
+	offers_berths: boolean,
+};
+
+/**  A way to cover every ride of the trip. */
+export type TicketStrategy = {
+	/**  What the strategy is. */
+	kind: StrategyKind,
+	/**  Short name for the comparison. */
+	title: string,
+	/**  The tickets to buy. */
+	items: TicketItem[],
+	/**  What the strategy costs in all. */
+	total: PriceTotal,
+	/**  For each ride of `TicketPlan::rides`, the ids of the tickets that cover it. */
+	covers: number[][],
+	/**  Things the traveller should know, such as rides that no ticket was priced for. */
+	notes: string[],
 };
 
 /**  How a train is shown to the traveller, such as "ICE 27". */
