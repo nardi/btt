@@ -14,6 +14,7 @@ btt-fares = { path = "crates/btt-fares" }
 btt-geo = { path = "crates/btt-geo" }
 btt-model = { path = "crates/btt-model" }
 btt-planner = { path = "crates/btt-planner" }
+btt-quotes = { path = "crates/btt-quotes" }
 btt-router = { path = "crates/btt-router" }
 btt-storage = { path = "crates/btt-storage" }
 btt-builder = { path = "crates/btt-builder" }
