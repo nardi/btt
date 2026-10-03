@@ -63,6 +63,9 @@
         },
         {
           "url": "https://www.thetrainline.com/*"
+        },
+        {
+          "url": "https://biglietti.italotreno.com/*"
         }
       ]
     }

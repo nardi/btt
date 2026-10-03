@@ -33,6 +33,8 @@ fn ride(
         },
         from_name: "From".into(),
         to_name: "To".into(),
+        from_coordinates: btt_model::GeoCoordinates::from_degrees(0.0, 0.0).unwrap(),
+        to_coordinates: btt_model::GeoCoordinates::from_degrees(0.0, 0.0).unwrap(),
         departure_time: UnixTimeMinutes(day * 1440),
         arrival_time: UnixTimeMinutes(day * 1440 + 300),
         time_zone: "Europe/Vienna".into(),
@@ -394,4 +396,18 @@ proptest! {
         // The optimizer lists the best pass of each kind, and the cheapest of all is among them.
         prop_assert_eq!(found, expected);
     }
+}
+
+#[test]
+fn an_italo_ticket_links_to_the_italo_site_with_station_codes() {
+    let mut italo = ride(0, ("IT", "IT"), "Italo", 570.0, false);
+    italo.from_coordinates = btt_model::GeoCoordinates::from_degrees(45.4339, 9.2391).unwrap();
+    italo.to_coordinates = btt_model::GeoCoordinates::from_degrees(41.9006, 12.5020).unwrap();
+    let plan = plan(vec![italo], None);
+    let link = plan.strategies[0].items[0].booking_link.as_ref().unwrap();
+    assert!(link.url.starts_with("https://biglietti.italotreno.com/"));
+    assert!(
+        link.url
+            .contains("osc=RG_&dsc=RMT&jt=oneway&od=01%2F07%2F2026")
+    );
 }

@@ -524,9 +524,28 @@ impl<'a> Problem<'a> {
                 ),
                 &indices,
                 self.run_price(first, last).clone(),
-                Some(shop_link(rides[0].from_country.as_deref())),
+                Some(self.single_ticket_link(rides)),
             );
         }
+    }
+
+    /// Returns the link to buy a ticket for a run of rides. Italo trains are sold on the Italo
+    /// site, and the others at the shop of the country of the first ride.
+    fn single_ticket_link(&self, rides: &[RideInput]) -> btt_model::BookingLink {
+        let all_italo = rides
+            .iter()
+            .all(|ride| ride.train_label.category.eq_ignore_ascii_case("Italo"));
+        let italo = all_italo
+            .then(|| {
+                crate::links::italo_link(
+                    &self.data.italo_stations,
+                    &rides[0],
+                    &rides[rides.len() - 1],
+                    self.settings.age_group,
+                )
+            })
+            .flatten();
+        italo.unwrap_or_else(|| shop_link(rides[0].from_country.as_deref()))
     }
 
     /// Builds the strategy of single tickets for every ride.

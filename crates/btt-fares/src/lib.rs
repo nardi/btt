@@ -5,6 +5,7 @@
 
 mod country;
 mod distance;
+mod italo;
 mod passes;
 mod price_book;
 mod reservations;
@@ -14,6 +15,7 @@ use thiserror::Error;
 
 pub use country::country_of_time_zone;
 pub use distance::DistanceModel;
+pub use italo::{ItaloStation, ItaloStations};
 pub use passes::{PassCatalogue, PassKind, PassPrices, PassType, PriceAgeGroup, Validity};
 pub use price_book::{PriceBook, RideFacts, TicketPriceSource};
 pub use reservations::{ReservationMode, ReservationRule, ReservationRules, RuleScope, SeatFee};
@@ -27,6 +29,8 @@ const RULES_TOML: &str = include_str!("../../../data/fares/interrail_rules.toml"
 const RESERVATIONS_TOML: &str = include_str!("../../../data/fares/interrail_reservations.toml");
 /// The tariffs and the distance model, as they are compiled in.
 const TARIFFS_TOML: &str = include_str!("../../../data/fares/tariffs.toml");
+/// The Italo stations, as they are compiled in.
+const ITALO_STATIONS_CSV: &str = include_str!("../../../data/fares/italo_stations.csv");
 /// The booking windows, as they are compiled in.
 const BOOKING_WINDOWS_TOML: &str = include_str!("../../../data/fares/booking_windows.toml");
 
@@ -62,6 +66,8 @@ pub struct FareData {
     pub distance_model: DistanceModel,
     /// Tariffs that price the domestic rides of one country.
     pub tariffs: Vec<DistanceTariff>,
+    /// The stations of Italo with the codes of its booking site.
+    pub italo_stations: ItaloStations,
     /// How far ahead tickets can be bought, by country.
     pub booking_windows: Vec<BookingWindow>,
     /// How many outbound and inbound journeys a pass allows in the country of residence.
@@ -100,6 +106,7 @@ impl FareData {
             reservations: ReservationRules::from_toml(RESERVATIONS_TOML, RULES_TOML)?,
             distance_model: DistanceModel::from_toml(TARIFFS_TOML)?,
             tariffs: tariff::tariffs_from_toml(TARIFFS_TOML)?,
+            italo_stations: ItaloStations::from_csv(ITALO_STATIONS_CSV),
             booking_windows: tariff::windows_from_toml(BOOKING_WINDOWS_TOML)?,
             residence_journeys_each_way: rules.residence.outbound_journeys,
         })

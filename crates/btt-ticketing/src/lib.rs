@@ -12,7 +12,9 @@ use btt_fares::{FareData, PriceBook};
 use btt_model::{AgeGroup, TicketPlan, TicketPreferences, TicketRide, TravelClass, Traveller};
 use smol_str::SmolStr;
 
-pub use links::{INTERRAIL_PASS_PAGE, pass_link, shop_link};
+pub use links::{
+    INTERRAIL_PASS_PAGE, Passengers, italo_link, italo_search_url, pass_link, shop_link,
+};
 pub use optimizer::{Problem, Settings, total_of};
 pub use rides::{RideInput, rides_of_journey};
 

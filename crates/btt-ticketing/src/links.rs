@@ -1,6 +1,10 @@
 //! Links to the places where tickets are sold.
 
-use btt_model::{BookingLink, BookingLinkKind};
+use btt_fares::ItaloStations;
+use btt_model::{AgeGroup, BookingLink, BookingLinkKind};
+use chrono::NaiveDate;
+
+use crate::rides::RideInput;
 
 /// The page that sells the Interrail Global Pass.
 pub const INTERRAIL_PASS_PAGE: &str = "https://www.interrail.eu/en/interrail-passes/global-pass";
@@ -40,6 +44,92 @@ pub fn shop_link(country: Option<&str>) -> BookingLink {
     }
 }
 
+/// How many travellers of each fare category a booking link asks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Passengers {
+    /// Adults.
+    pub adults: u8,
+    /// Young travellers.
+    pub youth: u8,
+    /// Children.
+    pub children: u8,
+    /// Seniors.
+    pub seniors: u8,
+    /// Infants.
+    pub infants: u8,
+}
+
+impl Passengers {
+    /// One traveller of an age group.
+    pub fn one(age_group: AgeGroup) -> Self {
+        let mut passengers = Self::default();
+        match age_group {
+            AgeGroup::Infant => passengers.infants = 1,
+            AgeGroup::Child => passengers.children = 1,
+            AgeGroup::Youth => passengers.youth = 1,
+            AgeGroup::Adult => passengers.adults = 1,
+            AgeGroup::Senior => passengers.seniors = 1,
+        }
+        passengers
+    }
+}
+
+/// Builds the address of a search on the Italo booking site.
+///
+/// The parameters are `osc` and `dsc` for the station codes, `jt` for `return` or `oneway`, `od`
+/// and `id` for the outbound and the return date as `dd/mm/yyyy`, and the number of travellers in
+/// `adt`, `yng`, `chd`, `snr` and `inf`. A search with `startSearch=true` runs when the page opens.
+/// The form of a return search comes from an address of the site. The one-way form is the same
+/// without the return date, which has not been checked on the site.
+pub fn italo_search_url(
+    origin_code: &str,
+    destination_code: &str,
+    outbound: NaiveDate,
+    return_date: Option<NaiveDate>,
+    passengers: Passengers,
+) -> String {
+    let date = |date: NaiveDate| date.format("%d%%2F%m%%2F%Y").to_string();
+    let journey_type = if return_date.is_some() {
+        "return"
+    } else {
+        "oneway"
+    };
+    let return_part = return_date.map_or_else(String::new, |day| format!("&id={}", date(day)));
+    format!(
+        "https://biglietti.italotreno.com/en/booking/ricerca-treni?osc={origin_code}&dsc={destination_code}&jt={journey_type}&od={}{return_part}&adt={}&yng={}&chd={}&snr={}&inf={}&pet=0&promo=&lang=en&startSearch=true",
+        date(outbound),
+        passengers.adults,
+        passengers.youth,
+        passengers.children,
+        passengers.seniors,
+        passengers.infants,
+    )
+}
+
+/// Returns a link to the Italo search for the stations of two rides, or `None` when a station
+/// is not one that Italo serves.
+pub fn italo_link(
+    stations: &ItaloStations,
+    first: &RideInput,
+    last: &RideInput,
+    age_group: AgeGroup,
+) -> Option<BookingLink> {
+    let origin = stations.station_near(first.from_coordinates)?;
+    let destination = stations.station_near(last.to_coordinates)?;
+    Some(BookingLink {
+        label: "Search on Italo".into(),
+        url: italo_search_url(
+            &origin.code,
+            &destination.code,
+            first.departure_date,
+            None,
+            Passengers::one(age_group),
+        )
+        .into(),
+        kind: BookingLinkKind::Search,
+    })
+}
+
 /// Returns the link to buy the Interrail Global Pass.
 pub fn pass_link() -> BookingLink {
     BookingLink {
@@ -72,6 +162,13 @@ mod tests {
             .collect();
         urls.push(shop_link(None).url.to_string());
         urls.push(pass_link().url.to_string());
+        urls.push(italo_search_url(
+            "RMT",
+            "MC_",
+            NaiveDate::MIN,
+            None,
+            Passengers::default(),
+        ));
         for url in urls {
             // The capability lists patterns such as `https://shop.oebb.at/*`, which cover a host.
             let host_pattern =
@@ -81,6 +178,35 @@ mod tests {
                 "{url} needs {host_pattern}"
             );
         }
+    }
+
+    #[test]
+    fn the_italo_url_matches_a_return_search_of_the_site() {
+        let date = |day| NaiveDate::from_ymd_opt(2026, 10, day).unwrap();
+        let passengers = Passengers {
+            adults: 1,
+            youth: 1,
+            children: 1,
+            seniors: 1,
+            infants: 0,
+        };
+        assert_eq!(
+            italo_search_url("RG_", "RMT", date(16), Some(date(17)), passengers),
+            "https://biglietti.italotreno.com/en/booking/ricerca-treni?osc=RG_&dsc=RMT&jt=return&od=16%2F10%2F2026&id=17%2F10%2F2026&adt=1&yng=1&chd=1&snr=1&inf=0&pet=0&promo=&lang=en&startSearch=true"
+        );
+    }
+
+    #[test]
+    fn a_one_way_search_has_no_return_date() {
+        let url = italo_search_url(
+            "MC_",
+            "NAC",
+            NaiveDate::from_ymd_opt(2026, 3, 5).unwrap(),
+            None,
+            Passengers::one(AgeGroup::Senior),
+        );
+        assert!(url.contains("jt=oneway&od=05%2F03%2F2026&adt=0&yng=0&chd=0&snr=1&inf=0"));
+        assert!(!url.contains("&id="));
     }
 
     #[test]

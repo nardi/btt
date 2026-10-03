@@ -1,7 +1,9 @@
 //! The rides of a trip as the optimizer sees them.
 
 use btt_fares::country_of_time_zone;
-use btt_model::{Journey, LegPlanStation, TrainLabel, TrainRide, TripPlaceId, UnixTimeMinutes};
+use btt_model::{
+    GeoCoordinates, Journey, LegPlanStation, TrainLabel, TrainRide, TripPlaceId, UnixTimeMinutes,
+};
 use chrono::{DateTime, NaiveDate};
 use chrono_tz::Tz;
 use smol_str::SmolStr;
@@ -17,6 +19,10 @@ pub struct RideInput {
     pub from_name: SmolStr,
     /// Name of the alighting station.
     pub to_name: SmolStr,
+    /// Position of the boarding station.
+    pub from_coordinates: GeoCoordinates,
+    /// Position of the alighting station.
+    pub to_coordinates: GeoCoordinates,
     /// Departure.
     pub departure_time: UnixTimeMinutes,
     /// Arrival.
@@ -82,6 +88,8 @@ pub fn rides_of_journey(
                 train_label: ride.train_label.clone(),
                 from_name: from.name.clone(),
                 to_name: to.name.clone(),
+                from_coordinates: from.coordinates,
+                to_coordinates: to.coordinates,
                 departure_time: ride.departure_time,
                 arrival_time: ride.arrival_time,
                 time_zone: from.time_zone.clone(),
