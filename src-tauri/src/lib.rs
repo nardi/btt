@@ -32,6 +32,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::add_place_at_coordinates,
         commands::delete_trip,
         commands::search_places,
+        commands::list_travellers,
+        commands::save_traveller,
+        commands::delete_traveller,
         problem_report::export_problem_report,
     ])
 }

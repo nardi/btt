@@ -6,7 +6,7 @@
 use btt_model::edit::NewTripPlace;
 use btt_model::{
     GeoCoordinates, PlaceInsertionPoint, PlaceSearchResult, PlanningSessionEvent,
-    StationSearchRadius, Trip, TripEdit, TripEditError, TripEditOutcome, TripId, TripSummary,
+    StationSearchRadius, Traveller, TravellerId, Trip, TripEdit, TripEditError, TripEditOutcome, TripId, TripSummary,
 };
 use chrono::NaiveDate;
 use serde::Serialize;
@@ -183,6 +183,35 @@ pub async fn add_place_at_coordinates(
 pub fn delete_trip(state: State<'_, AppState>, trip_id: TripId) -> Result<(), CommandError> {
     state.open_trips().remove(&trip_id);
     state.storage.delete_trip(trip_id)?;
+    Ok(())
+}
+
+/// Returns every traveller profile.
+#[tauri::command]
+#[specta::specta]
+pub fn list_travellers(state: State<'_, AppState>) -> Result<Vec<Traveller>, CommandError> {
+    Ok(state.storage.list_travellers()?)
+}
+
+/// Inserts a traveller profile, or replaces the one with the same ID.
+#[tauri::command]
+#[specta::specta]
+pub fn save_traveller(
+    state: State<'_, AppState>,
+    traveller: Traveller,
+) -> Result<(), CommandError> {
+    state.storage.save_traveller(&traveller)?;
+    Ok(())
+}
+
+/// Deletes a traveller profile.
+#[tauri::command]
+#[specta::specta]
+pub fn delete_traveller(
+    state: State<'_, AppState>,
+    traveller_id: TravellerId,
+) -> Result<(), CommandError> {
+    state.storage.delete_traveller(traveller_id)?;
     Ok(())
 }
 

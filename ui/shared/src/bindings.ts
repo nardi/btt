@@ -67,6 +67,12 @@ export const commands = {
 	 *  cache.
 	 */
 	searchPlaces: (query: string) => typedError<PlaceSearchResult[], CommandError>(__TAURI_INVOKE("search_places", { query })),
+	/**  Returns every traveller profile. */
+	listTravellers: () => typedError<Traveller[], CommandError>(__TAURI_INVOKE("list_travellers")),
+	/**  Inserts a traveller profile, or replaces the one with the same ID. */
+	saveTraveller: (traveller: Traveller) => typedError<null, CommandError>(__TAURI_INVOKE("save_traveller", { traveller })),
+	/**  Deletes a traveller profile. */
+	deleteTraveller: (travellerId: TravellerId) => typedError<null, CommandError>(__TAURI_INVOKE("delete_traveller", { travellerId })),
 	/**
 	 *  Asks where to save a problem report for a trip and writes it there. Returns the path of the
 	 *  saved file, or `None` when the traveller cancelled.
@@ -156,8 +162,30 @@ export type DailyTimeWindow = {
 /**  The length of a daily time window, from one minute to a whole day. */
 export type DailyWindowLength = number;
 
+/**  A discount card that lowers the price of single tickets. */
+export type DiscountCard = 
+/**  Deutsche Bahn BahnCard 25. */
+"BahnCard25" | 
+/**  Deutsche Bahn BahnCard 50. */
+"BahnCard50" | 
+/**  Deutsche Bahn BahnCard 100, which covers all trains of Deutsche Bahn. */
+"BahnCard100" | 
+/**  Swiss Half Fare Card. */
+"SwissHalfFare" | 
+/**  ÖBB Vorteilscard. */
+"OebbVorteilscard" | 
+/**  SNCF Carte Avantage. */
+"SncfAvantage";
+
 /**  A length of time in whole minutes, up to 65,535, which is about 45 days. */
 export type DurationMinutes = number;
+
+/**  The kind of single ticket the optimizer prices. */
+export type FareType = 
+/**  Full flexibility, valid on any train of the day. */
+"Flexible" | 
+/**  The cheaper ticket that ties the traveller to one train. */
+"Saver";
 
 /**
  *  A point on the Earth's surface.
@@ -406,6 +434,14 @@ export type OvernightLegOptions = {
 	accepted_berths: AcceptedBerths,
 };
 
+/**  An Interrail pass the traveller already owns. */
+export type OwnedInterrailPass = {
+	/**  The `id` of the pass in `data/fares/interrail_passes.toml`. */
+	pass_id: string,
+	/**  First day of validity of the pass. */
+	first_valid_date: string,
+};
+
 /**  Where a new place goes in the itinerary. */
 export type PlaceInsertionPoint = 
 /**  Before the place at this index, or at the end when the index equals the place count. */
@@ -541,6 +577,23 @@ export type StationWay = {
 	mode: WayToStationMode,
 };
 
+/**  How tickets for the trip are chosen. */
+export type TicketPreferences = {
+	/**  Whether the optimizer compares an Interrail pass with single tickets. */
+	consider_passes: boolean,
+	/**  Whether children travelling with an adult on a pass are priced as free. */
+	consider_families: boolean,
+	/**  The kind of single ticket to price. */
+	fare_type: FareType,
+	/**  Whether optional seat reservations are bought, so they count in the price. */
+	reserve_optional_seats: boolean,
+	/**
+	 *  The day tickets are assumed to be bought, which decides the booking window. `None` means
+	 *  today.
+	 */
+	assumed_purchase_date: string | null,
+};
+
 /**  How a train is shown to the traveller, such as "ICE 27". */
 export type TrainLabel = {
 	/**  Product or category, such as "ICE", "RJX" or "NJ". */
@@ -600,6 +653,26 @@ export type TravelDayWindows = {
 	departure: DailyTimeWindow,
 	/**  Window in which the last train of a leg arrives. */
 	arrival: DailyTimeWindow,
+};
+
+/**  A person who travels on a trip. */
+export type Traveller = {
+	/**  Identifies the traveller across trips. */
+	id: TravellerId,
+	/**  Name shown in lists. */
+	name: string,
+	/**  Date of birth, from which the age group on a day follows. */
+	birth_date: string,
+	/**  Country of residence as a two-letter code, which decides the Interrail residence rule. */
+	residence_country: string,
+	/**  Class the traveller books. */
+	travel_class: TravelClass,
+	/**  Discount cards the traveller owns. */
+	discount_cards: DiscountCard[],
+	/**  An Interrail pass the traveller already owns, if any. */
+	owned_pass: OwnedInterrailPass | null,
+	/**  The traveller whose pass a child travels with, if any. */
+	accompanying_traveller: TravellerId | null,
 };
 
 /**  Identifies a traveller profile, which lives outside any single trip. */
@@ -787,6 +860,8 @@ export type TripPreferences = {
 	travel_class: TravelClass,
 	/**  Weight of price against travel time in scoring. */
 	price_weight: PriceWeight,
+	/**  How tickets are chosen. */
+	ticket_preferences: TicketPreferences,
 };
 
 /**  Short description of a trip for the trip list. */

@@ -10,7 +10,9 @@ use std::path::Path;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use btt_model::{LegPlanningResult, PlaceSearchResult, Trip, TripId, TripSummary};
+use btt_model::{
+    LegPlanningResult, PlaceSearchResult, Traveller, TravellerId, Trip, TripId, TripSummary,
+};
 use chrono::NaiveDate;
 use rusqlite::{Connection, OptionalExtension, params};
 use rusqlite_migration::{M, Migrations};
@@ -51,6 +53,14 @@ const SCHEMA_MIGRATIONS: &[M<'static>] = &[
         leg_cache_key INTEGER PRIMARY KEY NOT NULL,
         cache_namespace INTEGER NOT NULL,
         leg_result BLOB NOT NULL
+    ) STRICT;",
+    ),
+    // Traveller profiles as JSON documents, like trips. They belong to the app and not to a trip.
+    M::up(
+        "CREATE TABLE travellers (
+        traveller_id BLOB PRIMARY KEY NOT NULL,
+        position INTEGER NOT NULL,
+        document TEXT NOT NULL
     ) STRICT;",
     ),
 ];
@@ -199,6 +209,54 @@ impl Storage {
         Ok(deleted_rows > 0)
     }
 
+    /// Returns every traveller profile in the order they were first saved.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the query fails or a document cannot be read.
+    pub fn list_travellers(&self) -> Result<Vec<Traveller>, StorageError> {
+        let connection = self.connection();
+        let mut statement =
+            connection.prepare_cached("SELECT document FROM travellers ORDER BY position")?;
+        let documents = statement
+            .query_map([], |row| row.get::<_, String>(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        documents
+            .iter()
+            .map(|document| Ok(serde_json::from_str(document)?))
+            .collect()
+    }
+
+    /// Inserts a traveller, or replaces the one with the same ID and keeps its position.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the document cannot be written or the query fails.
+    pub fn save_traveller(&self, traveller: &Traveller) -> Result<(), StorageError> {
+        let document = serde_json::to_string(traveller)?;
+        self.connection()
+            .prepare_cached(
+                "INSERT INTO travellers (traveller_id, position, document)
+                 VALUES (?1, (SELECT COALESCE(MAX(position), 0) + 1 FROM travellers), ?2)
+                 ON CONFLICT (traveller_id) DO UPDATE SET document = excluded.document",
+            )?
+            .execute(params![traveller.id.0.as_bytes(), document])?;
+        Ok(())
+    }
+
+    /// Deletes a traveller. Returns whether it existed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the query fails.
+    pub fn delete_traveller(&self, traveller_id: TravellerId) -> Result<bool, StorageError> {
+        let deleted_rows = self
+            .connection()
+            .prepare_cached("DELETE FROM travellers WHERE traveller_id = ?1")?
+            .execute([traveller_id.0.as_bytes()])?;
+        Ok(deleted_rows > 0)
+    }
+
     /// Returns the cached results of a place search, if they exist and have not expired.
     ///
     /// # Errors
@@ -337,6 +395,25 @@ mod tests {
         assert_eq!(summaries[0].trip_id, trip.id);
         assert_eq!(summaries[0].place_count, 3);
         assert_eq!(summaries[0].start_date, trip.start_date);
+    }
+
+    #[test]
+    fn travellers_keep_their_order_and_replace_on_save() {
+        let storage = Storage::open_in_memory().unwrap();
+        let birth_date = NaiveDate::from_ymd_opt(1990, 3, 4).unwrap();
+        let mut first = Traveller::new("First".into(), birth_date, "NL".into());
+        let second = Traveller::new("Second".into(), birth_date, "DE".into());
+        storage.save_traveller(&first).unwrap();
+        storage.save_traveller(&second).unwrap();
+        first.name = "Renamed".into();
+        storage.save_traveller(&first).unwrap();
+        assert_eq!(
+            storage.list_travellers().unwrap(),
+            vec![first.clone(), second]
+        );
+        assert!(storage.delete_traveller(first.id).unwrap());
+        assert!(!storage.delete_traveller(first.id).unwrap());
+        assert_eq!(storage.list_travellers().unwrap().len(), 1);
     }
 
     #[test]

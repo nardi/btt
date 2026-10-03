@@ -1,12 +1,18 @@
 <script lang="ts">
   // The itinerary of one trip: its places, the legs between them and the trip preferences.
-  import type { PlaceSearchResult, TripEdit, TripEditNotice, TripPlaceId } from "../bindings";
+  import type {
+    PlaceSearchResult,
+    TripEdit,
+    TripEditNotice,
+    TripPlaceId,
+    TripPreferences,
+  } from "../bindings";
+  import { formatMinutesOfDay } from "../format";
   import { itineraryRows, storedJourneyChoice, tripPlaces } from "../itinerary";
   import { legViewState, type TripSource } from "../trip-source";
   import LegRowView from "./LegRowView.svelte";
   import PlaceRowView from "./PlaceRowView.svelte";
   import PlaceSearch from "./PlaceSearch.svelte";
-  import PreferencesPanel from "./PreferencesPanel.svelte";
 
   /** Search radius of places added through search, in meters. */
   const defaultStationSearchRadius = 5000;
@@ -16,12 +22,15 @@
     selectedPlaceId,
     onSelect,
     onFocus,
+    onOpenSetup,
   }: {
     source: TripSource;
     selectedPlaceId: TripPlaceId | null;
     onSelect: (placeId: TripPlaceId | null) => void;
     /** Moves the map to a place. */
     onFocus: (placeId: TripPlaceId) => void;
+    /** Shows the setup screen. */
+    onOpenSetup: () => void;
   } = $props();
 
   const viewState = $derived(source.viewState);
@@ -55,6 +64,17 @@
         insert_at: { AtIndex: rows.places.length },
       },
     });
+  }
+
+  /** Describes the trip defaults in one line. */
+  function preferencesSummary(preferences: TripPreferences): string {
+    const { departure, arrival } = preferences.default_windows;
+    const travellers = preferences.traveller_ids.length;
+    return (
+      `Depart ${formatMinutesOfDay(departure.start)} to ${formatMinutesOfDay(departure.start + departure.length)}, ` +
+      `arrive ${formatMinutesOfDay(arrival.start)} to ${formatMinutesOfDay(arrival.start + arrival.length)}, ` +
+      `${travellers === 1 ? "1 traveller" : `${travellers} travellers`}.`
+    );
   }
 
   /** Position of the place being dragged, so rows can show where it would land. */
@@ -114,7 +134,10 @@
     <PlaceSearch searchPlaces={(query) => editable.searchPlaces(query)} onPick={addPlace} />
   {/if}
 
-  <PreferencesPanel preferences={trip.preferences} {onEdit} />
+  <p class="preferences-summary">
+    {preferencesSummary(trip.preferences)}
+    <button type="button" class="link" onclick={onOpenSetup}>Change in Setup</button>
+  </p>
 </section>
 
 <style>

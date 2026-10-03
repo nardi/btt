@@ -52,6 +52,13 @@ export function amsterdamViennaRome(): Trip {
       traveller_ids: [],
       travel_class: "Second",
       price_weight: 0,
+      ticket_preferences: {
+        consider_passes: true,
+        consider_families: true,
+        fare_type: "Flexible",
+        reserve_optional_seats: false,
+        assumed_purchase_date: null,
+      },
     },
     next_place_id: 4,
     chosen_journeys: [],

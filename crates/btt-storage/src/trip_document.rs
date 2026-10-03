@@ -13,8 +13,27 @@ type TripDocumentMigration = fn(&mut Value);
 ///
 /// A change to the `Trip` layout adds a function here, bumps `CURRENT_TRIP_SCHEMA_VERSION` and
 /// adds a fixture for the old version.
-const TRIP_DOCUMENT_MIGRATIONS: [TripDocumentMigration; 2] =
-    [wrap_window_overrides, night_windows_to_bedtime];
+const TRIP_DOCUMENT_MIGRATIONS: [TripDocumentMigration; 3] = [
+    wrap_window_overrides,
+    night_windows_to_bedtime,
+    add_ticket_preferences,
+];
+
+/// Version 4 adds the ticket preferences to the trip preferences. A trip written before then
+/// gets the defaults, which compare passes with single tickets and reserve no optional seats.
+fn add_ticket_preferences(document: &mut Value) {
+    if let Some(Value::Object(preferences)) = document.pointer_mut("/trip/preferences") {
+        preferences.entry("ticket_preferences").or_insert_with(|| {
+            serde_json::json!({
+                "consider_passes": true,
+                "consider_families": true,
+                "fare_type": "Flexible",
+                "reserve_optional_seats": false,
+                "assumed_purchase_date": null,
+            })
+        });
+    }
+}
 
 /// Version 3 describes a night train by bedtime and wake-up time instead of a boarding and an
 /// alighting window. Bedtime becomes the end of the boarding window, the latest moment to be
@@ -110,7 +129,7 @@ pub fn trip_from_document(document: &str) -> Result<Trip, StorageError> {
 
 #[cfg(test)]
 mod tests {
-    use btt_model::{LegTravelMode, PlaceWindowOverride};
+    use btt_model::{LegTravelMode, PlaceWindowOverride, TicketPreferences};
 
     use super::*;
 
@@ -119,6 +138,9 @@ mod tests {
 
     /// A document written by schema version 2, with a night leg in the windows of that version.
     const TRIP_DOCUMENT_VERSION_2: &str = include_str!("../tests/fixtures/trip_v2.json");
+
+    /// A document written by schema version 3, before the ticket preferences existed.
+    const TRIP_DOCUMENT_VERSION_3: &str = include_str!("../tests/fixtures/trip_v3.json");
 
     #[test]
     fn every_schema_version_fixture_loads() {
@@ -145,6 +167,9 @@ mod tests {
         };
         assert_eq!(options.bedtime.minutes_since_midnight(), 0);
         assert_eq!(options.wake_up_time.minutes_since_midnight(), 360);
+
+        let trip = trip_from_document(TRIP_DOCUMENT_VERSION_3).unwrap();
+        assert_eq!(trip.preferences.ticket_preferences, TicketPreferences::default());
     }
 
     #[test]

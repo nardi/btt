@@ -42,8 +42,8 @@
   }
 </script>
 
-<details class="preferences">
-  <summary>Preferences</summary>
+<section class="preferences">
+  <h3>Planning</h3>
   <div class="fields">
     <TimeWindowField
       label="Depart between"
@@ -118,7 +118,7 @@
       hours
     </label>
   </div>
-</details>
+</section>
 
 <style>
   .preferences {
@@ -128,8 +128,8 @@
     padding: var(--space-2) var(--space-3);
   }
 
-  summary {
-    cursor: pointer;
+  h3 {
+    margin: 0;
     font-weight: 600;
   }
 

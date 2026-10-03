@@ -1,7 +1,15 @@
 <script lang="ts">
   // The desktop app: a list of trips, or the itinerary of the open trip.
-  import { commands, type GeoCoordinates, type TripId, type TripSummary } from "@btt/shared/bindings";
+  import {
+    commands,
+    type GeoCoordinates,
+    type Traveller,
+    type TravellerId,
+    type TripId,
+    type TripSummary,
+  } from "@btt/shared/bindings";
   import ItineraryView from "@btt/shared/components/ItineraryView.svelte";
+  import SetupView from "@btt/shared/components/SetupView.svelte";
   import TripMap from "@btt/shared/components/TripMap.svelte";
   import type { PlaceFocusRequest } from "@btt/shared/map-features";
   import { onMount } from "svelte";
@@ -16,6 +24,15 @@
   let selectedPlaceId: number | null = $state(null);
   let focusRequest: PlaceFocusRequest | null = $state(null);
   let showProblemReport = $state(false);
+  /** The screens of an open trip. A trip opens on planning. */
+  type Screen = "setup" | "planning" | "tickets";
+  let screen: Screen = $state("planning");
+  const screens: { screen: Screen; label: string; enabled: boolean }[] = [
+    { screen: "setup", label: "Setup", enabled: true },
+    { screen: "planning", label: "Planning", enabled: true },
+    { screen: "tickets", label: "Tickets", enabled: false },
+  ];
+  let travellers: Traveller[] = $state([]);
   /** Where the map of the open trip looks, for problem reports. */
   let mapView: { center: GeoCoordinates; zoom: number } | null = $state(null);
 
@@ -28,10 +45,41 @@
     }
   }
 
+  async function refreshTravellers() {
+    const result = await commands.listTravellers();
+    if (result.status === "ok") {
+      travellers = result.data;
+    } else {
+      errorMessage = commandErrorMessage(result.error);
+    }
+  }
+
+  /** Saves a traveller profile and shows it in the list at once. */
+  async function saveTraveller(traveller: Traveller) {
+    const known = travellers.some((existing) => existing.id === traveller.id);
+    travellers = known
+      ? travellers.map((existing) => (existing.id === traveller.id ? traveller : existing))
+      : [...travellers, traveller];
+    const result = await commands.saveTraveller(traveller);
+    if (result.status === "error") {
+      errorMessage = commandErrorMessage(result.error);
+      await refreshTravellers();
+    }
+  }
+
+  async function deleteTraveller(travellerId: TravellerId) {
+    const result = await commands.deleteTraveller(travellerId);
+    if (result.status === "error") {
+      errorMessage = commandErrorMessage(result.error);
+    }
+    await refreshTravellers();
+  }
+
   async function openTrip(tripId: TripId) {
     const opened = await TauriTripSource.open(tripId);
     if (opened instanceof TauriTripSource) {
       openSource = opened;
+      screen = "planning";
       errorMessage = null;
     } else {
       errorMessage = commandErrorMessage(opened);
@@ -105,6 +153,7 @@
 
   onMount(() => {
     void refreshTrips();
+    void refreshTravellers();
   });
 </script>
 
@@ -171,6 +220,27 @@
         onClose={() => (showProblemReport = false)}
       />
     {/if}
+    <nav class="tabs" aria-label="Screens">
+      {#each screens as { screen: tab, label, enabled } (tab)}
+        <button
+          type="button"
+          class:active={screen === tab}
+          aria-current={screen === tab ? "page" : undefined}
+          disabled={!enabled}
+          onclick={() => (screen = tab)}
+        >
+          {label}
+        </button>
+      {/each}
+    </nav>
+    {#if screen === "setup"}
+      <SetupView
+        source={openSource}
+        {travellers}
+        onSaveTraveller={saveTraveller}
+        onDeleteTraveller={deleteTraveller}
+      />
+    {:else if screen === "planning"}
     <div class="workspace">
       <div class="itinerary-column">
         <ItineraryView
@@ -178,6 +248,7 @@
           {selectedPlaceId}
           onSelect={(placeId) => (selectedPlaceId = placeId)}
           onFocus={focusPlace}
+          onOpenSetup={() => (screen = "setup")}
         />
       </div>
       <div class="map-column">
@@ -190,6 +261,7 @@
         />
       </div>
     </div>
+    {/if}
   {/if}
 </main>
 
@@ -225,6 +297,24 @@
   .history-buttons {
     display: flex;
     gap: var(--space-1);
+  }
+
+  .tabs {
+    display: flex;
+    gap: var(--space-1);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .tabs button {
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: none;
+  }
+
+  .tabs button.active {
+    border-bottom-color: var(--color-accent);
+    font-weight: 600;
   }
 
   .workspace {

@@ -11,6 +11,7 @@ pub mod itinerary;
 pub mod place_search;
 pub mod plan;
 pub mod time;
+pub mod traveller;
 pub mod trip;
 
 pub use bounded::ValueOutOfRangeError;
@@ -35,7 +36,9 @@ pub use time::{
     DailyTimeWindow, DailyWindowLength, DurationMinutes, LocalTimeOfDay, TravelDayWindows,
     UnixTimeMinutes,
 };
+pub use traveller::{AgeGroup, DiscountCard, OwnedInterrailPass, Traveller};
 pub use trip::{
-    CURRENT_TRIP_SCHEMA_VERSION, ChosenJourney, InterrailPassPolicy, PriceWeight, StoredTrip,
-    TransferAversion, TravelClass, TravellerId, Trip, TripId, TripPreferences, TripSummary,
+    CURRENT_TRIP_SCHEMA_VERSION, ChosenJourney, FareType, InterrailPassPolicy, PriceWeight,
+    StoredTrip, TicketPreferences, TransferAversion, TravelClass, TravellerId, Trip, TripId,
+    TripPreferences, TripSummary,
 };
