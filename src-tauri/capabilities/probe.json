@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "probe",
+  "description": "Lets the probe window report what the page of a booking site loaded",
+  "windows": [
+    "probe"
+  ],
+  "remote": {
+    "urls": [
+      "https://int.bahn.de/*"
+    ]
+  },
+  "permissions": [
+    "core:default"
+  ]
+}
