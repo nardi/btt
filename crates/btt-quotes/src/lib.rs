@@ -4,7 +4,12 @@
 //! can break without notice and can be blocked. Each lives in its own module and is meant to be
 //! switched off by default.
 
+pub mod limiter;
 pub mod sbb;
+pub mod store;
+
+pub use limiter::RequestLimiter;
+pub use store::{MemoryStore, QuoteStore};
 
 use thiserror::Error;
 
@@ -25,6 +30,9 @@ pub enum QuoteError {
         /// The HTTP status.
         status: u16,
     },
+    /// Requests are stopped for a while after an earlier failure, so the site is left alone.
+    #[error("requests to the site are paused after a failure")]
+    Paused,
     /// The network request failed.
     #[error("request failed: {0}")]
     Network(#[from] reqwest::Error),

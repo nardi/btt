@@ -3,13 +3,18 @@
 //! Run `cargo run -p btt-quotes --example sbb_quote -- "<booking link>"`. The booking site can
 //! refuse automated clients, and then the example says so.
 
-use btt_quotes::sbb::SbbClient;
+use std::sync::Arc;
+
+use btt_quotes::MemoryStore;
+use btt_quotes::sbb::{SbbService, Search};
 
 #[tokio::main]
 async fn main() {
     let link = std::env::args().nth(1).expect("pass a booking link");
-    let client = SbbClient::new().expect("the HTTP client builds");
-    match client.quote(&link).await {
+    let search = Search::from_link(&link).expect("a booking link of the SBB site");
+    let service =
+        SbbService::new(Arc::new(MemoryStore::default())).expect("the HTTP client builds");
+    match service.quotes(&search).await {
         Ok(quotes) => {
             for quote in quotes {
                 let rides: Vec<String> = quote

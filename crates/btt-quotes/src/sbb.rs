@@ -5,20 +5,44 @@
 //! module follows the same two steps from a booking link such as
 //! `https://www.sbb.ch/en?stops=Basel+SBB_I8500010~Bern_I8507000&day=2026-10-16&time=06_30&moment=dep&reduction=none`.
 
+use std::sync::Arc;
+use std::time::Duration;
+
 use chrono::{DateTime, FixedOffset, NaiveDate, NaiveTime};
 use reqwest::Client;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-use crate::QuoteError;
+use crate::{QuoteError, QuoteStore, RequestLimiter};
 
-/// What the client says about itself.
+/// What the client says about itself. The CDN of the site refuses user agents that do not have
+/// the generic form `Mozilla/5.0 (compatible; ...)`, so the name of this client sits inside it.
 const USER_AGENT: &str = concat!(
-    "BigTrainTrip/",
+    "Mozilla/5.0 (compatible; BigTrainTrip/",
     env!("CARGO_PKG_VERSION"),
-    " (open-source train trip planner)"
+    ")"
 );
+
+/// The name sent in the Apollo client headers, which the service requires.
+const CLIENT_NAME: &str = "btt-quotes";
+
+/// The version sent in the Apollo client headers. The service refuses versions below a minimum
+/// that lies between 1.0.0 and 17.9.9, the range of its own web client.
+const CLIENT_VERSION: &str = "18.3.0";
+
+/// The least time between two requests to the site.
+const MINIMUM_INTERVAL: Duration = Duration::from_secs(2);
+
+/// How long requests stop after one fails.
+const FAILURE_PAUSE: Duration = Duration::from_secs(15 * 60);
+
+/// How long the trips and prices of a search are kept. Saver prices change with demand, so the
+/// time is short.
+const QUOTE_LIFETIME: Duration = Duration::from_secs(30 * 60);
+
+/// How long the address of the price service is kept.
+const ADDRESS_LIFETIME: Duration = Duration::from_secs(24 * 60 * 60);
 
 /// The query for the trips of a search, with the fields the quote reads.
 const TRIPS_QUERY: &str = "query Trips($input: TripInput!, $language: LanguageEnum!) { \
@@ -112,6 +136,28 @@ impl Search {
         })
     }
 
+    /// Returns the booking link of the search, in the form the site uses.
+    pub fn booking_link(&self) -> String {
+        format!(
+            "https://www.sbb.ch/en?stops={}_I{}~{}_I{}&day={}&time={}&moment={}&reduction=none",
+            self.origin.name.replace(' ', "+"),
+            self.origin.id,
+            self.destination.name.replace(' ', "+"),
+            self.destination.id,
+            self.date,
+            self.time.format("%H_%M"),
+            match self.moment {
+                Moment::Departure => "dep",
+                Moment::Arrival => "arr",
+            },
+        )
+    }
+
+    /// Returns the key under which the quotes of the search are kept.
+    pub fn cache_key(&self) -> String {
+        format!("sbb:{}", self.booking_link())
+    }
+
     /// Builds the GraphQL request for the trips of the search.
     pub fn trips_request(&self) -> Value {
         json!({
@@ -179,7 +225,7 @@ pub fn service_address(page: &str) -> Option<String> {
 }
 
 /// A ride of a trip.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Ride {
     /// The name of the first station.
     pub from: String,
@@ -194,7 +240,7 @@ pub struct Ride {
 }
 
 /// A trip that the search found.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Trip {
     /// The id the price request takes.
     pub id: String,
@@ -205,7 +251,7 @@ pub struct Trip {
 }
 
 /// A price for a class.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClassPrice {
     /// The price in the smallest unit of the currency, which is Rappen.
     pub price: Amount,
@@ -218,7 +264,7 @@ pub struct ClassPrice {
 }
 
 /// An amount of money.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Amount {
     /// The amount in the smallest unit of the currency.
     pub amount: u32,
@@ -227,7 +273,7 @@ pub struct Amount {
 }
 
 /// The prices of a trip.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TripPrices {
     /// The id of the trip.
     #[serde(rename = "tripId")]
@@ -327,7 +373,7 @@ pub fn parse_prices(response: &Value) -> Result<Vec<TripPrices>, QuoteError> {
 }
 
 /// A trip with its prices.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Quote {
     /// The trip.
     pub trip: Trip,
@@ -335,44 +381,67 @@ pub struct Quote {
     pub prices: Option<TripPrices>,
 }
 
-/// Fetches quotes from the SBB site.
-pub struct SbbClient {
+/// Fetches quotes from the SBB site, keeps them for a while and spaces its requests out.
+pub struct SbbService {
     /// The HTTP client, which keeps cookies between the page and the service.
     client: Client,
+    /// Keeps the address of the service and the quotes of searches.
+    store: Arc<dyn QuoteStore>,
+    /// Spaces requests out and stops them after a failure.
+    limiter: RequestLimiter,
 }
 
-impl SbbClient {
-    /// Creates a client that says what it is.
+impl SbbService {
+    /// Creates a service that keeps its quotes in a store.
     ///
     /// # Errors
     ///
     /// Returns an error when the HTTP client cannot be built.
-    pub fn new() -> Result<Self, QuoteError> {
+    pub fn new(store: Arc<dyn QuoteStore>) -> Result<Self, QuoteError> {
         Ok(Self {
             client: Client::builder()
                 .user_agent(USER_AGENT)
                 .cookie_store(true)
+                .timeout(Duration::from_secs(20))
                 .build()?,
+            store,
+            limiter: RequestLimiter::new(MINIMUM_INTERVAL, FAILURE_PAUSE),
         })
     }
 
-    /// Opens the booking link, finds the price service in its page, and asks it for the trips of
-    /// the search and then for their prices.
+    /// Returns the trips of a search with their prices. A search made in the last half hour is
+    /// answered from the store without a request.
     ///
     /// # Errors
     ///
-    /// Returns an error when the link is not supported, a request fails or is refused, or a
-    /// response is not what the page's own requests return.
-    pub async fn quote(&self, link: &str) -> Result<Vec<Quote>, QuoteError> {
-        let search = Search::from_link(link)?;
-        let page = self.client.get(link).send().await?;
-        if !page.status().is_success() {
-            return Err(QuoteError::Refused {
-                url: link.to_owned(),
-                status: page.status().as_u16(),
-            });
+    /// Returns an error when requests are paused after a failure, a request fails or is
+    /// refused, or a response is not what the requests of the page return. A failure pauses
+    /// requests for 15 minutes.
+    pub async fn quotes(&self, search: &Search) -> Result<Vec<Quote>, QuoteError> {
+        let key = search.cache_key();
+        if let Some(quotes) = self
+            .store
+            .load(&key, QUOTE_LIFETIME)
+            .and_then(|document| serde_json::from_str(&document).ok())
+        {
+            return Ok(quotes);
         }
-        let address = service_address(&page.text().await?).ok_or(QuoteError::NoServiceAddress)?;
+        let result = self.fetch(search).await;
+        match &result {
+            Ok(quotes) => {
+                if let Ok(document) = serde_json::to_string(quotes) {
+                    self.store.save(&key, &document);
+                }
+            }
+            Err(QuoteError::Paused | QuoteError::BadLink(_)) => {}
+            Err(_) => self.limiter.report_failure().await,
+        }
+        result
+    }
+
+    /// Asks the site for the trips of a search and then for their prices.
+    async fn fetch(&self, search: &Search) -> Result<Vec<Quote>, QuoteError> {
+        let address = self.service_address(&search.booking_link()).await?;
         let trips = parse_trips(&self.post(&address, &search.trips_request()).await?)?;
         let ids: Vec<String> = trips.iter().map(|trip| trip.id.clone()).collect();
         let prices = parse_prices(
@@ -395,12 +464,37 @@ impl SbbClient {
             .collect())
     }
 
+    /// Returns the address of the price service, from the store or else from the booking page.
+    async fn service_address(&self, link: &str) -> Result<String, QuoteError> {
+        if let Some(address) = self.store.load("sbb:service-address", ADDRESS_LIFETIME) {
+            return Ok(address);
+        }
+        if !self.limiter.wait_for_turn().await {
+            return Err(QuoteError::Paused);
+        }
+        let page = self.client.get(link).send().await?;
+        if !page.status().is_success() {
+            return Err(QuoteError::Refused {
+                url: link.to_owned(),
+                status: page.status().as_u16(),
+            });
+        }
+        let address = service_address(&page.text().await?).ok_or(QuoteError::NoServiceAddress)?;
+        self.store.save("sbb:service-address", &address);
+        Ok(address)
+    }
+
     /// Posts a GraphQL request and returns the JSON answer.
     async fn post(&self, address: &str, body: &Value) -> Result<Value, QuoteError> {
+        if !self.limiter.wait_for_turn().await {
+            return Err(QuoteError::Paused);
+        }
         let response = self
             .client
             .post(address)
             .header("accept", "application/graphql-response+json")
+            .header("apollographql-client-name", CLIENT_NAME)
+            .header("apollographql-client-version", CLIENT_VERSION)
             .json(body)
             .send()
             .await?;
@@ -412,6 +506,23 @@ impl SbbClient {
         }
         Ok(response.json().await?)
     }
+}
+
+/// Returns the quote of the trip that starts with a ride at the given departure and has the
+/// given number of rides.
+pub fn find_trip(
+    quotes: &[Quote],
+    first_departure: DateTime<FixedOffset>,
+    ride_count: usize,
+) -> Option<&Quote> {
+    quotes.iter().find(|quote| {
+        quote.trip.rides.len() == ride_count
+            && quote
+                .trip
+                .rides
+                .first()
+                .is_some_and(|ride| ride.departure == first_departure)
+    })
 }
 
 #[cfg(test)]
