@@ -55,19 +55,19 @@ const SCHEMA_MIGRATIONS: &[M<'static>] = &[
         leg_result BLOB NOT NULL
     ) STRICT;",
     ),
-    // Documents fetched from booking sites, by key, with the time they were fetched.
-    M::up(
-        "CREATE TABLE quote_cache (
-        cache_key TEXT PRIMARY KEY NOT NULL,
-        fetched_at INTEGER NOT NULL,
-        document TEXT NOT NULL
-    ) STRICT;",
-    ),
     // Traveller profiles as JSON documents, like trips. They belong to the app and not to a trip.
     M::up(
         "CREATE TABLE travellers (
         traveller_id BLOB PRIMARY KEY NOT NULL,
         position INTEGER NOT NULL,
+        document TEXT NOT NULL
+    ) STRICT;",
+    ),
+    // Documents fetched from booking sites, by key, with the time they were fetched.
+    M::up(
+        "CREATE TABLE quote_cache (
+        cache_key TEXT PRIMARY KEY NOT NULL,
+        fetched_at INTEGER NOT NULL,
         document TEXT NOT NULL
     ) STRICT;",
     ),
@@ -458,6 +458,19 @@ mod tests {
         assert!(storage.delete_traveller(first.id).unwrap());
         assert!(!storage.delete_traveller(first.id).unwrap());
         assert_eq!(storage.list_travellers().unwrap().len(), 1);
+    }
+
+    /// A database written before the quote cache existed has the first three migrations applied.
+    /// Migrations may only be appended, so opening it must add the quote cache and nothing else.
+    #[test]
+    fn a_database_with_the_first_three_migrations_opens() {
+        let mut connection = Connection::open_in_memory().unwrap();
+        Migrations::new(SCHEMA_MIGRATIONS[..3].to_vec())
+            .to_latest(&mut connection)
+            .unwrap();
+        let storage = Storage::from_connection(connection).unwrap();
+        storage.store_quote("key", "one").unwrap();
+        assert!(storage.list_travellers().unwrap().is_empty());
     }
 
     #[test]
