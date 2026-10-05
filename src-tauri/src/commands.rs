@@ -5,9 +5,10 @@
 
 use btt_model::edit::NewTripPlace;
 use btt_model::{
-    GeoCoordinates, PlaceInsertionPoint, PlaceSearchResult, PlanningSessionEvent,
-    StationSearchRadius, TicketLeg, TicketPlan, Traveller, TravellerId, Trip, TripEdit,
-    TripEditError, TripEditOutcome, TripId, TripSummary,
+    EuroCents, GeoCoordinates, LiveQuoteRequest, PlaceInsertionPoint, PlaceSearchResult,
+    PlanningSessionEvent, Price, PriceKind, PriceSource, StationSearchRadius, TicketLeg,
+    TicketPlan, TravelClass, Traveller, TravellerId, Trip, TripEdit, TripEditError,
+    TripEditOutcome, TripId, TripSummary,
 };
 use chrono::NaiveDate;
 use serde::Serialize;
@@ -260,6 +261,73 @@ pub fn plan_tickets(
         &state.fare_data,
         &state.price_book,
     ))
+}
+
+/// Asks the booking site named in a ticket's booking link for the live price of the ticket.
+///
+/// Returns `None` when the site is not one the app reads, the preferences or a failure of the
+/// site leave no price, or the site has no trip at the time. The site's answers are kept for
+/// half an hour, and requests are spaced out and paused after a failure.
+#[tauri::command]
+#[specta::specta]
+pub async fn fetch_live_quote(
+    state: State<'_, AppState>,
+    request: LiveQuoteRequest,
+) -> Result<Option<Price>, CommandError> {
+    let Some(service) = &state.sbb_service else {
+        return Ok(None);
+    };
+    let Ok(search) = btt_quotes::sbb::Search::from_link(&request.booking_link) else {
+        return Ok(None);
+    };
+    let quotes = match service.quotes(&search).await {
+        Ok(quotes) => quotes,
+        Err(error) => {
+            tracing::info!(%error, "no live price from the SBB site");
+            return Ok(None);
+        }
+    };
+    let departure_seconds = i64::from(request.first_departure_time.0) * 60;
+    let Some(quote) =
+        btt_quotes::sbb::find_trip(&quotes, departure_seconds, usize::from(request.ride_count))
+    else {
+        return Ok(None);
+    };
+    let class = match request.travel_class {
+        TravelClass::First => "FIRST",
+        TravelClass::Second => "SECOND",
+    };
+    let Some(class_price) = quote.prices.as_ref().and_then(|prices| {
+        prices
+            .prices
+            .iter()
+            .find(|price| price.travel_class == class)
+    }) else {
+        return Ok(None);
+    };
+    if class_price.price.currency != "CHF" {
+        return Ok(None);
+    }
+    let francs = f64::from(class_price.price.amount) / 100.0;
+    let cents = EuroCents::from_euro(francs * state.fare_data.chf_to_eur);
+    Ok(Some(Price {
+        low: cents,
+        high: cents,
+        kind: PriceKind::Live,
+        source: PriceSource {
+            name: "SBB booking site".into(),
+            note: format!(
+                "CHF {francs:.2} for {} class, {}, converted at 1 CHF = {} EUR, a fixed rough rate. \
+                 The booking site shows the final price.",
+                class.to_lowercase(),
+                class_price.after_sale_flexibility.to_lowercase().replace('_', " "),
+                state.fare_data.chf_to_eur
+            )
+            .into(),
+            as_of: Some(today_utc()),
+            page: Some(request.booking_link),
+        },
+    }))
 }
 
 /// Searches settlements and railway stations by name. Answers repeated searches from the

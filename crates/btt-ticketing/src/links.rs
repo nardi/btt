@@ -1,6 +1,8 @@
 //! Links to the places where tickets are sold.
 
-use btt_fares::ItaloStations;
+use std::fmt::Write as _;
+
+use btt_fares::{ItaloStations, SbbStations};
 use btt_model::{AgeGroup, BookingLink, BookingLinkKind};
 use chrono::NaiveDate;
 
@@ -130,6 +132,51 @@ pub fn italo_link(
     })
 }
 
+/// Encodes a station name for a booking link: a space is `+`, and anything that is not an ASCII
+/// letter or digit or one of `-._~` is `%XX`.
+fn encode_name(text: &str) -> String {
+    let mut encoded = String::new();
+    for byte in text.bytes() {
+        match byte {
+            b' ' => encoded.push('+'),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                encoded.push(char::from(byte));
+            }
+            // Writing to a string never fails.
+            other => {
+                let _ = write!(encoded, "%{other:02X}");
+            }
+        }
+    }
+    encoded
+}
+
+/// Returns a link to the SBB search for the stations of two rides in Switzerland, or `None`
+/// when a station is not a Swiss one the table knows. The link asks for the departure of the
+/// first ride, so the first trip of the answer is the planned one.
+pub fn sbb_link(
+    stations: &SbbStations,
+    first: &RideInput,
+    last: &RideInput,
+) -> Option<BookingLink> {
+    let origin = stations.station_near(first.from_coordinates)?;
+    let destination = stations.station_near(last.to_coordinates)?;
+    let url = format!(
+        "https://www.sbb.ch/en?stops={}_I{}~{}_I{}&day={}&time={}&moment=dep&reduction=none",
+        encode_name(&origin.name),
+        origin.uic,
+        encode_name(&destination.name),
+        destination.uic,
+        first.departure_date,
+        first.departure_clock.format("%H_%M"),
+    );
+    Some(BookingLink {
+        label: "Search on sbb.ch".into(),
+        url: url.into(),
+        kind: BookingLinkKind::Search,
+    })
+}
+
 /// Returns the link to buy the Interrail Global Pass.
 pub fn pass_link() -> BookingLink {
     BookingLink {
@@ -162,6 +209,7 @@ mod tests {
             .collect();
         urls.push(shop_link(None).url.to_string());
         urls.push(pass_link().url.to_string());
+        urls.push("https://www.sbb.ch/en".to_owned());
         urls.push(italo_search_url(
             "RMT",
             "MC_",

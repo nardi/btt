@@ -8,6 +8,7 @@ use specta::Type;
 use crate::itinerary::TripPlaceId;
 use crate::plan::TrainLabel;
 use crate::time::UnixTimeMinutes;
+use crate::trip::TravelClass;
 
 /// An amount of money in euro cents.
 #[derive(
@@ -154,6 +155,21 @@ pub struct TicketItem {
     pub price: Price,
     /// Where to buy it.
     pub booking_link: Option<BookingLink>,
+    /// What to ask a booking site for the price of this ticket, if a site can tell it.
+    pub live_quote_request: Option<LiveQuoteRequest>,
+}
+
+/// A request for the live price of a ticket on the booking site that sells it.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub struct LiveQuoteRequest {
+    /// The booking link of the ticket, which names the site and the search.
+    pub booking_link: SmolStr,
+    /// Departure of the first train the ticket covers, which picks the trip from the answer.
+    pub first_departure_time: UnixTimeMinutes,
+    /// Number of trains the ticket covers.
+    pub ride_count: u8,
+    /// Class the price is asked for.
+    pub travel_class: TravelClass,
 }
 
 /// What a strategy is.

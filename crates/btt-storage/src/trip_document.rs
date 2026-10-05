@@ -13,11 +13,23 @@ type TripDocumentMigration = fn(&mut Value);
 ///
 /// A change to the `Trip` layout adds a function here, bumps `CURRENT_TRIP_SCHEMA_VERSION` and
 /// adds a fixture for the old version.
-const TRIP_DOCUMENT_MIGRATIONS: [TripDocumentMigration; 3] = [
+const TRIP_DOCUMENT_MIGRATIONS: [TripDocumentMigration; 4] = [
     wrap_window_overrides,
     night_windows_to_bedtime,
     add_ticket_preferences,
+    add_live_prices,
 ];
+
+/// Version 5 adds the choice to look up live prices on booking sites, which is on.
+fn add_live_prices(document: &mut Value) {
+    if let Some(Value::Object(preferences)) =
+        document.pointer_mut("/trip/preferences/ticket_preferences")
+    {
+        preferences
+            .entry("live_prices")
+            .or_insert(Value::Bool(true));
+    }
+}
 
 /// Version 4 adds the ticket preferences to the trip preferences. A trip written before then
 /// gets the defaults, which compare passes with single tickets and reserve no optional seats.
@@ -142,6 +154,9 @@ mod tests {
     /// A document written by schema version 3, before the ticket preferences existed.
     const TRIP_DOCUMENT_VERSION_3: &str = include_str!("../tests/fixtures/trip_v3.json");
 
+    /// A document written by schema version 4, before the live price choice existed.
+    const TRIP_DOCUMENT_VERSION_4: &str = include_str!("../tests/fixtures/trip_v4.json");
+
     #[test]
     fn every_schema_version_fixture_loads() {
         assert_eq!(
@@ -173,6 +188,9 @@ mod tests {
             trip.preferences.ticket_preferences,
             TicketPreferences::default()
         );
+
+        let trip = trip_from_document(TRIP_DOCUMENT_VERSION_4).unwrap();
+        assert!(trip.preferences.ticket_preferences.live_prices);
     }
 
     #[test]

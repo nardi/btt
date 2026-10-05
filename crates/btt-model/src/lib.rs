@@ -34,8 +34,9 @@ pub use plan::{
     WayToStationMode,
 };
 pub use tickets::{
-    BookingLink, BookingLinkKind, EuroCents, Price, PriceKind, PriceSource, PriceTotal,
-    StrategyKind, TicketItem, TicketLeg, TicketPlan, TicketProduct, TicketRide, TicketStrategy,
+    BookingLink, BookingLinkKind, EuroCents, LiveQuoteRequest, Price, PriceKind, PriceSource,
+    PriceTotal, StrategyKind, TicketItem, TicketLeg, TicketPlan, TicketProduct, TicketRide,
+    TicketStrategy,
 };
 pub use time::{
     DailyTimeWindow, DailyWindowLength, DurationMinutes, LocalTimeOfDay, TravelDayWindows,

@@ -1,6 +1,14 @@
 // Helpers for showing ticket plans.
 
-import type { EuroCents, PriceKind, PriceTotal, TicketRide } from "./bindings";
+import type {
+  EuroCents,
+  Price,
+  PriceKind,
+  PriceTotal,
+  TicketItem,
+  TicketRide,
+  TicketStrategy,
+} from "./bindings";
 
 /** Formats an amount in euro cents, such as `€12.50`, and `€12` for whole euros. */
 export function formatEuro(cents: EuroCents): string {
@@ -75,4 +83,41 @@ export function ridesByDate(rides: readonly TicketRide[]): { date: string; indic
     }
   });
   return groups;
+}
+
+/** The live prices that came back, by the key of the ticket they are for. `null` means none. */
+export type LivePrices = ReadonlyMap<string, Price | null>;
+
+/** Returns the key that a ticket's live price is kept under, or `null` for a ticket with none. */
+export function liveQuoteKey(item: TicketItem): string | null {
+  const request = item.live_quote_request;
+  return request === null ? null : `${request.booking_link}|${request.first_departure_time}|${request.ride_count}|${request.travel_class}`;
+}
+
+/** Returns the live price of a ticket, or `null` when it has none yet. */
+export function livePriceOf(item: TicketItem, live: LivePrices): Price | null {
+  const key = liveQuoteKey(item);
+  return key === null ? null : (live.get(key) ?? null);
+}
+
+/** Returns the price to show for a ticket: its live price if it has one, else its estimate. */
+export function effectivePrice(item: TicketItem, live: LivePrices): Price {
+  return livePriceOf(item, live) ?? item.price;
+}
+
+/** Adds up the prices of a strategy, with a live price in place of the estimate where there is one. */
+export function adjustedTotal(strategy: TicketStrategy, live: LivePrices): PriceTotal {
+  const order: PriceKind[] = ["Formula", "Live", "Range"];
+  let low = 0;
+  let high = 0;
+  let kind: PriceKind = "Formula";
+  for (const item of strategy.items) {
+    const price = effectivePrice(item, live);
+    low += price.low;
+    high += price.high;
+    if (order.indexOf(price.kind) > order.indexOf(kind)) {
+      kind = price.kind;
+    }
+  }
+  return { low, high, kind };
 }

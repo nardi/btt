@@ -13,6 +13,8 @@ use btt_planner::{
     DEFAULT_PLANNING_DEBOUNCE, LegCacheKey, LegPlanningBackend, LegResultStore, PlanningEventSink,
     StubBackend, TimetableBundleRouter, TripPlanningSession,
 };
+use btt_quotes::QuoteStore;
+use btt_quotes::sbb::SbbService;
 use btt_storage::Storage;
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
@@ -58,6 +60,27 @@ impl LegResultStore for StorageLegResultStore {
     }
 }
 
+/// Keeps quotes from booking sites in the app database, so they survive a restart.
+struct StorageQuoteStore(Arc<Storage>);
+
+impl QuoteStore for StorageQuoteStore {
+    fn load(&self, key: &str, max_age: std::time::Duration) -> Option<String> {
+        let max_age_seconds = i64::try_from(max_age.as_secs()).unwrap_or(i64::MAX);
+        self.0
+            .cached_quote(key, max_age_seconds)
+            .unwrap_or_else(|error| {
+                tracing::warn!(%error, "could not read a quote from the database");
+                None
+            })
+    }
+
+    fn save(&self, key: &str, document: &str) {
+        if let Err(error) = self.0.store_quote(key, document) {
+            tracing::warn!(%error, "could not save a quote to the database");
+        }
+    }
+}
+
 /// A trip the frontend has open, with the session that plans it.
 pub struct OpenTrip {
     /// The current state of the trip, which every edit starts from.
@@ -81,6 +104,8 @@ pub struct AppState {
     pub fare_data: FareData,
     /// The sources that price single tickets.
     pub price_book: PriceBook,
+    /// Looks up prices on the SBB booking site. `None` when its HTTP client could not be built.
+    pub sbb_service: Option<SbbService>,
     /// The timetable bundle the planner loaded, if any.
     pub bundle_path: Option<PathBuf>,
     /// The most recent log lines, for problem reports.
@@ -136,10 +161,15 @@ impl AppState {
         // The data files are compiled in and a test in `btt-fares` loads them, so this cannot fail.
         let fare_data = FareData::bundled().expect("the bundled fare data is valid");
         let price_book = PriceBook::from_data(&fare_data);
+        let storage = Arc::new(storage);
+        let sbb_service = SbbService::new(Arc::new(StorageQuoteStore(Arc::clone(&storage))))
+            .map_err(|error| tracing::warn!(%error, "live SBB prices are not available"))
+            .ok();
         Ok(Self {
             fare_data,
             price_book,
-            storage: Arc::new(storage),
+            sbb_service,
+            storage,
             planning_backend,
             photon: PhotonClient::new(PUBLIC_PHOTON_BASE_URL, USER_AGENT)?,
             bundle_path,

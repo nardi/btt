@@ -106,6 +106,30 @@ pub(crate) fn tariffs_from_toml(text: &str) -> Result<Vec<DistanceTariff>, FareD
     Ok(file.tariff)
 }
 
+/// The `[exchange_rates]` table of `tariffs.toml`.
+#[derive(Deserialize)]
+struct ExchangeRatesFile {
+    /// The table.
+    exchange_rates: ExchangeRates,
+}
+
+/// Fixed rough rates to euro.
+#[derive(Deserialize)]
+struct ExchangeRates {
+    /// Euro for one Swiss franc.
+    chf_to_eur: f64,
+}
+
+/// Reads the rate of the Swiss franc from the text of `tariffs.toml`.
+pub(crate) fn chf_to_eur(text: &str) -> Result<f64, FareDataError> {
+    let file: ExchangeRatesFile =
+        toml::from_str(text).map_err(|source| FareDataError::Invalid {
+            file: "tariffs.toml",
+            source,
+        })?;
+    Ok(file.exchange_rates.chf_to_eur)
+}
+
 /// Reads the booking windows from the text of `booking_windows.toml`.
 pub(crate) fn windows_from_toml(text: &str) -> Result<Vec<BookingWindow>, FareDataError> {
     let file: WindowsFile = toml::from_str(text).map_err(|source| FareDataError::Invalid {

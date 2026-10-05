@@ -4,7 +4,7 @@ use btt_fares::country_of_time_zone;
 use btt_model::{
     GeoCoordinates, Journey, LegPlanStation, TrainLabel, TrainRide, TripPlaceId, UnixTimeMinutes,
 };
-use chrono::{DateTime, NaiveDate};
+use chrono::{DateTime, NaiveDate, NaiveTime};
 use chrono_tz::Tz;
 use smol_str::SmolStr;
 
@@ -31,6 +31,8 @@ pub struct RideInput {
     pub time_zone: SmolStr,
     /// Local date of the departure, which is the ride's travel day.
     pub departure_date: NaiveDate,
+    /// Local time of day of the departure.
+    pub departure_clock: NaiveTime,
     /// Local date of the arrival.
     pub arrival_date: NaiveDate,
     /// Country of the boarding station, if known.
@@ -43,11 +45,18 @@ pub struct RideInput {
     pub offers_berths: bool,
 }
 
-/// Returns the local date of a moment in a time zone, or `None` for an unknown zone.
-fn local_date(moment: UnixTimeMinutes, time_zone: &str) -> Option<NaiveDate> {
+/// Returns the local date and time of day of a moment in a time zone, or `None` for an unknown
+/// zone.
+fn local_moment(moment: UnixTimeMinutes, time_zone: &str) -> Option<(NaiveDate, NaiveTime)> {
     let zone: Tz = time_zone.parse().ok()?;
     let utc = DateTime::from_timestamp(i64::from(moment.0) * 60, 0)?;
-    Some(utc.with_timezone(&zone).date_naive())
+    let local = utc.with_timezone(&zone);
+    Some((local.date_naive(), local.time()))
+}
+
+/// Returns the local date of a moment in a time zone, or `None` for an unknown zone.
+fn local_date(moment: UnixTimeMinutes, time_zone: &str) -> Option<NaiveDate> {
+    local_moment(moment, time_zone).map(|(date, _)| date)
 }
 
 /// Returns the length of a ride along its line in kilometres, from the points of the line or
@@ -83,6 +92,8 @@ pub fn rides_of_journey(
         .filter_map(|ride| {
             let from = stations.get(usize::from(ride.boarding_station.0))?;
             let to = stations.get(usize::from(ride.alighting_station.0))?;
+            let (departure_date, departure_clock) =
+                local_moment(ride.departure_time, &from.time_zone)?;
             Some(RideInput {
                 leg_arrival_place_id,
                 train_label: ride.train_label.clone(),
@@ -93,7 +104,8 @@ pub fn rides_of_journey(
                 departure_time: ride.departure_time,
                 arrival_time: ride.arrival_time,
                 time_zone: from.time_zone.clone(),
-                departure_date: local_date(ride.departure_time, &from.time_zone)?,
+                departure_date,
+                departure_clock,
                 arrival_date: local_date(ride.arrival_time, &to.time_zone)?,
                 from_country: country_of_time_zone(&from.time_zone).map(Into::into),
                 to_country: country_of_time_zone(&to.time_zone).map(Into::into),

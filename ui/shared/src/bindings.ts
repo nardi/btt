@@ -79,6 +79,23 @@ export const commands = {
 	 */
 	planTickets: (tripId: TripId, legs: TicketLeg[]) => typedError<TicketPlan, CommandError>(__TAURI_INVOKE("plan_tickets", { tripId, legs })),
 	/**
+	 *  Asks the booking site named in a ticket's booking link for the live price of the ticket.
+	 * 
+	 *  Returns `None` when the site is not one the app reads, the preferences or a failure of the
+	 *  site leave no price, or the site has no trip at the time. The site's answers are kept for
+	 *  half an hour, and requests are spaced out and paused after a failure.
+	 */
+	fetchLiveQuote: (request: LiveQuoteRequest) => typedError<{
+	/**  The lowest price the source allows. Equal to `high` for a formula. */
+	low: EuroCents,
+	/**  The highest price the source allows. */
+	high: EuroCents,
+	/**  How sure the price is. */
+	kind: PriceKind,
+	/**  Where the price comes from. */
+	source: PriceSource,
+} | null, CommandError>(__TAURI_INVOKE("fetch_live_quote", { request })),
+	/**
 	 *  Asks where to save a problem report for a trip and writes it there. Returns the path of the
 	 *  saved file, or `None` when the traveller cancelled.
 	 * 
@@ -400,6 +417,18 @@ export type LegTravelMode =
 /**  Exactly one night train with a berth, plus optional trains before and after it. */
 { Overnight: OvernightLegOptions };
 
+/**  A request for the live price of a ticket on the booking site that sells it. */
+export type LiveQuoteRequest = {
+	/**  The booking link of the ticket, which names the site and the search. */
+	booking_link: string,
+	/**  Departure of the first train the ticket covers, which picks the trip from the answer. */
+	first_departure_time: UnixTimeMinutes,
+	/**  Number of trains the ticket covers. */
+	ride_count: number,
+	/**  Class the price is asked for. */
+	travel_class: TravelClass,
+};
+
 /**  A time of day on the local clock of a place, from 00:00 to 23:59. */
 export type LocalTimeOfDay = number;
 
@@ -671,6 +700,8 @@ export type TicketItem = {
 	price: Price,
 	/**  Where to buy it. */
 	booking_link: BookingLink | null,
+	/**  What to ask a booking site for the price of this ticket, if a site can tell it. */
+	live_quote_request: LiveQuoteRequest | null,
 };
 
 /**  The chosen journey of one leg, as the frontend hands it over to price the trip. */
@@ -695,7 +726,7 @@ export type TicketPlan = {
 	notes: string[],
 };
 
-/**  How tickets for the trip are chosen. */
+/**  How tickets for the trip are chosen. The options are independent switches. */
 export type TicketPreferences = {
 	/**  Whether the optimizer compares an Interrail pass with single tickets. */
 	consider_passes: boolean,
@@ -705,6 +736,11 @@ export type TicketPreferences = {
 	fare_type: FareType,
 	/**  Whether optional seat reservations are bought, so they count in the price. */
 	reserve_optional_seats: boolean,
+	/**
+	 *  Whether prices are looked up on the booking sites of operators. These sites are not
+	 *  meant to be read by programs, so the lookup is a choice.
+	 */
+	live_prices: boolean,
 	/**
 	 *  The day tickets are assumed to be bought, which decides the booking window. `None` means
 	 *  today.

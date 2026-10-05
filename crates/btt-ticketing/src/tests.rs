@@ -39,6 +39,7 @@ fn ride(
         arrival_time: UnixTimeMinutes(day * 1440 + 300),
         time_zone: "Europe/Vienna".into(),
         departure_date: date(day),
+        departure_clock: chrono::NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
         arrival_date: date(day + u32::from(offers_berths)),
         from_country: Some(countries.0.into()),
         to_country: Some(countries.1.into()),
@@ -407,4 +408,46 @@ fn an_italo_ticket_links_to_the_italo_site_with_station_codes() {
     let link = plan.strategies[0].items[0].booking_link.as_ref().unwrap();
     assert!(link.url.starts_with("https://biglietti.italotreno.com/"));
     assert!(link.url.contains("osc=RG_&dsc=RMT&jt=single&od=01/07/2026"));
+}
+
+#[test]
+fn a_swiss_ticket_gets_an_sbb_search_and_a_live_price_request() {
+    let mut swiss = ride(0, ("CH", "CH"), "IC", 100.0, false);
+    swiss.from_coordinates = btt_model::GeoCoordinates::from_degrees(47.5474, 7.5896).unwrap();
+    swiss.to_coordinates = btt_model::GeoCoordinates::from_degrees(46.9490, 7.4392).unwrap();
+    let plan = plan(vec![swiss], None);
+    let item = &plan.strategies[0].items[0];
+    let link = item.booking_link.as_ref().unwrap();
+    // The booking site's own search form reads the link back to the same stations.
+    let search = btt_quotes::sbb::Search::from_link(&link.url).unwrap();
+    assert_eq!(search.origin.id, "8500010");
+    assert_eq!(search.destination.id, "8507000");
+    assert_eq!(search.time.to_string(), "08:00:00");
+    let request = item.live_quote_request.as_ref().unwrap();
+    assert_eq!(request.booking_link, link.url);
+    assert_eq!(request.ride_count, 1);
+}
+
+#[test]
+fn live_prices_off_asks_for_no_live_price() {
+    let mut swiss = ride(0, ("CH", "CH"), "IC", 100.0, false);
+    swiss.from_coordinates = btt_model::GeoCoordinates::from_degrees(47.5474, 7.5896).unwrap();
+    swiss.to_coordinates = btt_model::GeoCoordinates::from_degrees(46.9490, 7.4392).unwrap();
+    let data = FareData::bundled().unwrap();
+    let book = PriceBook::from_data(&data);
+    let preferences = TicketPreferences {
+        live_prices: false,
+        ..TicketPreferences::default()
+    };
+    let plan = plan_tickets(
+        &TicketRequest {
+            rides: vec![swiss],
+            traveller: None,
+            preferences: &preferences,
+            today: date(0),
+        },
+        &data,
+        &book,
+    );
+    assert!(plan.strategies[0].items[0].live_quote_request.is_none());
 }

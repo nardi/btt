@@ -59,6 +59,16 @@
     Reserve seats where a reservation is optional
   </label>
   <label>
+    <input
+      type="checkbox"
+      checked={preferences.live_prices}
+      {disabled}
+      onchange={(event) => update({ live_prices: event.currentTarget.checked })}
+    />
+    Look up live prices on booking sites
+    <span class="hint">unofficial, sbb.ch only for now</span>
+  </label>
+  <label>
     <span class="label">Buying on</span>
     <input
       type="date"

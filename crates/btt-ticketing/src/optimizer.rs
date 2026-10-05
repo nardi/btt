@@ -513,7 +513,8 @@ impl<'a> Problem<'a> {
                 .collect();
             let indices: Vec<usize> = (first..=last).collect();
             let sales = self.sales_text(&rides[0]);
-            builder.add(
+            let (link, live_request) = self.single_ticket_link(rides);
+            let id = builder.add(
                 TicketProduct::SingleTicket,
                 format!("Single ticket, {}", names.join(" + ")),
                 format!(
@@ -524,28 +525,55 @@ impl<'a> Problem<'a> {
                 ),
                 &indices,
                 self.run_price(first, last).clone(),
-                Some(self.single_ticket_link(rides)),
+                Some(link),
             );
+            builder.items[usize::from(id)]
+                .as_mut()
+                .expect("the ticket was just added")
+                .live_quote_request = live_request;
         }
     }
 
-    /// Returns the link to buy a ticket for a run of rides. Italo trains are sold on the Italo
-    /// site, and the others at the shop of the country of the first ride.
-    fn single_ticket_link(&self, rides: &[RideInput]) -> btt_model::BookingLink {
+    /// Returns the link to buy a ticket for a run of rides, and the request for its live price
+    /// when the booking site can tell it. Italo trains are sold on the Italo site, rides in
+    /// Switzerland on the SBB site, and the others at the shop of the country of the first ride.
+    fn single_ticket_link(
+        &self,
+        rides: &[RideInput],
+    ) -> (btt_model::BookingLink, Option<btt_model::LiveQuoteRequest>) {
         let all_italo = rides
             .iter()
             .all(|ride| ride.train_label.category.eq_ignore_ascii_case("Italo"));
-        let italo = all_italo
-            .then(|| {
-                crate::links::italo_link(
-                    &self.data.italo_stations,
-                    &rides[0],
-                    &rides[rides.len() - 1],
-                    self.settings.age_group,
-                )
-            })
-            .flatten();
-        italo.unwrap_or_else(|| shop_link(rides[0].from_country.as_deref()))
+        if all_italo
+            && let Some(link) = crate::links::italo_link(
+                &self.data.italo_stations,
+                &rides[0],
+                &rides[rides.len() - 1],
+                self.settings.age_group,
+            )
+        {
+            return (link, None);
+        }
+        let all_swiss = rides.iter().all(|ride| {
+            ride.from_country.as_deref() == Some("CH") && ride.to_country.as_deref() == Some("CH")
+        });
+        if all_swiss
+            && let Some(link) =
+                crate::links::sbb_link(&self.data.sbb_stations, &rides[0], &rides[rides.len() - 1])
+        {
+            let request =
+                self.settings
+                    .preferences
+                    .live_prices
+                    .then(|| btt_model::LiveQuoteRequest {
+                        booking_link: link.url.clone(),
+                        first_departure_time: rides[0].departure_time,
+                        ride_count: u8::try_from(rides.len()).unwrap_or(u8::MAX),
+                        travel_class: self.settings.class,
+                    });
+            return (link, request);
+        }
+        (shop_link(rides[0].from_country.as_deref()), None)
     }
 
     /// Builds the strategy of single tickets for every ride.
@@ -740,6 +768,7 @@ impl StrategyBuilder {
                 .collect(),
             price,
             booking_link,
+            live_quote_request: None,
         });
     }
 
@@ -752,12 +781,13 @@ impl StrategyBuilder {
         rides: &[usize],
         price: Price,
         booking_link: Option<btt_model::BookingLink>,
-    ) {
+    ) -> u16 {
         let id = self.reserve_id();
         for &ride in rides {
             self.cover_with(ride, id);
         }
         self.fill(id, product, title, detail, rides, price, booking_link);
+        id
     }
 
     /// Finishes the strategy.

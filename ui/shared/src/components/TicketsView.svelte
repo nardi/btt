@@ -3,9 +3,13 @@
   import type { Price, TicketPlan, TicketStrategy } from "../bindings";
   import { formatDate, formatTimeInZone } from "../format";
   import {
+    adjustedTotal,
+    effectivePrice,
     formatEuro,
     formatPriceRange,
     formatTotal,
+    livePriceOf,
+    type LivePrices,
     priceKindDescription,
     priceKindLabel,
     ridesByDate,
@@ -15,12 +19,18 @@
   let {
     plan,
     loading,
+    livePrices,
+    liveLoading,
     unplannedLegs,
     onOpenLink,
   }: {
     /** The plan, or `null` before the first one arrives. */
     plan: TicketPlan | null;
     loading: boolean;
+    /** Live prices from booking sites, by ticket. They replace the estimates they are for. */
+    livePrices: LivePrices;
+    /** Whether live prices are still being looked up. */
+    liveLoading: boolean;
     /** Legs without a journey, which the plan leaves out. */
     unplannedLegs: number;
     /** Opens a booking link. */
@@ -33,15 +43,21 @@
   const selected = $derived(strategies[Math.min(selectedIndex, strategies.length - 1)] ?? null);
   const groups = $derived(plan === null ? [] : ridesByDate(plan.rides));
 
+  /** The total of a strategy, with live prices where there are some. */
+  function totalOf(strategy: TicketStrategy) {
+    return adjustedTotal(strategy, livePrices);
+  }
+
   /** The middle of a strategy's total, for comparing strategies. */
   function middle(strategy: TicketStrategy): number {
-    return (strategy.total.low + strategy.total.high) / 2;
+    const total = totalOf(strategy);
+    return (total.low + total.high) / 2;
   }
 
   /** Describes how much more a strategy costs than the cheapest. */
   function difference(strategy: TicketStrategy): string {
-    const cheapest = strategies[0];
-    if (cheapest === undefined || strategy === cheapest) {
+    const cheapest = strategies.reduce((best, other) => (middle(other) < middle(best) ? other : best), strategies[0]!);
+    if (strategy === cheapest) {
       return "cheapest";
     }
     return `${formatEuro(Math.round(middle(strategy) - middle(cheapest)))} more`;
@@ -117,11 +133,14 @@
           left out.
         </p>
       {/if}
-      <div class="total" title={priceKindDescription(selected.total.kind)}>
-        <span class="total-price">{formatTotal(selected.total)}</span>
-        <span class="badge kind-{selected.total.kind}">
-          {priceKindLabel(selected.total.kind)}
+      <div class="total" title={priceKindDescription(totalOf(selected).kind)}>
+        <span class="total-price">{formatTotal(totalOf(selected))}</span>
+        <span class="badge kind-{totalOf(selected).kind}">
+          {priceKindLabel(totalOf(selected).kind)}
         </span>
+        {#if liveLoading}
+          <span class="muted">looking up live prices…</span>
+        {/if}
         {#if plan.traveller_name !== null}
           <span class="muted">for {plan.traveller_name}</span>
         {/if}
@@ -136,7 +155,7 @@
             onclick={() => (selectedIndex = strategyIndex)}
           >
             <span class="strategy-title">{strategy.title}</span>
-            <span>{formatTotal(strategy.total)}</span>
+            <span>{formatTotal(totalOf(strategy))}</span>
             <span class="muted">{difference(strategy)}</span>
           </button>
         {/each}
@@ -146,15 +165,21 @@
       {/each}
       <ul class="items">
         {#each selected.items as item (item.id)}
+          {@const price = effectivePrice(item, livePrices)}
           <li class="item" style:--ticket-colour={ticketColour(item.id)}>
             <div class="item-header">
               <span class="item-title">{item.title}</span>
-              <span class="item-price" title={sourceText(item.price)}>
-                {formatPriceRange(item.price.low, item.price.high)}
-                <span class="badge kind-{item.price.kind}">{priceKindLabel(item.price.kind)}</span>
+              <span class="item-price" title={sourceText(price)}>
+                {formatPriceRange(price.low, price.high)}
+                <span class="badge kind-{price.kind}">{priceKindLabel(price.kind)}</span>
               </span>
             </div>
             <p class="detail">{item.detail}</p>
+            {#if livePriceOf(item, livePrices) !== null}
+              <p class="detail">
+                Estimate was {formatPriceRange(item.price.low, item.price.high)}.
+              </p>
+            {/if}
             {#if item.booking_link !== null}
               {@const link = item.booking_link}
               <button type="button" class="link" onclick={() => onOpenLink(link.url)}>

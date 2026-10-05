@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import type { TicketRide } from "./bindings";
-import { formatEuro, formatPriceRange, ridesByDate, ticketColour } from "./tickets";
+import {
+  adjustedTotal,
+  effectivePrice,
+  formatEuro,
+  formatPriceRange,
+  liveQuoteKey,
+  ridesByDate,
+  ticketColour,
+} from "./tickets";
 
 function ride(departure: number, timeZone = "Europe/Vienna"): TicketRide {
   return {
@@ -48,5 +56,47 @@ describe("ticketColour", () => {
   it("repeats for the same id", () => {
     expect(ticketColour(2)).toBe(ticketColour(2));
     expect(ticketColour(0)).not.toBe(ticketColour(1));
+  });
+});
+
+describe("live prices", () => {
+  const price = (low: number, kind: "Formula" | "Live" | "Range") => ({
+    low,
+    high: low,
+    kind,
+    source: { name: "test", note: "", as_of: null, page: null },
+  });
+  const item = (id: number, estimate: number, withRequest: boolean) => ({
+    id,
+    product: "SingleTicket" as const,
+    title: "t",
+    detail: "d",
+    ride_indices: [0],
+    price: price(estimate, "Range"),
+    booking_link: null,
+    live_quote_request: withRequest
+      ? {
+          booking_link: "https://www.sbb.ch/en?x",
+          first_departure_time: 100 + id,
+          ride_count: 1,
+          travel_class: "Second" as const,
+        }
+      : null,
+  });
+
+  it("replaces an estimate with the live price of the same ticket", () => {
+    const strategy = {
+      kind: "SingleTickets" as const,
+      title: "s",
+      items: [item(0, 5000, true), item(1, 3000, true), item(2, 1000, false)],
+      total: { low: 9000, high: 9000, kind: "Range" as const },
+      covers: [],
+      notes: [],
+    };
+    const live = new Map([[liveQuoteKey(strategy.items[0]!)!, price(4500, "Live")]]);
+    expect(adjustedTotal(strategy, live)).toEqual({ low: 8500, high: 8500, kind: "Range" });
+    expect(effectivePrice(strategy.items[0]!, live).kind).toBe("Live");
+    expect(effectivePrice(strategy.items[1]!, live).kind).toBe("Range");
+    expect(liveQuoteKey(strategy.items[2]!)).toBeNull();
   });
 });

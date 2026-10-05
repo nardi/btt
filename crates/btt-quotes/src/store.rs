@@ -49,10 +49,10 @@ mod tests {
         let store = MemoryStore::default();
         store.save("a", "one");
         assert_eq!(
-            store.load("a", Duration::from_secs(60)).as_deref(),
+            store.load("a", Duration::from_mins(1)).as_deref(),
             Some("one")
         );
         assert_eq!(store.load("a", Duration::ZERO), None);
-        assert_eq!(store.load("b", Duration::from_secs(60)), None);
+        assert_eq!(store.load("b", Duration::from_mins(1)), None);
     }
 }

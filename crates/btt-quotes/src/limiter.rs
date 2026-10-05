@@ -68,7 +68,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn requests_leave_at_least_the_interval_apart() {
-        let limiter = RequestLimiter::new(Duration::from_secs(2), Duration::from_secs(600));
+        let limiter = RequestLimiter::new(Duration::from_secs(2), Duration::from_mins(10));
         let start = Instant::now();
         assert!(limiter.wait_for_turn().await);
         assert!(limiter.wait_for_turn().await);
@@ -78,7 +78,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn a_failure_stops_requests_for_the_pause() {
-        let limiter = RequestLimiter::new(Duration::from_secs(1), Duration::from_secs(600));
+        let limiter = RequestLimiter::new(Duration::from_secs(1), Duration::from_mins(10));
         assert!(limiter.wait_for_turn().await);
         limiter.report_failure().await;
         assert!(!limiter.wait_for_turn().await);

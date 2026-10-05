@@ -5,6 +5,7 @@
     type GeoCoordinates,
     type Traveller,
     type TravellerId,
+    type Price,
     type TicketLeg,
     type TicketPlan,
     type TripId,
@@ -15,6 +16,7 @@
   import TicketsView from "@btt/shared/components/TicketsView.svelte";
   import TripMap from "@btt/shared/components/TripMap.svelte";
   import { itineraryRows } from "@btt/shared/itinerary";
+  import { liveQuoteKey } from "@btt/shared/tickets";
   import type { PlaceFocusRequest } from "@btt/shared/map-features";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { onMount } from "svelte";
@@ -43,6 +45,9 @@
   let ticketsLoading = $state(false);
   /** Legs of the open trip that have no journey, which the ticket plan leaves out. */
   let unplannedLegs = $state(0);
+  /** Live prices from booking sites by ticket, with `null` for a ticket the site gave none for. */
+  let livePrices: Map<string, Price | null> = $state(new Map());
+  let liveLoading = $state(false);
   /** Numbers the pricing requests, so that a late answer to an old request is dropped. */
   let ticketRequestNumber = 0;
   /** Where the map of the open trip looks, for problem reports. */
@@ -196,11 +201,44 @@
       ticketsLoading = false;
       if (result.status === "ok") {
         ticketPlan = result.data;
+        void fetchLivePrices(result.data, requestNumber);
       } else {
         errorMessage = commandErrorMessage(result.error);
       }
     });
   });
+
+  /**
+   * Looks up the live price of each ticket that has a booking site to ask, one after the other.
+   * The backend keeps the answers and spaces its requests, so a repeat costs nothing.
+   */
+  async function fetchLivePrices(plan: TicketPlan, requestNumber: number) {
+    const requests = new Map<string, NonNullable<(typeof plan.strategies)[number]["items"][number]["live_quote_request"]>>();
+    for (const strategy of plan.strategies) {
+      for (const item of strategy.items) {
+        const key = liveQuoteKey(item);
+        if (key !== null && item.live_quote_request !== null && !livePrices.has(key)) {
+          requests.set(key, item.live_quote_request);
+        }
+      }
+    }
+    if (requests.size === 0) {
+      return;
+    }
+    liveLoading = true;
+    for (const [key, request] of requests) {
+      if (requestNumber !== ticketRequestNumber) {
+        break;
+      }
+      const result = await commands.fetchLiveQuote(request);
+      const next = new Map(livePrices);
+      next.set(key, result.status === "ok" ? result.data : null);
+      livePrices = next;
+    }
+    if (requestNumber === ticketRequestNumber) {
+      liveLoading = false;
+    }
+  }
 
   /** Opens a booking link in the system browser. */
   async function openBookingLink(url: string) {
@@ -304,6 +342,8 @@
       <TicketsView
         plan={ticketPlan}
         loading={ticketsLoading}
+        {livePrices}
+        {liveLoading}
         {unplannedLegs}
         onOpenLink={openBookingLink}
       />

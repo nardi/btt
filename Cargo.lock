@@ -638,6 +638,7 @@ dependencies = [
  "btt-geo",
  "btt-model",
  "btt-planner",
+ "btt-quotes",
  "btt-storage",
  "btt-ticketing",
  "chrono",
@@ -806,6 +807,7 @@ version = "0.1.0"
 dependencies = [
  "btt-fares",
  "btt-model",
+ "btt-quotes",
  "chrono",
  "chrono-tz",
  "proptest",

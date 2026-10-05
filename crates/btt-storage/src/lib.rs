@@ -55,6 +55,14 @@ const SCHEMA_MIGRATIONS: &[M<'static>] = &[
         leg_result BLOB NOT NULL
     ) STRICT;",
     ),
+    // Documents fetched from booking sites, by key, with the time they were fetched.
+    M::up(
+        "CREATE TABLE quote_cache (
+        cache_key TEXT PRIMARY KEY NOT NULL,
+        fetched_at INTEGER NOT NULL,
+        document TEXT NOT NULL
+    ) STRICT;",
+    ),
     // Traveller profiles as JSON documents, like trips. They belong to the app and not to a trip.
     M::up(
         "CREATE TABLE travellers (
@@ -257,6 +265,42 @@ impl Storage {
         Ok(deleted_rows > 0)
     }
 
+    /// Returns a document fetched from a booking site, if it was saved at most `max_age_seconds`
+    /// ago.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the query fails.
+    pub fn cached_quote(
+        &self,
+        cache_key: &str,
+        max_age_seconds: i64,
+    ) -> Result<Option<String>, StorageError> {
+        let oldest = unix_seconds_now() - max_age_seconds;
+        Ok(self
+            .connection()
+            .prepare_cached(
+                "SELECT document FROM quote_cache WHERE cache_key = ?1 AND fetched_at >= ?2",
+            )?
+            .query_row(params![cache_key, oldest], |row| row.get(0))
+            .optional()?)
+    }
+
+    /// Saves a document fetched from a booking site, replacing an earlier one.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the query fails.
+    pub fn store_quote(&self, cache_key: &str, document: &str) -> Result<(), StorageError> {
+        self.connection()
+            .prepare_cached(
+                "INSERT OR REPLACE INTO quote_cache (cache_key, fetched_at, document)
+                 VALUES (?1, ?2, ?3)",
+            )?
+            .execute(params![cache_key, unix_seconds_now(), document])?;
+        Ok(())
+    }
+
     /// Returns the cached results of a place search, if they exist and have not expired.
     ///
     /// # Errors
@@ -414,6 +458,24 @@ mod tests {
         assert!(storage.delete_traveller(first.id).unwrap());
         assert!(!storage.delete_traveller(first.id).unwrap());
         assert_eq!(storage.list_travellers().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn quotes_are_kept_and_replaced() {
+        let storage = Storage::open_in_memory().unwrap();
+        assert_eq!(storage.cached_quote("key", 60).unwrap(), None);
+        storage.store_quote("key", "one").unwrap();
+        assert_eq!(
+            storage.cached_quote("key", 60).unwrap().as_deref(),
+            Some("one")
+        );
+        storage.store_quote("key", "two").unwrap();
+        assert_eq!(
+            storage.cached_quote("key", 60).unwrap().as_deref(),
+            Some("two")
+        );
+        // A document older than the age asked for is not returned.
+        assert_eq!(storage.cached_quote("key", -1).unwrap(), None);
     }
 
     #[test]

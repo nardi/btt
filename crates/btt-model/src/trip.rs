@@ -70,7 +70,8 @@ pub enum FareType {
     Saver,
 }
 
-/// How tickets for the trip are chosen.
+/// How tickets for the trip are chosen. The options are independent switches.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
 pub struct TicketPreferences {
     /// Whether the optimizer compares an Interrail pass with single tickets.
@@ -81,6 +82,9 @@ pub struct TicketPreferences {
     pub fare_type: FareType,
     /// Whether optional seat reservations are bought, so they count in the price.
     pub reserve_optional_seats: bool,
+    /// Whether prices are looked up on the booking sites of operators. These sites are not
+    /// meant to be read by programs, so the lookup is a choice.
+    pub live_prices: bool,
     /// The day tickets are assumed to be bought, which decides the booking window. `None` means
     /// today.
     pub assumed_purchase_date: Option<NaiveDate>,
@@ -93,6 +97,7 @@ impl Default for TicketPreferences {
             consider_families: true,
             fare_type: FareType::Flexible,
             reserve_optional_seats: false,
+            live_prices: true,
             assumed_purchase_date: None,
         }
     }
@@ -202,7 +207,7 @@ impl Trip {
 }
 
 /// Schema version that `StoredTrip` documents written by this build carry.
-pub const CURRENT_TRIP_SCHEMA_VERSION: u16 = 4;
+pub const CURRENT_TRIP_SCHEMA_VERSION: u16 = 5;
 
 /// A trip as it is stored and exported, with the schema version of its document.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]

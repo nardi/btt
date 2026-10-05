@@ -5,6 +5,7 @@
 //! module follows the same two steps from a booking link such as
 //! `https://www.sbb.ch/en?stops=Basel+SBB_I8500010~Bern_I8507000&day=2026-10-16&time=06_30&moment=dep&reduction=none`.
 
+use std::fmt::Write as _;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -35,14 +36,14 @@ const CLIENT_VERSION: &str = "18.3.0";
 const MINIMUM_INTERVAL: Duration = Duration::from_secs(2);
 
 /// How long requests stop after one fails.
-const FAILURE_PAUSE: Duration = Duration::from_secs(15 * 60);
+const FAILURE_PAUSE: Duration = Duration::from_mins(15);
 
 /// How long the trips and prices of a search are kept. Saver prices change with demand, so the
 /// time is short.
-const QUOTE_LIFETIME: Duration = Duration::from_secs(30 * 60);
+const QUOTE_LIFETIME: Duration = Duration::from_mins(30);
 
 /// How long the address of the price service is kept.
-const ADDRESS_LIFETIME: Duration = Duration::from_secs(24 * 60 * 60);
+const ADDRESS_LIFETIME: Duration = Duration::from_hours(24);
 
 /// The query for the trips of a search, with the fields the quote reads.
 const TRIPS_QUERY: &str = "query Trips($input: TripInput!, $language: LanguageEnum!) { \
@@ -71,6 +72,49 @@ pub enum Moment {
     Departure,
     /// Arrive at or before the time.
     Arrival,
+}
+
+/// Decodes a part of an address: `+` is a space, and `%XX` is a byte.
+fn percent_decode(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'+' => decoded.push(b' '),
+            b'%' if index + 2 < bytes.len() => {
+                let hex = std::str::from_utf8(&bytes[index + 1..index + 3]).ok();
+                if let Some(byte) = hex.and_then(|hex| u8::from_str_radix(hex, 16).ok()) {
+                    decoded.push(byte);
+                    index += 2;
+                } else {
+                    decoded.push(b'%');
+                }
+            }
+            byte => decoded.push(byte),
+        }
+        index += 1;
+    }
+    String::from_utf8_lossy(&decoded).into_owned()
+}
+
+/// Encodes a station name for a booking link: a space is `+`, and anything that is not a letter
+/// or digit of ASCII or one of `-._~` is `%XX`.
+pub fn percent_encode(text: &str) -> String {
+    let mut encoded = String::new();
+    for byte in text.bytes() {
+        match byte {
+            b' ' => encoded.push('+'),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                encoded.push(char::from(byte));
+            }
+            // Writing to a string never fails.
+            other => {
+                let _ = write!(encoded, "%{other:02X}");
+            }
+        }
+    }
+    encoded
 }
 
 /// The search of a booking link.
@@ -106,7 +150,7 @@ impl Search {
         let station = |text: &str| {
             let (name, id) = text.rsplit_once("_I")?;
             Some(Station {
-                name: name.replace('+', " "),
+                name: percent_decode(name),
                 id: id.to_owned(),
             })
         };
@@ -140,9 +184,9 @@ impl Search {
     pub fn booking_link(&self) -> String {
         format!(
             "https://www.sbb.ch/en?stops={}_I{}~{}_I{}&day={}&time={}&moment={}&reduction=none",
-            self.origin.name.replace(' ', "+"),
+            percent_encode(&self.origin.name),
             self.origin.id,
-            self.destination.name.replace(' ', "+"),
+            percent_encode(&self.destination.name),
             self.destination.id,
             self.date,
             self.time.format("%H_%M"),
@@ -508,11 +552,11 @@ impl SbbService {
     }
 }
 
-/// Returns the quote of the trip that starts with a ride at the given departure and has the
-/// given number of rides.
+/// Returns the quote of the trip that starts with a ride at the given departure, in seconds since
+/// the Unix epoch, and has the given number of rides.
 pub fn find_trip(
     quotes: &[Quote],
-    first_departure: DateTime<FixedOffset>,
+    first_departure_unix_seconds: i64,
     ride_count: usize,
 ) -> Option<&Quote> {
     quotes.iter().find(|quote| {
@@ -521,7 +565,7 @@ pub fn find_trip(
                 .trip
                 .rides
                 .first()
-                .is_some_and(|ride| ride.departure == first_departure)
+                .is_some_and(|ride| ride.departure.timestamp() == first_departure_unix_seconds)
     })
 }
 
@@ -540,6 +584,16 @@ mod tests {
         assert_eq!(search.date.to_string(), "2026-10-16");
         assert_eq!(search.time.to_string(), "06:30:00");
         assert_eq!(search.moment, Moment::Departure);
+    }
+
+    #[test]
+    fn names_with_umlauts_round_trip_through_a_link() {
+        let search = Search::from_link(
+            "https://www.sbb.ch/en?stops=Z%C3%BCrich+HB_I8503000~Bern_I8507000&day=2026-10-16&time=06_30&moment=dep&reduction=none",
+        )
+        .unwrap();
+        assert_eq!(search.origin.name, "Zürich HB");
+        assert_eq!(Search::from_link(&search.booking_link()).unwrap(), search);
     }
 
     #[test]
@@ -618,6 +672,33 @@ mod tests {
             .map(|class| class.price.amount)
             .min();
         assert_eq!(cheapest, Some(2500));
+    }
+
+    #[test]
+    fn a_trip_is_found_by_its_first_departure_and_ride_count() {
+        let trips: Value =
+            serde_json::from_str(include_str!("../tests/fixtures/sbb_trips.json")).unwrap();
+        let prices: Value =
+            serde_json::from_str(include_str!("../tests/fixtures/sbb_trip_prices.json")).unwrap();
+        let prices = parse_prices(&prices).unwrap();
+        let quotes: Vec<Quote> = parse_trips(&trips)
+            .unwrap()
+            .into_iter()
+            .map(|trip| Quote {
+                prices: prices
+                    .iter()
+                    .find(|price| price.trip_id == trip.id)
+                    .cloned(),
+                trip,
+            })
+            .collect();
+        // 06:58 in Basel on 16 October 2026 is 04:58 UTC.
+        let departure = DateTime::parse_from_rfc3339("2026-10-16T06:58:00+02:00")
+            .unwrap()
+            .timestamp();
+        let found = find_trip(&quotes, departure, 1).unwrap();
+        assert_eq!(found.trip.rides[0].products, ["IC 6 959"]);
+        assert!(find_trip(&quotes, departure, 2).is_none());
     }
 
     #[test]
