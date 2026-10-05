@@ -8,6 +8,8 @@
     formatEuro,
     formatPriceRange,
     formatTotal,
+    hasPendingLivePrice,
+    isLivePending,
     livePriceOf,
     type LivePrices,
     priceKindDescription,
@@ -48,6 +50,14 @@
     return adjustedTotal(strategy, livePrices);
   }
 
+  /** Whether the total of a strategy waits for a live price. */
+  function totalPending(strategy: TicketStrategy): boolean {
+    return hasPendingLivePrice(strategy, livePrices, liveLoading);
+  }
+
+  /** Whether any strategy waits for a live price, which changes every comparison between them. */
+  const anyPending = $derived(strategies.some(totalPending));
+
   /** The middle of a strategy's total, for comparing strategies. */
   function middle(strategy: TicketStrategy): number {
     const total = totalOf(strategy);
@@ -69,6 +79,10 @@
     return `${price.source.name}. ${price.source.note}${date}`;
   }
 </script>
+
+{#snippet spinner(label: string)}
+  <span class="spinner" role="status" aria-label={label} title={label}></span>
+{/snippet}
 
 <section class="tickets">
   {#if plan === null}
@@ -112,7 +126,7 @@
                           {(strategy.covers[index] ?? [])
                             .map((id) => strategy.items.find((item) => item.id === id)?.title)
                             .join(" and ")}
-                          ({difference(strategy)} in all)
+                          ({#if anyPending}{@render spinner("Comparing")}{:else}{difference(strategy)}{/if} in all)
                         </li>
                       {/if}
                     {/each}
@@ -135,12 +149,12 @@
       {/if}
       <div class="total" title={priceKindDescription(totalOf(selected).kind)}>
         <span class="total-price">{formatTotal(totalOf(selected))}</span>
+        {#if totalPending(selected)}
+          {@render spinner("Looking up live prices")}
+        {/if}
         <span class="badge kind-{totalOf(selected).kind}">
           {priceKindLabel(totalOf(selected).kind)}
         </span>
-        {#if liveLoading}
-          <span class="muted">looking up live prices…</span>
-        {/if}
         {#if plan.traveller_name !== null}
           <span class="muted">for {plan.traveller_name}</span>
         {/if}
@@ -155,8 +169,13 @@
             onclick={() => (selectedIndex = strategyIndex)}
           >
             <span class="strategy-title">{strategy.title}</span>
-            <span>{formatTotal(totalOf(strategy))}</span>
-            <span class="muted">{difference(strategy)}</span>
+            <span>
+              {formatTotal(totalOf(strategy))}
+              {#if totalPending(strategy)}{@render spinner("Looking up live prices")}{/if}
+            </span>
+            <span class="muted">
+              {#if anyPending}{@render spinner("Comparing")}{:else}{difference(strategy)}{/if}
+            </span>
           </button>
         {/each}
       </div>
@@ -171,7 +190,11 @@
               <span class="item-title">{item.title}</span>
               <span class="item-price" title={sourceText(price)}>
                 {formatPriceRange(price.low, price.high)}
-                <span class="badge kind-{price.kind}">{priceKindLabel(price.kind)}</span>
+                {#if isLivePending(item, livePrices, liveLoading)}
+                  {@render spinner("Looking up the live price")}
+                {:else}
+                  <span class="badge kind-{price.kind}">{priceKindLabel(price.kind)}</span>
+                {/if}
               </span>
             </div>
             <p class="detail">{item.detail}</p>
@@ -378,6 +401,30 @@
 
   .badge.kind-Range {
     border-color: #b2851f;
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 0.9em;
+    height: 0.9em;
+    vertical-align: -0.1em;
+    border: 2px solid var(--color-border);
+    border-top-color: var(--color-accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .spinner {
+      animation: none;
+      border-top-color: var(--color-border);
+    }
   }
 
   .muted {

@@ -121,3 +121,18 @@ export function adjustedTotal(strategy: TicketStrategy, live: LivePrices): Price
   }
   return { low, high, kind };
 }
+
+/** Returns whether the live price of a ticket is still being looked up. */
+export function isLivePending(item: TicketItem, live: LivePrices, loading: boolean): boolean {
+  const key = liveQuoteKey(item);
+  return loading && key !== null && !live.has(key);
+}
+
+/** Returns whether any ticket of a strategy has a live price still being looked up. */
+export function hasPendingLivePrice(
+  strategy: TicketStrategy,
+  live: LivePrices,
+  loading: boolean,
+): boolean {
+  return strategy.items.some((item) => isLivePending(item, live, loading));
+}

@@ -6,6 +6,7 @@ import {
   effectivePrice,
   formatEuro,
   formatPriceRange,
+  isLivePending,
   liveQuoteKey,
   ridesByDate,
   ticketColour,
@@ -98,5 +99,29 @@ describe("live prices", () => {
     expect(effectivePrice(strategy.items[0]!, live).kind).toBe("Live");
     expect(effectivePrice(strategy.items[1]!, live).kind).toBe("Range");
     expect(liveQuoteKey(strategy.items[2]!)).toBeNull();
+  });
+});
+
+describe("pending live prices", () => {
+  const item = (withRequest: boolean) => ({
+    id: 0,
+    product: "SingleTicket" as const,
+    title: "t",
+    detail: "d",
+    ride_indices: [0],
+    price: { low: 1, high: 1, kind: "Range" as const, source: { name: "t", note: "", as_of: null, page: null } },
+    booking_link: null,
+    live_quote_request: withRequest
+      ? { booking_link: "https://www.sbb.ch/en?x", first_departure_time: 1, ride_count: 1, travel_class: "Second" as const }
+      : null,
+  });
+
+  it("is pending only while loading and without an answer", () => {
+    const ticket = item(true);
+    const key = liveQuoteKey(ticket)!;
+    expect(isLivePending(ticket, new Map(), true)).toBe(true);
+    expect(isLivePending(ticket, new Map(), false)).toBe(false);
+    expect(isLivePending(ticket, new Map([[key, null]]), true)).toBe(false);
+    expect(isLivePending(item(false), new Map(), true)).toBe(false);
   });
 });
