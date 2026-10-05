@@ -23,6 +23,7 @@ use tauri::ipc::Channel;
 use crate::commands::CommandError;
 use crate::log_buffer::RecentLogLines;
 use crate::place_naming::{has_provisional_name, provisional_place_name};
+use crate::ticket_report::{LiveQuoteLogEntry, TicketPlanRecord};
 
 /// `User-Agent` for requests to public services, which ask clients to identify themselves.
 const USER_AGENT: &str = concat!(
@@ -112,6 +113,10 @@ pub struct AppState {
     pub recent_log_lines: RecentLogLines,
     /// Language for place names, as a two-letter code.
     pub language: SmolStr,
+    /// The last ticket plan of each trip, for problem reports.
+    pub ticket_plans: Mutex<FxHashMap<TripId, TicketPlanRecord>>,
+    /// The most recent live price lookups, for problem reports.
+    pub live_quote_log: Mutex<Vec<LiveQuoteLogEntry>>,
     /// Trips the frontend has open. Edits lock this map, which keeps edits to one trip in
     /// order.
     open_trips: Mutex<FxHashMap<TripId, OpenTrip>>,
@@ -176,6 +181,8 @@ impl AppState {
             recent_log_lines,
             // Place names come in English until the app has a language setting.
             language: "en".into(),
+            ticket_plans: Mutex::new(FxHashMap::default()),
+            live_quote_log: Mutex::new(Vec::new()),
             open_trips: Mutex::new(FxHashMap::default()),
         })
     }

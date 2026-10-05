@@ -5,10 +5,9 @@
 
 use btt_model::edit::NewTripPlace;
 use btt_model::{
-    EuroCents, GeoCoordinates, LiveQuoteRequest, PlaceInsertionPoint, PlaceSearchResult,
-    PlanningSessionEvent, Price, PriceKind, PriceSource, StationSearchRadius, TicketLeg,
-    TicketPlan, TravelClass, Traveller, TravellerId, Trip, TripEdit, TripEditError,
-    TripEditOutcome, TripId, TripSummary,
+    GeoCoordinates, LiveQuoteRequest, PlaceInsertionPoint, PlaceSearchResult, PlanningSessionEvent,
+    Price, StationSearchRadius, TicketLeg, TicketPlan, Traveller, TravellerId, Trip, TripEdit,
+    TripEditError, TripEditOutcome, TripId, TripSummary,
 };
 use chrono::NaiveDate;
 use serde::Serialize;
@@ -218,7 +217,7 @@ pub fn delete_traveller(
 }
 
 /// Returns today's date in UTC, which is close enough to decide whether sales have opened.
-fn today_utc() -> NaiveDate {
+pub(crate) fn today_utc() -> NaiveDate {
     let seconds = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |elapsed| i64::try_from(elapsed.as_secs()).unwrap_or(0));
@@ -251,7 +250,7 @@ pub fn plan_tickets(
             btt_ticketing::rides_of_journey(leg.arrival_place_id, &leg.journey, &leg.stations)
         })
         .collect();
-    Ok(btt_ticketing::plan_tickets(
+    let plan = btt_ticketing::plan_tickets(
         &btt_ticketing::TicketRequest {
             rides,
             traveller,
@@ -260,74 +259,47 @@ pub fn plan_tickets(
         },
         &state.fare_data,
         &state.price_book,
-    ))
+    );
+    state
+        .ticket_plans
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .insert(
+            trip_id,
+            crate::ticket_report::TicketPlanRecord {
+                created_at: chrono::Local::now().to_rfc3339(),
+                legs,
+                traveller: traveller.cloned(),
+                preferences: preferences.ticket_preferences.clone(),
+                plan: plan.clone(),
+            },
+        );
+    Ok(plan)
 }
 
 /// Asks the booking site named in a ticket's booking link for the live price of the ticket.
 ///
-/// Returns `None` when the site is not one the app reads, the preferences or a failure of the
-/// site leave no price, or the site has no trip at the time. The site's answers are kept for
-/// half an hour, and requests are spaced out and paused after a failure.
+/// Returns `None` when the site is not one the app reads, a failure of the site leaves no price,
+/// or the site has no trip at the time. The site's answers are kept for half an hour, and
+/// requests are spaced out and paused after a failure. Every lookup goes into a log that
+/// problem reports include.
 #[tauri::command]
 #[specta::specta]
 pub async fn fetch_live_quote(
     state: State<'_, AppState>,
     request: LiveQuoteRequest,
 ) -> Result<Option<Price>, CommandError> {
-    let Some(service) = &state.sbb_service else {
-        return Ok(None);
+    let (outcome, site_answer) = crate::ticket_report::look_up(&state, &request).await;
+    let price = match &outcome {
+        crate::ticket_report::LiveQuoteOutcome::Quoted { price } => Some(price.clone()),
+        _ => None,
     };
-    let Ok(search) = btt_quotes::sbb::Search::from_link(&request.booking_link) else {
-        return Ok(None);
-    };
-    let quotes = match service.quotes(&search).await {
-        Ok(quotes) => quotes,
-        Err(error) => {
-            tracing::info!(%error, "no live price from the SBB site");
-            return Ok(None);
-        }
-    };
-    let departure_seconds = i64::from(request.first_departure_time.0) * 60;
-    let Some(quote) =
-        btt_quotes::sbb::find_trip(&quotes, departure_seconds, usize::from(request.ride_count))
-    else {
-        return Ok(None);
-    };
-    let class = match request.travel_class {
-        TravelClass::First => "FIRST",
-        TravelClass::Second => "SECOND",
-    };
-    let Some(class_price) = quote.prices.as_ref().and_then(|prices| {
-        prices
-            .prices
-            .iter()
-            .find(|price| price.travel_class == class)
-    }) else {
-        return Ok(None);
-    };
-    if class_price.price.currency != "CHF" {
-        return Ok(None);
-    }
-    let francs = f64::from(class_price.price.amount) / 100.0;
-    let cents = EuroCents::from_euro(francs * state.fare_data.chf_to_eur);
-    Ok(Some(Price {
-        low: cents,
-        high: cents,
-        kind: PriceKind::Live,
-        source: PriceSource {
-            name: "SBB booking site".into(),
-            note: format!(
-                "CHF {francs:.2} for {} class, {}, converted at 1 CHF = {} EUR, a fixed rough rate. \
-                 The booking site shows the final price.",
-                class.to_lowercase(),
-                class_price.after_sale_flexibility.to_lowercase().replace('_', " "),
-                state.fare_data.chf_to_eur
-            )
-            .into(),
-            as_of: Some(today_utc()),
-            page: Some(request.booking_link),
-        },
-    }))
+    let mut log = state
+        .live_quote_log
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    crate::ticket_report::log_lookup(&mut log, &request, outcome, site_answer);
+    Ok(price)
 }
 
 /// Searches settlements and railway stations by name. Answers repeated searches from the

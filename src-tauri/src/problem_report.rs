@@ -1,5 +1,5 @@
 //! Problem reports: a ZIP file with a trip and everything needed to plan it again, so an odd
-//! route can be reproduced and analysed.
+//! route or a bad ticket price can be reproduced and analysed.
 
 // Tauri passes `State` and other arguments by value, which the command signatures must match.
 #![allow(clippy::needless_pass_by_value)]
@@ -18,6 +18,7 @@ use tauri_plugin_dialog::DialogExt;
 
 use crate::commands::CommandError;
 use crate::state::AppState;
+use crate::ticket_report::{LiveQuoteLogEntry, TicketPlanRecord};
 
 /// Environment variable that saves reports to a fixed path without asking, for automated tests.
 const REPORT_PATH_VARIABLE: &str = "BTT_PROBLEM_REPORT_PATH";
@@ -72,6 +73,16 @@ struct ReportedLeg {
     /// journey. A leg of a chain joined by same-day stops is planned with the chain in the app,
     /// so its explanation can differ from the stored result.
     explanation: LegExplanation,
+}
+
+/// Contents of `tickets.json`: the ticket plan the traveller saw and the live price lookups.
+#[derive(Serialize)]
+struct TicketsReport {
+    /// The last ticket plan of the trip with what it was made from, or `None` when the Tickets
+    /// screen was not opened.
+    plan: Option<TicketPlanRecord>,
+    /// The most recent live price lookups, of every trip, with the answers of the booking site.
+    live_quote_lookups: Vec<LiveQuoteLogEntry>,
 }
 
 /// Asks where to save a problem report for a trip and writes it there. Returns the path of the
@@ -131,11 +142,25 @@ pub async fn export_problem_report(
         backend: state.planning_backend.kind_name(),
         bundle: state.bundle_path.as_deref().and_then(bundle_summary),
     };
+    let tickets = TicketsReport {
+        plan: state
+            .ticket_plans
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&trip_id)
+            .cloned(),
+        live_quote_lookups: state
+            .live_quote_log
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone(),
+    };
     let files = [
         ("report.json", json(&summary)?),
         ("trip.json", btt_storage::trip_to_document(&trip)?),
         ("legs.json", json(&legs)?),
         ("view.json", json(&view)?),
+        ("tickets.json", json(&tickets)?),
         ("log.txt", state.recent_log_lines.text()),
     ];
     write_zip(&path, &files).map_err(|error| CommandError::Storage {

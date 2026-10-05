@@ -5,6 +5,7 @@ mod log_buffer;
 mod place_naming;
 mod problem_report;
 mod state;
+mod ticket_report;
 
 use btt_storage::Storage;
 use tauri::Manager;

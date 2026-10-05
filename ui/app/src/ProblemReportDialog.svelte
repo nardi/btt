@@ -43,9 +43,10 @@
   <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="problem-report-title">
     <h2 id="problem-report-title">Report a problem</h2>
     <p>
-      Describe what looks wrong, such as an odd route or a missing train. The report file holds
-      this trip with its places, the planned journeys and what the planner considered, so the
-      problem can be reproduced. Share it only with people you want to see your trip.
+      Describe what looks wrong, such as an odd route, a missing train or a ticket price that is
+      far off. The report file holds this trip with its places, the planned journeys and what the
+      planner considered, and the ticket plan with the live price lookups and the answers of the
+      booking sites, so the problem can be reproduced. Share it only with people you want to see your trip.
     </p>
     <textarea bind:value={note} rows="5" placeholder="What did you expect, and what did you see?"
     ></textarea>
