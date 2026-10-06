@@ -107,6 +107,8 @@ pub struct AppState {
     pub price_book: PriceBook,
     /// Looks up prices on the SBB booking site. `None` when its HTTP client could not be built.
     pub sbb_service: Option<SbbService>,
+    /// Looks up prices on the DB booking site in a hidden window. `None` in tests without an app.
+    pub db_service: Option<crate::db_quotes::DbQuoteService>,
     /// The timetable bundle the planner loaded, if any.
     pub bundle_path: Option<PathBuf>,
     /// The most recent log lines, for problem reports.
@@ -132,6 +134,7 @@ impl AppState {
     ///
     /// Returns an error when the HTTP client for Photon cannot be built.
     pub fn new(
+        app: tauri::AppHandle,
         storage: Storage,
         data_directory: &Path,
         recent_log_lines: RecentLogLines,
@@ -167,13 +170,19 @@ impl AppState {
         let fare_data = FareData::bundled().expect("the bundled fare data is valid");
         let price_book = PriceBook::from_data(&fare_data);
         let storage = Arc::new(storage);
-        let sbb_service = SbbService::new(Arc::new(StorageQuoteStore(Arc::clone(&storage))))
+        let quote_store: Arc<dyn QuoteStore> = Arc::new(StorageQuoteStore(Arc::clone(&storage)));
+        let db_service = Some(crate::db_quotes::DbQuoteService::new(
+            app,
+            Arc::clone(&quote_store),
+        ));
+        let sbb_service = SbbService::new(quote_store)
             .map_err(|error| tracing::warn!(%error, "live SBB prices are not available"))
             .ok();
         Ok(Self {
             fare_data,
             price_book,
             sbb_service,
+            db_service,
             storage,
             planning_backend,
             photon: PhotonClient::new(PUBLIC_PHOTON_BASE_URL, USER_AGENT)?,

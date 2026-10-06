@@ -13,6 +13,12 @@ use proptest::prelude::*;
 
 use crate::{Problem, RideInput, Settings, TicketRequest, plan_tickets};
 
+/// The bundled fare data, read once for all tests. The station tables take a while to parse.
+fn fare_data() -> &'static FareData {
+    static DATA: std::sync::OnceLock<FareData> = std::sync::OnceLock::new();
+    DATA.get_or_init(|| FareData::bundled().unwrap())
+}
+
 fn date(day: u32) -> NaiveDate {
     NaiveDate::from_ymd_opt(2026, 7, 1).unwrap() + chrono::Days::new(u64::from(day))
 }
@@ -49,8 +55,8 @@ fn ride(
 }
 
 fn plan(rides: Vec<RideInput>, traveller: Option<&Traveller>) -> TicketPlan {
-    let data = FareData::bundled().unwrap();
-    let book = PriceBook::from_data(&data);
+    let data = fare_data();
+    let book = PriceBook::from_data(data);
     let preferences = TicketPreferences::default();
     plan_tickets(
         &TicketRequest {
@@ -59,7 +65,7 @@ fn plan(rides: Vec<RideInput>, traveller: Option<&Traveller>) -> TicketPlan {
             preferences: &preferences,
             today: date(0),
         },
-        &data,
+        data,
         &book,
     )
 }
@@ -161,8 +167,8 @@ fn the_country_of_residence_allows_one_journey_each_way() {
         ride(3, ("DE", "NL"), "ICE", 400.0, false),
         ride(3, ("NL", "NL"), "IC", 50.0, false),
     ];
-    let data = FareData::bundled().unwrap();
-    let book = PriceBook::from_data(&data);
+    let data = fare_data();
+    let book = PriceBook::from_data(data);
     let preferences = TicketPreferences::default();
     let settings = Settings {
         class: TravelClass::Second,
@@ -172,7 +178,7 @@ fn the_country_of_residence_allows_one_journey_each_way() {
         purchase_date: date(0),
         single_ticket_percent: 100,
     };
-    let problem = Problem::new(&rides, &data, &book, &settings);
+    let problem = Problem::new(&rides, data, &book, &settings);
     assert_eq!(
         problem.pass_covers_ride(),
         vec![true, true, true, false, true, true]
@@ -379,8 +385,8 @@ proptest! {
                 ride(day, (countries[from], countries[to]), categories[category], kilometres, false)
             })
             .collect();
-        let data = FareData::bundled().unwrap();
-        let book = PriceBook::from_data(&data);
+        let data = fare_data();
+        let book = PriceBook::from_data(data);
         let preferences = TicketPreferences::default();
         let settings = Settings {
             class: TravelClass::Second,
@@ -390,10 +396,10 @@ proptest! {
             purchase_date: date(0),
             single_ticket_percent: 100,
         };
-        let problem = Problem::new(&rides, &data, &book, &settings);
+        let problem = Problem::new(&rides, data, &book, &settings);
         let strategies = problem.strategies();
         let found = strategies.iter().map(middle_total).min().unwrap();
-        let expected = exhaustive_best(&rides, &data, &book);
+        let expected = exhaustive_best(&rides, data, &book);
         // The optimizer lists the best pass of each kind, and the cheapest of all is among them.
         prop_assert_eq!(found, expected);
     }
@@ -433,8 +439,8 @@ fn live_prices_off_asks_for_no_live_price() {
     let mut swiss = ride(0, ("CH", "CH"), "IC", 100.0, false);
     swiss.from_coordinates = btt_model::GeoCoordinates::from_degrees(47.5474, 7.5896).unwrap();
     swiss.to_coordinates = btt_model::GeoCoordinates::from_degrees(46.9490, 7.4392).unwrap();
-    let data = FareData::bundled().unwrap();
-    let book = PriceBook::from_data(&data);
+    let data = fare_data();
+    let book = PriceBook::from_data(data);
     let preferences = TicketPreferences {
         live_prices: false,
         ..TicketPreferences::default()
@@ -446,8 +452,38 @@ fn live_prices_off_asks_for_no_live_price() {
             preferences: &preferences,
             today: date(0),
         },
-        &data,
+        data,
         &book,
     );
     assert!(plan.strategies[0].items[0].live_quote_request.is_none());
+}
+
+#[test]
+fn a_german_ticket_gets_a_db_search_with_eva_numbers_and_a_live_price_request() {
+    let mut german = ride(0, ("DE", "DE"), "ICE", 290.0, false);
+    german.from_coordinates = btt_model::GeoCoordinates::from_degrees(52.5256, 13.3696).unwrap();
+    german.to_coordinates = btt_model::GeoCoordinates::from_degrees(53.5527, 10.0069).unwrap();
+    let plan = plan(vec![german], None);
+    let item = &plan.strategies[0].items[0];
+    let link = item.booking_link.as_ref().unwrap();
+    assert!(
+        link.url
+            .starts_with("https://int.bahn.de/en/buchung/fahrplan/suche#")
+    );
+    assert!(
+        link.url
+            .contains("&so=Berlin%20Hbf&zo=Hamburg%20Hbf&kl=2&r=13:16:KLASSENLOS:1")
+    );
+    assert!(
+        link.url
+            .contains("&soei=8011160&zoei=8002549&hd=2026-07-01T08:00:00&hza=D")
+    );
+    assert!(
+        link.url
+            .contains("&soid=A%3D1%40O%3DBerlin%20Hbf%40L%3D8011160%40")
+    );
+    assert_eq!(
+        item.live_quote_request.as_ref().unwrap().booking_link,
+        link.url
+    );
 }

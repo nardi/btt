@@ -536,7 +536,8 @@ impl<'a> Problem<'a> {
 
     /// Returns the link to buy a ticket for a run of rides, and the request for its live price
     /// when the booking site can tell it. Italo trains are sold on the Italo site, rides in
-    /// Switzerland on the SBB site, and the others at the shop of the country of the first ride.
+    /// Switzerland on the SBB site, runs that touch Germany on the DB site, and the others at
+    /// the shop of the country of the first ride.
     fn single_ticket_link(
         &self,
         rides: &[RideInput],
@@ -557,20 +558,39 @@ impl<'a> Problem<'a> {
         let all_swiss = rides.iter().all(|ride| {
             ride.from_country.as_deref() == Some("CH") && ride.to_country.as_deref() == Some("CH")
         });
+        let live_request = |link: &btt_model::BookingLink| {
+            self.settings
+                .preferences
+                .live_prices
+                .then(|| btt_model::LiveQuoteRequest {
+                    booking_link: link.url.clone(),
+                    first_departure_time: rides[0].departure_time,
+                    ride_count: u8::try_from(rides.len()).unwrap_or(u8::MAX),
+                    travel_class: self.settings.class,
+                })
+        };
         if all_swiss
             && let Some(link) =
                 crate::links::sbb_link(&self.data.sbb_stations, &rides[0], &rides[rides.len() - 1])
         {
-            let request =
-                self.settings
-                    .preferences
-                    .live_prices
-                    .then(|| btt_model::LiveQuoteRequest {
-                        booking_link: link.url.clone(),
-                        first_departure_time: rides[0].departure_time,
-                        ride_count: u8::try_from(rides.len()).unwrap_or(u8::MAX),
-                        travel_class: self.settings.class,
-                    });
+            let request = live_request(&link);
+            return (link, request);
+        }
+        // The DB site prices journeys inside Germany and to and from its neighbours, but not
+        // the domestic journeys of most other countries, so it takes a run that touches Germany.
+        let touches_germany = rides.iter().any(|ride| {
+            ride.from_country.as_deref() == Some("DE") || ride.to_country.as_deref() == Some("DE")
+        });
+        if touches_germany
+            && let Some(link) = crate::links::db_link(
+                &self.data.db_stations,
+                &rides[0],
+                &rides[rides.len() - 1],
+                self.settings.class,
+                self.settings.age_group,
+            )
+        {
+            let request = live_request(&link);
             return (link, request);
         }
         (shop_link(rides[0].from_country.as_deref()), None)

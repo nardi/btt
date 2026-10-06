@@ -9,7 +9,7 @@ mod italo;
 mod passes;
 mod price_book;
 mod reservations;
-mod sbb;
+mod station_table;
 mod tariff;
 
 use thiserror::Error;
@@ -20,7 +20,7 @@ pub use italo::{ItaloStation, ItaloStations};
 pub use passes::{PassCatalogue, PassKind, PassPrices, PassType, PriceAgeGroup, Validity};
 pub use price_book::{PriceBook, RideFacts, TicketPriceSource};
 pub use reservations::{ReservationMode, ReservationRule, ReservationRules, RuleScope, SeatFee};
-pub use sbb::{SbbStation, SbbStations};
+pub use station_table::{CodedStation, StationTable};
 pub use tariff::{BookingWindow, DistanceTariff};
 
 /// The Interrail pass list, as it is compiled in.
@@ -35,6 +35,9 @@ const TARIFFS_TOML: &str = include_str!("../../../data/fares/tariffs.toml");
 const ITALO_STATIONS_CSV: &str = include_str!("../../../data/fares/italo_stations.csv");
 /// The Swiss stations, as they are compiled in.
 const SBB_STATIONS_CSV: &str = include_str!("../../../data/fares/sbb_stations.csv");
+/// The stations of the DB booking site with their EVA numbers, from the Trainline stations
+/// table, as they are compiled in.
+const DB_STATIONS_CSV: &str = include_str!("../../../data/fares/db_stations.csv");
 /// The booking windows, as they are compiled in.
 const BOOKING_WINDOWS_TOML: &str = include_str!("../../../data/fares/booking_windows.toml");
 
@@ -73,7 +76,9 @@ pub struct FareData {
     /// The stations of Italo with the codes of its booking site.
     pub italo_stations: ItaloStations,
     /// The Swiss stations with their UIC numbers.
-    pub sbb_stations: SbbStations,
+    pub sbb_stations: StationTable,
+    /// The stations of the DB booking site with their EVA numbers.
+    pub db_stations: StationTable,
     /// Euro for one Swiss franc, as a fixed rough rate.
     pub chf_to_eur: f64,
     /// How far ahead tickets can be bought, by country.
@@ -115,7 +120,8 @@ impl FareData {
             distance_model: DistanceModel::from_toml(TARIFFS_TOML)?,
             tariffs: tariff::tariffs_from_toml(TARIFFS_TOML)?,
             italo_stations: ItaloStations::from_csv(ITALO_STATIONS_CSV),
-            sbb_stations: SbbStations::from_csv(SBB_STATIONS_CSV),
+            sbb_stations: StationTable::from_csv(SBB_STATIONS_CSV),
+            db_stations: StationTable::from_csv(DB_STATIONS_CSV),
             chf_to_eur: tariff::chf_to_eur(TARIFFS_TOML)?,
             booking_windows: tariff::windows_from_toml(BOOKING_WINDOWS_TOML)?,
             residence_journeys_each_way: rules.residence.outbound_journeys,

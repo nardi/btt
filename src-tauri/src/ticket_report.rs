@@ -1,6 +1,7 @@
 //! What the app keeps about ticket prices for problem reports: the last ticket plan of each open
 //! trip with the journeys it was made from, and a log of the live price lookups with the raw
-//! answers of the booking site.
+//! answers of the booking sites. Lookups go to the SBB site or the DB site, by the address of
+//! the booking link.
 
 use btt_model::{
     EuroCents, LiveQuoteRequest, Price, PriceKind, PriceSource, TicketLeg, TicketPlan,
@@ -45,6 +46,8 @@ pub enum LiveQuoteOutcome {
     NoMatchingTrip,
     /// The site has the trip and no price for the class.
     NoPriceForClass,
+    /// The site shows the trip and sells no ticket for it.
+    NotSold,
     /// The site gave a price in a currency the app does not convert.
     UnknownCurrency {
         /// The currency code.
@@ -67,11 +70,81 @@ pub struct LiveQuoteLogEntry {
     /// How it ended.
     pub outcome: LiveQuoteOutcome,
     /// Every trip with its prices that the site answered with, as it came back.
-    pub site_answer: Option<Vec<Quote>>,
+    pub site_answer: Option<serde_json::Value>,
 }
 
 /// Looks up the live price of a ticket, and returns how it ended with the answer of the site.
 pub async fn look_up(
+    state: &AppState,
+    request: &LiveQuoteRequest,
+) -> (LiveQuoteOutcome, Option<serde_json::Value>) {
+    if request.booking_link.starts_with(DB_LINK_PREFIX) {
+        return look_up_db(state, request).await;
+    }
+    let (outcome, quotes) = look_up_sbb(state, request).await;
+    (
+        outcome,
+        quotes.and_then(|quotes| serde_json::to_value(quotes).ok()),
+    )
+}
+
+/// The start of every booking link of the DB site.
+const DB_LINK_PREFIX: &str = "https://int.bahn.de/";
+
+/// Looks up the live price of a ticket on the DB site.
+async fn look_up_db(
+    state: &AppState,
+    request: &LiveQuoteRequest,
+) -> (LiveQuoteOutcome, Option<serde_json::Value>) {
+    let Some(service) = &state.db_service else {
+        return (LiveQuoteOutcome::NoService, None);
+    };
+    let Some(departure) = crate::db_quotes::search_time(&request.booking_link) else {
+        return (LiveQuoteOutcome::UnsupportedLink, None);
+    };
+    let cards = match service.cards(&request.booking_link).await {
+        Ok(cards) => cards,
+        Err(error) => {
+            tracing::info!(%error, "no live price from the DB site");
+            return (LiveQuoteOutcome::Failed { error }, None);
+        }
+    };
+    let answer = serde_json::to_value(&cards).ok();
+    let Some(card) =
+        crate::db_quotes::planned_card(&cards, departure, usize::from(request.ride_count))
+    else {
+        return (LiveQuoteOutcome::NoMatchingTrip, answer);
+    };
+    let Some(euro) = card.price else {
+        return (LiveQuoteOutcome::NotSold, answer);
+    };
+    let cents = EuroCents::from_euro(euro);
+    let class = match request.travel_class {
+        TravelClass::First => "first",
+        TravelClass::Second => "second",
+    };
+    let price = Price {
+        low: cents,
+        high: cents,
+        kind: PriceKind::Live,
+        source: PriceSource {
+            name: "DB booking site".into(),
+            note: format!(
+                "The lowest price the DB site shows for {} in {class} class, for one traveller \
+                 with no discount card. It can be a saver fare that ties the ticket to the train. \
+                 The booking site shows the final price.",
+                card.trains.join(" and ")
+            )
+            .into(),
+            as_of: Some(crate::commands::today_utc()),
+            page: Some(request.booking_link.clone()),
+        },
+    };
+    (LiveQuoteOutcome::Quoted { price }, answer)
+}
+
+/// Looks up the live price of a ticket on the SBB site.
+async fn look_up_sbb(
     state: &AppState,
     request: &LiveQuoteRequest,
 ) -> (LiveQuoteOutcome, Option<Vec<Quote>>) {
@@ -144,7 +217,7 @@ pub fn log_lookup(
     log: &mut Vec<LiveQuoteLogEntry>,
     request: &LiveQuoteRequest,
     outcome: LiveQuoteOutcome,
-    site_answer: Option<Vec<Quote>>,
+    site_answer: Option<serde_json::Value>,
 ) {
     if log.len() >= MAXIMUM_LOGGED_LOOKUPS {
         log.remove(0);

@@ -1,6 +1,8 @@
 //! The BigTrainTrip desktop app: Tauri setup, commands and shared state.
 
 mod commands;
+mod db_page;
+mod db_quotes;
 mod log_buffer;
 mod place_naming;
 mod probe;
@@ -87,7 +89,12 @@ pub fn run() {
             let data_directory = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_directory)?;
             let storage = Storage::open(&data_directory.join("btt.sqlite3"))?;
-            app.manage(AppState::new(storage, &data_directory, recent_log_lines)?);
+            app.manage(AppState::new(
+                app.handle().clone(),
+                storage,
+                &data_directory,
+                recent_log_lines,
+            )?);
             probe::start(app.handle());
             Ok(())
         })
