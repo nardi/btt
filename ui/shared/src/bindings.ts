@@ -96,8 +96,6 @@ export const commands = {
 	/**  Where the price comes from. */
 	source: PriceSource,
 } | null, CommandError>(__TAURI_INVOKE("fetch_live_quote", { request })),
-	/**  Receives an answer that the page relayed and appends it to the output file. */
-	probeReport: (url: string, status: number, body: string) => __TAURI_INVOKE<void>("probe_report", { url, status, body }),
 	/**
 	 *  Asks where to save a problem report for a trip and writes it there. Returns the path of the
 	 *  saved file, or `None` when the traveller cancelled.

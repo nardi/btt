@@ -39,7 +39,6 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::delete_traveller,
         commands::plan_tickets,
         commands::fetch_live_quote,
-        probe::probe_report,
         problem_report::export_problem_report,
     ])
 }
@@ -89,9 +88,7 @@ pub fn run() {
             std::fs::create_dir_all(&data_directory)?;
             let storage = Storage::open(&data_directory.join("btt.sqlite3"))?;
             app.manage(AppState::new(storage, &data_directory, recent_log_lines)?);
-            if let Ok(url) = std::env::var(probe::PROBE_URL_VARIABLE) {
-                probe::open_probe_window(app.handle(), &url)?;
-            }
+            probe::start(app.handle());
             Ok(())
         })
         .run(tauri::generate_context!())
