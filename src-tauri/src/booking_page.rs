@@ -1,6 +1,6 @@
-//! Reads the connections and prices that the DB booking site shows, from a window of the app.
+//! Reads the connections and prices that a booking site shows, from a window of the app.
 //!
-//! The site refuses scripted clients but serves its pages to the app's own web view. A window
+//! The DB site, the ÖBB shop and PKP Intercity refuse scripted clients but serve their pages to the app's own web view. A window
 //! opens a booking link, and a script in the page waits until the connection list has rendered,
 //! reads it, and puts the result into the fragment of the page's address, where the app reads it.
 
@@ -15,7 +15,7 @@ const RESULT_MARKER: &str = "BTTPROBE=";
 /// How often a window is tried again when `WebView2` refuses to create it.
 const CREATE_ATTEMPTS: u32 = 20;
 
-/// Script that runs in every page of a reading window. On the DB site it waits until the connection
+/// Script that runs in every page of a reading window. On the sites it reads, it waits until the connection
 /// list has rendered and stopped changing, reads it, and puts the result as JSON into the
 /// fragment of the address, which the app can read without any channel into the page.
 ///
@@ -23,14 +23,20 @@ const CREATE_ATTEMPTS: u32 = 20;
 /// wording. The head of a card is the smallest element around a time of day that holds two
 /// times, and the card is the largest element around its head that holds no other head.
 /// Within a card the first two times are the departure and the arrival, the lowest amount is the
-/// price, and texts that look like a train category followed by a number are the trains.
+/// price, with its currency in the same text or the next one, and texts that look like a train category followed by a number are the trains.
 pub(crate) const INITIALIZATION_SCRIPT: &str = r"(function () {
-  if (window.top !== window || !/(^|\.)bahn\.de$/.test(location.hostname)) { return; }
+  if (window.top !== window || !/(^|\.)(bahn\.de|oebbtickets\.at|intercity\.pl)$/.test(location.hostname)) { return; }
   const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
-  const MONEY = /(?:€|EUR)\s*(\d{1,4}(?:[.,  ]\d{3})*[.,]\d{2})|(\d{1,4}(?:[.,  ]\d{3})*[.,]\d{2})\s*(?:€|EUR)/;
+  const NUMBER = '(\\d{1,4}(?:[.,\\u202f\\u00a0]\\d{3})*[.,]\\d{2})';
+  const CURRENCY = '(€|EUR|zł|PLN|CHF|Fr\\.)';
+  const MONEY_BEFORE = new RegExp(CURRENCY + '\\s*' + NUMBER);
+  const MONEY_AFTER = new RegExp(NUMBER + '\\s*' + CURRENCY);
+  const AMOUNT_ONLY = new RegExp('^' + NUMBER + '$');
+  const CURRENCY_ONLY = new RegExp('^' + CURRENCY + '$');
+  const currencyCode = (symbol) => ({ '€': 'EUR', 'zł': 'PLN', 'Fr.': 'CHF' })[symbol] || symbol;
   const TRAIN = /^([A-ZÄÖÜ]{1,5})\s?(\d{1,6})$/;
   const parseAmount = (text) => {
-    const digits = text.replace(/[  ]/g, '');
+    const digits = text.replace(/[\u202f\u00a0]/g, '');
     const decimal = Math.max(digits.lastIndexOf('.'), digits.lastIndexOf(','));
     return Number(digits.slice(0, decimal).replace(/[.,]/g, '') + '.' + digits.slice(decimal + 1));
   };
@@ -76,16 +82,25 @@ pub(crate) const INITIALIZATION_SCRIPT: &str = r"(function () {
     return list.map((card) => {
       const all = texts(card);
       const times = timesIn(all);
-      const amounts = all.flatMap((text) => {
-        const match = MONEY.exec(text);
-        return match ? [parseAmount(match[1] || match[2])] : [];
+      const amounts = [];
+      all.forEach((text, index) => {
+        const before = MONEY_BEFORE.exec(text);
+        const after = MONEY_AFTER.exec(text);
+        if (before) {
+          amounts.push({ amount: parseAmount(before[2]), currency: currencyCode(before[1]) });
+        } else if (after) {
+          amounts.push({ amount: parseAmount(after[1]), currency: currencyCode(after[2]) });
+        } else if (AMOUNT_ONLY.test(text) && CURRENCY_ONLY.test(all[index + 1] || '')) {
+          amounts.push({ amount: parseAmount(text), currency: currencyCode(all[index + 1]) });
+        }
       });
+      const lowest = amounts.reduce((best, entry) => (best === null || entry.amount < best.amount ? entry : best), null);
       const trains = [];
       for (const text of all) {
         const match = TRAIN.exec(text);
         if (match && !trains.includes(match[1] + ' ' + match[2])) { trains.push(match[1] + ' ' + match[2]); }
       }
-      return { departure: times[0], arrival: times[1], trains, price: amounts.length ? Math.min(...amounts) : null };
+      return { departure: times[0], arrival: times[1], trains, price: lowest && lowest.amount, currency: lowest && lowest.currency };
     });
   };
   const report = (result) => {
@@ -121,15 +136,18 @@ pub(crate) const INITIALIZATION_SCRIPT: &str = r"(function () {
 
 /// A connection as the page shows it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DbCard {
+pub struct PageCard {
     /// Departure time of day, such as `13:37`.
     pub departure: String,
     /// Arrival time of day.
     pub arrival: Option<String>,
     /// The trains, such as `ICE 600`.
     pub trains: Vec<String>,
-    /// The lowest price on the card, in euro, or `None` when the site sells no ticket for it.
+    /// The lowest price on the card, or `None` when the site sells no ticket for it.
     pub price: Option<f64>,
+    /// The ISO code of the currency of the price, such as `EUR` or `PLN`.
+    #[serde(default)]
+    pub currency: Option<String>,
 }
 
 /// What the page reported for one link.
@@ -225,7 +243,7 @@ mod tests {
             .parse()
             .unwrap();
         let result = result_in(&url).unwrap();
-        let card: DbCard = serde_json::from_value(result.cards[0].clone()).unwrap();
+        let card: PageCard = serde_json::from_value(result.cards[0].clone()).unwrap();
         assert_eq!(card.trains, ["ICE 600"]);
         assert!((card.price.unwrap() - 160.96).abs() < 1e-9);
         let other: tauri::Url = "https://int.bahn.de/en/x#sts=true".parse().unwrap();

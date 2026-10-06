@@ -1,14 +1,15 @@
 //! The BigTrainTrip desktop app: Tauri setup, commands and shared state.
 
+mod booking_links;
+mod booking_page;
 mod commands;
-mod db_page;
-mod db_quotes;
 mod log_buffer;
 mod place_naming;
 mod probe;
 mod problem_report;
 mod state;
 mod ticket_report;
+mod webview_quotes;
 
 use btt_storage::Storage;
 use tauri::Manager;

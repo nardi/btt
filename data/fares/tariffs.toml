@@ -31,3 +31,4 @@ currency = "EUR"
 # rates, and the app says so next to a converted price.
 [exchange_rates]
 chf_to_eur = 1.07
+pln_to_eur = 0.235

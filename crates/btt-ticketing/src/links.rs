@@ -246,6 +246,113 @@ pub fn db_link(
     })
 }
 
+/// Returns the stations of a table for the first boarding and the last alighting station of a
+/// run, or `None` when the table knows either of them not.
+fn end_stations<'a>(
+    stations: &'a StationTable,
+    first: &RideInput,
+    last: &RideInput,
+) -> Option<(&'a btt_fares::CodedStation, &'a btt_fares::CodedStation)> {
+    Some((
+        stations.station_near(first.from_coordinates)?,
+        stations.station_near(last.to_coordinates)?,
+    ))
+}
+
+/// Returns a link to the Trenitalia search for the stations of two rides, or `None` when a
+/// station is not in the table.
+///
+/// The link is the handoff that trenitalia.com uses to send a search to lefrecce.it, with the
+/// fields in plain text: the station names, the date as `dd-mm-yyyy`, the time and the number
+/// of adults and children. Opening it runs the search.
+pub fn trenitalia_link(
+    stations: &StationTable,
+    first: &RideInput,
+    last: &RideInput,
+    age_group: AgeGroup,
+) -> Option<BookingLink> {
+    let (origin, destination) = end_stations(stations, first, last)?;
+    let child = matches!(age_group, AgeGroup::Child | AgeGroup::Infant);
+    let url = format!(
+        "https://www.lefrecce.it/Channels.Website.WEB/website/auth/handoff?action=searchTickets         &lang=en&departureStation={}&arrivalStation={}&departureDate={}&departureTime={}         &noOfAdults={}&noOfChildren={}&tripType=on&selectedTrainType=tutti",
+        encode_name(&origin.name),
+        encode_name(&destination.name),
+        first.departure_date.format("%d-%m-%Y"),
+        encode_name(&first.departure_clock.format("%H:%M").to_string()),
+        u8::from(!child),
+        u8::from(child),
+    );
+    Some(BookingLink {
+        label: "Search on lefrecce.it".into(),
+        url: url.into(),
+        kind: BookingLinkKind::Search,
+    })
+}
+
+/// Returns a link to the ÖBB shop search for the stations of two rides, or `None` when a
+/// station is not in the table. The shop takes its own station numbers and the departure time.
+pub fn obb_link(
+    stations: &StationTable,
+    first: &RideInput,
+    last: &RideInput,
+) -> Option<BookingLink> {
+    let (origin, destination) = end_stations(stations, first, last)?;
+    let url = format!(
+        "https://shop.oebbtickets.at/en/ticket?stationOrigEva={}&stationDestEva={}         &outwardDateTime={}T{}&outwardArrival=false",
+        origin.code,
+        destination.code,
+        first.departure_date,
+        first.departure_clock.format("%H:%M"),
+    );
+    Some(BookingLink {
+        label: "Search on the ÖBB shop".into(),
+        url: url.into(),
+        kind: BookingLinkKind::Search,
+    })
+}
+
+/// Returns a link to the PKP Intercity search for the stations of two rides, or `None` when a
+/// station is not in the table. The link asks for one traveller on the normal fare, code 1010.
+pub fn pkp_link(
+    stations: &StationTable,
+    first: &RideInput,
+    last: &RideInput,
+) -> Option<BookingLink> {
+    let (origin, destination) = end_stations(stations, first, last)?;
+    let url = format!(
+        "https://ebilet.intercity.pl/wyszukiwanie?dwyj={}&swyj={}&sprzy={}&time={}         &ticket50=&ticket100=1010",
+        first.departure_date,
+        origin.code,
+        destination.code,
+        first.departure_clock.format("%H:%M"),
+    );
+    Some(BookingLink {
+        label: "Search on intercity.pl".into(),
+        url: url.into(),
+        kind: BookingLinkKind::Search,
+    })
+}
+
+/// Returns a link to the NS order page for a single between the stations of two rides, or
+/// `None` when a station is not in the table. NS fares hold for the whole day, so the link
+/// takes the date and no time.
+pub fn ns_link(
+    stations: &StationTable,
+    first: &RideInput,
+    last: &RideInput,
+) -> Option<BookingLink> {
+    let (origin, destination) = end_stations(stations, first, last)?;
+    let url = format!(
+        "https://www.ns.nl/en/tickets/order/buy-tickets?travelDate={}&fromUicCode={}&toUicCode={}",
+        first.departure_date, origin.code, destination.code,
+    );
+    Some(BookingLink {
+        label: "Buy on ns.nl".into(),
+        url: url.into(),
+        kind: BookingLinkKind::Product,
+    })
+}
+
 /// Returns the link to buy the Interrail Global Pass.
 pub fn pass_link() -> BookingLink {
     BookingLink {
@@ -280,6 +387,10 @@ mod tests {
         urls.push(pass_link().url.to_string());
         urls.push("https://www.sbb.ch/en".to_owned());
         urls.push("https://int.bahn.de/en/buchung/fahrplan/suche".to_owned());
+        urls.push("https://www.lefrecce.it/Channels.Website.WEB/".to_owned());
+        urls.push("https://shop.oebbtickets.at/en/ticket".to_owned());
+        urls.push("https://ebilet.intercity.pl/wyszukiwanie".to_owned());
+        urls.push("https://www.ns.nl/en/tickets".to_owned());
         urls.push(italo_search_url(
             "RMT",
             "MC_",

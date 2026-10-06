@@ -113,21 +113,35 @@ struct ExchangeRatesFile {
     exchange_rates: ExchangeRates,
 }
 
-/// Fixed rough rates to euro.
-#[derive(Deserialize)]
-struct ExchangeRates {
+/// Fixed rough rates to euro, for prices that booking sites quote in another currency.
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+pub struct ExchangeRates {
     /// Euro for one Swiss franc.
-    chf_to_eur: f64,
+    pub chf_to_eur: f64,
+    /// Euro for one Polish zloty.
+    pub pln_to_eur: f64,
 }
 
-/// Reads the rate of the Swiss franc from the text of `tariffs.toml`.
-pub(crate) fn chf_to_eur(text: &str) -> Result<f64, FareDataError> {
-    let file: ExchangeRatesFile =
-        toml::from_str(text).map_err(|source| FareDataError::Invalid {
-            file: "tariffs.toml",
-            source,
-        })?;
-    Ok(file.exchange_rates.chf_to_eur)
+impl ExchangeRates {
+    /// Returns euro for one unit of a currency, by its ISO code, or `None` for a currency the
+    /// table does not know.
+    pub fn euro_per(&self, currency: &str) -> Option<f64> {
+        match currency {
+            "EUR" => Some(1.0),
+            "CHF" => Some(self.chf_to_eur),
+            "PLN" => Some(self.pln_to_eur),
+            _ => None,
+        }
+    }
+}
+
+/// Reads the exchange rates from the text of `tariffs.toml`.
+pub(crate) fn exchange_rates(text: &str) -> Result<ExchangeRates, FareDataError> {
+    let file: ExchangeRatesFile = toml::from_str(text).map_err(|source| FareDataError::Invalid {
+        file: "tariffs.toml",
+        source,
+    })?;
+    Ok(file.exchange_rates)
 }
 
 /// Reads the booking windows from the text of `booking_windows.toml`.

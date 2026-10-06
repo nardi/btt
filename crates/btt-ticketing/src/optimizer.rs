@@ -535,65 +535,87 @@ impl<'a> Problem<'a> {
     }
 
     /// Returns the link to buy a ticket for a run of rides, and the request for its live price
-    /// when the booking site can tell it. Italo trains are sold on the Italo site, rides in
-    /// Switzerland on the SBB site, runs that touch Germany on the DB site, and the others at
-    /// the shop of the country of the first ride.
+    /// when the booking site can tell it.
+    ///
+    /// Italo trains are sold on the Italo site. A run that touches Germany goes to the DB site,
+    /// which also sells the trips to its neighbours. A run inside one country goes to the site of
+    /// that country: SBB, NS, ÖBB, PKP Intercity or Trenitalia. Anything else gets the shop of
+    /// the country of the first ride and no live price.
     fn single_ticket_link(
         &self,
         rides: &[RideInput],
     ) -> (btt_model::BookingLink, Option<btt_model::LiveQuoteRequest>) {
+        let (first, last) = (&rides[0], &rides[rides.len() - 1]);
         let all_italo = rides
             .iter()
             .all(|ride| ride.train_label.category.eq_ignore_ascii_case("Italo"));
         if all_italo
             && let Some(link) = crate::links::italo_link(
                 &self.data.italo_stations,
-                &rides[0],
-                &rides[rides.len() - 1],
+                first,
+                last,
                 self.settings.age_group,
             )
         {
             return (link, None);
         }
-        let all_swiss = rides.iter().all(|ride| {
-            ride.from_country.as_deref() == Some("CH") && ride.to_country.as_deref() == Some("CH")
-        });
         let live_request = |link: &btt_model::BookingLink| {
             self.settings
                 .preferences
                 .live_prices
                 .then(|| btt_model::LiveQuoteRequest {
                     booking_link: link.url.clone(),
-                    first_departure_time: rides[0].departure_time,
+                    first_departure_time: first.departure_time,
                     ride_count: u8::try_from(rides.len()).unwrap_or(u8::MAX),
                     travel_class: self.settings.class,
                 })
         };
-        if all_swiss
-            && let Some(link) =
-                crate::links::sbb_link(&self.data.sbb_stations, &rides[0], &rides[rides.len() - 1])
-        {
-            let request = live_request(&link);
-            return (link, request);
-        }
-        // The DB site prices journeys inside Germany and to and from its neighbours, but not
-        // the domestic journeys of most other countries, so it takes a run that touches Germany.
-        let touches_germany = rides.iter().any(|ride| {
-            ride.from_country.as_deref() == Some("DE") || ride.to_country.as_deref() == Some("DE")
-        });
-        if touches_germany
-            && let Some(link) = crate::links::db_link(
-                &self.data.db_stations,
-                &rides[0],
-                &rides[rides.len() - 1],
+        let touches = |country: &str| {
+            rides.iter().any(|ride| {
+                ride.from_country.as_deref() == Some(country)
+                    || ride.to_country.as_deref() == Some(country)
+            })
+        };
+        let inside = |country: &str| {
+            rides.iter().all(|ride| {
+                ride.from_country.as_deref() == Some(country)
+                    && ride.to_country.as_deref() == Some(country)
+            })
+        };
+        let data = self.data;
+        let link = if touches("DE") {
+            crate::links::db_link(
+                &data.db_stations,
+                first,
+                last,
                 self.settings.class,
                 self.settings.age_group,
             )
-        {
-            let request = live_request(&link);
-            return (link, request);
+        } else if inside("CH") {
+            crate::links::sbb_link(&data.sbb_stations, first, last)
+        } else if inside("NL") {
+            crate::links::ns_link(&data.ns_stations, first, last)
+        } else if inside("AT") {
+            crate::links::obb_link(&data.obb_stations, first, last)
+        } else if inside("PL") {
+            crate::links::pkp_link(&data.pkp_stations, first, last)
+        } else if inside("IT") {
+            crate::links::trenitalia_link(
+                &data.trenitalia_stations,
+                first,
+                last,
+                self.settings.age_group,
+            )
+        } else {
+            None
+        };
+        match link {
+            Some(link) => {
+                let request = live_request(&link);
+                (link, request)
+            }
+            None => (shop_link(first.from_country.as_deref()), None),
         }
-        (shop_link(rides[0].from_country.as_deref()), None)
     }
 
     /// Builds the strategy of single tickets for every ride.

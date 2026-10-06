@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, WebviewWindow};
 
-use crate::db_page::{DbCard, PageResult, create_window, window_result};
+use crate::booking_page::{PageCard, PageResult, create_window, window_result};
 
 /// Environment variable that names the file with the links to open at startup.
 pub const PROBE_URLS_VARIABLE: &str = "BTT_PROBE_URLS";
@@ -126,7 +126,7 @@ pub fn start(app: &AppHandle) {
                     result
                         .cards
                         .into_iter()
-                        .filter_map(|card| serde_json::from_value::<DbCard>(card).ok())
+                        .filter_map(|card| serde_json::from_value::<PageCard>(card).ok())
                         .collect::<Vec<_>>()
                 }),
             }));
@@ -139,21 +139,28 @@ pub fn start(app: &AppHandle) {
 
 /// Sends each link through the live price lookup that the Tickets screen uses, twice, so the
 /// second answer shows the cache, writes the outcomes and exits the app.
+///
+/// A line can add the departure of the first train in minutes since the Unix epoch and the
+/// number of trains, as `link|minutes|trains`. Without them the request asks for one train.
 async fn look_up_through_service(app: AppHandle, path: std::ffi::OsString) {
     use tauri::Manager as _;
     let links = std::fs::read_to_string(path).unwrap_or_default();
     let state = app.state::<crate::state::AppState>();
     for round in 0..2 {
-        for (index, link) in links
+        for (index, line) in links
             .lines()
             .map(str::trim)
             .filter(|line| !line.is_empty())
             .enumerate()
         {
+            let mut parts = line.split('|');
+            let link = parts.next().unwrap_or_default();
+            let minutes = parts.next().and_then(|minutes| minutes.parse().ok());
+            let trains = parts.next().and_then(|trains| trains.parse().ok());
             let request = btt_model::LiveQuoteRequest {
                 booking_link: link.into(),
-                first_departure_time: btt_model::UnixTimeMinutes(0),
-                ride_count: 1,
+                first_departure_time: btt_model::UnixTimeMinutes(minutes.unwrap_or(0)),
+                ride_count: trains.unwrap_or(1),
                 travel_class: btt_model::TravelClass::Second,
             };
             let started = Instant::now();

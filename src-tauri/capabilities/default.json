@@ -66,6 +66,15 @@
         },
         {
           "url": "https://biglietti.italotreno.com/*"
+        },
+        {
+          "url": "https://www.lefrecce.it/*"
+        },
+        {
+          "url": "https://shop.oebbtickets.at/*"
+        },
+        {
+          "url": "https://ebilet.intercity.pl/*"
         }
       ]
     }

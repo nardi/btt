@@ -107,8 +107,12 @@ pub struct AppState {
     pub price_book: PriceBook,
     /// Looks up prices on the SBB booking site. `None` when its HTTP client could not be built.
     pub sbb_service: Option<SbbService>,
-    /// Looks up prices on the DB booking site in a hidden window. `None` in tests without an app.
-    pub db_service: Option<crate::db_quotes::DbQuoteService>,
+    /// Looks up prices on the booking sites that are read in a hidden window.
+    pub webview_service: Option<crate::webview_quotes::WebviewQuoteService>,
+    /// Looks up prices on the Trenitalia site. `None` when its HTTP client could not be built.
+    pub trenitalia_service: Option<btt_quotes::trenitalia::TrenitaliaService>,
+    /// Looks up NS fares. `None` when its HTTP client could not be built.
+    pub ns_service: Option<btt_quotes::ns::NsService>,
     /// The timetable bundle the planner loaded, if any.
     pub bundle_path: Option<PathBuf>,
     /// The most recent log lines, for problem reports.
@@ -171,7 +175,14 @@ impl AppState {
         let price_book = PriceBook::from_data(&fare_data);
         let storage = Arc::new(storage);
         let quote_store: Arc<dyn QuoteStore> = Arc::new(StorageQuoteStore(Arc::clone(&storage)));
-        let db_service = Some(crate::db_quotes::DbQuoteService::new(
+        let trenitalia_service =
+            btt_quotes::trenitalia::TrenitaliaService::new(Arc::clone(&quote_store))
+                .map_err(|error| tracing::warn!(%error, "live Trenitalia prices are not available"))
+                .ok();
+        let ns_service = btt_quotes::ns::NsService::new(Arc::clone(&quote_store))
+            .map_err(|error| tracing::warn!(%error, "NS fares are not available"))
+            .ok();
+        let webview_service = Some(crate::webview_quotes::WebviewQuoteService::new(
             app,
             Arc::clone(&quote_store),
         ));
@@ -182,7 +193,9 @@ impl AppState {
             fare_data,
             price_book,
             sbb_service,
-            db_service,
+            webview_service,
+            trenitalia_service,
+            ns_service,
             storage,
             planning_backend,
             photon: PhotonClient::new(PUBLIC_PHOTON_BASE_URL, USER_AGENT)?,

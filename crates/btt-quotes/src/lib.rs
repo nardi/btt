@@ -5,8 +5,10 @@
 //! switched off by default.
 
 pub mod limiter;
+pub mod ns;
 pub mod sbb;
 pub mod store;
+pub mod trenitalia;
 
 pub use limiter::RequestLimiter;
 pub use store::{MemoryStore, QuoteStore};

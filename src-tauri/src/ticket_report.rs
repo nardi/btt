@@ -1,7 +1,7 @@
 //! What the app keeps about ticket prices for problem reports: the last ticket plan of each open
 //! trip with the journeys it was made from, and a log of the live price lookups with the raw
-//! answers of the booking sites. Lookups go to the SBB site or the DB site, by the address of
-//! the booking link.
+//! answers of the booking sites. Lookups go to the booking site that the address of the
+//! booking link names.
 
 use btt_model::{
     EuroCents, LiveQuoteRequest, Price, PriceKind, PriceSource, TicketLeg, TicketPlan,
@@ -10,6 +10,7 @@ use btt_model::{
 use btt_quotes::sbb::{Quote, Search, find_trip};
 use serde::Serialize;
 
+use crate::booking_links::{BookingSite, parameter};
 use crate::state::AppState;
 
 /// The most live price lookups the log keeps. The oldest go first.
@@ -78,64 +79,252 @@ pub async fn look_up(
     state: &AppState,
     request: &LiveQuoteRequest,
 ) -> (LiveQuoteOutcome, Option<serde_json::Value>) {
-    if request.booking_link.starts_with(DB_LINK_PREFIX) {
-        return look_up_db(state, request).await;
+    match BookingSite::of(&request.booking_link) {
+        None => (LiveQuoteOutcome::UnsupportedLink, None),
+        Some(BookingSite::Sbb) => {
+            let (outcome, quotes) = look_up_sbb(state, request).await;
+            (
+                outcome,
+                quotes.and_then(|quotes| serde_json::to_value(quotes).ok()),
+            )
+        }
+        Some(BookingSite::Trenitalia) => look_up_trenitalia(state, request).await,
+        Some(BookingSite::Ns) => look_up_ns(state, request).await,
+        Some(site) => look_up_in_web_view(state, request, site).await,
     }
-    let (outcome, quotes) = look_up_sbb(state, request).await;
-    (
-        outcome,
-        quotes.and_then(|quotes| serde_json::to_value(quotes).ok()),
-    )
 }
 
-/// The start of every booking link of the DB site.
-const DB_LINK_PREFIX: &str = "https://int.bahn.de/";
+/// Returns the name of a booking site for price sources.
+fn site_name(site: BookingSite) -> &'static str {
+    match site {
+        BookingSite::Sbb => "SBB booking site",
+        BookingSite::Db => "DB booking site",
+        BookingSite::Obb => "ÖBB shop",
+        BookingSite::Pkp => "PKP Intercity booking site",
+        BookingSite::Trenitalia => "Trenitalia booking site",
+        BookingSite::Ns => "NS fares",
+    }
+}
 
-/// Looks up the live price of a ticket on the DB site.
-async fn look_up_db(
+/// Returns a live price in euro from an amount in a currency, with a note on its source, or the
+/// outcome for a currency the app does not convert.
+fn live_price(
     state: &AppState,
     request: &LiveQuoteRequest,
+    site: BookingSite,
+    amount: f64,
+    currency: &str,
+    note: &str,
+) -> LiveQuoteOutcome {
+    let Some(rate) = state.fare_data.exchange_rates.euro_per(currency) else {
+        return LiveQuoteOutcome::UnknownCurrency {
+            currency: currency.to_owned(),
+        };
+    };
+    let conversion = if currency == "EUR" {
+        String::new()
+    } else {
+        format!(" {currency} {amount:.2}, converted at a fixed rough rate of {rate} euro.")
+    };
+    LiveQuoteOutcome::Quoted {
+        price: Price {
+            low: EuroCents::from_euro(amount * rate),
+            high: EuroCents::from_euro(amount * rate),
+            kind: PriceKind::Live,
+            source: PriceSource {
+                name: site_name(site).into(),
+                note: format!("{note}{conversion} The booking site shows the final price.").into(),
+                as_of: Some(crate::commands::today_utc()),
+                page: Some(request.booking_link.clone()),
+            },
+        },
+    }
+}
+
+/// Looks up the live price of a ticket by reading the site's page in the web view.
+///
+/// The ÖBB shop and PKP Intercity show second class prices on their lists, so a first class
+/// ticket gets no live price there.
+async fn look_up_in_web_view(
+    state: &AppState,
+    request: &LiveQuoteRequest,
+    site: BookingSite,
 ) -> (LiveQuoteOutcome, Option<serde_json::Value>) {
-    let Some(service) = &state.db_service else {
+    let Some(service) = &state.webview_service else {
         return (LiveQuoteOutcome::NoService, None);
     };
-    let Some(departure) = crate::db_quotes::search_time(&request.booking_link) else {
+    if request.travel_class == TravelClass::First
+        && matches!(site, BookingSite::Obb | BookingSite::Pkp)
+    {
+        return (LiveQuoteOutcome::NoPriceForClass, None);
+    }
+    let Some(departure) = crate::booking_links::search_time(&request.booking_link) else {
         return (LiveQuoteOutcome::UnsupportedLink, None);
     };
     let cards = match service.cards(&request.booking_link).await {
         Ok(cards) => cards,
         Err(error) => {
-            tracing::info!(%error, "no live price from the DB site");
+            tracing::info!(%error, "no live price from a booking page");
             return (LiveQuoteOutcome::Failed { error }, None);
         }
     };
     let answer = serde_json::to_value(&cards).ok();
     let Some(card) =
-        crate::db_quotes::planned_card(&cards, departure, usize::from(request.ride_count))
+        crate::webview_quotes::planned_card(&cards, &departure, usize::from(request.ride_count))
     else {
         return (LiveQuoteOutcome::NoMatchingTrip, answer);
     };
-    let Some(euro) = card.price else {
+    let Some(amount) = card.price else {
         return (LiveQuoteOutcome::NotSold, answer);
     };
-    let cents = EuroCents::from_euro(euro);
-    let class = match request.travel_class {
-        TravelClass::First => "first",
-        TravelClass::Second => "second",
+    let trains = if card.trains.is_empty() {
+        format!("the {departure} connection")
+    } else {
+        card.trains.join(" and ")
+    };
+    let note = format!(
+        "The lowest price the site shows for {trains}, for one traveller with no discount card. \
+         It can be a saver fare that ties the ticket to the train."
+    );
+    let currency = card.currency.as_deref().unwrap_or("EUR");
+    (
+        live_price(state, request, site, amount, currency, &note),
+        answer,
+    )
+}
+
+/// Looks up the live price of a ticket on the Trenitalia site, from the stations, date, time and
+/// travellers of its handoff link.
+async fn look_up_trenitalia(
+    state: &AppState,
+    request: &LiveQuoteRequest,
+) -> (LiveQuoteOutcome, Option<serde_json::Value>) {
+    let Some(service) = &state.trenitalia_service else {
+        return (LiveQuoteOutcome::NoService, None);
+    };
+    if request.travel_class == TravelClass::First {
+        return (LiveQuoteOutcome::NoPriceForClass, None);
+    }
+    let link = &request.booking_link;
+    let location = |name: Option<String>| {
+        let name = name?;
+        state
+            .fare_data
+            .trenitalia_stations
+            .stations
+            .iter()
+            .find(|station| station.name == name)
+            .and_then(|station| station.code.parse::<u64>().ok())
+    };
+    let count = |name: &str| parameter(link, name).and_then(|count| count.parse().ok());
+    let departure = parameter(link, "departureDate")
+        .zip(parameter(link, "departureTime"))
+        .and_then(|(date, time)| {
+            chrono::NaiveDateTime::parse_from_str(&format!("{date} {time}"), "%d-%m-%Y %H:%M").ok()
+        });
+    let (Some(origin_id), Some(destination_id), Some(departure)) = (
+        location(parameter(link, "departureStation")),
+        location(parameter(link, "arrivalStation")),
+        departure,
+    ) else {
+        return (LiveQuoteOutcome::UnsupportedLink, None);
+    };
+    let search = btt_quotes::trenitalia::Search {
+        origin_id,
+        destination_id,
+        departure,
+        adults: count("noOfAdults").unwrap_or(1),
+        children: count("noOfChildren").unwrap_or(0),
+    };
+    let solutions = match service.solutions(&search).await {
+        Ok(solutions) => solutions,
+        Err(error) => {
+            tracing::info!(%error, "no live price from the Trenitalia site");
+            return (
+                LiveQuoteOutcome::Failed {
+                    error: error.to_string(),
+                },
+                None,
+            );
+        }
+    };
+    let answer = serde_json::to_value(&solutions).ok();
+    let departure_seconds = i64::from(request.first_departure_time.0) * 60;
+    let Some(solution) = btt_quotes::trenitalia::find_solution(
+        &solutions,
+        departure_seconds,
+        usize::from(request.ride_count),
+    ) else {
+        return (LiveQuoteOutcome::NoMatchingTrip, answer);
+    };
+    let Some(amount) = solution.price else {
+        return (LiveQuoteOutcome::NotSold, answer);
+    };
+    let note = format!(
+        "The lowest price the site shows for {}. It can be an Economy or Super Economy fare \
+         that ties the ticket to the train.",
+        solution.trains.join(" and ")
+    );
+    (
+        live_price(
+            state,
+            request,
+            BookingSite::Trenitalia,
+            amount,
+            "EUR",
+            &note,
+        ),
+        answer,
+    )
+}
+
+/// Looks up the fare of a single on ns.nl. NS fares are the same on every train of the day, so
+/// no train is matched.
+async fn look_up_ns(
+    state: &AppState,
+    request: &LiveQuoteRequest,
+) -> (LiveQuoteOutcome, Option<serde_json::Value>) {
+    let Some(service) = &state.ns_service else {
+        return (LiveQuoteOutcome::NoService, None);
+    };
+    let link = &request.booking_link;
+    let date = parameter(link, "travelDate").and_then(|date| date.parse().ok());
+    let (Some(from), Some(to), Some(date)) = (
+        parameter(link, "fromUicCode"),
+        parameter(link, "toUicCode"),
+        date,
+    ) else {
+        return (LiveQuoteOutcome::UnsupportedLink, None);
+    };
+    let fare = match service.single_fare(&from, &to, date).await {
+        Ok(fare) => fare,
+        Err(error) => {
+            tracing::info!(%error, "no fare from NS");
+            return (
+                LiveQuoteOutcome::Failed {
+                    error: error.to_string(),
+                },
+                None,
+            );
+        }
+    };
+    let answer = serde_json::to_value(fare).ok();
+    let cents = match request.travel_class {
+        TravelClass::First => fare.first_class_cents,
+        TravelClass::Second => fare.second_class_cents,
+    };
+    let Some(cents) = cents else {
+        return (LiveQuoteOutcome::NoPriceForClass, answer);
     };
     let price = Price {
-        low: cents,
-        high: cents,
-        kind: PriceKind::Live,
+        low: EuroCents(cents),
+        high: EuroCents(cents),
+        kind: PriceKind::Formula,
         source: PriceSource {
-            name: "DB booking site".into(),
-            note: format!(
-                "The lowest price the DB site shows for {} in {class} class, for one traveller \
-                 with no discount card. It can be a saver fare that ties the ticket to the train. \
-                 The booking site shows the final price.",
-                card.trains.join(" and ")
-            )
-            .into(),
+            name: site_name(BookingSite::Ns).into(),
+            note: "The fixed NS fare of a single, valid on every train of the day. Supplements \
+                   for the Intercity direct and the ICE are not included."
+                .into(),
             as_of: Some(crate::commands::today_utc()),
             page: Some(request.booking_link.clone()),
         },
@@ -187,7 +376,7 @@ async fn look_up_sbb(
         return (LiveQuoteOutcome::UnknownCurrency { currency }, Some(quotes));
     }
     let francs = f64::from(class_price.price.amount) / 100.0;
-    let cents = EuroCents::from_euro(francs * state.fare_data.chf_to_eur);
+    let cents = EuroCents::from_euro(francs * state.fare_data.exchange_rates.chf_to_eur);
     let price = Price {
         low: cents,
         high: cents,
@@ -202,7 +391,7 @@ async fn look_up_sbb(
                     .after_sale_flexibility
                     .to_lowercase()
                     .replace('_', " "),
-                state.fare_data.chf_to_eur
+                state.fare_data.exchange_rates.chf_to_eur
             )
             .into(),
             as_of: Some(crate::commands::today_utc()),

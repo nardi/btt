@@ -487,3 +487,49 @@ fn a_german_ticket_gets_a_db_search_with_eva_numbers_and_a_live_price_request() 
         link.url
     );
 }
+
+/// Plans one ride between two positions in a country and returns its booking link and whether
+/// it asks for a live price.
+fn single_ride_link(
+    country: &str,
+    category: &str,
+    from: (f64, f64),
+    to: (f64, f64),
+) -> (String, bool) {
+    let mut ride = ride(0, (country, country), category, 200.0, false);
+    ride.from_coordinates = btt_model::GeoCoordinates::from_degrees(from.0, from.1).unwrap();
+    ride.to_coordinates = btt_model::GeoCoordinates::from_degrees(to.0, to.1).unwrap();
+    let plan = plan(vec![ride], None);
+    let item = &plan.strategies[0].items[0];
+    (
+        item.booking_link.as_ref().unwrap().url.to_string(),
+        item.live_quote_request.is_some(),
+    )
+}
+
+#[test]
+fn each_country_goes_to_its_own_booking_site() {
+    let (link, live) = single_ride_link("IT", "FR", (44.4171, 8.9208), (44.5061, 11.3434));
+    assert!(link.contains("handoff?action=searchTickets"), "{link}");
+    assert!(
+        link.contains("departureStation=Genova+Piazza+Principe&arrivalStation=Bologna+Centrale")
+    );
+    assert!(link.contains("departureDate=01-07-2026&departureTime=08%3A00"));
+    assert!(live);
+    let (link, _) = single_ride_link("AT", "RJX", (47.8116, 16.2343), (46.6156, 14.3136));
+    assert!(
+        link.contains("stationOrigEva=8100516&stationDestEva=8100085"),
+        "{link}"
+    );
+    assert!(link.contains("outwardDateTime=2026-07-01T08:00"));
+    let (link, _) = single_ride_link("PL", "IC", (52.4020, 16.9109), (52.2289, 21.0032));
+    assert!(
+        link.contains("swyj=5100081&sprzy=5100065&time=08:00"),
+        "{link}"
+    );
+    let (link, _) = single_ride_link("NL", "IC", (52.3791, 4.9003), (51.8418, 5.8517));
+    assert!(
+        link.contains("travelDate=2026-07-01&fromUicCode=8400058&toUicCode=8400470"),
+        "{link}"
+    );
+}

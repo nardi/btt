@@ -1,4 +1,5 @@
-//! Live prices from the DB booking site, read from a hidden window of the app.
+//! Live prices from the booking sites that refuse scripted clients, read from a hidden window of
+//! the app: DB, the ÖBB shop and PKP Intercity.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -7,12 +8,12 @@ use btt_quotes::{QuoteStore, RequestLimiter};
 use tauri::{AppHandle, WebviewWindow};
 use tokio::sync::Mutex;
 
-use crate::db_page::{DbCard, PageResult, create_window, window_result};
+use crate::booking_page::{PageCard, PageResult, create_window, window_result};
 
-/// Label of the window that reads the DB site.
-const WINDOW_LABEL: &str = "db-quotes";
+/// Label of the window that reads the booking sites.
+const WINDOW_LABEL: &str = "booking-sites";
 
-/// The least time between two lookups on the site.
+/// The least time between two lookups.
 const MINIMUM_INTERVAL: Duration = Duration::from_secs(2);
 
 /// How long lookups stop after one fails.
@@ -27,9 +28,10 @@ const LOOKUP_TIMEOUT: Duration = Duration::from_secs(40);
 /// How often the address of the window is read while waiting.
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 
-/// Reads connections and prices from DB booking links, one at a time in a hidden window, keeps
-/// them for half an hour and spaces the lookups out.
-pub struct DbQuoteService {
+/// Reads connections and prices from booking links, one at a time in a hidden window, keeps
+/// them for half an hour and spaces the lookups out. All sites share the window, so the app never
+/// loads more than one booking page at a time.
+pub struct WebviewQuoteService {
     /// The app, which owns the window.
     app: AppHandle,
     /// Keeps the connections of each link.
@@ -41,7 +43,7 @@ pub struct DbQuoteService {
     window: Mutex<Option<WebviewWindow>>,
 }
 
-impl DbQuoteService {
+impl WebviewQuoteService {
     /// Creates the service. The window opens on the first lookup.
     pub fn new(app: AppHandle, store: Arc<dyn QuoteStore>) -> Self {
         Self {
@@ -52,15 +54,15 @@ impl DbQuoteService {
         }
     }
 
-    /// Returns the connections that a DB booking link shows, with their prices. A link looked up
+    /// Returns the connections that a booking link shows, with their prices. A link looked up
     /// in the last half hour is answered from the store.
     ///
     /// # Errors
     ///
     /// Returns a description when lookups are paused, the window cannot open, or the page shows
     /// nothing within 40 seconds. A failure pauses lookups for 15 minutes.
-    pub async fn cards(&self, link: &str) -> Result<Vec<DbCard>, String> {
-        let key = format!("db:{link}");
+    pub async fn cards(&self, link: &str) -> Result<Vec<PageCard>, String> {
+        let key = format!("page:{link}");
         if let Some(cards) = self
             .store
             .load(&key, QUOTE_LIFETIME)
@@ -70,7 +72,7 @@ impl DbQuoteService {
         }
         let mut window = self.window.lock().await;
         if !self.limiter.wait_for_turn().await {
-            return Err("lookups on the DB site are paused after a failure".to_owned());
+            return Err("lookups on the booking sites are paused after a failure".to_owned());
         }
         let result = self.read_page(&mut window, link).await;
         match &result {
@@ -90,7 +92,7 @@ impl DbQuoteService {
         &self,
         window: &mut Option<WebviewWindow>,
         link: &str,
-    ) -> Result<Vec<DbCard>, String> {
+    ) -> Result<Vec<PageCard>, String> {
         let reading = if let Some(existing) = window.as_ref() {
             // A link that differs only in its fragment can leave the page showing the last
             // search, so the window goes through an empty page first.
@@ -117,14 +119,14 @@ impl DbQuoteService {
             // A window in a bad state is replaced on the next lookup.
             let _ = reading.destroy();
             *window = None;
-            "the DB page showed no connections within 40 seconds".to_owned()
+            "the booking page showed no connections within 40 seconds".to_owned()
         })?;
         Ok(cards_of(result))
     }
 }
 
 /// Returns the connections of a page result that parse.
-fn cards_of(result: PageResult) -> Vec<DbCard> {
+fn cards_of(result: PageResult) -> Vec<PageCard> {
     result
         .cards
         .into_iter()
@@ -154,24 +156,14 @@ async fn wait_for_result(window: &WebviewWindow) -> Option<PageResult> {
     None
 }
 
-/// Returns the time of day of the search in a DB booking link, the `HH:MM` of its `hd`
-/// parameter, which is the planned departure of the first train.
-pub fn search_time(link: &str) -> Option<&str> {
-    let fragment = link.split_once('#')?.1;
-    let value = fragment
-        .split('&')
-        .find_map(|pair| pair.strip_prefix("hd="))?;
-    value.split_once('T').and_then(|(_, time)| time.get(..5))
-}
-
 /// Returns the connection that is the planned journey: the one that leaves at the time of the
 /// search with the planned number of trains. A card that names no trains matches on its time
 /// alone.
 pub fn planned_card<'a>(
-    cards: &'a [DbCard],
+    cards: &'a [PageCard],
     departure: &str,
     ride_count: usize,
-) -> Option<&'a DbCard> {
+) -> Option<&'a PageCard> {
     let at_time = || cards.iter().filter(move |card| card.departure == departure);
     at_time()
         .find(|card| card.trains.len() == ride_count)
@@ -182,20 +174,14 @@ pub fn planned_card<'a>(
 mod tests {
     use super::*;
 
-    fn card(departure: &str, trains: &[&str], price: Option<f64>) -> DbCard {
-        DbCard {
+    fn card(departure: &str, trains: &[&str], price: Option<f64>) -> PageCard {
+        PageCard {
             departure: departure.to_owned(),
             arrival: None,
             trains: trains.iter().map(|&train| train.to_owned()).collect(),
             price,
+            currency: Some("EUR".to_owned()),
         }
-    }
-
-    #[test]
-    fn the_search_time_comes_from_the_link() {
-        let link = "https://int.bahn.de/en/buchung/fahrplan/suche#sts=true&so=A&hd=2026-10-22T09:37:00&hza=D";
-        assert_eq!(search_time(link), Some("09:37"));
-        assert_eq!(search_time("https://int.bahn.de/x"), None);
     }
 
     #[test]

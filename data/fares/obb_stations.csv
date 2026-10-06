@@ -1,0 +1,1448 @@
+code,name,latitude,longitude
+8100108,Innsbruck Hbf,47.26328,11.40100
+8100099,Wörgl,47.49180,12.06058
+8100001,Kufstein,47.58308,12.16555
+8100102,Jenbach,47.38845,11.77846
+8100147,Villach Hbf,46.61862,13.84854
+8100148,Villach Westbahnhof,46.60809,13.84014
+8100002,Salzburg Hbf,47.81305,13.04582
+8100197,Feldkirch,47.24141,9.60376
+8100173,Graz Hbf,47.06784,15.41566
+8100073,Judenburg,47.17373,14.66575
+8100085,Klagenfurt Hbf,46.61580,14.31239
+8100013,Linz/Donau Hbf,48.29153,14.29112
+8100010,Steyr,48.03941,14.42494
+8100014,Wels Hbf,48.16587,14.02656
+8100012,Amstetten NÖ,48.12191,14.87744
+8100157,Bad Ischl,47.71196,13.62710
+8100095,Bad Gastein,47.11977,13.14556
+8100090,Bregenz,47.50300,9.73962
+8100122,Dornbirn,47.41769,9.73880
+8100151,Gmunden,47.92504,13.78254
+8100059,Hopfgarten im Brixental,47.45535,12.14918
+8100055,Kitzbühel,47.45378,12.39138
+8100070,Leoben Hbf,47.38660,15.08961
+8100131,Liezen,47.56266,14.24180
+8100123,Lustenau,47.45033,9.66712
+8100049,Saalfelden,47.42684,12.82942
+8100008,St. Pölten Hbf,48.20768,15.62591
+8100003,Wien Westbahnhof,48.19760,16.33707
+8100009,St. Valentin,48.17914,14.52185
+8100005,Melk,48.22409,15.33130
+8100015,Lambach,48.09409,13.88834
+8100017,Attnang-Puchheim,48.01280,13.72072
+8100020,Steindorf bei Straßwalchen,47.96673,13.23902
+8100022,Grieskirchen-Gallspach,48.23105,13.83891
+8100023,Neumarkt-Kallham,48.27154,13.72504
+8100024,Schärding,48.46324,13.44272
+8100032,Bruck/Mur,47.41383,15.27943
+8100040,Hallein,47.68517,13.09943
+8100041,Golling-Abtenau,47.60058,13.16408
+8100043,St. Johann im Pongau,47.34811,13.19484
+8100044,Schwarzach-St. Veit,47.31853,13.15446
+8100046,Taxenbach-Rauris,47.29275,12.94716
+8100047,Bruck-Fusch,47.28462,12.82881
+8100048,Zell am See,47.32052,12.79657
+8100050,Maishofen-Saalbach,47.35884,12.81036
+8100051,Leogang,47.44328,12.74169
+8100052,Hochfilzen,47.46771,12.62653
+8100053,Fieberbrunn,47.49113,12.52894
+8100054,St. Johann in Tirol,47.51962,12.43078
+8100057,Kirchberg in Tirol,47.44892,12.30910
+8100058,Westendorf in Tirol,47.44111,12.22290
+8100060,Telfs-Pfaffenhofen,47.30071,11.07887
+8100061,Ötztal,47.23848,10.85911
+8100062,Imst-Pitztal,47.21908,10.76167
+8100064,St. Anton am Arlberg,47.12757,10.26699
+8100065,Langen am Arlberg,47.13172,10.12037
+8100067,Bludenz,47.15472,9.81457
+8100071,St. Michael in Obersteiermark,47.34663,15.00919
+8100078,St. Veit/Glan,46.77059,14.36719
+8100079,Krumpendorf/Wörthersee,46.62634,14.22151
+8100080,Pörtschach am Wörther See,46.63620,14.14623
+8100081,Velden am Wörther See,46.62005,14.04484
+8100084,Faak am See,46.56437,13.91301
+8100088,Scharnitz,47.39226,11.26693
+8100089,Ehrwald Zugspitzbahn,47.41008,10.91400
+8100093,Mallnitz-Obervellach,46.98167,13.17642
+8100097,Bad Hofgastein,47.19571,13.10094
+8100098,Dorfgastein,47.23867,13.10306
+8100100,Kundl,47.47598,11.98206
+8100101,Brixlegg,47.43477,11.88002
+8100103,Schwaz,47.35010,11.70180
+8100104,Fritzens-Wattens,47.30216,11.58881
+8100105,Hall in Tirol,47.27708,11.50136
+8100106,Matrei am Brenner,47.12713,11.45282
+8100107,Steinach in Tirol,47.08922,11.46983
+8100109,Innsbruck Westbahnhof,47.25559,11.39187
+8100112,Reith bei Seefeld,47.30085,11.20065
+8100113,Seefeld in Tirol,47.32873,11.18948
+8100114,Bichlbach-Berwang,47.42274,10.79452
+8102260,Vils in Tirol,47.54890,10.63733
+8100117,Schruns,47.07950,9.91760
+8100118,Tschagguns,47.07915,9.90491
+8100119,Rankweil,47.27336,9.63716
+8100120,Götzis,47.33661,9.63670
+8100121,Hohenems,47.36471,9.68100
+8100135,Gröbming,47.42695,13.90136
+8100138,Radstadt,47.38442,13.46839
+8100139,Altenmarkt im Pongau,47.38247,13.42842
+8100140,Eben im Pongau,47.40703,13.39644
+8100141,Lienz in Osttirol,46.82929,12.77118
+8100142,Sillian,46.74424,12.42960
+8100144,Oberdrauburg,46.74684,12.97368
+8100146,Greifenburg-Weißensee,46.74285,13.19286
+8100160,Bad Goisern,47.64008,13.61263
+8100163,Obertraun-Dachsteinhöhlen,47.55773,13.68331
+8100164,Bad Aussee,47.59907,13.77683
+8100165,Bad Mitterndorf,47.55037,13.94523
+8100166,Tauplitz,47.55170,14.00999
+8100170,Kirchdorf/Krems,47.90648,14.11627
+8100172,Hinterstoder,47.77470,14.17904
+8100198,Bruck/Leitha,48.01907,16.78008
+8100242,Fügen-Hart im Zillertal,47.34475,11.85317
+8100270,Hermagor,46.62609,13.38069
+8100281,Kaltenbach-Stumm im Zillertal,47.29234,11.87596
+8100290,Kirchbichl,47.51952,12.09389
+8100295,Krems an der Donau,48.40883,15.60402
+8100300,Langkampfen,47.54487,12.10814
+8100310,Stans bei Schwaz,47.36606,11.72298
+8100323,Terfens-Weer,47.31592,11.63439
+8100329,Uderns im Zillertal,47.32634,11.86524
+8100337,Volders-Baumkirchen,47.29637,11.56450
+8100365,Braunau/Inn,48.25912,13.04799
+8100366,Brixen im Thale,47.44923,12.26055
+8100371,Graz Ostbahnhof-Messe,47.05340,15.44829
+8100380,Vandans,47.09872,9.86883
+8100400,Ramsau im Zillertal-Hippach,47.20516,11.86991
+8100405,Ried im Innkreis,48.20045,13.48821
+8100426,Seekirchen am Wallersee,47.90389,13.13842
+8100465,Rattenberg-Kramsach,47.43922,11.89604
+8100477,Rum (Innsbruck),47.27803,11.45617
+8100483,Schaftenau,47.55921,12.12592
+8100486,Schlitters-Bruck am Ziller,47.37783,11.84359
+8100488,Münster-Wiesing,47.40332,11.81948
+8100507,Vöcklabruck,48.01006,13.66370
+8100508,Vöcklamarkt,47.99804,13.48954
+8100517,Windischgarsten,47.71533,14.32693
+8100524,Pill-Vomperbach,47.32420,11.67736
+8100539,Werfen,47.47260,13.19518
+8100541,Mayrhofen im Zillertal,47.16953,11.86239
+8100544,Wernstein,48.50420,13.45555
+8100547,Zell am Ziller,47.23138,11.88137
+8100552,Lermoos,47.40677,10.87937
+8100553,Lähn,47.42085,10.83404
+8100555,Musau,47.53262,10.67493
+8100556,Pflach,47.51376,10.71893
+8100558,Ulrichsbrücke-Füssen,47.54606,10.66374
+8100843,Graz Köflacher Bahnhof,47.06790,15.41348
+8100883,Graz Webling,47.03241,15.40586
+8100905,Graz Wetzelsdorf,47.05062,15.40167
+8101912,Reutte in Tirol Schulzentrum,47.49006,10.73270
+8101972,Bichlbach Almkopfbahn,47.42818,10.78148
+8102044,Laimach Regionalmuseum,47.22167,11.87260
+8102045,Salzburg Taxham Europark,47.81631,13.01038
+8102048,Salzburg Aiglhof,47.80782,13.02674
+8102052,Salzburg Mülln-Altstadt,47.80840,13.03416
+8102055,Salzburg Sam,47.81981,13.06289
+8100042,Bischofshofen,47.41736,13.22008
+8100063,Landeck-Zams,47.14824,10.57839
+8100092,Spittal-Millstättersee,46.79570,13.48742
+8100115,Reutte in Tirol,47.49299,10.72151
+8100132,Stainach-Irdning,47.52920,14.10675
+8100137,Schladming,47.39383,13.67815
+8100150,Selzthal,47.55036,14.31277
+8100167,Rohr-Bad Hall,48.06963,14.19080
+8100447,Wien Hütteldorf,48.19765,16.26055
+8100514,Wien Meidling,48.17500,16.33612
+8100550,Heiterwang-Plansee,47.44250,10.74845
+1290401,Wien Hbf,48.18492,16.37586
+8101227,Wien Matzleinsdorfer Platz,48.17999,16.35715
+8100353,Flughafen Wien,48.12083,16.56306
+8100076,Friesach,46.95370,14.41029
+8100026,Gloggnitz,47.67769,15.94591
+8100110,Innsbruck-Hötting,47.26134,11.37379
+8101150,Liesing,48.13459,16.28423
+8101195,Linz Wegscheid,48.24783,14.27524
+8100029,Mürzzuschlag,47.60761,15.67713
+8101470,Salzburg Aigen,47.78886,13.07940
+8100306,Spital am Pyhrn,47.67433,14.35257
+8101596,Spital am Semmering,47.61628,15.75602
+8101692,Tulln,48.33149,16.06074
+8100074,Unzmarkt,47.20079,14.44231
+8100516,Wiener Neustadt Hbf,47.81164,16.23431
+8101433,Wien Rennweg,48.19581,16.38599
+8102059,Tullnerfeld,48.29506,15.99669
+8100021,Bad Schallerbach-Wallern,48.22876,13.92224
+8100129,Gmünd NÖ,48.76423,14.98517
+8100193,Raaba,47.03016,15.49583
+8100210,Allentsteig,48.71593,15.32983
+8100211,Andorf,48.36985,13.56579
+8100213,Annenheim,46.65860,13.90122
+8100216,Baumgarten,47.72789,16.51785
+8100217,Bürmoos,47.98184,12.92512
+8100220,Draßburg,47.74777,16.49508
+8100221,Drösing,48.53991,16.89569
+8100225,Ebenfurth,47.87764,16.36194
+8100231,Eisenstadt,47.83928,16.52941
+8100236,Wien Floridsdorf,48.25639,16.40002
+8100238,Frauenkirchen,47.84053,16.91619
+8100247,Gars-Thunau,48.59736,15.65518
+8100249,Wien Gersthof,48.23086,16.32908
+8100255,Gols,47.89173,16.90509
+8100258,Gries am Brenner,47.04128,11.48527
+8100261,Grünau im Almtal,47.85368,13.95163
+8100267,Hard-Fussach,47.47985,9.68813
+8100269,Wien Heiligenstadt,48.24905,16.36570
+8100271,Wien Hernals,48.22325,16.31485
+8100273,Hötzelsdorf-Geras,48.74247,15.67026
+8100274,Hollabrunn,48.56279,16.07228
+8100277,Horn NÖ,48.66584,15.67352
+8100293,Korneuburg,48.34293,16.32893
+8100297,Wien Krottenbachstraße,48.24005,16.34062
+8100298,Lamprechtshausen,47.99014,12.94975
+8100313,Strass im Zillertal,47.39529,11.81833
+8100320,Taufkirchen an der Pram,48.40686,13.52257
+8100335,Vitis,48.75316,15.17362
+8100336,Völkermarkt-Kühnsdorf,46.62208,14.62993
+8100341,Wallern im Burgenland,47.73345,16.93044
+8100343,Weiden am See,47.92573,16.86382
+8100361,Wulkaprodersdorf,47.78925,16.49055
+8100379,Trimmelkam,48.02738,12.86048
+8100382,Villach Warmbad,46.58883,13.82867
+8100390,Aschau im Zillertal,47.26351,11.89712
+8100395,Wien Breitensee,48.19754,16.30674
+8100399,Irnfritz,48.74841,15.53977
+8100406,Ried im Zillertal,47.30294,11.87319
+8100407,Riedau,48.30447,13.62672
+8100414,Salzburg Hbf Bahnsteige (11-12),47.81286,13.04457
+8100424,Müllendorf,47.83390,16.46006
+8100431,St Andrä am Zicksee,47.78280,16.92799
+8100434,Neusiedl am See,47.95564,16.82346
+8100441,Wien Oberdöbling,48.24410,16.34406
+8100442,Obernberg-Altheim,48.27010,13.25978
+8100446,Wien Franz-Josefs-Bahnhof,48.22617,16.36127
+8100448,Pamhagen,47.70410,16.90343
+8100450,Wien Penzing,48.19271,16.30444
+8100456,Bergheim bei Salzburg,47.83935,13.02096
+8100457,Bernhardsthal,48.68800,16.87901
+8100466,Marchegg,48.24925,16.91870
+8100469,Retz,48.75353,15.95704
+8100473,Bregenz Riedenburg,47.49291,9.72131
+8100484,Mönchhof-Halbturn,47.87473,16.94687
+8100499,Nickelsdorf,47.94282,17.08625
+8100509,Oberndorf bei Salzburg Bahnhof,47.94180,12.94409
+8100512,Wien Ottakring,48.21181,16.31119
+8100515,Parndorf Ort,47.99208,16.85139
+8100531,Pürbach-Schrems,48.76371,15.08398
+8100545,Jenbach Zillertalbahn,47.38836,11.77856
+8100546,Kuchl,47.62582,13.14153
+8100548,Allerheiligenhöfe,47.26903,11.35297
+8100549,Gießenbach in Tirol,47.37438,11.23670
+8100551,Kranebitten,47.26959,11.32866
+8100554,Leithen bei Seefeld,47.29078,11.22194
+8100559,Salzburg Gnigl,47.81185,13.06636
+8100564,St Martin im Sulmtal-Bergla,46.74826,15.28480
+8100584,Schlüßlberg,48.22367,13.86918
+8100587,Schlöglmühl,47.68260,15.91377
+8100594,Weng bei Neumarkt,47.93675,13.17535
+8100601,Flughafen Graz-Feldkirchen,46.99764,15.44964
+8101590,Wien Hbf (Bahnsteige 1-2),48.18570,16.37455
+8100349,Wien Praterstern,48.21908,16.38997
+8101473,Wien Quartier Belvedere,48.18794,16.37838
+8100449,Wien Mitte-Landstraße,48.20639,16.38483
+8198353,Wien Flughafen (CAT),48.12083,16.56306
+8100416,Sattledt,48.07383,14.05571
+8100534,Stockerau,48.38611,16.21570
+8101701,Untersiebenbrunn Bahnhof,48.24799,16.74759
+8100276,Holzleithen am Hausruck Bahnhof,48.11354,13.60660
+8101447,Rothenthurn Bahnhof,46.76028,13.58038
+8101575,St. Paul im Lavanttal Bad Bahnhof,46.69643,14.86854
+8100339,Waizenkirchen Bahnhof,48.33053,13.85298
+8102010,Jesdorf-Bergfried Bahnhof,47.28341,12.66185
+8101781,Winzendorf bei Wr Neustadt Bahnhof,47.81069,16.11132
+8101317,Obersdorf NÖ (Bahnsteige 1-2),48.36229,16.51668
+8100496,St. Andrä im Lavanttal Bahnhof,46.76379,14.84158
+8100487,Schönberg/Kamp Bahnhof,48.51550,15.69665
+8100354,Wienerbruck-Josefsberg Bahnhof,47.85643,15.30725
+8101368,Pleißing-Waschbach Bahnhof,48.80550,15.84217
+8100718,Deutschlandsberg Bahnhof,46.81888,15.21829
+8102029,Uggl-Schwarzenbach Bahnhof,47.28026,12.59596
+8101199,Maierdorf Bahnhof,46.88714,15.85469
+8100158,Hieflau Bahnhof,47.60780,14.73756
+8101230,Mödling Bahnhof,48.08597,16.29553
+8101844,Prambachkirchen-Bad Weinberg Bahnhof,48.31543,13.90109
+8100234,Erlaufklause Bahnhof,47.83257,15.28361
+8101828,Zitoll Bahnhof,47.20693,15.32433
+8101010,Jennersdorf Bahnhof,46.93510,16.13969
+8101423,Rabenstein/Pielach Bahnhof,48.06825,15.46617
+8101205,Mautbrücken Bahnhof,46.72128,14.18917
+8101418,Raggendorf Bahnhof,48.39959,16.66731
+8100937,Hofstatt/Anzbach Bahnhof,48.19194,15.91838
+8100884,Groß Schweinbarth Bahnhof,48.41793,16.64052
+8102007,Mistelbach/Zaya Stadt Bahnhof,48.57074,16.56885
+8101437,Raggendorf Markt Bahnhof,48.38978,16.65447
+8101480,Schauboden Bahnhof,48.07900,15.13696
+8101430,Regelsbrunn Bahnhof,48.10701,16.78068
+8101122,Laxenburg-Biedermannsdorf Bahnhof,48.07694,16.35551
+8100945,Hohenbrugg/Raab Bahnhof,46.94425,16.06032
+8101957,Eggenberg bei Vorchdorf Schloss Bahnhof,47.99414,13.91826
+8100429,Söchau Bahnhof,47.02868,16.01389
+8101591,St. Ruprecht/Raab Bahnhof,47.15177,15.66798
+8100642,Ausschlag-Zöbern Bahnhof,47.53306,16.08321
+8101148,Lichendorf bei Mureck Bahnhof,46.71390,15.69833
+8100209,Alkoven Bahnhof,48.28818,14.11518
+8101308,Oftering Bahnhof,48.22760,14.15112
+8101137,Lebring Bahnhof,46.85493,15.53225
+8101245,Mistelbach/Zaya Bahnhof,48.56568,16.56362
+8100847,Grünbach am Schneeberg Kohlenwerk Bahnhof,47.79816,15.97188
+8101632,Schwarzenbach/Pielach Bahnhof,47.99491,15.35393
+8100947,Himberg bei Übelbach Bahnhof,47.21837,15.27406
+8101176,Langschlag bei Großgerungs Bahnhof,48.57685,14.88272
+8101367,Platt bei Zellerndorf Bahnhof,48.67467,15.96577
+8100814,Furth bei Mattighofen Bahnhof,48.13190,13.13985
+8100201,Eggenburg Bahnhof,48.63786,15.81454
+8100480,Mittersill Bahnhof,47.28366,12.48146
+8101493,Straß-Emling Bahnhof,48.28783,14.08197
+8100837,Groß St. Florian Bahnhof,46.82082,15.31777
+8102030,Uttendorf im Pinzgau Manlitzbrücke Bahnhof,47.28321,12.56233
+8102601,Heidenreichstein Moormuseum Bahnhof,48.86286,15.10794
+8101787,Wildungsmauer Bahnhof,48.10797,16.80191
+8101942,Bleiburg Staatsgrenze (Tarifpunkt),46.56667,14.83995
+8100502,St. Martin-Sittich Bahnhof,46.73215,14.15242
+8101841,Mühling-Plaika Bahnhof,48.10324,15.13272
+8101288,Neuratting Bahnhof,48.22716,13.37390
+8100438,Niederspaching Bahnhof,48.32303,13.81000
+8100656,Baumgartenberg Bahnhof,48.20871,14.74767
+8101145,Lengdorf im Pinzgau Bahnhof,47.28156,12.62852
+8101293,Neumarkt/Ybbs-Karlsbach Bahnhof,48.14342,15.05525
+8100183,Rohrbach-Vorau Bahnhof,47.39053,15.98576
+8100463,Losenstein Bahnhof,47.92406,14.43109
+8101377,Pöndorf Bahnhof,47.98667,13.35581
+8101847,Predlitz Pichl Bahnhof,47.07682,13.92112
+8101164,Lödersdorf Bahnhof,46.95468,15.94553
+8101454,Rohr/Raab Bahnhof,46.97629,15.81248
+8100433,Neukirchen am Großvenediger Bahnhof,47.25287,12.28224
+8100222,Drosendorf Bahnhof,48.86413,15.62475
+8100890,Großsierning Bahnhof,48.18809,15.45764
+8100035,Leibnitz Bahnhof,46.78122,15.54685
+8101023,Kaindorf im Murtal Bahnhof,47.10341,14.12441
+8101587,Sitzenberg-Reidling Bahnhof,48.33219,15.81866
+8101343,Preding-Wieselsdorf Bahnhof,46.85810,15.38166
+8101254,Manzing-Prambach Bahnhof,48.33183,13.88857
+8100437,St. Martin im Innkreis Bahnhof,48.28883,13.43371
+8100650,Berndorf/Triesting Fabrik Bahnhof,47.94026,16.13379
+8100491,Mureck Bahnhof,46.71132,15.77098
+8100615,Alling-Tobisegg Bahnhof,46.88191,15.37286
+8100675,Bockfließ Bahnhof,48.35778,16.60320
+8101598,St. Stefan-Vorderberg Bahnhof,46.60032,13.53354
+8101186,Lutzmannsdorf/Mur Bahnhof,47.10350,14.07529
+8100161,Admont Bahnhof,47.57333,14.46841
+8100180,Hartberg Bahnhof,47.28126,15.98497
+8101909,Burk Bahnhof,47.28520,12.49760
+8101385,Predlitz Turrach Bahnhof,47.07189,13.90861
+8101489,St. Egyden am Steinfeld Bahnhof,47.76100,16.14675
+8100850,Glanegg in Ktn Bahnhof,46.71650,14.21066
+8101626,Schwallenbach Bahnhof,48.34169,15.40349
+8100532,Purbach/Neusiedler See Bahnhof,47.90632,16.69861
+8101085,Krenstetten-Biberbach Bahnhof,48.05522,14.69918
+8100983,Hirtenberg Bahnhof,47.92944,16.17565
+8101837,Grünbach am Schneeberg Schule Bahnhof,47.80137,15.98146
+8100191,Pitten Bahnhof,47.71717,16.17958
+8101808,Weitra Bahnhof,48.70050,14.90153
+8101394,Markt Piesting Bahnhof,47.87457,16.12409
+8100188,Aspang Markt Bahnhof,47.56235,16.09958
+8100202,Absdorf-Hippersdorf Bahnhof,48.40185,15.98617
+8101597,St. Peter-Seitenstetten Bahnhof,48.05470,14.64615
+8100533,Stadl/Mur Bahnhof,47.08471,13.98100
+8100997,Herzogenburg-Wielandsthal Bahnhof,48.28514,15.69057
+8101280,Neulengbach Stadt Bahnhof,48.19618,15.90692
+8101334,Palmsdorf im Attergau Bahnhof,47.92350,13.51287
+8100474,Rohrbach-Berg Bahnhof,48.58194,13.98707
+8100724,Dürnkrut Bahnhof,48.46977,16.86011
+8106399,St. Lorenzen ob Murau Ost Bahnhof,47.10026,14.09654
+8101140,Leumühle Bahnhof,48.32192,14.01027
+8143520,Weiz Nord Bahnhof,47.22247,15.62415
+8101605,Lilienfeld Krankenhaus Bahnhof,48.00902,15.57851
+8100876,Großraming Bahnhof,47.88222,14.55107
+8101347,Petersbaumgarten Bahnhof,47.63376,16.13238
+8100785,Feldham Bahnhof,48.01458,13.91247
+8100982,Haslau/Donau Bahnhof,48.10966,16.71044
+8101508,Steinbach-Großpertholz Bahnhof,48.64029,14.84216
+8100698,Brunn-Maria Enzersdorf Bahnhof,48.10496,16.28806
+8102068,Schalchen-Mattighofen Bahnhof,48.09596,13.16293
+8100968,Hochschneeberg Bergbahnhof,47.76053,15.83426
+8101629,Schönwies bei Imst Bahnhof,47.19721,10.66061
+8101039,Köflach Bahnhof,47.06159,15.08329
+8100125,Mautern in Stmk Bahnhof,47.39678,14.83605
+8101243,Marein-St. Lorenzen Bahnhof,47.47326,15.37326
+8101523,Siebenhirten NÖ Bahnhof,48.61139,16.53121
+8101383,Wolfsberg in Ktn Reding Bahnhof,46.82498,14.84616
+8100458,Bramberg am Wildkogel Bahnhof,47.26980,12.34489
+8101645,Traisen Markt Bahnhof,48.03975,15.61152
+8102046,Asten-Fisching Bahnhof,48.22599,14.43145
+8100485,Scheibbs Bahnhof,48.00526,15.16429
+8101755,Weissenbach-Neuhaus Bahnhof,47.98431,16.04631
+8100725,Munderfing Dampfsäge Bahnhof,48.06851,13.18455
+8101746,Weikendorf Bahnhof,48.33885,16.76328
+8100543,Pama Bahnhof,48.04208,17.04140
+8101780,Willendorf/Wachau Bahnhof,48.32002,15.40480
+8100793,Feldbach/Raab Landesbahn Bahnhof,46.94929,15.89668
+8100536,Kefermarkt Bahnhof,48.43690,14.53812
+8101080,Krieglach Bahnhof,47.54716,15.56003
+8100091,Kolbnitz Bahnhof,46.87834,13.32182
+8101782,Wösendorf-Joching Bahnhof,48.38399,15.45459
+8102022,Altnagelberg Herrenhaus Bahnhof,48.84092,14.99271
+8100733,Dürnbach/Enns Bahnhof,47.97835,14.35384
+8101823,Zissersdorf bei Geras Bahnhof,48.82801,15.63118
+8101594,Straßham-Schönering Bahnhof,48.28352,14.14824
+8100602,Achenlohe Bahnhof,48.04585,13.19780
+8101655,Teufenbach/Mur Bahnhof,47.13498,14.36233
+8100609,Aisthofen Bahnhof,48.25624,14.59036
+8101466,Schafbergalpe Bahnhof,47.77000,13.42218
+8100599,Albersdorf bei Gleisdorf Bahnhof,47.12306,15.69525
+8101857,Wilfling Bahnhof,47.98064,14.02908
+8100832,Großengersdorf Bahnhof,48.35414,16.56966
+8101573,Sonntagberg NÖ Bahnhof,47.99270,14.73802
+8100906,Großweikersdorf Bahnhof,48.46905,15.97620
+8100521,Pettenbach OÖ Bahnhof,47.96215,14.01150
+8100311,Statzendorf Bahnhof,48.30910,15.63267
+8100176,Fehring Bahnhof,46.94947,16.01268
+8101477,Siebenbrunn-Leopoldsdorf Bahnhof,48.24557,16.70384
+8100239,Freistadt Bahnhof,48.49518,14.48146
+8101463,Saffen Bahnhof,48.02171,15.15251
+8101851,Sölling bei Purgstall Bahnhof,48.03900,15.14038
+8102191,Mittersill Essiger Bahnhof,47.28410,12.49254
+8195426,Litschau Bahnhof (Tarifpunkt),48.94184,15.04400
+8100834,Getzersdorf ob der Traisen Bahnhof,48.32409,15.71530
+8101078,Waidhofen/Ybbs Kreilhof Bahnhof,47.94495,14.79755
+8100668,Bleiburg Stadt Bahnhof,46.59007,14.79412
+8100732,Dietrichshofen Bahnhof,48.37003,13.42209
+8100858,Grein Stadt Bahnhof,48.23004,14.85604
+8100195,Gleisdorf Bahnhof,47.09942,15.70894
+8100082,Spielfeld-Straß Bahnhof,46.70958,15.62912
+8101055,Kleblach-Lind Bahnhof,46.77231,13.34266
+8101144,Langau bei Geras Bahnhof,48.82520,15.71850
+8100358,Winterbach NÖ Bahnhof,47.95092,15.27515
+8101475,Schwerbach/Pielach Bahnhof,48.01987,15.40363
+8100264,Hadersdorf/Kamp Bahnhof,48.44651,15.71464
+8100319,Tamsweg Bahnhof,47.12992,13.80796
+8101548,Schönborn-Mallebarn Bahnhof,48.46846,16.15920
+8100614,Alkoven Schule Bahnhof,48.28634,14.10380
+8100522,Peuerbach Bahnhof,48.33747,13.77061
+8101471,St. Michael ob Bleiburg Bahnhof,46.58225,14.75092
+8100520,Petronell-Carnuntum Bahnhof,48.10590,16.86773
+8101769,Willendorf am Steinfeld Bahnhof,47.78922,16.06047
+8100299,Langenlois Bahnhof,48.47680,15.68618
+8101833,Diensthubersiedlung Bahnhof,47.96808,14.02202
+8101636,Schwarza bei Spielfeld Bahnhof,46.71802,15.66947
+8101822,Ziersdorf Bahnhof,48.52793,15.92199
+8101443,Ramingstein Bahnhof,47.07653,13.84334
+8101320,Ortmann Bahnhof,47.89339,15.97932
+8100984,Hautzendorf NÖ Bahnhof,48.45132,16.49290
+8100006,Pöchlarn Bahnhof,48.20807,15.21660
+8101686,Trattenbach/Enns Bahnhof,47.93029,14.35469
+8100347,Weizelsdorf Bahnhof,46.53948,14.24376
+8100661,Böheimkirchen Bahnhof,48.20042,15.75366
+8100325,Traismauer Bahnhof,48.34793,15.74559
+8101654,Trautmannsdorf in Oststmk Bahnhof,46.87813,15.88851
+8117109,Heidenreichstein Bahnhof,48.86478,15.11782
+8100528,Pregarten Bahnhof,48.35595,14.52231
+8100579,Oed/Piesting Bahnhof,47.87872,16.02635
+8101185,Lungitz/Gusen Bahnhof,48.28867,14.47836
+8101328,Oberwaltersdorf Bahnhof,47.97511,16.32838
+8100415,Sarmingstein Bahnhof,48.22959,14.94399
+8101041,Kammerhof Bahnhof,48.10461,15.53022
+8101221,Mitterdorf-Veitsch Bahnhof,47.53656,15.51238
+8100219,Donnerskirchen Bahnhof,47.88862,16.66045
+8100154,Gaflenz Bahnhof,47.89378,14.72366
+8100226,Ebreichsdorf Bahnhof,47.96120,16.40887
+8101713,Untertullnerbach Bahnhof,48.19166,16.12805
+8101599,Schafbergspitze Bahnhof,47.77523,13.43380
+8100505,Ober-Grafendorf Bahnhof,48.15195,15.53983
+8100647,Bärnbach bei Köflach Bahnhof,47.05615,15.12935
+8102579,Waldhausen bei Zwettl Museumsbahnhof,48.52474,15.24353
+8101988,Waldegg-Dürnbach Bahnhof,47.86760,16.05148
+8133912,Schönau bei Litschau Dorfwirt Bahnhof,48.93216,15.03843
+8100894,Guntersdorf Bahnhof,48.64228,16.05363
+8101669,Tiffen Bahnhof,46.70140,14.06000
+8100194,Laßnitzhöhe Bahnhof,47.07892,15.58841
+8102043,Vorchdorf Gewerbegebiet Bahnhof,48.01013,13.91422
+8100454,Attersee Bahnhof,47.91446,13.53400
+8100885,Gschnarret Bahnhof,48.31164,13.93909
+8101161,Laßnitzthal Bahnhof,47.08814,15.65626
+8100283,Kammer-Schörfling Bahnhof,47.94849,13.59532
+8100038,Steindorf/Ossiacher See Bahnhof,46.69820,14.01410
+8101854,Tamsweg St. Leonhard Bahnhof,47.12380,13.80706
+8101973,Rothengrub Bahnhof,47.78920,16.05108
+8100511,Weyer/Enns Bahnhof,47.86156,14.66699
+8100501,St. Paul im Lavanttal Bahnhof,46.70651,14.86775
+8101070,Köppling Bahnhof,47.00274,15.24440
+8101975,Pernitz Raimundviertel Bahnhof,47.89226,15.94675
+8101241,Sachsenburg Markt Bahnhof,46.82564,13.34830
+8101567,Sollenau Bahnhof,47.89829,16.24561
+8101153,Lilienfeld Bahnhof,48.01377,15.59305
+8100882,Grünbach am Schneeberg Bahnhof,47.79747,15.99791
+8100179,Sebersdorf Bahnhof,47.18887,15.99904
+8100126,Kalwang Bahnhof,47.42369,14.74694
+8101534,Steinkogel Bahnhof,47.78716,13.74136
+8101918,Kaindorf/Sulm Bahnhof,46.80217,15.54243
+8100948,Hart im Innkreis Bahnhof,48.31604,13.41521
+8100421,Mühlbach im Pinzgau Bahnhof,47.27300,12.37429
+8101501,St. Georgen/Gusen Bahnhof,48.26516,14.44040
+8100266,Hainburg/Donau Personenbahnhof,48.14875,16.93924
+8101694,Übersbach bei Fürstenfeld Bahnhof,47.02688,16.05360
+8101704,Unteroberndorf Bahnhof,48.18180,15.95774
+8101305,Oedt bei Feldbach Bahnhof,46.93639,15.86906
+8101502,St. Georgen/Gusen Bahnhst,48.27090,14.45088
+8100503,St. Nikola-Struden Bahnhof,48.23349,14.90910
+8101225,Mühling/Erlauf Bahnhof,48.11098,15.13552
+8100289,Kirchberg/Pielach Bahnhof,48.02426,15.43275
+8100156,Kleinreifling Bahnhof,47.82396,14.64218
+8101033,Kottingbrunn Bahnhof,47.95019,16.22698
+8100056,Arnoldstein Bahnhof,46.55147,13.70769
+8101115,Laizing Bahnhof,47.96400,13.89213
+8100928,Helmahof Bahnhof,48.31045,16.59766
+8101284,Nötsch im Gailtal Bahnhof,46.58866,13.62523
+8100178,Bierbaum/Safen Bahnhof,47.09800,16.07427
+8102024,Kleinpertholz bei Heidenreichstein Bahnhof,48.86080,15.10531
+8101793,Wolkersdorf im Weinviertel Bahnhof,48.37865,16.51249
+8100697,Burgfried bei Gnas Bahnhof,46.89137,15.83298
+8101623,St. Veit/Triesting Bahnhof,47.93324,16.14908
+8100781,Ferndorf in Ktn Bahnhof,46.73289,13.62854
+8100205,Achau Bahnhof,48.08212,16.37702
+8101117,Lahöfen Bahnhof,48.28694,14.00676
+8100455,Bad Waltersdorf Bahnhof,47.17027,16.01368
+8101440,Rosental im Pinzgau Bahnhof,47.24355,12.24523
+8101788,Wittmannsdorf NÖ Bahnhof,47.92029,16.21992
+8100794,Unterfladnitz Bahnhof,47.17931,15.66740
+8101763,Weitersfeld im Waldviertel Bahnhof,48.78749,15.80470
+8167958,Hollersbach im Pinzgau Panoramabahn Bahnhof,47.27893,12.40815
+8101922,Spielfeld Staatsgrenze (Tarifpunkt),46.69206,15.64025
+8100600,Aschbach NÖ Bahnhof,48.06966,14.75636
+8101542,St. Lorenzen ob Murau Bahnhof,47.10169,14.09042
+8101530,St. Johann-Weistrach Bahnhof,48.07496,14.61322
+8101647,Tattendorf Bahnhof,47.95546,16.30592
+8100802,Frankenfels Bahnhof,47.98188,15.32195
+8100324,Thal/Drau Bahnhof,46.78414,12.67070
+8100775,Enzersdorf bei Staatz Bahnhof,48.67280,16.51102
+8101111,Ladendorf Bahnhof,48.53616,16.51011
+8100409,Mattighofen Bahnhof,48.10867,13.15237
+8100839,Großgerungs Bahnhof,48.57181,14.96020
+8101049,Kirchberg-Thürnau Bahnhof,48.27523,14.16562
+8100212,Annaberg NÖ-Reith Bahnhof,47.86532,15.31069
+8100804,Fraham bei Eferding Bahnhof,48.28748,14.03951
+8101072,Kößlwang Bahnhof,48.02297,13.90876
+8100301,Laubenbachmühle Bahnhof,47.95229,15.28716
+8100980,Hausruck Bahnhof,48.12961,13.57162
+8101595,Strasshof/Nordbahn Bahnhof,48.31857,16.63442
+8101037,Kendlbruck Bahnhof,47.06963,13.88251
+8100970,Hörersdorf Bahnhof,48.62029,16.51633
+8100513,Ottensheim Bahnhof,48.33779,14.17711
+8100763,Ehrenhausen Bahnhof,46.72766,15.58557
+8100268,Hatzendorf Bahnhof,46.97935,16.00342
+8100333,Uttendorf-Helpfau Bahnhof,48.16078,13.13346
+8101327,Ottnang-Wolfsegg Bahnhof,48.09206,13.66488
+8100490,Murau Bahnhof,47.10899,14.17478
+8101620,Sulzbachtäler Bahnhof,47.24246,12.26085
+8101105,Katzendorf in Stmk Bahnhof,46.88368,15.85384
+8100777,Falkendorf/Mur Bahnhof,47.09880,14.00888
+8100749,Eichgraben-Altlengbach Bahnhof,48.17374,15.98201
+8100576,Marktl/Traisen Bahnhof,48.02154,15.60007
+8100254,Götzendorf/Leitha Bahnhof,48.02568,16.58742
+8101113,Wald im Pinzgau Lahnsiedlung Bahnhof,47.23985,12.20674
+8101725,Voitsberg Bahnhof,47.04314,15.15004
+8101237,Mötz Bahnhof,47.27524,10.96001
+8100175,Feldbach/Raab Bahnhof,46.95856,15.88857
+8101601,Schwertberg Bahnhof,48.26866,14.58019
+8101179,Lahnstein/Traun Bahnhof,47.77450,13.73108
+8101740,Waidhofen/Ybbs Lokalbahn Bahnhof,47.95582,14.77891
+8100841,Großhaslau Bahnhof,48.64769,15.16854
+8101858,Pernitz Wipfelhofstraße Bahnhof,47.89574,15.96828
+8100072,Knittelfeld Bahnhof,47.21529,14.83762
+8100851,Gleißenfeld Bahnhof,47.67923,16.12876
+8101048,Kirchstetten bei Neulengbach Bahnhof,48.19026,15.82116
+8100275,Hollersbach im Pinzgau Bahnhof,47.27834,12.41548
+8102016,Perg Schulzentrum Bahnhof,48.24249,14.64037
+8100127,Wald am Schoberpass Bahnhof,47.45038,14.67079
+8128381,Aalfang Bahnhof,48.84261,15.06890
+8102190,Stuhlfelden Siedlung Bahnhof,47.28587,12.53530
+8101180,Laa/Thaya Bahnhof,48.72371,16.40267
+8101336,Paasdorf Bahnhof,48.54684,16.53522
+8101421,Rainfeld-Klein Zell Bahnhof,48.05065,15.70742
+8101052,Karling bei Eferding Bahnhof,48.35213,13.99384
+8101747,Walding bei Linz Bahnhof,48.34839,14.15363
+8100898,Guggenbach Warthkogelsiedlung Bahnhof,47.21937,15.25173
+8101065,Kottingneusiedl Bahnhof,48.70347,16.46429
+8101401,Pottenstein/Triesting Bahnhof,47.96143,16.08951
+8100182,Grafendorf bei Hartberg Bahnhof,47.34664,16.00354
+8100658,Baumgartner Bahnhof,47.75341,15.85081
+8102028,Ernstbrunn Bahnhof,48.52608,16.37694
+8100979,Hofstätten bei Bad Gleichenberg Bahnhof,46.89291,15.87201
+8100611,Aich im Jauntal Bahnhof,46.63015,14.81141
+8100177,Fürstenfeld Bahnhof,47.04216,16.08389
+8101640,Traiskirchen Aspangbahn Bahnhof,48.01741,16.30307
+8101877,Puch bei Villach Bahnhof,46.66314,13.75966
+8100190,Seebenstein Bahnhof,47.70332,16.14278
+8101807,Waldstein Bahnhof,47.21984,15.29010
+8100713,Böhlerwerk Bahnhof,47.98308,14.75406
+8100757,Enzesfeld-Lindabrunn Bahnhof,47.92130,16.18744
+8100417,Mittewald/Drau Bahnhof,46.76959,12.59515
+8100641,Auersthal Bahnhof,48.36804,16.64228
+8100897,Guggenbach Bahnhof,47.21902,15.25586
+8100731,Dreistetten Bahnhof,47.87249,16.11014
+8100237,Frantschach-St. Gertraud Bahnhof,46.86500,14.86858
+8101231,Mogersdorf Bahnhof,46.94555,16.22923
+8101384,Prottes Bahnhof,48.38240,16.72999
+8181995,Tarifpunkt 88 Spielfeld Staatsgrenze,46.69205,15.64417
+8101341,Preding bei Weiz Bahnhof,47.20154,15.64757
+8101198,Mainburg/Pielach Bahnhof,48.07976,15.47855
+8101047,Kirchham bei Vorchdorf Bahnhof,47.97552,13.89882
+8100075,Neumarkt in Stmk Bahnhof,47.07348,14.41493
+8101075,Kappel am Krappfeld Bahnhof,46.83760,14.47562
+8100227,Eferding Bahnhof,48.30309,14.01583
+8100355,Wieselburg/Erlauf Bahnhof,48.13215,15.14248
+8100957,Hainfeld NÖ Bahnhof,48.03936,15.76859
+8101432,Rekawinkel Bahnhof,48.17982,16.03179
+8101767,Willersdorf/Aschach Bahnhof,48.32561,13.83209
+8101536,Stillfried Bahnhof,48.41201,16.84654
+8100068,Nenzing Bahnhof,47.19164,9.70808
+8100538,Bad Deutsch-Altenburg Bahnhof,48.13277,16.91076
+8100591,Silberwald Bahnhof,48.32832,16.67834
+8100651,Boding Bahnhof,47.96359,15.29723
+8100307,Spitz/Donau Bahnhof,48.36509,15.41766
+8101693,Übelbach Bahnhof,47.22484,15.23659
+8101842,Murau St. Leonhard Bahnhof,47.10938,14.16534
+8102027,Mollmannsdorf Bahnhof,48.41276,16.40406
+8100593,Werndorf Bahnhof,46.91637,15.47698
+8101764,Wagram-Grafenegg Bahnhof,48.43421,15.77659
+8101516,Schlägl Bahnhof,48.63661,13.97540
+8101814,Weiz Zentrum (Bahnhst),47.21921,15.62713
+8101210,Mixnitz-Bärenschützklamm Bahnhof,47.33158,15.36028
+8100878,Gerling OÖ Bahnhof,48.39730,14.07708
+8100856,Gnas Bahnhof,46.88435,15.83117
+8101369,Pernitz-Muggendorf Bahnhof,47.89591,15.95813
+8100580,Perg Bahnhof,48.24755,14.62750
+8100489,Munderfing Bahnhof,48.07310,13.18020
+8101724,Waidhofen/Ybbs Vogelsang Bahnhof,47.95134,14.78713
+8100025,Baden bei Wien Bahnhof,48.00405,16.24278
+8100155,Ebensee Bahnhof,47.80435,13.77146
+8100334,Uttendorf-Stubachtal Bahnhof,47.28109,12.57396
+8101562,St. Martin bei Weitra Bahnhof,48.66316,14.84145
+8101651,Trasdorf Bahnhof,48.31516,15.88010
+8101650,Tullnerbach-Pressbaum Bahnhof,48.18606,16.09286
+8101622,St. Veit/Gölsen Bahnhof,48.04511,15.67176
+8100296,Krimml Bahnhof,47.23470,12.19628
+8100859,Gobelsburg Bahnhof,48.46240,15.70162
+8101306,Oepping Bahnhof,48.59986,13.96045
+8101277,Neunkirchen NÖ Bahnhof,47.73161,16.08510
+8101380,Prädiberg Bahnhof,46.92036,15.84797
+8101283,Nöstlbach-St. Marien Bahnhof,48.16399,14.24654
+8100819,Gaishorn am See Bahnhof,47.48909,14.54657
+8101415,Raasdorf Bahnhof,48.23902,16.58191
+8100780,Felixdorf Bahnhof,47.88730,16.24806
+8100622,Arbing Bahnhof,48.22687,14.70113
+8100206,Aggsbach-Markt Bahnhof,48.29664,15.40292
+8101046,Kirchham bei Vorchdorf Ort Bahnhof,47.97114,13.89693
+8100877,Granitztal Bahnhof,46.68513,14.83823
+8101745,Waldegg/Piesting Bahnhof,47.86891,16.05847
+8101696,Unterhöflein Bahnhof,47.79070,16.03290
+8101154,Limberg-Maissau Bahnhof,48.59234,15.86331
+8100766,Ebensee Landungsplatz Bahnhof,47.81274,13.77452
+8101238,Paternion Markt Bahnhof,46.72523,13.64237
+8100128,Trieben Bahnhof,47.48920,14.48926
+8100735,Dürrwien Bahnhof,48.17844,16.06176
+8101813,Weiz Bahnhof,47.21427,15.63092
+8100318,Takern-St. Margarethen Bahnhof,47.04566,15.75785
+8101586,Schrambach Bahnhof,48.00143,15.57467
+8100681,Bergern am Hausruck Bahnhof,48.10086,13.63129
+8100790,Fischa Bahnhof,46.90595,15.83717
+8100500,Niedernsill Bahnhof,47.28209,12.64684
+8101468,Säusenstein Bahnhof,48.19261,15.11381
+8100817,Gaisfeld Bahnhof,47.02125,15.19753
+8101839,Hagendorf im Murtal Bahnhof,47.08726,13.99073
+8101770,Wiesenau im Lavanttal Bahnhof,46.94518,14.81388
+8100764,Erlauf Bahnhof,48.18381,15.18210
+8100663,Bad Blumau Bahnhof,47.12337,16.05658
+8101393,Passering Bahnhof,46.80694,14.46944
+8101249,Mühldorf im Lavanttal Bahnhof,46.73611,14.85736
+8100034,Peggau-Deutschfeistritz Bahnhof,47.20724,15.34326
+8101674,Traunkirchen Ort Bahnhof,47.84278,13.78704
+8101158,Schadendorf bei Lieboch Bahnhof,46.97932,15.31800
+8101107,Kroisbach-Zöbing Bahnhof,47.03383,15.76096
+8100680,Bruderndorf bei Langschlag Bahnhof,48.59732,14.84634
+8101106,Kleinzell im Mühlkreis Bahnhof,48.45849,14.03208
+8100827,Göllersdorf Bahnhof,48.49247,16.12663
+8100440,St. Stefan im Lavanttal Bahnhof,46.80675,14.84612
+8100007,Ybbs/Donau Bahnhof,48.15890,15.09971
+8101543,Schlins-Beschling Bahnhof,47.19499,9.68998
+8100846,Guntramsdorf Thallern Bahnhof,48.05192,16.29749
+8100891,Gstocket Bahnhof,48.30626,13.95517
+8101941,Hessendorf bei Geras Anglerparadies Bahnhof,48.81272,15.74293
+8100924,Heilbad Burgwies Bahnhof,47.28623,12.51057
+8100181,St. Johann in der Haide Bahnhof,47.28062,16.03526
+8100328,Twimberg Bahnhof,46.91537,14.84176
+8101843,Murau West Bahnhof,47.11210,14.14796
+8101856,Vorchdorf Schule (Bahnhst),48.00408,13.91713
+8102051,Hengsberg Bahnhof,46.86349,15.45784
+8100030,Kindberg Bahnhof,47.50115,15.44834
+8100096,Treibach-Althofen Bahnhof,46.86852,14.46557
+8101163,Leobersdorf Bahnhof,47.93843,16.23099
+8101408,Purkla Bahnhof,46.73156,15.90335
+8101178,Lasberg-St. Oswald Bahnhof,48.46091,14.52152
+8100369,Gramatneusiedl Bahnhof,48.03529,16.49106
+8100999,Iglmühle Bahnhof,48.52057,14.03644
+8101261,Neubau-Kreuzstetten Bahnhof,48.49734,16.50065
+8101439,Rohrbach/Gölsen Bahnhof,48.04776,15.74284
+8101783,Weißenstein-Kellerberg Bahnhof,46.67952,13.71986
+8100322,Ternberg Bahnhof,47.94919,14.35498
+8100391,Bad St. Leonhard Bahnhof,46.96576,14.78672
+8101545,Schönfeld-Lassee Bahnhof,48.25104,16.80721
+8101081,Kröllendorf Bahnhof,48.04255,14.78901
+8101714,Übelbach Vormarkt Bahnhof,47.22252,15.24108
+8101282,Neuhaus-Niederwaldkirchen Bahnhof,48.44201,14.05135
+8100727,Dornach bei Grein Bahnhof,48.19187,14.82007
+8100356,Wiesen-Sigleß Bahnhof,47.75343,16.36978
+8100272,Herzogenburg Bahnhof,48.27655,15.69636
+8101203,Markersdorf/Pielach Bahnhof,48.19644,15.49697
+8100340,Wald im Pinzgau Bahnhof,47.24371,12.22850
+8101826,Zöbing/Kamp Bahnhof,48.49068,15.69385
+8101403,Puchberg am Schneeberg Bahnhof,47.79041,15.91032
+8100932,Hengsthütte Bahnhof,47.75816,15.88298
+8101077,Kreisbach Bahnhof,48.10056,15.60788
+8101218,Miesenbach-Waidmannsfeld Bahnhof,47.87757,16.00530
+8100808,Frättingsdorf Bahnhof,48.64343,16.51218
+8117345,Weiz Interspar Bahnhof,47.20761,15.63966
+8101087,Krems in Stmk Bahnhof,47.03304,15.17550
+8101381,Pressbaum Bahnhof,48.18138,16.07784
+8100916,Halbenrain Bahnhof,46.72382,15.94886
+8101906,Straßham Wehrgasse Bahnhof,48.28892,14.14393
+8101802,Winkl im Rosental Bahnhof,46.54508,14.01417
+8102012,Neukirchen am Großvenediger Vorstadl Bahnhof,47.25271,12.29780
+8100288,Kirchberg am Wagram Bahnhof,48.42750,15.89429
+8101397,Pirtendorf Bahnhof,47.28489,12.54469
+8100087,Mühldorf-Möllbrücke Bahnhof,46.85140,13.36702
+8100613,Allerheiligen-Mürzhofen Bahnhof,47.48200,15.40290
+8101102,Großraming Kraftwerk Bahnhof,47.89296,14.51077
+8101391,Purgstall/Erlauf Bahnhof,48.05897,15.13110
+8101742,Wartberg/Krems Bahnhof,47.98903,14.12155
+8101774,Wildon Bahnhof,46.88418,15.52100
+8101460,Marbach bei Murau Golfplatz Bahnhof,47.10097,14.10741
+8198445,Waidhofen/Ybbs Bahnhof (Citybahn),47.96838,14.76598
+8100479,Mitterbach/Erlaufsee Bahnhof,47.81309,15.29693
+8101352,Pfaffstätten Bahnhof,48.01826,16.25894
+8100708,Bad Vöslau Bahnhof,47.96948,16.22408
+8100585,Wartberg ob der Aist Schloss Haus Bahnhof,48.34168,14.50538
+8101431,Reichraming Bahnhof,47.89146,14.47265
+8100886,Gosdorf Bahnhof,46.72443,15.79761
+8100419,Möllbrücke-Sachsenburg Bahnhof,46.83080,13.36806
+8101472,Hengsttal Bahnhof,47.78533,15.89933
+8100208,Aigen-Schlägl Bahnhof,48.64263,13.97495
+8101206,Matzen im Weinviertel Bahnhof,48.39739,16.70037
+8100627,Abschlag Bahnhof,48.62521,14.84615
+8100345,Weißenkirchen/Wachau Bahnhof,48.39848,15.47323
+8100857,Gniebing Bahnhof,46.96183,15.85317
+8101149,Lieboch Bahnhof,46.96861,15.34532
+8100332,Gattendorf Bahnhof,48.01063,16.98119
+8100476,Rottenegg Bahnhof,48.36019,14.13755
+8101656,Teesdorf Bahnhof,47.94250,16.28979
+8101444,Ramingstein-Thomatal Bahnhof,47.07529,13.83049
+8100174,Bad Gleichenberg Bahnhof,46.87144,15.90366
+8100571,Gutenstein Bahnhof,47.87695,15.91086
+8101576,Sperneck bei Eferding Bahnhof,48.29107,13.99414
+8101751,Weidach bei Vorchdorf Bahnhof,47.98977,13.90830
+8100159,Gstatterboden im Nationalpark Bahnhof,47.59137,14.63357
+8101456,Rettenbach im Pinzgau Bahnhof,47.28151,12.44983
+8101657,Ternitzer Hütte Bahnhof,47.75173,15.86689
+8100826,Grein-Bad Kreuzen Bahnhof,48.22068,14.85122
+8100316,Summerau Bahnhof,48.55719,14.44860
+8101797,Wopfing Bahnhof,47.87366,16.07680
+8100949,Hilm-Kematen Bahnhof,48.02253,14.76174
+8100252,Gösing an der Mariazeller Bahn Bahnhof,47.88830,15.28185
+8100410,Mauerkirchen Bahnhof,48.19144,13.12885
+8101449,Rosenau/Ybbs Bahnhof,48.01053,14.74179
+8100778,Falkenohren Bahnhof,47.98799,13.90459
+8100338,Vorchdorf-Eggenberg Bahnhof,47.99827,13.92086
+8101360,Bad Pirawarth Bahnhof,48.44853,16.60578
+8100393,Bleiburg Bahnhof,46.57423,14.78654
+8101836,Frojach Bahnhof,47.13169,14.33497
+8100901,Guggenbach Pulverwerksiedlung Bahnhof,47.21862,15.26580
+8100262,Gstadt bei Waidhofen Bahnhof,47.94364,14.81879
+8101600,Staatz Bahnhof,48.69972,16.49259
+8100996,Herzogenburg Stadt Bahnhof,48.28446,15.70059
+8101272,Niederkreuzstetten Bahnhof,48.47800,16.47982
+8101255,Neuhofen/Krems Bahnhof,48.13603,14.23846
+8100976,Haslach/Mühl Bahnhof,48.55448,14.03089
+8101786,Wollsdorf/Raab Bahnhof,47.13416,15.68265
+8101806,Weißenbach-St. Gallen Bahnhof,47.71426,14.63548
+8101652,Tauchendorf-Haidensee Bahnhof,46.72819,14.23646
+8101535,Schleinbach Bahnhof,48.42206,16.48987
+8101557,Söding-Mooskirchen Bahnhof,46.99691,15.28228
+8101160,Lannach Bahnhof,46.94109,15.33435
+8101533,Steinklamm Bahnhof,48.05336,15.45641
+8101738,Walchen im Pinzgau Bahnhof,47.28525,12.69578
+8100831,Gemeinlebarn Bahnhof,48.33597,15.80505
+8100783,Fentsch-St. Lorenzen Bahnhof,47.25173,14.89296
+8100595,Wenns im Pinzgau Bahnhof,47.27220,12.35426
+8101490,Murau St. Egidi Bahnhof,47.10818,14.18218
+8100940,Hofstetten-Grünau Bahnhof,48.09678,15.50788
+8100452,Aschach/Donau Bahnhof,48.36327,14.01405
+8101653,Trautmannsdorf/Leitha Bahnhof,48.02417,16.64354
+8100537,Maria Ellend/Donau Bahnhof,48.10974,16.68813
+8100950,Himberg bei Wien Bahnhof,48.08228,16.44505
+8100737,Eferding Gewerbegebiet Bahnhof,48.30203,14.02184
+8101589,St. Ruprecht ob Murau Bahnhof,47.10805,14.02449
+8101407,Pupping Bahnhof,48.33924,13.99810
+8101498,Seyring Bahnhof,48.33076,16.50181
+8100086,Paternion-Feistritz Bahnhof,46.70756,13.67375
+8100344,Weigelsdorf NÖ Bahnhof,47.95209,16.41281
+8101938,Wandritsch Bahnhof,47.11045,14.03436
+8100033,Frohnleiten Bahnhof,47.26638,15.32711
+8100370,Gratwein-Gratkorn Bahnhof,47.12904,15.32322
+8101173,Lanzendorf-Rannersdorf Bahnhof,48.11324,16.44749
+8101855,Unterhillinglah Bahnhof,48.29321,14.02798
+8101680,Triebendorf Bahnhof,47.12811,14.24546
+8100246,Gaisbach-Wartberg Bahnhof,48.33030,14.50610
+8100083,Rosenbach bei Villach Bahnhof,46.53089,14.03547
+8101053,Krottendorf-Ligist Bahnhof,47.00990,15.21427
+8100039,Feldkirchen in Ktn Bahnhof,46.72151,14.09900
+8101546,Scheiblingkirchen-Warth Bahnhof,47.66218,16.13102
+8100383,Wartberg im Mürztal Bahnhof,47.52728,15.48308
+8101365,Pillichsdorf Bahnhof,48.36166,16.53884
+8100471,Mariazell Bahnhof,47.78308,15.30755
+8101323,Oisnitz-St. Josef Bahnhof,46.91559,15.35439
+8101611,Sautern-Schiltern Bahnhof,47.70743,16.15626
+8100530,Puchenstuben Bahnhof,47.93059,15.29047
+8100445,Waidhofen/Ybbs Bahnhof,47.96814,14.76534
+8100652,Berndorf/Triesting Stadt Bahnhof,47.94482,16.10869
+8101711,Urschendorf am Steinfeld Bahnhof,47.79738,16.08984
+8101061,Kammern im Liesingtal Bahnhof,47.38990,14.90360
+8100903,Gussendorf Bahnhof,46.82964,15.34856
+8101643,Traisen Bahnhof,48.05685,15.61243
+8101830,Zwettl NÖ Museumsbahnhof,48.61007,15.16765
+8101029,Katsdorf Bahnhof,48.31211,14.49021
+8100229,Eis-Ruden Bahnhof,46.66278,14.82524
+8101860,Waidhofen/Ybbs Schillerpark Bahnhof,47.95742,14.77353
+8100372,Guntramsdorf Kaiserau Bahnhof,48.04432,16.32510
+8100285,Gleisdorf West Bahnhof,47.10544,15.70340
+8100720,Deutschfeistritz Bahnhof,47.19960,15.33562
+8101372,Prenning Viertler Bahnhof,47.20979,15.31641
+8100527,Preblau-Sauerbrunn Bahnhof,46.93139,14.82606
+8100196,Studenzen-Fladnitz Bahnhof,46.99882,15.77487
+8100746,Etsdorf-Straß Bahnhof,48.45309,15.73033
+8101197,Maria Anzbach Bahnhof,48.18797,15.93473
+8101697,Ulrichskirchen Bahnhof,48.40208,16.48812
+8100852,Glinzendorf Bahnhof,48.24210,16.63949
+8101974,Markt Piesting Harzwerk Bahnhof,47.87649,16.13623
+8101079,Kastenreith Bahnhof,47.85073,14.63802
+8101804,Wiesenfeld-Schwarzenbach Bahnhof,48.05128,15.64859
+8101581,Schurrerprambach Bahnhof,48.34244,13.87038
+8100314,Stuhlfelden Bahnhof,47.28577,12.52670
+8100760,Einach Bahnhof,47.08388,13.94078
+8101661,Ternitz Bahnhof,47.71352,16.03321
+8101340,Prattsdorf-Dachsberg Bahnhof,48.31513,13.92903
+8101099,Küpfern Bahnhof,47.85826,14.61086
+8101414,Petzenkirchen Bahnhof,48.14348,15.15696
+8101682,Trumau Bahnhof,47.99250,16.33228
+8100583,Saurau Bahnhof,47.13130,14.28109
+8100526,Pram-Haag Bahnhof,48.23174,13.61707
+8101312,Ollersbach Bahnhof,48.19161,15.84811
+8100719,Deutschkreutz Bahnhof,47.60387,16.61968
+8101474,Schildberg bei Böheimkirchen Bahnhof,48.21943,15.73960
+8101166,Loich Bahnhof,48.01200,15.39193
+8100359,Wolfsberg in Ktn Bahnhof,46.84263,14.83842
+8100245,Gänserndorf Bahnhof,48.34031,16.73274
+8100867,Gumpoldskirchen Bahnhof,48.04096,16.28494
+8101229,Möllersdorf Aspangbahn Bahnhof,48.02901,16.31256
+8100734,Dürnberg bei Ottensheim Bahnhof,48.33148,14.19235
+8101612,Steinbachbrücke Bahnhof,47.93236,13.99310
+8100590,Stübing Bahnhof,47.17755,15.32245
+8100568,Fels am Wagram Bahnhof,48.42900,15.82286
+8100960,Waizenkirchen Hochscharten Bahnhof,48.33408,13.85978
+8100705,Brunn/Pitten Bahnhof,47.72255,16.18829
+8101606,Stöttham im Attergau Bahnhof,47.92572,13.50861
+8101956,Kirnberg bei Eferding Bahnhof,48.29756,13.96883
+8101768,Wilhelmsburg/Traisen Bahnhof,48.11142,15.60838
+8100745,Emmersdorf im Gailtal Bahnhof,46.59531,13.57266
+8101313,Oberland OÖ Bahnhof,47.90231,14.74484
+8101469,Saxen Bahnhof,48.20541,14.78949
+8101752,Weitersfeld/Mur Bahnhof,46.71467,15.71975
+8101371,Prenning Bahnhof,47.21292,15.30821
+8100619,Angern/March Bahnhof,48.38438,16.82591
+8100958,Hainburg/Donau Kulturfabrik Bahnhof,48.14484,16.93221
+8101014,Johnsbach im Nationalpark Bahnhof,47.58241,14.59588
+8100910,Habachtal-Weyerhof Bahnhof,47.25683,12.31629
+8172379,Kreischberg Talstation Bahnhof,47.10194,14.08732
+8100430,Neufelden Bahnhof,48.48371,14.00507
+8101224,Maria Lanzendorf Bahnhof,48.10243,16.41965
+8100721,Deutsch Wagram Bahnhof,48.30302,16.56410
+8100959,Hainburg/Donau Ungartor Bahnhof,48.14832,16.94806
+8101809,Wettmannstätten Bahnhof,46.83744,15.38102
+8101730,Wackersbach Bahnhof,48.29639,13.97952
+8101633,St. Wolfgang im Salzk. Schafbergbf,47.73966,13.43976
+8101244,Mariahof-St. Lambrecht Bahnhof,47.10426,14.37422
+8101329,Oberweiden Bahnhof,48.30640,16.83358
+8102023,Altnagelberg Fa Ergo Bahnhof,48.85152,14.99910
+8101908,Weinburg/Pielach Bahnhof,48.11259,15.53531
+8101020,Kapellerfeld Bahnhof,48.31683,16.49508
+8101304,Obersdorf NÖ (Bahnsteig 3),48.36240,16.51760
+8100779,Frauental-Bad Gams Bahnhof,46.82384,15.25530
+8101110,Lacken im Mühlkreis Bahnhof,48.38586,14.09141
+8101748,Weikendorf-Dörfles Bahnhof,48.34949,16.75891
+8101279,Neulengbach Bahnhof,48.19945,15.89265
+8100192,Bad Erlach Bahnhof,47.73204,16.21185
+8100423,Münchendorf Bahnhof,48.03248,16.38629
+8101644,Tallesbrunn Bahnhof,48.36363,16.78620
+8101083,Krummnußbaum an der Westbahn Bahnhof,48.20782,15.15980
+8101679,Steinschal-Tradigist Bahnhof,48.04100,15.45191
+8101316,Oberpiesting Bahnhof,47.87447,16.09718
+8102011,Steinach im Pinzgau Bahnhof,47.26736,12.33787
+8101349,Pfennigbach bei Puchberg Bahnhof,47.79570,15.92386
+8102021,Brand bei Litschau Bahnhof,48.86084,15.01741
+8136306,Langegg bei Schrems Bahnhof,48.83602,15.05174
+8153718,Hirschwang an der Rax Bahnhof,47.70810,15.81272
+8100954,Hintering Bahnhof,47.07225,13.86494
+8101635,Waidhofen/Ybbs Stadt Bahnhof,47.95840,14.76776
+8100677,Bad Radkersburg Bahnhof,46.69911,15.99365
+8100730,Dorf im Pinzgau-Pass Thurn Bahnhof,47.27727,12.38848
+8100189,Edlitz-Grimmenstein Bahnhof,47.61692,16.12786
+8101056,Klangen Bahnhof,48.12009,15.54115
+8100256,Grafenstein Bahnhof,46.61894,14.45958
+8101196,Madling Bahnhof,47.07599,13.82181
+8101307,Oedt bei Feldbach Siedlung Bahnhof,46.94130,15.87964
+8100926,Hallstatt Bahnhof,47.56770,13.66209
+8101247,Muckendorf-Wipfing Bahnhof,48.32830,16.15004
+8101204,Marchtrenk Bahnhof,48.20113,14.09977
+8101097,Küb Bahnhof,47.68148,15.87652
+8100243,Fürth-Kaprun Bahnhof,47.28790,12.74517
+8101703,Unterloiben Bahnhof,48.39163,15.54665
+8100235,Fischamend Bahnhof,48.11652,16.61520
+8100800,Frauenberg/Enns Bahnhof,47.56999,14.39847
+8100597,Aich-Assach Bahnhof,47.42040,13.82076
+8101448,Roppen Bahnhof,47.21580,10.81757
+8101134,Ledenitzen Bahnhof,46.55765,13.97838
+8101395,Pritschitz Bahnhof,46.62822,14.16999
+8101119,Lehen-Altensam Bahnhof,48.03540,13.70101
+8101628,Schwanberg Bahnhof,46.76610,15.23953
+8100707,Baumgarten-Waldbach Bahnhof,47.92625,13.82993
+8100036,Sattendorf Bahnhof,46.66283,13.91646
+8100637,Atzenbrugg Bahnhof,48.29697,15.91848
+8101217,Michelhausen Bahnhof,48.29649,15.93408
+8100967,Hönigsberg Bahnhof,47.58345,15.64618
+8100244,Furth-Göttweig Bahnhof,48.37320,15.61578
+8100284,Katzelsdorf/Leitha Bahnhof,47.79282,16.26694
+8101339,Prambeckenhof Bahnhof,48.29117,13.78191
+8101007,Inzing/Inn Bahnhof,47.27797,11.19868
+8100069,Frastanz Bahnhof,47.22005,9.63899
+8101811,Weitwörth-Nußdorf Bahnhof,47.92403,12.96595
+8100259,Schwechat Bahnhof,48.14360,16.48152
+8100257,Greifenstein-Altenberg Bahnhof,48.34468,16.23957
+8100772,Elsbethen Bahnhof,47.76093,13.08035
+8101500,Stiefern Bahnhof,48.53484,15.69141
+8101146,Leogang-Steinberge Bahnhof,47.44494,12.76846
+8101428,Redl-Zipf Bahnhof,48.02622,13.51499
+8101706,Unterradlberg Bahnhof,48.25515,15.68666
+8101405,Pulgarn Bahnhof,48.27833,14.39367
+8101549,Stein-Mautern Bahnhof,48.39920,15.57148
+8100639,Aurachkirchen Bahnhof,47.96805,13.74538
+8100833,Geras-Kottaun Bahnhof,48.80733,15.66853
+8100028,Semmering Bahnhof,47.63970,15.83103
+8101189,Langwies/Traun Bahnhof,47.75680,13.70533
+8101702,Unterkritzendorf Bahnhof,48.32408,16.30928
+8100862,Görtschach-Förolach Bahnhof,46.62316,13.47081
+8100171,Klaus/Pyhrnbahn Bahnhof,47.83297,14.15509
+8100045,Lend/Salzach Bahnhof,47.29750,13.05545
+8100849,Glandorf Bahnhof,46.74993,14.38112
+8101585,Sulz-Röthis Bahnhof,47.29396,9.63467
+8101260,Neukirchen-Gampern Bahnhof,48.02030,13.54932
+8100031,Kapfenberg Bahnhof,47.44519,15.29209
+8100019,Straßwalchen Bahnhof,47.97208,13.26447
+8100759,Ennsdorf Bahnhof,48.21650,14.49609
+8100152,Altmünster/Traunsee Bahnhof,47.89123,13.75831
+8100315,Suben Bahnhof,48.40276,13.43312
+8101419,Ramingdorf-Haidershofen Bahnhof,48.06773,14.45950
+8100331,Untereggendorf Bahnhof,47.86135,16.32132
+8100700,Buchberg/Kamp Bahnhof,48.57581,15.65878
+8100373,Kittsee Bahnhof,48.08145,17.07146
+8100439,Obereggendorf Bahnhof,47.84988,16.29722
+8100582,Pürgg Bahnhof,47.52864,14.06462
+8100630,Altach Bahnhof,47.35213,9.66124
+8100717,Dörnbach-Hitzing Bahnhof,48.27154,14.20184
+8101364,Pölfing-Brunn Bahnhof,46.73013,15.30024
+8100130,Hohenau/March Bahnhof,48.59825,16.90094
+8101467,Sarasdorf Bahnhof,48.02322,16.67710
+8100952,Hipping Bahnhof,47.95067,13.47204
+8101190,Langenwang/Mürz Bahnhof,47.56813,15.61387
+8101151,Lind-Scheifling Bahnhof,47.15751,14.40320
+8100011,Enns Bahnhof,48.22121,14.46674
+8101678,Thalheim-Pöls Bahnhof,47.19657,14.58858
+8101614,Steyregg Bahnhof,48.28447,14.36229
+8101382,Premstätten-Tobelbad Bahnhof,46.97913,15.39095
+8101337,Patsch Bahnhof,47.19322,11.41649
+8100066,Ludesch Bahnhof,47.18037,9.77111
+8101071,Kothmühle Bahnhof,47.88671,13.94064
+8114529,Neunagelberg Bahnhof,48.82164,14.97106
+8100770,Eschenau/Salzach Bahnhof,47.30679,13.00841
+8100813,Furth-Palt Bahnhof,48.38448,15.60602
+8101540,Schlierbach/Krems Bahnhof,47.93693,14.11125
+8100695,Breitenschützing Bahnhof,48.07868,13.80082
+8100169,Kremsmünster Bahnhof,48.05357,14.14135
+8100523,Piesendorf Bahnhof,47.29055,12.72336
+8100204,Abfaltersbach/Drau Bahnhof,46.75351,12.51120
+8101796,Wöllersdorf/Piesting Bahnhof,47.86153,16.17800
+8100134,Neumarkt-Köstendorf Bahnhof,47.95494,13.22508
+8100962,Höbersdorf Bahnhof,48.44829,16.17310
+8101524,Sierndorf/March Bahnhof,48.51106,16.89097
+8101319,Oberradlberg Bahnhof,48.24070,15.67062
+8100077,Launsdorf-Hochosterwitz Bahnhof,46.76888,14.45563
+8101870,Stallegg Bahnhof,48.61539,15.64368
+8100638,Aurolzmünster Bahnhof,48.24906,13.45802
+8101396,Pottenbrunn Bahnhof,48.22366,15.70193
+8101390,Pottschach Bahnhof,47.69713,16.00626
+8101794,Wolfshütte Bahnhof,48.05293,13.68151
+8102067,Ostermiething Bahnhof,48.04441,12.84593
+8100740,Eberschwang Bahnhof,48.15180,13.53668
+8101376,Pöham Bahnhof,47.43031,13.25474
+8101025,Kainisch Bahnhof,47.57070,13.84151
+8101676,Töschling Bahnhof,46.63315,14.11041
+8100687,Breitwiesen Bahnhof,48.22308,13.96782
+8100974,Hörsching Bahnhof,48.24567,14.18621
+8101285,Niederwölz Bahnhof,47.14621,14.37535
+8101955,Achleitnersiedlung Bahnhof,48.32151,14.20568
+8100893,Gschwandt-Rabesberg Bahnhof,47.93184,13.84582
+8100765,Eisengattern Bahnhof,47.95271,13.88046
+8100027,Payerbach-Reichenau Bahnhof,47.69605,15.86301
+8100215,Antiesenhofen Bahnhof,48.34736,13.40208
+8100133,Öblarn Bahnhof,47.46069,13.98763
+8101351,Pfaffenschwendt Bahnhof,47.46852,12.58066
+8100570,Großendorf Bahnhof,48.03869,14.05565
+8100408,Mattersburg Bahnhof,47.73587,16.40878
+8100722,Dechantskirchen Bahnhof,47.41859,16.02193
+8100788,Finkenstein Bahnhof,46.56883,13.86788
+8100037,Ossiach-Bodensdorf Bahnhof,46.68259,13.97424
+8101036,Kematen/Krems Bahnhof,48.11299,14.20305
+8101450,Roßleithen Bahnhof,47.72455,14.30864
+8101716,Viechtwang Bahnhof,47.91554,13.97131
+8101861,Zellermoos Bahnhof,47.29589,12.77921
+8101271,Niederfladnitz Bahnhof,48.79366,15.89415
+8101273,Niederöblarn Bahnhof,47.48166,14.01430
+8100018,Frankenmarkt Bahnhof,47.98310,13.43262
+8101219,Mitterberghütten Bahnhof,47.39536,13.22244
+8101275,Niklasdorf Bahnhof,47.39390,15.15546
+8100861,Gödersdorf Bahnhof,46.56839,13.84687
+8100317,Tainach-Stein Bahnhof,46.61621,14.54493
+8100929,Hallwang-Elixhausen Bahnhof,47.85776,13.09126
+8101646,Tassenbach Bahnhof,46.74681,12.46579
+8101370,Pernegg/Mur Bahnhof,47.35947,15.34301
+8101750,Wies-Eibiswald Bahnhof,46.71842,15.25920
+8101695,Ulmerfeld-Hausmening Bahnhof,48.07491,14.81570
+8101795,Wolfsbergkogel Bahnhof,47.64962,15.82710
+8100864,Gopperding Bahnhof,48.44083,13.45842
+8101346,Perchtoldsdorf Bahnhof,48.12271,16.28562
+8100302,Lauterach Bahnhof,47.47742,9.72428
+8101416,Rabensburg Bahnhof,48.65192,16.89467
+8100420,Scharnstein-Mühldorf Bahnhof,47.90060,13.95893
+8101000,Imsterberg Bahnhof,47.21122,10.70602
+8100789,Finklham Bahnhof,48.24730,13.97499
+8101373,Pusarnitz Bahnhof,46.83516,13.40463
+8100153,Traunkirchen Bahnhof,47.85520,13.77714
+8101315,Oberolberndorf Bahnhof,48.41361,16.17423
+8100784,Feuerwerksanstalt Bahnhof,47.84884,16.18932
+8100187,Tauchen-Schaueregg Bahnhof,47.48284,16.05478
+8101494,Stein/Enns Bahnhof,47.43732,13.94186
+8101399,Peterskirchen Bahnhof,48.23388,13.54938
+8100495,Neufeld/Leitha Bahnhof,47.86847,16.38127
+8101191,Langenzersdorf Bahnhof,48.30635,16.35611
+8100589,Stams Bahnhof,47.28190,10.97990
+8100418,Mittlern Bahnhof,46.60447,14.70940
+8101670,Timelkam Bahnhof,48.00797,13.59576
+8100738,Eben/Achensee Bahnhof,47.41411,11.76333
+8101202,Mandling/Enns Bahnhof,47.40418,13.56822
+8100478,Mining Bahnhof,48.27131,13.17127
+8101819,Zell/Pram Bahnhof,48.31727,13.62406
+8101527,Siggerwiesen Bahnhof,47.86321,13.00543
+8100363,Zellerndorf Bahnhof,48.69520,15.96832
+8101324,Oberthalheim-Timelkam Bahnhof,48.00183,13.62375
+8101289,Nüziders Bahnhof,47.17146,9.79271
+8100604,Acharting Bahnhof,47.89107,12.99261
+8100747,Ernsthofen Bahnhof,48.12655,14.48002
+8101821,Ziegelhaiden Bahnhof,47.95361,12.94244
+8101076,Kraubath/Mur Bahnhof,47.30600,14.94553
+8100518,Zeltweg Bahnhof,47.18964,14.74794
+8100224,Dürnstein-Oberloiben Bahnhof,48.39327,15.52536
+8101265,Nettingsdorf Bahnhof,48.18953,14.25853
+8101709,Unterpurkersdorf Bahnhof,48.20754,16.18920
+8101825,Zeiselmauer-Königstetten Bahnhof,48.32664,16.17499
+8100818,Gagering Bahnhof,47.36286,11.85185
+8100643,Altweitra Bahnhof,48.72250,14.90478
+8101034,Kalköfen-Dachsberg Bahnhof,48.27326,13.98726
+8101292,Nußbach Bahnhof,47.97208,14.12304
+8101757,Walsberg Bahnhof,47.95668,13.47268
+8101478,Siebenmühlen-Rosenau Bahnhof,47.95946,13.60573
+8101157,Lind-Rosegg Bahnhof,46.60588,14.00007
+8100248,Garsten Bahnhof,48.02375,14.40832
+8100774,Eugendorf Bahnhof,47.87347,13.11698
+8101458,Rufling Bahnhof,48.27314,14.21917
+8100280,Jois Bahnhof,47.95666,16.79072
+8101852,Schauersberg Bahnhof,48.13593,14.00868
+8101771,Wilfleinsdorf Bahnhof,48.02197,16.71955
+8101451,Rotholz Bahnhof,47.39091,11.80096
+8101387,Prinzersdorf Bahnhof,48.20309,15.52610
+8101684,Traxenbichl Bahnhof,47.87724,13.93834
+8101720,Vellach-Khünburg Bahnhof,46.63123,13.40815
+8100667,Bludenz-Moos Bahnhof,47.14224,9.83098
+8100626,Ansfelden Bahnhof,48.20890,14.26110
+8101011,Judendorf-Straßengel Bahnhof,47.11845,15.34393
+8101871,Mannswörth Bahnhof,48.13651,16.50746
+8100888,Grimsing Bahnhof,48.26312,15.36470
+8101063,Kumpfmühl Bahnhof,48.26938,13.62031
+8100845,Gunskirchen Bahnhof,48.13213,13.94542
+8100241,Friedburg Bahnhof,47.99702,13.23422
+8100956,Haiming Bahnhof,47.25342,10.89036
+8101104,Lanzenkirchen Bahnhof,47.75067,16.24225
+8101024,Kamegg Bahnhof,48.61013,15.65756
+8101660,Tenneck Bahnhof,47.49428,13.17891
+8101084,Kritzendorf Bahnhof,48.33607,16.29897
+8100143,Dölsach Bahnhof,46.81480,12.83357
+8100016,Schwanenstadt Bahnhof,48.05409,13.76810
+8101335,Parndorf Bahnhof,47.98694,16.87097
+8101666,Thurnharting Bahnhof,48.26932,14.18576
+8101269,Neuhub Bahnhof,47.94068,13.85996
+8100936,Hetzmannsdorf-Wullersdorf Bahnhof,48.61698,16.09170
+8101361,Pinsdorf Bahnhof,47.93322,13.76614
+8100265,Haiding Bahnhof,48.20982,13.97476
+8100475,Maurach/Achensee Bahnhof,47.42180,11.75377
+8101803,Wallersee Bahnhof,47.91920,13.15929
+8100368,Fürnitz Bahnhof,46.56317,13.81364
+8100706,Brunn/Schneebergbahn Bahnhof,47.82560,16.15729
+8101717,Viehofen Bahnhof,48.23076,15.65289
+8100955,Hollenegg Bahnhof,46.78584,15.23566
+8101675,Thörl-Maglern Bahnhof,46.54033,13.64831
+8101251,Mitterweißenbach Bahnhof,47.73880,13.66333
+8101728,Völs Bahnhof,47.25577,11.32124
+8100305,Liebenfels Bahnhof,46.73641,14.29310
+8101363,Plank/Kamp Bahnhof,48.55780,15.67331
+8100836,Greinsfurth Bahnhof,48.10796,14.83853
+8100573,Micheldorf-Hirt Bahnhof,46.91432,14.43151
+8101353,Pfarrwerfen Bahnhof,47.46142,13.19970
+8101175,Lorüns Bahnhof,47.13068,9.85371
+8100493,Sigmundsherberg Bahnhof,48.68570,15.74502
+8101274,Nikolsdorf Bahnhof,46.77919,12.89505
+8102009,Lengau Bahnhof,48.00849,13.21976
+8100342,Wampersdorf Bahnhof,47.93066,16.41692
+8100907,Grieswirt Bahnhof,47.50944,12.46786
+8100961,Höflein/Donau Bahnhof,48.35006,16.27181
+8100828,Gedersdorf Bahnhof,48.43191,15.69034
+8102006,Oberalm Bahnhof,47.69982,13.09323
+8100360,Wolfsthal Bahnhof,48.13556,17.00617
+8101248,Mühlheim/Inn Bahnhof,48.26970,13.22093
+8100689,Bisamberg Bahnhof,48.31632,16.34727
+8102066,Kledt Bahnhof,48.27389,13.73956
+8100389,Wolfurt Bahnhof,47.45712,9.74103
+8100525,Pottendorf-Landegg Bahnhof,47.90539,16.39620
+8100578,Muntigl Bahnhof,47.85312,13.00563
+8101228,Mauer-Öhling Bahnhof,48.09436,14.79885
+8101723,Voitsdorf Bahnhof,48.01243,14.04705
+8100308,Stadl-Paura Bahnhof,48.08444,13.88332
+8101338,Paudorf Bahnhof,48.35177,15.61571
+8101012,Jedenspeigen Bahnhof,48.49503,16.87829
+8101935,Hart-Wörth Bahnhof,48.14739,15.61417
+8100795,Flaurling Bahnhof,47.28898,11.14307
+8103174,Feldkirchen-Seiersberg Bahnhof,47.01260,15.44048
+8101712,Unterberg-Stefansbrücke Bahnhof,47.21415,11.39181
+8101834,Eiferding Bahnhof,48.01475,12.86378
+8100094,Böckstein Bahnhof,47.08057,13.13044
+8100993,Hüttau Bahnhof,47.41565,13.32062
+8100398,Loipersbach-Schattendorf Bahnhof,47.70072,16.49186
+8135785,Angererbach-Ahrnbach Bahnhof,47.27700,11.88671
+8101638,Steyrling Bahnhof,47.80166,14.16367
+8101402,Puchenau Bahnhof,48.31164,14.23839
+8101298,Oberfalkenstein Bahnhof,46.92589,13.23738
+8100232,Emmersdorf/Donau Bahnhof,48.24306,15.33765
+8100162,Steeg-Gosau Bahnhof,47.61616,13.63202
+8100111,Hochzirl Bahnhof,47.28098,11.24969
+8100562,Autal Bahnhof,47.05700,15.53005
+8101386,Pruggern Bahnhof,47.42336,13.87482
+8101784,Weitlanbrunn Bahnhof,46.74305,12.39037
+8101267,Neuhaus/Gail Bahnhof,46.55508,13.78012
+8101515,Straßhof/Aschach Bahnhof,48.27738,13.75313
+8100451,Zirl Bahnhof,47.26587,11.22991
+8100623,Ardning Bahnhof,47.59057,14.35885
+8101294,Oberaschach Bahnhof,48.27916,13.75823
+8101658,Teichstätt Bahnhof,48.01984,13.21295
+8100830,Geinberg Bahnhof,48.26632,13.29118
+8101375,Pöckau Bahnhof,46.55186,13.74650
+8100995,Herzograd Bahnhof,48.16138,14.50349
+8100710,Breitenwaida Bahnhof,48.51493,16.07488
+8100472,Marz-Rohrbach Bahnhof,47.71762,16.42875
+8100411,Rosenburg/Kamp Bahnhof,48.62842,15.64351
+8100376,Moosbierbaum-Heiligeneich Bahnhof,48.30587,15.90128
+8101578,Spillern Bahnhof,48.37581,16.25668
+8100797,Föderlach Bahnhof,46.60211,13.95900
+8101664,Theresienfeld Bahnhof,47.86071,16.24404
+8101829,Zurndorf Bahnhof,47.96813,17.02377
+8100124,Lochau-Hörbranz Bahnhof,47.52953,9.74237
+8102056,Unterretzbach Bahnhof,48.76434,16.00754
+8101045,Kimpling Bahnhof,48.26660,13.66976
+8100214,Anthering Bahnhof,47.87922,13.00089
+8101159,Langenlebarn Bahnhof,48.32752,16.12175
+8100716,Dorf/Enns Bahnhof,48.09145,14.47309
+8101817,Zehmemoos Bahnhof,47.98945,12.93719
+8100592,Waldl Bahnhof,48.02789,13.90769
+8102065,Diepoltsdorf Bahnhof,48.03520,12.86109
+8100702,Burgeck Bahnhof,47.39785,11.77575
+8101853,Wien Speising Bahnhof,48.17361,16.28364
+8101937,Wien Spittelau Bahnhof,48.23532,16.35807
+8101555,Wien Geiselbergstraße Bahnhof,48.17558,16.40715
+8100691,Wien Brünner Straße Bahnhof,48.26779,16.40359
+8100634,Wien Atzgersdorf Bahnhof,48.14695,16.28858
+8101641,Wien Traisengasse Bahnhof,48.23479,16.38338
+8100922,Wien Hadersdorf Bahnhof,48.21037,16.22331
+8104229,Wien Stadlau Bahnhof,48.21919,16.44841
+8100935,Wien Hetzendorf Bahnhof,48.16669,16.31527
+8101553,Wien Simmering Bahnhof,48.16988,16.41933
+8101556,Wien Grillgasse Bahnhof,48.16720,16.40696
+8101539,Wien Praterkai Bahnhof,48.19950,16.44103
+8101760,Wien Weidlingau Bahnhof,48.21044,16.21193
+8101170,Wien Leopoldau Bahnhof,48.27731,16.44833
+8101290,Wien Nußdorf Bahnhof,48.26067,16.36761
+8101013,Wien Jedlersdorf Bahnhof,48.27385,16.39614
+8100796,Wien Siemensstraße Bahnhof,48.27075,16.42020
+8100920,Wien Haidestraße Bahnhof,48.17874,16.42620
+8101619,Wien Süßenbrunn Bahnhof,48.28556,16.48546
+8100975,Wien Hausfeldstraße Bahnhof,48.23370,16.48558
+8102057,Wien Wolf in der Au Bahnhof,48.20465,16.23641
+8101588,Wien Strebersdorf Bahnhof,48.28551,16.38175
+8100374,Wien Kaiserebersdorf Bahnhof,48.14593,16.46522
+8101820,Wien Zentralfriedhof S-Bahn Bahnhof,48.15417,16.42614
+8100918,Wien Hirschstetten Bahnhof,48.23272,16.46908
+8100432,St. Andrä-Wördern,48.33394,16.20913
+8103487,Graz Liebenau Murpark Bahnhof,47.04005,15.46268
+8100004,Wien Hbf (Autoreisezuganlage),48.17787,16.39100
+8100136,Haus im Ennstal Bahnhof,47.41699,13.80129
+8100145,Dellach im Drautal Bahnhof,46.73581,13.07531
+8100149,Steinfeld im Drautal Bahnhof,46.75258,13.25961
+8100185,Friedberg in Stmk Bahnhof,47.43471,16.05394
+8100186,Pinggau Markt Bahnhof,47.44054,16.06106
+8100199,Schwarzenau im Waldviertel Bahnhof,48.74627,15.26721
+8100200,Göpfritz an der Wild Bahnhof,48.72977,15.39470
+8100203,Tulln/Donau Bahnhof,48.32745,16.06456
+8100263,Gurten OÖ Bahnhof,48.24383,13.33461
+8100282,Kaltenbrunnen im Montafon Bahnhof,47.08548,9.88790
+8100309,Stadt Rottenmann Bahnhof,47.52728,14.36710
+8100357,Winden am See Bahnhof,47.94699,16.75900
+8100388,Neudorf bei Parndorf Bahnhst,48.00885,16.93828
+8100396,Linz/Donau Urfahr Bahnhof,48.31209,14.27980
+8100397,Breitenbrunn/Neusiedler See Bahnhof,47.94108,16.74623
+8100404,Salzburg Maria Plain-Plainbrücke Bahnhof,47.82658,13.03679
+8100412,Micheldorf in OÖ Bahnhof,47.88313,14.12640
+8100413,Mauthausen OÖ Bahnhof,48.24288,14.53272
+8100422,Schützen am Gebirge Bahnhof,47.84814,16.61896
+8100425,Wörschach Schwefelbad Bahnhof,47.54551,14.13978
+8100453,Neusiedl am See Bad Bahnhst,47.94285,16.84434
+8100460,Klosterneuburg Kierling Bahnhof,48.30981,16.32628
+8100470,Maria Rain in Ktn Bahnhof,46.56373,14.28432
+8100481,Bad Sauerbrunn Bahnhof,47.77408,16.32466
+8100494,Neudörfl im Bgld Bahnhof,47.79378,16.30057
+8100497,St. Anton im Montafon Bahnhof,47.10990,9.86619
+8100498,St. Georgen im Attergau Bahnhof,47.93722,13.48821
+8100506,St. Urban/Ossiacher See Bahnhof,46.67447,13.95951
+8100529,Pressegger See Bahnhof,46.63166,13.43684
+8100563,Au bei Bad Wimsbach Bahnhof,48.04752,13.90705
+8100565,Bergham bei Linz Bahnhof,48.27398,14.23982
+8100572,Haid bei Vöcklamarkt Bahnhof,47.98841,13.50138
+8100575,Kogl im Attergau Bahnhof,47.94595,13.47299
+8100586,Silz in Tirol Bahnhof,47.27017,10.93665
+8100606,Bergham bei Linz Am Dürrweg Bahnhst,48.27417,14.23099
+8100635,Altenstadt (Feldkirch) Bahnhof,47.25626,9.61539
+8100653,Bad Fischau-Brunn Bahnhof,47.82681,16.17314
+8100655,Bad Fischau Bahnhof,47.83139,16.17152
+8100657,Berg im Drautal Bahnhof,46.74240,13.12776
+8100666,Blankenberg bei Vorchdorf Bahnhof,48.03347,13.90802
+8100669,Blindenmarkt bei Amstetten Bahnhof,48.12508,14.97960
+8100672,Bad Mitterndorf-Heilbrunn Bahnhof,47.55108,13.92546
+8100678,Ried im Innkreis Bad Bahnhof,48.21231,13.47758
+8100682,Breiteneich bei Horn Bahnhst,48.67198,15.68813
+8100686,Bruckberg im Pinzgau Bahnhof,47.29735,12.78605
+8100692,Breitenstein am Semmering Bahnhof,47.66007,15.82053
+8100693,Breitensee bei Marchegg Bahnhst,48.25477,16.87763
+8100699,Bludenz Brunnenfeld-Stallehr Bahnhof,47.13630,9.83892
+8100703,Bichl im Zillertal Bahnhof,47.19505,11.87056
+8100711,Bad Wimsbach-Neydharting Bahnhof,48.06483,13.90335
+8100728,Dornbirn Schoren Bahnhof,47.41299,9.72630
+8100736,Eichberg am Semmering Bahnhof,47.67218,15.91110
+8100743,Eching bei Bürmoos Bahnhof,47.97704,12.90880
+8100753,Gmunden Engelhof Bahnhof,47.92357,13.81918
+8100755,Erlach im Zillertal Bahnhof,47.24486,11.89576
+8100756,Wien Erzherzog-Karl-Straße Bahnhst,48.22984,16.45323
+8100773,Eisenstadt Schule Bahnhof,47.84383,16.53656
+8100791,Feldkirch Amberg Bahnhof,47.25538,9.62137
+8100806,Puxerboden Bahnhst,47.13169,14.33497
+8100807,Linz/Donau Franckstraße Bahnhof,48.28593,14.32354
+8100812,Waidhofen/Ybbs Pestalozzistraße Bahnhst,47.94946,14.78953
+8100823,Gaisruck bei Stockerau Bahnhof,48.39413,16.06453
+8100842,Gisingen (Feldkirch) Bahnhof,47.25542,9.59781
+8100863,Bad Goisern Jodschwefelbad Bahnhof,47.65834,13.60880
+8100869,Gerasdorf bei Wien Bahnhof,48.29334,16.48374
+8100879,Gerling im Pinzgau Bahnhof,47.39019,12.82728
+8100892,Gries im Pinzgau Bahnhof,47.28805,12.89063
+8100912,Hagenau bei Salzburg Bahnhof,47.83237,13.02937
+8100915,Bruderndorf bei Langschlag Wasserstation Bahnhst,48.60540,14.84871
+8100921,Hatlerdorf (Dornbirn) Bahnhof,47.39808,9.72488
+8100925,Hennersdorf bei Wien Bahnhof,48.11265,16.35857
+8100939,Hopfgarten im Brixental Berglift Bahnhof,47.44673,12.15893
+8100953,Hirschbach bei Gmünd Bahnhof,48.74924,15.12719
+8100963,Hofern bei Retz Bahnhof,48.77971,15.90373
+8100981,Haselstauden (Dornbirn) Bahnhof,47.43245,9.74907
+8100986,Hatting in Tirol Bahnhof,47.28128,11.17071
+8100990,Hausleiten bei Stockerau Bahnhof,48.39135,16.10621
+8101003,Wien Blumental Bahnhof,48.13875,16.36918
+8101005,Irschen in Ktn Bahnhof,46.74059,13.01313
+8101006,Itzling OÖ Bahnhof,48.31300,13.79488
+8101019,Kalsdorf bei Graz Bahnhof,46.96429,15.47004
+8101021,Kapfing im Zillertal Bahnhof,47.33349,11.86176
+8101032,Kapfenberg Fachhochschule Bahnhof,47.45469,15.32913
+8101038,Kematen in Tirol Bahnhof,47.26119,11.27670
+8101044,Kitzbühel Hahnenkamm Bahnhof,47.44348,12.38966
+8101050,Klamm-Schottwien Bahnhof,47.66516,15.87242
+8101051,Kledering Bahnhof,48.13330,16.43916
+8101090,Klagenfurt Annabichl Bahnhof,46.65059,14.31496
+8101091,Klagenfurt Ebenthal Bahnhof,46.61663,14.33347
+8101093,Klagenfurt Lend Bahnhof,46.62153,14.28400
+8101094,Klagenfurt Ostbahnhof,46.62162,14.32198
+8101100,Klaus in Vlbg Bahnhst,47.30858,9.62448
+8101101,Klosterneuburg Weidling Bahnhof,48.29709,16.33498
+8101118,Lahrndorf bei Garsten Bahnhof,47.99484,14.37381
+8101120,Lauffen bei Bad Ischl Bahnhof,47.67438,13.61637
+8101124,Leobendorf-Burg Kreuzenstein Bahnhof,48.36463,16.30186
+8101126,Lendorf im Drautal Bahnhof,46.82752,13.41919
+8101127,Linz/Donau Ebelsberg Bahnhof,48.25206,14.34717
+8101135,Lenzing OÖ Ort Bahnhof,47.97169,13.60666
+8101141,Lenzing OÖ Bahnhof,47.98322,13.61363
+8101167,Leonding (Lokalbahn) Bahnhof,48.27445,14.25448
+8101169,Loosdorf bei Melk Bahnhof,48.19483,15.40505
+8101193,Linz/Donau Oed Bahnhof,48.26468,14.27654
+8101222,Mittlere Au OÖ Bahnhof,48.03874,13.91044
+8101223,Lambach Markt Bahnhof,48.09438,13.86981
+8101239,Maria Saal Bahnhst,46.68276,14.33908
+8101278,Neukirchen bei Lambach Bahnhst,48.09516,13.83272
+8101287,Niedernfritz-St. Martin Bahnhof,47.42130,13.34465
+8101295,Oberbrunn im Innkreis Bahnhof,48.17099,13.51322
+8101299,Oberhart bei Steinhaus Bahnhof,48.10399,14.03918
+8101311,Obertraun Koppenbrüllerhöhle Bahnhof,47.56433,13.72036
+8101322,Obersee OÖ Bahnhof,47.59167,13.66571
+8101325,Obertrattnach-Markt Hofkirchen Bahnhof,48.24594,13.76687
+8101332,Oberhofen-Zell am Moos Bahnhof,47.95890,13.30151
+8101342,Purkersdorf bei Wien Sanatorium Bahnhof,48.20628,16.20044
+8101356,Pichl bei Schladming Bahnhof,47.38837,13.61329
+8101358,Linz/Donau Pichling Bahnhof,48.24264,14.38000
+8101374,St. Pölten Alpenbahnhof-Kaiserwald (Traisentalbahn),48.19913,15.61382
+8101379,Pötting im Hausruckkreis Bahnhof,48.28517,13.76789
+8101389,Pasching bei Linz Bahnhof,48.25728,14.20894
+8101398,Graz Puntigam Bahnhof,47.03081,15.42925
+8101404,Purkersdorf bei Wien Zentrum Bahnhst,48.20613,16.17578
+8101406,Puch bei Hallein Bahnhof,47.71306,13.09055
+8101409,Puchenau West Bahnhof,48.31253,14.22244
+8101453,Rohrendorf bei Krems Bahnhst,48.42322,15.65694
+8101457,Rietz in Tirol Bahnhof,47.29205,11.02470
+8101476,Salzburg Itzling Bahnhof,47.81917,13.04099
+8101481,Salzburg Parsch Bahnhof,47.79934,13.07300
+8101486,Stefansdorf bei Peuerbach Bahnhof,48.30690,13.79073
+8101488,Waidhofen/Ybbs Kupferschmiedgasse Bahnhst,47.96078,14.77117
+8101496,Villach Seebach Bahnhof,46.62089,13.87453
+8101499,Leonding Straßfeld Bahnhof,48.27465,14.24585
+8101504,St. Georgen ob Judenburg Bahnhof,47.21220,14.49880
+8101505,St. Georgen/Längsee Bahnhof,46.76186,14.42333
+8101506,St. Georgen/Mattig Bahnhof,48.21636,13.09885
+8101507,Graz Straßgang Bahnhof,47.01987,15.40536
+8101510,St. Georgen am Steinfelde Bahnhst,48.13776,15.61444
+8101511,St. Georgen im Attergau Seniorenheim Bahnhof,47.93417,13.49358
+8101513,St. Georgen bei Salzburg Bahnhof,47.99023,12.88906
+8101514,Stadt Haag Bahnhst,48.11570,14.56606
+8101517,Schmidham im Attergau Bahnhof,47.97295,13.48733
+8101519,Bergheim bei Salzburg Schlachthof Bahnhof,47.84598,13.01255
+8101520,Steinhaus am Semmering Bahnhof,47.62089,15.78410
+8101521,Steinhaus bei Wels Bahnhof,48.11933,14.01789
+8101522,Sierndorf bei Stockerau Bahnhof,48.42892,16.17503
+8101529,St. Jodok am Brenner Bahnhof,47.06329,11.49931
+8101538,Scheifling in Stmk Bahnhof,47.14911,14.41711
+8101550,Dietmannsdorf im Sulmtal Bahnhst,46.74452,15.31175
+8101558,Salzburg Kasern Bahnhst,47.83914,13.06521
+8101560,St. Martin bei Traun Bahnhof,48.23645,14.26469
+8101571,Wörgl Süd-Bruckhäusl Bahnhof,47.48730,12.10771
+8101579,St. Pantaleon NÖ Bahnhof,48.22765,14.52863
+8101582,St. Peter im Sulmtal Bahnhof,46.75976,15.25430
+8101592,Villach St. Ruprecht Bahnhof,46.64096,13.87635
+8101593,Kitzbühel Schwarzsee Bahnhof,47.45347,12.37046
+8101609,Steyr Münichholz Bahnhof,48.04761,14.44922
+8101617,Schützen am Gebirge Bahnhst,47.85121,16.63000
+8101624,St. Veit/Glan Westbahnhof,46.76252,14.36204
+8101634,Schwarzach in Vlbg Bahnhof,47.44620,9.75437
+8101665,St. Georgen im Attergau Thern Bahnhof,47.92831,13.50195
+8101671,Schüttdorf Tischlerhäusl Bahnhof,47.30799,12.79402
+8101685,Tisis (Feldkirch) Bahnhof,47.22725,9.57569
+8101690,Traun OÖ Bahnhof,48.22561,14.25385
+8101699,Linz/Donau Untergaumberg Bahnhst,48.28014,14.28017
+8101700,Unterhart bei Sattledt Bahnhof,48.08913,14.04262
+8101710,Unterm Wald Bahnhst,47.92757,13.83987
+8101718,Bad Vigaun Bahnhof,47.66414,13.12410
+8101736,Wankham bei Attnang Bahnhof,47.99805,13.73021
+8101737,Walchen im Attergau Bahnhof,47.97896,13.49479
+8101754,Wels Lokalbahn Bahnhof,48.15664,14.01731
+8101775,Wies in Stmk Markt Bahnhof,46.71844,15.27321
+8101776,Windau im Brixental Bahnhof,47.43888,12.18668
+8101778,Wiesmühle bei Sattledt Bahnhst,48.02186,14.04371
+8101785,Wendling bei Haag Bahnhof,48.24642,13.65024
+8101789,Wr Neustadt Civitas Nova Bahnhof,47.83358,16.25537
+8101791,Wr Neustadt Nord Bahnhof,47.83499,16.23880
+8101792,Oberndorf in Tirol Bahnhof,47.49733,12.39079
+8101810,Wulkaprodersdorf Bahnhst,47.79905,16.49646
+8101832,Bruckberg im Pinzgau Golfplatz Bahnhof,47.29470,12.77625
+8101838,Gschwandt bei Gmunden Schule Bahnhst,47.93561,13.84796
+8101840,Schüttdorf Kitzsteinhornstraße Bahnhof,47.30191,12.79405
+8101845,St. Pölten Porschestraße Bahnhof,48.18311,15.61707
+8101848,Piesendorf Bad Bahnhof,47.28826,12.71265
+8101849,Bad Wimsbach Steinfeld Bahnhof,48.06173,13.90515
+8101863,Altenhof/Kamp Bahnhof,48.54421,15.68601
+8101913,Arnsdorf bei Lamprechtshausen Bahnhof,47.96964,12.93465
+8101917,Salzburg Süd Bahnhof,47.77026,13.07855
+8101934,Wien Handelskai (Bahnsteige 1-2),48.24212,16.38562
+8101939,Wallersbach bei Unzmarkt Bahnhof,47.18950,14.43050
+8101944,Karl z’Neuhub Bahnhst,47.94452,13.87141
+8101946,Wels Messe Bahnhof,48.15246,14.01962
+8101948,St. Pölten Alpenbahnhof-Kaiserwald (Mariaz. Bahn),48.19842,15.61297
+8101950,Bregenz Hafen Bahnhof,47.50615,9.74839
+8101989,Krems/Donau Campus-Kunstmeile Bahnhof,48.40746,15.58586
+8101990,St. Pölten Traisenpark Bahnhst,48.22052,15.64127
+8102015,Mattersburg Nord Bahnhof,47.74139,16.40261
+8102017,Wr Neustadt Anemonensee Bahnhof,47.81192,16.20976
+8102019,Graz Stadion Liebenau Bahnhof,47.04675,15.45315
+8102025,Schüttdorf Areitbahn Bahnhst,47.29908,12.78936
+8102042,Lienz in Osttirol Peggetz Bahnhof,46.82710,12.79306
+8102047,Kuchl Garnei Bahnhof,47.65169,13.12824
+8102049,Hallein Burgfried Bahnhof,47.67599,13.11415
+8102050,Hart bei Graz Bahnhst,47.04184,15.50748
+8102053,Oberhofen im Inntal Bahnhof,47.30199,11.09572
+8102054,Puch bei Hallein Urstein Bahnhof,47.72418,13.08815
+8102058,Wöllersdorf/Piesting Marchgraben Bahnhof,47.86484,16.16552
+8102062,Straßwalchen West Bahnhof,47.97672,13.24537
+8102105,Hall in Tirol-Thaur Bahnhst,47.27710,11.47445
+8102149,Ledenitzen Bahnhst,46.56292,13.96519
+8102888,Wien Aspern Nord Bahnhof,48.23469,16.50444
+8198129,Gmünd NÖ Bahnhof (Waldviertelbahn),48.76496,14.98352
+8182347,Reichenau an der Rax Kurhaus Bahnhof,47.69952,15.84582
+8175848,Gmunden Lembergweg Bahnhst,47.91774,13.81859
+8103644,Klagenfurt West Bahnhof,46.62281,14.26875
+8103842,Klagenfurt Süd Bahnhof,46.61030,14.30236
+8105979,Villach Landskron Bahnhst,46.63012,13.87566
+8105982,Heinfels Bahnhst,46.74590,12.44444
+8151847,Gmunden Schloss Weyer Bahnhst,47.91538,13.81120
+8151894,Gmunden Seebahnhof (Hochmüllergasse),47.91615,13.80513
+8151895,Gmunden Klosterplatz (Tram),47.91770,13.80390
+8156718,Payerbach-Reichenau Bahnhof (Lokalbahn),47.69607,15.85923
+8161697,Reichenau an der Rax Haaberg Bahnhof,47.70465,15.82383
+8165233,Reichenau an der Rax Bahnhof,47.69808,15.83929
+8169949,Altnagelberg Bahnhof,48.83786,14.98985
+8100914,Hagenau im Innkreis Bahnhof,48.26518,13.11429
+8100726,Dietmanns Gmünd Bahnhst,48.75028,14.94686
+8101345,Weststeiermark Banhof,46.81382,15.29688
