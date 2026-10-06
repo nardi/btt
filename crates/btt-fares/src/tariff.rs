@@ -137,10 +137,11 @@ impl ExchangeRates {
 
 /// Reads the exchange rates from the text of `tariffs.toml`.
 pub(crate) fn exchange_rates(text: &str) -> Result<ExchangeRates, FareDataError> {
-    let file: ExchangeRatesFile = toml::from_str(text).map_err(|source| FareDataError::Invalid {
-        file: "tariffs.toml",
-        source,
-    })?;
+    let file: ExchangeRatesFile =
+        toml::from_str(text).map_err(|source| FareDataError::Invalid {
+            file: "tariffs.toml",
+            source,
+        })?;
     Ok(file.exchange_rates)
 }
 

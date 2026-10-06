@@ -539,8 +539,8 @@ impl<'a> Problem<'a> {
     ///
     /// Italo trains are sold on the Italo site. A run that touches Germany goes to the DB site,
     /// which also sells the trips to its neighbours. A run inside one country goes to the site of
-    /// that country: SBB, NS, ÖBB, PKP Intercity or Trenitalia. Anything else gets the shop of
-    /// the country of the first ride and no live price.
+    /// that country: SBB, NS, ÖBB, PKP Intercity or Trenitalia, and a run inside France goes to
+    /// SBB too. Anything else gets the shop of the country of the first ride and no live price.
     fn single_ticket_link(
         &self,
         rides: &[RideInput],
@@ -593,6 +593,10 @@ impl<'a> Problem<'a> {
             )
         } else if inside("CH") {
             crate::links::sbb_link(&data.sbb_stations, first, last)
+        } else if inside("FR") {
+            // The SBB site sells French trips, while SNCF Connect has no link to a search and
+            // blocks scripted clients.
+            crate::links::sbb_link(&data.sbb_france_stations, first, last)
         } else if inside("NL") {
             crate::links::ns_link(&data.ns_stations, first, last)
         } else if inside("AT") {

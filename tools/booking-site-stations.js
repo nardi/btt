@@ -65,3 +65,11 @@ write('ns_stations.csv', (row) => {
   const uic = row[column('uic')];
   return country(row) === 'NL' && /^84\d{5}$/.test(uic) && !isBus(row) ? uic : null;
 });
+
+// The SBB site sells French trips too and takes UIC numbers of French stations. Entries for the
+// RER share a position with the main line station and are left out.
+write('sbb_france_stations.csv', (row) => {
+  const uic = row[column('uic')];
+  const isRer = /\bRER\b/.test(row[column('name')]);
+  return country(row) === 'FR' && /^87\d{5}$/.test(uic) && !isBus(row) && !isRer ? uic : null;
+});

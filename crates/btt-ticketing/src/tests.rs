@@ -533,3 +533,18 @@ fn each_country_goes_to_its_own_booking_site() {
         "{link}"
     );
 }
+
+#[test]
+fn a_french_ticket_goes_to_sbb_and_a_luxembourg_ride_is_free() {
+    let (link, live) = single_ride_link("FR", "TGV INOUI", (48.8443, 2.3744), (45.7606, 4.8594));
+    assert!(
+        link.contains("stops=Paris+Gare+de+Lyon_I8768600~Lyon+Part-Dieu_I8772319"),
+        "{link}"
+    );
+    assert!(live);
+    let mut ride = ride(0, ("LU", "LU"), "RE", 30.0, false);
+    ride.from_coordinates = btt_model::GeoCoordinates::from_degrees(49.6000, 6.1342).unwrap();
+    ride.to_coordinates = btt_model::GeoCoordinates::from_degrees(49.4958, 5.9806).unwrap();
+    let plan = plan(vec![ride], None);
+    assert_eq!(plan.strategies[0].total.high, EuroCents::ZERO);
+}

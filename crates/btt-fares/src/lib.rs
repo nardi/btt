@@ -18,7 +18,7 @@ pub use country::country_of_time_zone;
 pub use distance::DistanceModel;
 pub use italo::{ItaloStation, ItaloStations};
 pub use passes::{PassCatalogue, PassKind, PassPrices, PassType, PriceAgeGroup, Validity};
-pub use price_book::{PriceBook, RideFacts, TicketPriceSource};
+pub use price_book::{FreeTravel, PriceBook, RideFacts, TicketPriceSource};
 pub use reservations::{ReservationMode, ReservationRule, ReservationRules, RuleScope, SeatFee};
 pub use station_table::{CodedStation, StationTable};
 pub use tariff::{BookingWindow, DistanceTariff, ExchangeRates};
@@ -45,6 +45,8 @@ const OBB_STATIONS_CSV: &str = include_str!("../../../data/fares/obb_stations.cs
 /// The stations of the PKP Intercity booking site with its station numbers, as they are compiled
 /// in.
 const PKP_STATIONS_CSV: &str = include_str!("../../../data/fares/pkp_stations.csv");
+/// The French stations with the UIC numbers that the SBB site takes, as they are compiled in.
+const SBB_FRANCE_STATIONS_CSV: &str = include_str!("../../../data/fares/sbb_france_stations.csv");
 /// The stations of the NS booking site with their UIC numbers, as they are compiled in.
 const NS_STATIONS_CSV: &str = include_str!("../../../data/fares/ns_stations.csv");
 /// The booking windows, as they are compiled in.
@@ -96,6 +98,9 @@ pub struct FareData {
     pub pkp_stations: StationTable,
     /// The stations of the NS booking site with their UIC numbers.
     pub ns_stations: StationTable,
+    /// The French stations with the UIC numbers that the SBB site takes, which sells French
+    /// trips too.
+    pub sbb_france_stations: StationTable,
     /// Fixed rough rates to euro.
     pub exchange_rates: ExchangeRates,
     /// How far ahead tickets can be bought, by country.
@@ -143,6 +148,7 @@ impl FareData {
             obb_stations: StationTable::from_csv(OBB_STATIONS_CSV),
             pkp_stations: StationTable::from_csv(PKP_STATIONS_CSV),
             ns_stations: StationTable::from_csv(NS_STATIONS_CSV),
+            sbb_france_stations: StationTable::from_csv(SBB_FRANCE_STATIONS_CSV),
             exchange_rates: tariff::exchange_rates(TARIFFS_TOML)?,
             booking_windows: tariff::windows_from_toml(BOOKING_WINDOWS_TOML)?,
             residence_journeys_each_way: rules.residence.outbound_journeys,
