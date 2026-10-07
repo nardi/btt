@@ -118,6 +118,9 @@ pub struct AppState {
     pub db_service: Option<btt_quotes::db::DbService>,
     /// Looks up prices on the ÖBB shop. `None` when its HTTP client could not be built.
     pub obb_service: Option<btt_quotes::obb::ObbService>,
+    /// Looks up prices on the sites that answer a search with their connections. `None` when
+    /// an HTTP client could not be built.
+    pub site_services: Option<crate::site_quotes::SiteServices>,
     /// The timetable bundle the planner loaded, if any.
     pub bundle_path: Option<PathBuf>,
     /// The most recent log lines, for problem reports.
@@ -193,6 +196,11 @@ impl AppState {
         let obb_service = btt_quotes::obb::ObbService::new(Arc::clone(&quote_store))
             .map_err(|error| tracing::warn!(%error, "live ÖBB prices are not available"))
             .ok();
+        let site_services = crate::site_quotes::SiteServices::new(&quote_store)
+            .map_err(
+                |error| tracing::warn!(%error, "live prices of several sites are not available"),
+            )
+            .ok();
         let webview_service = Some(crate::webview_quotes::WebviewQuoteService::new(
             app,
             Arc::clone(&quote_store),
@@ -209,6 +217,7 @@ impl AppState {
             ns_service,
             db_service,
             obb_service,
+            site_services,
             storage,
             planning_backend,
             photon: PhotonClient::new(PUBLIC_PHOTON_BASE_URL, USER_AGENT)?,

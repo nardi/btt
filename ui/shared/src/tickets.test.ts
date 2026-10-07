@@ -114,7 +114,7 @@ describe("pending live prices", () => {
     price: { low: 1, high: 1, kind: "Range" as const, source: { name: "t", note: "", as_of: null, page: null } },
     booking_link: null,
     live_quote_request: withRequest
-      ? { booking_link: "https://www.sbb.ch/en?x", first_departure_time: 1, ride_count: 1, travel_class: "Second" as const }
+      ? { booking_link: "https://www.sbb.ch/en?x", first_departure_time: 1, ride_count: 1, travel_class: "Second" as const, site_search: null }
       : null,
   });
 

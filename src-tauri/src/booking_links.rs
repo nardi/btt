@@ -15,6 +15,20 @@ pub enum BookingSite {
     Trenitalia,
     /// ns.nl, whose fares are read with plain requests.
     Ns,
+    /// dsb.dk, read with plain requests.
+    Dsb,
+    /// sj.se, read with plain requests.
+    Sj,
+    /// snalltaget.se, read with plain requests.
+    Snalltaget,
+    /// jegy.mav.hu, read with plain requests.
+    Mav,
+    /// The Italo site, read with plain requests.
+    Italo,
+    /// venta.renfe.com, read with plain requests.
+    Renfe,
+    /// eurostar.com, read with plain requests.
+    Eurostar,
 }
 
 impl BookingSite {
@@ -27,6 +41,13 @@ impl BookingSite {
             ("https://ebilet.intercity.pl/", Self::Pkp),
             ("https://www.lefrecce.it/", Self::Trenitalia),
             ("https://www.ns.nl/", Self::Ns),
+            ("https://www.dsb.dk/", Self::Dsb),
+            ("https://www.sj.se/", Self::Sj),
+            ("https://www.snalltaget.se/", Self::Snalltaget),
+            ("https://jegy.mav.hu/", Self::Mav),
+            ("https://biglietti.italotreno.com/", Self::Italo),
+            ("https://venta.renfe.com/", Self::Renfe),
+            ("https://www.eurostar.com/", Self::Eurostar),
         ];
         sites
             .into_iter()

@@ -437,6 +437,8 @@ export type LiveQuoteRequest = {
 	ride_count: number,
 	/**  Class the price is asked for. */
 	travel_class: TravelClass,
+	/**  The search to run on the booking site, for a site whose booking link does not name it. */
+	site_search?: SiteSearch | null,
 };
 
 /**  A time of day on the local clock of a place, from 00:00 to 23:59. */
@@ -669,6 +671,16 @@ export type SearchedWindow = {
 	start: UnixTimeMinutes,
 	/**  Moment the span ends. */
 	end: UnixTimeMinutes,
+};
+
+/**  A search on a booking site whose booking link opens its start page. */
+export type SiteSearch = {
+	/**  Code of the first station on the site. */
+	origin_code: string,
+	/**  Code of the last station on the site. */
+	destination_code: string,
+	/**  Departure of the first train on the local clock of its station, as `YYYY-MM-DDTHH:MM`. */
+	local_departure: string,
 };
 
 /**  Largest distance from a place to a station the planner may use, from 100 m to 50 km. */

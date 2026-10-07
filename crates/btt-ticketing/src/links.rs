@@ -3,7 +3,7 @@
 use std::fmt::Write as _;
 
 use btt_fares::{ItaloStations, StationTable};
-use btt_model::{AgeGroup, BookingLink, BookingLinkKind, TravelClass};
+use btt_model::{AgeGroup, BookingLink, BookingLinkKind, SiteSearch, TravelClass};
 use chrono::NaiveDate;
 
 use crate::rides::RideInput;
@@ -360,6 +360,161 @@ pub fn ns_link(
         url: url.into(),
         kind: BookingLinkKind::Product,
     })
+}
+
+/// Returns the search of a run on a booking site whose link does not name it, from the codes
+/// of its end stations and the local departure of its first ride.
+fn site_search(origin: &str, destination: &str, first: &RideInput) -> SiteSearch {
+    SiteSearch {
+        origin_code: origin.into(),
+        destination_code: destination.into(),
+        local_departure: format!(
+            "{}T{}",
+            first.departure_date,
+            first.departure_clock.format("%H:%M")
+        )
+        .into(),
+    }
+}
+
+/// Returns a link to the start page of a booking site with the search to run there, or `None`
+/// when a station is not in the table. The sites behind these links have no link that runs a
+/// search.
+fn start_page_link(
+    stations: &StationTable,
+    first: &RideInput,
+    last: &RideInput,
+    label: &str,
+    url: &str,
+) -> Option<(BookingLink, SiteSearch)> {
+    let (origin, destination) = end_stations(stations, first, last)?;
+    Some((
+        BookingLink {
+            label: label.into(),
+            url: url.into(),
+            kind: BookingLinkKind::Search,
+        },
+        site_search(&origin.code, &destination.code, first),
+    ))
+}
+
+/// Returns a link to dsb.dk for a run in Denmark, with the search to run there.
+pub fn dsb_link(
+    stations: &StationTable,
+    first: &RideInput,
+    last: &RideInput,
+) -> Option<(BookingLink, SiteSearch)> {
+    start_page_link(
+        stations,
+        first,
+        last,
+        "Open dsb.dk",
+        "https://www.dsb.dk/en/",
+    )
+}
+
+/// Returns a link to sj.se for a run in Sweden, with the search to run there.
+pub fn sj_link(
+    stations: &StationTable,
+    first: &RideInput,
+    last: &RideInput,
+) -> Option<(BookingLink, SiteSearch)> {
+    start_page_link(stations, first, last, "Open sj.se", "https://www.sj.se/en")
+}
+
+/// Returns a link to snalltaget.se for a run of Snälltåget, with the search to run there.
+pub fn snalltaget_link(
+    stations: &StationTable,
+    first: &RideInput,
+    last: &RideInput,
+) -> Option<(BookingLink, SiteSearch)> {
+    start_page_link(
+        stations,
+        first,
+        last,
+        "Open snalltaget.se",
+        "https://www.snalltaget.se/en",
+    )
+}
+
+/// Returns a link to the MÁV ticket shop for a run in Hungary, with the search to run there.
+pub fn mav_link(
+    stations: &StationTable,
+    first: &RideInput,
+    last: &RideInput,
+) -> Option<(BookingLink, SiteSearch)> {
+    start_page_link(
+        stations,
+        first,
+        last,
+        "Open jegy.mav.hu",
+        "https://jegy.mav.hu/?lang=en",
+    )
+}
+
+/// Returns a link to the Renfe search for a run in Spain, with the search to run there, or
+/// `None` when a station is not in the table. Opening the link runs the search.
+pub fn renfe_link(
+    stations: &StationTable,
+    first: &RideInput,
+    last: &RideInput,
+) -> Option<(BookingLink, SiteSearch)> {
+    let (origin, destination) = end_stations(stations, first, last)?;
+    let date = encode_name(&first.departure_date.format("%d/%m/%Y").to_string());
+    let url = format!(
+        "https://venta.renfe.com/vol/buscarTren.do?Idioma=en&Pais=UK&tipoBusqueda=autocomplete\
+         &currenLocation=menuBusqueda&vengoderenfecom=SI&desOrigen={}&desDestino={}\
+         &cdgoOrigen=0071%2C{origin_code}%2C{origin_code}\
+         &cdgoDestino=0071%2C{destination_code}%2C{destination_code}&idiomaBusqueda=ES\
+         &FechaIdaSel={date}&_fechaIdaVisual={date}&adultos_=1&ninos_=0&ninosMenores=0\
+         &plazaH=false&sinEnlace=false",
+        encode_name(&origin.name),
+        encode_name(&destination.name),
+        origin_code = origin.code,
+        destination_code = destination.code,
+    );
+    Some((
+        BookingLink {
+            label: "Search on renfe.com".into(),
+            url: url.into(),
+            kind: BookingLinkKind::Search,
+        },
+        site_search(&origin.code, &destination.code, first),
+    ))
+}
+
+/// Returns a link to the Eurostar search for a run of Eurostar, with the search to run there,
+/// or `None` when a station is not in the table. Opening the link runs the search.
+pub fn eurostar_link(
+    stations: &StationTable,
+    first: &RideInput,
+    last: &RideInput,
+) -> Option<(BookingLink, SiteSearch)> {
+    let (origin, destination) = end_stations(stations, first, last)?;
+    let url = format!(
+        "https://www.eurostar.com/search/uk-en?adult=1&origin={}&destination={}&outbound={}",
+        origin.code, destination.code, first.departure_date,
+    );
+    Some((
+        BookingLink {
+            label: "Search on eurostar.com".into(),
+            url: url.into(),
+            kind: BookingLinkKind::Search,
+        },
+        site_search(&origin.code, &destination.code, first),
+    ))
+}
+
+/// Returns the search to run on the Italo site for a run of Italo, or `None` when a station is
+/// not one that Italo serves.
+pub fn italo_site_search(
+    stations: &ItaloStations,
+    first: &RideInput,
+    last: &RideInput,
+) -> Option<SiteSearch> {
+    let origin = stations.station_near(first.from_coordinates)?;
+    let destination = stations.station_near(last.to_coordinates)?;
+    Some(site_search(&origin.code, &destination.code, first))
 }
 
 /// Returns the link to buy the Interrail Global Pass.

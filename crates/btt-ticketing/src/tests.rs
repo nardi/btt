@@ -625,3 +625,71 @@ fn a_ticket_across_a_border_goes_to_the_site_of_its_departure_country() {
     let link = border_ride_link(("SE", "DE"), (59.3300, 18.0576), (53.5527, 10.0069));
     assert!(link.starts_with("https://int.bahn.de/"), "{link}");
 }
+
+/// Plans one ride of an operator and returns its booking link and the search for its live
+/// price.
+fn site_ride(
+    countries: (&str, &str),
+    operator: &str,
+    from: (f64, f64),
+    to: (f64, f64),
+) -> (String, Option<btt_model::SiteSearch>) {
+    let mut ride = ride(0, countries, "IC", 300.0, false);
+    ride.train_label.operator = operator.into();
+    ride.from_coordinates = btt_model::GeoCoordinates::from_degrees(from.0, from.1).unwrap();
+    ride.to_coordinates = btt_model::GeoCoordinates::from_degrees(to.0, to.1).unwrap();
+    let plan = plan(vec![ride], None);
+    let item = &plan.strategies[0].items[0];
+    (
+        item.booking_link.as_ref().unwrap().url.to_string(),
+        item.live_quote_request
+            .as_ref()
+            .and_then(|request| request.site_search.clone()),
+    )
+}
+
+#[test]
+fn sites_without_a_search_link_get_the_search_in_the_request() {
+    let (link, search) = site_ride(("DK", "DK"), "dsb", (55.6727, 12.5646), (55.4018, 10.3860));
+    assert_eq!(link, "https://www.dsb.dk/en/");
+    let search = search.unwrap();
+    assert_eq!(search.origin_code, "8600626");
+    assert_eq!(search.destination_code, "8600512");
+    assert_eq!(search.local_departure, "2026-07-01T08:00");
+    let (link, search) = site_ride(("SE", "SE"), "sj", (59.3301, 18.0582), (57.7089, 11.9735));
+    assert_eq!(link, "https://www.sj.se/en");
+    assert_eq!(search.unwrap().destination_code, "740000002");
+    let (link, search) = site_ride(("ES", "ES"), "renfe", (40.4060, -3.6898), (41.3789, 2.1404));
+    assert!(link.contains("cdgoOrigen=0071%2C60000%2C60000"), "{link}");
+    assert!(!link.contains(char::is_whitespace), "{link}");
+    assert_eq!(search.unwrap().destination_code, "71801");
+}
+
+#[test]
+fn operators_that_sell_their_own_trains_get_their_own_site() {
+    let (link, search) = site_ride(
+        ("SE", "DE"),
+        "snalltaget",
+        (59.3301, 18.0582),
+        (52.5256, 13.3696),
+    );
+    assert_eq!(link, "https://www.snalltaget.se/en");
+    assert_eq!(search.unwrap().destination_code, "Berlin");
+    let (link, search) = site_ride(
+        ("GB", "FR"),
+        "eurostar",
+        (51.5319, -0.1264),
+        (48.8802, 2.3552),
+    );
+    assert!(
+        link.contains("origin=7015400&destination=8727100"),
+        "{link}"
+    );
+    assert!(search.is_some());
+    let (link, search) = site_ride(("IT", "IT"), "italo", (45.4339, 9.2391), (41.9006, 12.5020));
+    assert!(
+        link.starts_with("https://biglietti.italotreno.com/"),
+        "{link}"
+    );
+    assert_eq!(search.unwrap().origin_code, "RG_");
+}

@@ -31,6 +31,7 @@ const OWN_TICKET_OPERATORS: &[&str] = &[
     "westbahn",
     "european-sleeper",
     "snalltaget",
+    "eurostar",
     "ouigo",
     "ouigo-espana",
     "iryo",
@@ -569,13 +570,15 @@ impl<'a> Problem<'a> {
     /// Returns the link to buy a ticket for a run of rides, and the request for its live price
     /// when the booking site can tell it.
     ///
-    /// Italo trains are sold on the Italo site. Any other run goes to the site of the country it
-    /// leaves from, which for a run that crosses a border is the most likely seller:
+    /// Italo, Snälltåget and Eurostar trains are sold on the sites of their operators. Any other
+    /// run goes to the site of the country it leaves from, which for a run that crosses a border
+    /// is the most likely seller:
     ///
     /// - DB for Germany, SBB for Switzerland, ÖBB for Austria and Trenitalia for Italy, which
     ///   all sell trips abroad too.
-    /// - NS for the Netherlands, PKP Intercity for Poland and SBB for France, which only get
-    ///   runs that stay in their country.
+    /// - NS for the Netherlands, PKP Intercity for Poland, SBB for France, DSB for Denmark, SJ
+    ///   for Sweden, MÁV for Hungary, Renfe for Spain and DB for Czechia, which only get runs
+    ///   that stay in their country.
     ///
     /// A run that crosses a border and that the site of its departure country cannot take goes
     /// to DB, which prices most trips in Europe. Anything else gets the shop of the country of
@@ -584,33 +587,72 @@ impl<'a> Problem<'a> {
         &self,
         rides: &[RideInput],
     ) -> (btt_model::BookingLink, Option<btt_model::LiveQuoteRequest>) {
+        let first = &rides[0];
+        let Some((link, site_search)) = self
+            .operator_site_link(rides)
+            .or_else(|| self.country_site_link(rides))
+        else {
+            return (shop_link(first.from_country.as_deref()), None);
+        };
+        let request = self
+            .settings
+            .preferences
+            .live_prices
+            .then(|| btt_model::LiveQuoteRequest {
+                booking_link: link.url.clone(),
+                first_departure_time: first.departure_time,
+                ride_count: u8::try_from(rides.len()).unwrap_or(u8::MAX),
+                travel_class: self.settings.class,
+                site_search,
+            });
+        (link, request)
+    }
+
+    /// Returns whether every ride of a run is a train of an operator.
+    fn run_of_operator(rides: &[RideInput], operator: &str) -> bool {
+        rides.iter().all(|ride| {
+            ride.train_label.operator == operator
+                // Plans stored without an operator still name Italo trains by their category.
+                || (operator == "italo" && ride.train_label.category.eq_ignore_ascii_case("Italo"))
+        })
+    }
+
+    /// Returns the link to the site of the operator of a run whose trains all belong to an
+    /// operator that sells its own tickets, with the search to run there.
+    fn operator_site_link(
+        &self,
+        rides: &[RideInput],
+    ) -> Option<(btt_model::BookingLink, Option<btt_model::SiteSearch>)> {
         let (first, last) = (&rides[0], &rides[rides.len() - 1]);
-        let all_italo = rides.iter().all(|ride| {
-            // Plans stored without an operator still name Italo trains by their category.
-            ride.train_label.operator == "italo"
-                || ride.train_label.category.eq_ignore_ascii_case("Italo")
-        });
-        if all_italo
-            && let Some(link) = crate::links::italo_link(
-                &self.data.italo_stations,
+        let data = self.data;
+        if Self::run_of_operator(rides, "italo") {
+            let link = crate::links::italo_link(
+                &data.italo_stations,
                 first,
                 last,
                 self.settings.age_group,
-            )
-        {
-            return (link, None);
+            )?;
+            let search = crate::links::italo_site_search(&data.italo_stations, first, last);
+            return Some((link, search));
         }
-        let live_request = |link: &btt_model::BookingLink| {
-            self.settings
-                .preferences
-                .live_prices
-                .then(|| btt_model::LiveQuoteRequest {
-                    booking_link: link.url.clone(),
-                    first_departure_time: first.departure_time,
-                    ride_count: u8::try_from(rides.len()).unwrap_or(u8::MAX),
-                    travel_class: self.settings.class,
-                })
+        let (link, search) = if Self::run_of_operator(rides, "snalltaget") {
+            crate::links::snalltaget_link(&data.snalltaget_stations, first, last)?
+        } else if Self::run_of_operator(rides, "eurostar") {
+            crate::links::eurostar_link(&data.eurostar_stations, first, last)?
+        } else {
+            return None;
         };
+        Some((link, Some(search)))
+    }
+
+    /// Returns the link to the site of the country a run leaves from, or to DB for a run across
+    /// a border that the site of its country cannot take, with the search to run there when
+    /// the link does not name it.
+    fn country_site_link(
+        &self,
+        rides: &[RideInput],
+    ) -> Option<(btt_model::BookingLink, Option<btt_model::SiteSearch>)> {
+        let (first, last) = (&rides[0], &rides[rides.len() - 1]);
         let data = self.data;
         let departure_country = first.from_country.as_deref();
         let domestic = rides.iter().all(|ride| {
@@ -626,8 +668,11 @@ impl<'a> Problem<'a> {
                 self.settings.age_group,
             )
         };
+        let with_search = |link: Option<(btt_model::BookingLink, btt_model::SiteSearch)>| {
+            link.map(|(link, search)| (link, Some(search)))
+        };
         let departure_site_link = match (departure_country, domestic) {
-            (Some("DE"), _) => db_link(),
+            (Some("DE"), _) | (Some("CZ"), true) => db_link(),
             (Some("CH"), _) => {
                 let stations = |country: Option<&str>| {
                     if country == Some("CH") {
@@ -660,16 +705,23 @@ impl<'a> Problem<'a> {
             ),
             (Some("NL"), true) => crate::links::ns_link(&data.ns_stations, first, last),
             (Some("PL"), true) => crate::links::pkp_link(&data.pkp_stations, first, last),
+            (Some("DK"), true) => {
+                return with_search(crate::links::dsb_link(&data.dsb_stations, first, last));
+            }
+            (Some("SE"), true) => {
+                return with_search(crate::links::sj_link(&data.sj_stations, first, last));
+            }
+            (Some("HU"), true) => {
+                return with_search(crate::links::mav_link(&data.mav_stations, first, last));
+            }
+            (Some("ES"), true) => {
+                return with_search(crate::links::renfe_link(&data.renfe_stations, first, last));
+            }
             _ => None,
         };
-        let link = departure_site_link.or_else(|| if domestic { None } else { db_link() });
-        match link {
-            Some(link) => {
-                let request = live_request(&link);
-                (link, request)
-            }
-            None => (shop_link(first.from_country.as_deref()), None),
-        }
+        departure_site_link
+            .or_else(|| if domestic { None } else { db_link() })
+            .map(|link| (link, None))
     }
 
     /// Builds the strategy of single tickets for every ride.

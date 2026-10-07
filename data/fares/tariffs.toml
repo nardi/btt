@@ -32,3 +32,6 @@ currency = "EUR"
 [exchange_rates]
 chf_to_eur = 1.07
 pln_to_eur = 0.235
+sek_to_eur = 0.087
+dkk_to_eur = 0.134
+huf_to_eur = 0.0025

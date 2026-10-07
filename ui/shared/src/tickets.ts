@@ -92,7 +92,12 @@ export type LivePrices = ReadonlyMap<string, LiveQuote | null>;
 /** Returns the key that a ticket's live price is kept under, or `null` for a ticket with none. */
 export function liveQuoteKey(item: TicketItem): string | null {
   const request = item.live_quote_request;
-  return request === null ? null : `${request.booking_link}|${request.first_departure_time}|${request.ride_count}|${request.travel_class}`;
+  if (request === null) {
+    return null;
+  }
+  const search = request.site_search ?? null;
+  const searchKey = search === null ? "" : `${search.origin_code}~${search.destination_code}~${search.local_departure}`;
+  return `${request.booking_link}|${request.first_departure_time}|${request.ride_count}|${request.travel_class}|${searchKey}`;
 }
 
 /** Returns the live price of a ticket, or `null` when it has none yet. */

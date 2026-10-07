@@ -45,10 +45,22 @@ const OBB_STATIONS_CSV: &str = include_str!("../../../data/fares/obb_stations.cs
 /// The stations of the PKP Intercity booking site with its station numbers, as they are compiled
 /// in.
 const PKP_STATIONS_CSV: &str = include_str!("../../../data/fares/pkp_stations.csv");
-/// The French stations with the UIC numbers that the SBB site takes, as they are compiled in.
+/// The foreign stations with the UIC numbers that the SBB site takes, as they are compiled in.
 const SBB_ABROAD_STATIONS_CSV: &str = include_str!("../../../data/fares/sbb_abroad_stations.csv");
 /// The stations of the NS booking site with their UIC numbers, as they are compiled in.
 const NS_STATIONS_CSV: &str = include_str!("../../../data/fares/ns_stations.csv");
+/// The Danish stations with the UIC numbers that DSB takes, as they are compiled in.
+const DSB_STATIONS_CSV: &str = include_str!("../../../data/fares/dsb_stations.csv");
+/// The Swedish stations with the Samtrafiken ids that SJ takes, as they are compiled in.
+const SJ_STATIONS_CSV: &str = include_str!("../../../data/fares/sj_stations.csv");
+/// The stops of Snälltåget with the codes its site takes, as they are compiled in.
+const SNALLTAGET_STATIONS_CSV: &str = include_str!("../../../data/fares/snalltaget_stations.csv");
+/// The Hungarian stations with the codes that MÁV takes, as they are compiled in.
+const MAV_STATIONS_CSV: &str = include_str!("../../../data/fares/mav_stations.csv");
+/// The Spanish stations with the codes that Renfe takes, as they are compiled in.
+const RENFE_STATIONS_CSV: &str = include_str!("../../../data/fares/renfe_stations.csv");
+/// The stations of Eurostar with their UIC numbers, as they are compiled in.
+const EUROSTAR_STATIONS_CSV: &str = include_str!("../../../data/fares/eurostar_stations.csv");
 /// The booking windows, as they are compiled in.
 const BOOKING_WINDOWS_TOML: &str = include_str!("../../../data/fares/booking_windows.toml");
 
@@ -101,6 +113,18 @@ pub struct FareData {
     /// The French, Italian and Austrian stations with the UIC numbers that the SBB site takes,
     /// which sells trips from Switzerland to these countries and French trips too.
     pub sbb_abroad_stations: StationTable,
+    /// The Danish stations with the UIC numbers that DSB takes.
+    pub dsb_stations: StationTable,
+    /// The Swedish stations with the Samtrafiken ids that SJ takes.
+    pub sj_stations: StationTable,
+    /// The stops of Snälltåget with the codes its site takes.
+    pub snalltaget_stations: StationTable,
+    /// The Hungarian stations with the codes that MÁV takes.
+    pub mav_stations: StationTable,
+    /// The Spanish stations with the codes that Renfe takes.
+    pub renfe_stations: StationTable,
+    /// The stations of Eurostar with their UIC numbers.
+    pub eurostar_stations: StationTable,
     /// Fixed rough rates to euro.
     pub exchange_rates: ExchangeRates,
     /// How far ahead tickets can be bought, by country.
@@ -149,6 +173,12 @@ impl FareData {
             pkp_stations: StationTable::from_csv(PKP_STATIONS_CSV),
             ns_stations: StationTable::from_csv(NS_STATIONS_CSV),
             sbb_abroad_stations: StationTable::from_csv(SBB_ABROAD_STATIONS_CSV),
+            dsb_stations: StationTable::from_csv(DSB_STATIONS_CSV),
+            sj_stations: StationTable::from_csv(SJ_STATIONS_CSV),
+            snalltaget_stations: StationTable::from_csv(SNALLTAGET_STATIONS_CSV),
+            mav_stations: StationTable::from_csv(MAV_STATIONS_CSV),
+            renfe_stations: StationTable::from_csv(RENFE_STATIONS_CSV),
+            eurostar_stations: StationTable::from_csv(EUROSTAR_STATIONS_CSV),
             exchange_rates: tariff::exchange_rates(TARIFFS_TOML)?,
             booking_windows: tariff::windows_from_toml(BOOKING_WINDOWS_TOML)?,
             residence_journeys_each_way: rules.residence.outbound_journeys,

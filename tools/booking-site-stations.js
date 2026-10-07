@@ -5,6 +5,7 @@
 // Run `node tools/booking-site-stations.js` from the root of the repository. Each table has the
 // columns code, name, latitude and longitude, where the code is what the booking site takes.
 
+import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 
 const lines = fs.readFileSync('build-cache/feeds/stations.csv', 'utf8').split('\n');
@@ -83,3 +84,156 @@ write('sbb_abroad_stations.csv', (row) => {
     ? uic
     : null;
 });
+
+// DSB takes UIC numbers of Danish stations.
+write('dsb_stations.csv', (row) => {
+  const uic = row[column('uic')];
+  return country(row) === 'DK' && /^86\d{5}$/.test(uic) && !isBus(row) ? uic : null;
+});
+
+// Renfe takes its own five-digit station codes. Codes of letters stand for cities and are left
+// out.
+write('renfe_stations.csv', (row) => {
+  const id = row[column('renfe_id')];
+  return country(row) === 'ES' && /^\d{5}$/.test(id) && !isBus(row) ? id : null;
+});
+
+/** Writes one table from rows of code, name, latitude and longitude. */
+function writeRows(file, entries) {
+  const out = ['code,name,latitude,longitude'];
+  for (const entry of entries) {
+    out.push([entry.code, entry.name.replace(/,/g, ' '), entry.latitude.toFixed(5), entry.longitude.toFixed(5)].join(','));
+  }
+  fs.writeFileSync(`data/fares/${file}`, out.join('\n') + '\n');
+  console.log(file, out.length - 1);
+}
+
+// SJ and Snälltåget take the stop ids of Samtrafiken, which the Swedish timetable feed uses.
+// Railway stations have ids below 740010000 and names such as `Alvesta station` or
+// `Stockholm Centralstation`.
+const swedishStops = execSync('unzip -p build-cache/feeds/se_Trafiklab.gtfs.zip stops.txt', {
+  maxBuffer: 1 << 28,
+})
+  .toString('utf8')
+  .split('\n')
+  .slice(1)
+  .map((line) => /^("([^"]*)"|[^,]*),(\d+),([-\d.]+),([-\d.]+)/.exec(line))
+  .filter(Boolean)
+  .map((match) => ({
+    name: match[2] ?? match[1],
+    code: match[3],
+    latitude: Number(match[4]),
+    longitude: Number(match[5]),
+  }));
+const swedishStationsById = new Map(swedishStops.map((stop) => [stop.code, stop]));
+writeRows(
+  'sj_stations.csv',
+  swedishStops.filter(
+    (stop) =>
+      Number(stop.code) < 740010000 &&
+      /(station|Centralstation| C)$/i.test(stop.name) &&
+      !/busstation$/i.test(stop.name),
+  ),
+);
+
+/** Returns the Trainline station of a name in a country, or `undefined`. */
+function trainlineStation(name, countryCode) {
+  const row = rows.find((candidate) => candidate[column('name')] === name && country(candidate) === countryCode);
+  return row && {
+    name,
+    latitude: Number(row[column('latitude')]),
+    longitude: Number(row[column('longitude')]),
+  };
+}
+
+// The sites answer clients that name themselves like the app does.
+const userAgent = 'Mozilla/5.0 (compatible; BigTrainTrip/tools)';
+
+// Snälltåget lists its stops with codes that are Samtrafiken ids in Sweden and names or ids of
+// its own elsewhere. Stops abroad take their position from the Trainline station of the name
+// here.
+const snalltagetNames = {
+  Berlin: ['Berlin Hbf', 'DE'],
+  Hamburg: ['Hamburg Hbf', 'DE'],
+  Dresden: ['Dresden Hbf', 'DE'],
+  Köpenhamn: ['København', 'DK'],
+  'Malmö C': ['Malmö Central', 'SE'],
+  860000083: ['Kolding St.', 'DK'],
+  860000512: ['Odense St.', 'DK'],
+  860000100: ['Padborg St.', 'DK'],
+  800024643: ['Neumünster', 'DE'],
+  810000462: ['Salzburg Hbf', 'AT'],
+  810000522: ['Innsbruck Hbf', 'AT'],
+};
+const snalltagetToken = await (await fetch('https://www.snalltaget.se/token/v2', { headers: { accept: 'application/json', 'user-agent': userAgent } })).json();
+const snalltagetStops = await (
+  await fetch('https://apiv2.snalltaget.se/navigation/stops', {
+    headers: { accept: 'application/json', 'user-agent': userAgent, authorization: `Bearer ${snalltagetToken.access_token}`, origin: 'https://www.snalltaget.se' },
+  })
+).json();
+writeRows(
+  'snalltaget_stations.csv',
+  snalltagetStops.items.flatMap((stop) => {
+    const swedish = swedishStationsById.get(stop.code);
+    if (swedish && /(station|Centralstation| C)$/i.test(swedish.name) && !/(busstation|bstn)$/i.test(stop.name)) {
+      return [{ ...swedish, name: stop.name }];
+    }
+    const [name, countryCode] = snalltagetNames[stop.code] ?? [];
+    const station = name && trainlineStation(name, countryCode);
+    return station ? [{ ...station, code: stop.code, name: stop.name }] : [];
+  }),
+);
+
+// Eurostar takes UIC numbers, and its own list names the stations its trains call at.
+const eurostarStations = await (
+  await fetch('https://site-api.eurostar.com/search/stations/graphql', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'user-agent': userAgent,
+      origin: 'https://www.eurostar.com',
+      // The key of the site's own pages.
+      'x-api-key': 'NGktEpCX5R2jYamA9WejQ5b5ryxxUhq51pg7iNXm',
+    },
+    body: JSON.stringify({
+      operationName: 'getStations',
+      variables: { withDefaultConnections: true },
+      query: 'query getStations($withDefaultConnections: Boolean) { stations(withDefaultConnections: $withDefaultConnections) { uic name isEurostarDirect isErDirect } }',
+    }),
+  })
+).json();
+const eurostarCodes = new Set(
+  eurostarStations.data.stations.filter((station) => station.isEurostarDirect || station.isErDirect).map((station) => station.uic),
+);
+write('eurostar_stations.csv', (row) => {
+  const uic = row[column('uic')];
+  return eurostarCodes.has(uic) && !isBus(row) ? uic : null;
+});
+
+// MÁV takes the UIC numbers of Hungarian stations with two leading zeros. Its station list names
+// each station's number in the MÁV timetable feed, whose stops have the positions.
+const mavPositions = new Map(
+  execSync('unzip -p build-cache/feeds/hu_mav.gtfs.zip stops.txt', { maxBuffer: 1 << 28 })
+    .toString('utf8')
+    .split('\n')
+    .slice(1)
+    .map((line) => /^("([^"]*)"|[^,]*),([^,]+),([-\d.]+),([-\d.]+)/.exec(line))
+    .filter(Boolean)
+    .map((match) => [match[3], { latitude: Number(match[4]), longitude: Number(match[5]) }]),
+);
+const mavList = await (
+  await fetch('https://jegy-a.mav.hu/IK_API_PROD/api/OfferRequestApi/GetStationList', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'user-agent': userAgent, language: 'en', origin: 'https://jegy.mav.hu' },
+    body: '{}',
+  })
+).json();
+writeRows(
+  'mav_stations.csv',
+  mavList.stations
+    .filter((station) => station.coutryIso === 'HU' && !station.isAlias && /^0055\d{5}$/.test(station.code))
+    .flatMap((station) => {
+      const position = mavPositions.get(station.baseCode);
+      return position ? [{ code: station.code, name: station.name, ...position }] : [];
+    }),
+);

@@ -7,6 +7,7 @@ mod log_buffer;
 mod place_naming;
 mod probe;
 mod problem_report;
+mod site_quotes;
 mod state;
 mod ticket_report;
 mod webview_quotes;

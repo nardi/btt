@@ -120,6 +120,12 @@ pub struct ExchangeRates {
     pub chf_to_eur: f64,
     /// Euro for one Polish zloty.
     pub pln_to_eur: f64,
+    /// Euro for one Swedish krona.
+    pub sek_to_eur: f64,
+    /// Euro for one Danish krone.
+    pub dkk_to_eur: f64,
+    /// Euro for one Hungarian forint.
+    pub huf_to_eur: f64,
 }
 
 impl ExchangeRates {
@@ -130,6 +136,9 @@ impl ExchangeRates {
             "EUR" => Some(1.0),
             "CHF" => Some(self.chf_to_eur),
             "PLN" => Some(self.pln_to_eur),
+            "SEK" => Some(self.sek_to_eur),
+            "DKK" => Some(self.dkk_to_eur),
+            "HUF" => Some(self.huf_to_eur),
             _ => None,
         }
     }

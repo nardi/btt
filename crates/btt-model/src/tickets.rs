@@ -170,6 +170,20 @@ pub struct LiveQuoteRequest {
     pub ride_count: u8,
     /// Class the price is asked for.
     pub travel_class: TravelClass,
+    /// The search to run on the booking site, for a site whose booking link does not name it.
+    #[serde(default)]
+    pub site_search: Option<SiteSearch>,
+}
+
+/// A search on a booking site whose booking link opens its start page.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub struct SiteSearch {
+    /// Code of the first station on the site.
+    pub origin_code: SmolStr,
+    /// Code of the last station on the site.
+    pub destination_code: SmolStr,
+    /// Departure of the first train on the local clock of its station, as `YYYY-MM-DDTHH:MM`.
+    pub local_departure: SmolStr,
 }
 
 /// The answer of a booking site about a ticket.

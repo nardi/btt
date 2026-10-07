@@ -162,6 +162,7 @@ async fn look_up_through_service(app: AppHandle, path: std::ffi::OsString) {
                 first_departure_time: btt_model::UnixTimeMinutes(minutes.unwrap_or(0)),
                 ride_count: trains.unwrap_or(1),
                 travel_class: btt_model::TravelClass::Second,
+                site_search: None,
             };
             let started = Instant::now();
             let (outcome, _) = crate::ticket_report::look_up(&state, &request).await;

@@ -94,7 +94,8 @@ pub async fn look_up(
         Some(BookingSite::Ns) => look_up_ns(state, request).await,
         Some(BookingSite::Db) => look_up_db(state, request).await,
         Some(BookingSite::Obb) => look_up_obb(state, request).await,
-        Some(site) => look_up_in_web_view(state, request, site).await,
+        Some(BookingSite::Pkp) => look_up_in_web_view(state, request, BookingSite::Pkp).await,
+        Some(site) => look_up_on_site(state, request, site).await,
     }
 }
 
@@ -107,6 +108,13 @@ fn site_name(site: BookingSite) -> &'static str {
         BookingSite::Pkp => "PKP Intercity booking site",
         BookingSite::Trenitalia => "Trenitalia booking site",
         BookingSite::Ns => "NS fares",
+        BookingSite::Dsb => "DSB booking site",
+        BookingSite::Sj => "SJ booking site",
+        BookingSite::Snalltaget => "Snälltåget booking site",
+        BookingSite::Mav => "MÁV booking site",
+        BookingSite::Italo => "Italo booking site",
+        BookingSite::Renfe => "Renfe booking site",
+        BookingSite::Eurostar => "Eurostar booking site",
     }
 }
 
@@ -191,6 +199,57 @@ async fn look_up_in_web_view(
     let currency = card.currency.as_deref().unwrap_or("EUR");
     (
         live_price(state, request, site, amount, currency, &note),
+        answer,
+    )
+}
+
+/// Looks up the live price of a ticket on a site that answers a search with its connections,
+/// from the search in the request.
+async fn look_up_on_site(
+    state: &AppState,
+    request: &LiveQuoteRequest,
+    site: BookingSite,
+) -> (LiveQuoteOutcome, Option<serde_json::Value>) {
+    let Some(services) = &state.site_services else {
+        return (LiveQuoteOutcome::NoService, None);
+    };
+    let Some(search) = crate::site_quotes::connection_search(site, request) else {
+        return (LiveQuoteOutcome::UnsupportedLink, None);
+    };
+    let connections = match services.connections(site, &search).await {
+        None => return (LiveQuoteOutcome::NoService, None),
+        Some(Ok(connections)) => connections,
+        Some(Err(error)) => {
+            tracing::info!(%error, site = site_name(site), "no live price");
+            return (
+                LiveQuoteOutcome::Failed {
+                    error: error.to_string(),
+                },
+                None,
+            );
+        }
+    };
+    let answer = serde_json::to_value(&connections).ok();
+    let Some(connection) = btt_quotes::find_connection(&connections, &search) else {
+        return (LiveQuoteOutcome::NoMatchingTrip, answer);
+    };
+    if connection.not_for_sale {
+        return (LiveQuoteOutcome::NotSold, answer);
+    }
+    let Some(amount) = crate::site_quotes::class_price(connection, request.travel_class) else {
+        return (LiveQuoteOutcome::NoPriceForClass, answer);
+    };
+    let note = format!(
+        "The lowest price the site shows for {} in {} class, for one adult with no discount \
+         card. It can be a saver fare that ties the ticket to the train.",
+        connection.trains.join(" and "),
+        match request.travel_class {
+            TravelClass::First => "first",
+            TravelClass::Second => "second",
+        }
+    );
+    (
+        live_price(state, request, site, amount, &connection.currency, &note),
         answer,
     )
 }
@@ -568,6 +627,7 @@ mod tests {
             first_departure_time: UnixTimeMinutes(minute),
             ride_count: 1,
             travel_class: TravelClass::Second,
+            site_search: None,
         }
     }
 
