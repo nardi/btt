@@ -33,6 +33,14 @@ describe("itineraryRows", () => {
     ]);
   });
 
+  it("shows the arrival date of a plan that takes longer than the calendar assumes", () => {
+    const trip = amsterdamViennaRome();
+    const rome = tripPlaces(trip.itinerary)[2]!.id;
+    const rows = itineraryRows(trip, new Map([[rome, "2026-10-05"]]));
+    expect(rows.places[2]!.arrivalDate).toBe("2026-10-05");
+    expect(rows.legs.map((leg) => leg.departureDate)).toEqual(["2026-10-01", "2026-10-03"]);
+  });
+
   it("lists places of every itinerary variant", () => {
     const trip = amsterdamViennaRome();
     expect(tripPlaces(trip.itinerary).map((row) => row.name)).toEqual([

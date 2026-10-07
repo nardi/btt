@@ -8,7 +8,7 @@
     TripPreferences,
   } from "../bindings";
   import { formatMinutesOfDay } from "../format";
-  import { itineraryRows, storedJourneyChoice, tripPlaces } from "../itinerary";
+  import { itineraryRows, plannedArrivalDate, storedJourneyChoice, tripPlaces } from "../itinerary";
   import { legViewState, type TripSource } from "../trip-source";
   import LegRowView from "./LegRowView.svelte";
   import PlaceRowView from "./PlaceRowView.svelte";
@@ -35,7 +35,14 @@
 
   const viewState = $derived(source.viewState);
   const trip = $derived(viewState.trip);
-  const rows = $derived(itineraryRows(trip));
+  const plannedArrivalDates = $derived(
+    new Map(
+      [...viewState.legStatesByArrivalPlace].flatMap(([placeId, legState]) =>
+        legState.status === "found" ? [[placeId, plannedArrivalDate(legState.legPlan)] as const] : [],
+      ),
+    ),
+  );
+  const rows = $derived(itineraryRows(trip, plannedArrivalDates));
   const editable = $derived(source.kind === "editable" ? source : null);
   const onEdit = $derived(
     editable === null ? undefined : (edit: TripEdit) => void editable.applyEdit(edit),

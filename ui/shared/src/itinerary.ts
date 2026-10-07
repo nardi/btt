@@ -8,12 +8,15 @@ import type {
   Itinerary,
   ItineraryRoute,
   JourneyChoice,
+  LegPlan,
   LegTravelMode,
   PlaceStay,
   PlaceWindowOverride,
   Trip,
   TripPlace,
+  TripPlaceId,
 } from "./bindings";
+import { dateInZone } from "./format";
 
 /** Position of a place in the itinerary. Only via places have a stay. */
 export type PlaceRole = "origin" | "via" | "destination";
@@ -87,9 +90,14 @@ export function addDays(isoDate: string, days: number): string {
  *
  * Follows the calendar rules of `Itinerary::leg_departure_dates` in Rust. Each via place adds its
  * nights, and an overnight leg arrives the day after it departs. Day trains are assumed to
- * arrive on their departure date until a plan gives the exact time.
+ * arrive on their departure date until a plan gives the exact time. `plannedArrivalDates`
+ * holds those dates by arrival place, and a place shows its planned date when it has one. The
+ * departure dates keep to the calendar rules, because the planner plans each leg on them.
  */
-export function itineraryRows(trip: Trip): ItineraryRows {
+export function itineraryRows(
+  trip: Trip,
+  plannedArrivalDates: ReadonlyMap<TripPlaceId, string> = new Map(),
+): ItineraryRows {
   const route = itineraryRoute(trip.itinerary);
   if (route === null) {
     const places = tripPlaces(trip.itinerary).map(
@@ -139,13 +147,21 @@ export function itineraryRows(trip: Trip): ItineraryRows {
       place: arrival.place,
       role: arrival.stay === null ? "destination" : "via",
       stay: arrival.stay,
-      arrivalDate,
+      arrivalDate: plannedArrivalDates.get(arrival.place.id) ?? arrivalDate,
       departureDate: nextDepartureDate,
     });
     departurePlace = arrival.place;
     departureDate = nextDepartureDate ?? arrivalDate;
   }
   return { places, legs };
+}
+
+/** Returns the date on which the chosen journey of a leg plan reaches its last station. */
+export function plannedArrivalDate(legPlan: LegPlan): string {
+  const journey = legPlan.chosen_journey;
+  const lastRide = journey.later_rides.at(-1)?.ride ?? journey.first_ride;
+  const timeZone = legPlan.station_table[lastRide.alighting_station]?.time_zone ?? "UTC";
+  return dateInZone(lastRide.arrival_time, timeZone);
 }
 
 /** Returns the arrival window a place overrides, or `null` when it uses the trip's default. */

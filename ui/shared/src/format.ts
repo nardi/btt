@@ -65,6 +65,16 @@ export function formatTimeInZone(moment: UnixTimeMinutes, timeZone: string): str
   }).format(new Date(moment * 60_000));
 }
 
+/** Returns the `YYYY-MM-DD` date of a moment on the local clock of a time zone. */
+export function dateInZone(moment: UnixTimeMinutes, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone,
+  }).format(new Date(moment * 60_000));
+}
+
 /** Formats a `YYYY-MM-DD` date with its weekday, such as `Thu 1 Oct`. */
 export function formatDate(isoDate: string): string {
   return new Intl.DateTimeFormat("en-GB", {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   dailyTimeWindow,
+  dateInZone,
   formatDailyTimeWindow,
   formatDistance,
   formatDuration,
@@ -45,6 +46,15 @@ describe("formatTimeInZone", () => {
     const moment = Date.UTC(2026, 9, 1, 6, 0) / 60_000;
     expect(formatTimeInZone(moment, "Europe/Amsterdam")).toBe("08:00");
     expect(formatTimeInZone(moment, "Europe/London")).toBe("07:00");
+  });
+});
+
+describe("dateInZone", () => {
+  it("takes the date of the local clock", () => {
+    // 2026-11-20 23:30 UTC is already 21 November in Rome.
+    const moment = Date.UTC(2026, 10, 20, 23, 30) / 60_000;
+    expect(dateInZone(moment, "Europe/Rome")).toBe("2026-11-21");
+    expect(dateInZone(moment, "Europe/London")).toBe("2026-11-20");
   });
 });
 
