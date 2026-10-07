@@ -49,6 +49,8 @@ pub struct Settings<'a> {
     pub preferences: &'a TicketPreferences,
     /// The day the tickets are assumed to be bought.
     pub purchase_date: NaiveDate,
+    /// Today's date. Booking sites sell no tickets for trains that left before it.
+    pub today: NaiveDate,
     /// The share of the adult single ticket price that the traveller pays, in percent.
     pub single_ticket_percent: u32,
 }
@@ -598,17 +600,17 @@ impl<'a> Problem<'a> {
         else {
             return (shop_link(first.from_country.as_deref()), None);
         };
-        let request = self
-            .settings
-            .preferences
-            .live_prices
-            .then(|| btt_model::LiveQuoteRequest {
+        // Booking sites sell no tickets for trains that have left.
+        let departed = first.departure_date < self.settings.today;
+        let request = (self.settings.preferences.live_prices && !departed).then(|| {
+            btt_model::LiveQuoteRequest {
                 booking_link: link.url.clone(),
                 first_departure_time: first.departure_time,
                 ride_count: u8::try_from(rides.len()).unwrap_or(u8::MAX),
                 travel_class: self.settings.class,
                 site_search,
-            });
+            }
+        });
         (link, request)
     }
 

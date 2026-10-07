@@ -178,6 +178,7 @@ fn the_country_of_residence_allows_one_journey_each_way() {
         residence_country: Some("NL"),
         preferences: &preferences,
         purchase_date: date(0),
+        today: date(0),
         single_ticket_percent: 100,
     };
     let problem = Problem::new(&rides, data, &book, &settings);
@@ -396,6 +397,7 @@ proptest! {
             residence_country: None,
             preferences: &preferences,
             purchase_date: date(0),
+            today: date(0),
             single_ticket_percent: 100,
         };
         let problem = Problem::new(&rides, data, &book, &settings);
@@ -564,6 +566,7 @@ fn a_flixtrain_with_an_ic_category_is_not_covered_by_a_pass() {
         residence_country: None,
         preferences: &preferences,
         purchase_date: date(0),
+        today: date(0),
         single_ticket_percent: 100,
     };
     let rides = [flix];
@@ -692,4 +695,26 @@ fn operators_that_sell_their_own_trains_get_their_own_site() {
         "{link}"
     );
     assert_eq!(search.unwrap().origin_code, "RG_");
+}
+
+#[test]
+fn trains_that_have_left_get_no_live_price_request() {
+    let mut swiss = ride(0, ("CH", "CH"), "IC", 100.0, false);
+    swiss.from_coordinates = btt_model::GeoCoordinates::from_degrees(47.5474, 7.5896).unwrap();
+    swiss.to_coordinates = btt_model::GeoCoordinates::from_degrees(46.9490, 7.4392).unwrap();
+    let data = fare_data();
+    let book = PriceBook::from_data(data);
+    let preferences = TicketPreferences::default();
+    let plan = plan_tickets(
+        &TicketRequest {
+            rides: vec![swiss],
+            traveller: None,
+            preferences: &preferences,
+            today: date(1),
+        },
+        data,
+        &book,
+    );
+    assert!(plan.strategies[0].items[0].live_quote_request.is_none());
+    assert!(plan.notes.iter().any(|note| note.contains("before today")));
 }

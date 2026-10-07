@@ -79,6 +79,13 @@ pub fn plan_tickets(request: &TicketRequest<'_>, data: &FareData, book: &PriceBo
         }
         _ => 100,
     };
+    if request.preferences.live_prices && first_ride.departure_date < request.today {
+        notes.push(
+            "The trip starts before today, so booking sites give no live prices for the trains \
+             that have left."
+                .into(),
+        );
+    }
     if request.traveller.is_none() {
         notes.push("Add a traveller in Setup. The prices assume one adult in second class.".into());
     }
@@ -95,6 +102,7 @@ pub fn plan_tickets(request: &TicketRequest<'_>, data: &FareData, book: &PriceBo
             .preferences
             .assumed_purchase_date
             .unwrap_or(request.today),
+        today: request.today,
         single_ticket_percent,
     };
     let problem = Problem::new(&request.rides, data, book, &settings);
