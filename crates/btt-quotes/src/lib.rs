@@ -5,14 +5,24 @@
 //! switched off by default.
 
 pub mod db;
+pub mod dsb;
+pub mod eurostar;
+pub mod italo;
+mod js_literal;
 pub mod limiter;
+pub mod mav;
 pub mod ns;
 pub mod obb;
+pub mod renfe;
 pub mod sbb;
+pub mod site;
+pub mod sj;
+pub mod snalltaget;
 pub mod store;
 pub mod trenitalia;
 
 pub use limiter::RequestLimiter;
+pub use site::{ConnectionSearch, ConnectionSource, SiteConnection, SiteService, find_connection};
 pub use store::{MemoryStore, QuoteStore};
 
 use thiserror::Error;
