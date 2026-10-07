@@ -718,3 +718,25 @@ fn trains_that_have_left_get_no_live_price_request() {
     assert!(plan.strategies[0].items[0].live_quote_request.is_none());
     assert!(plan.notes.iter().any(|note| note.contains("before today")));
 }
+
+#[test]
+fn operators_without_a_readable_site_get_their_shop_and_no_live_price() {
+    let mut westbahn = ride(0, ("AT", "AT"), "WB", 300.0, false);
+    westbahn.train_label.operator = "westbahn".into();
+    westbahn.from_coordinates = btt_model::GeoCoordinates::from_degrees(48.1851, 16.3780).unwrap();
+    westbahn.to_coordinates = btt_model::GeoCoordinates::from_degrees(47.8131, 13.0458).unwrap();
+    let plan = plan(vec![westbahn], None);
+    let item = &plan.strategies[0].items[0];
+    assert_eq!(
+        item.booking_link.as_ref().unwrap().url,
+        "https://westbahn.at/en/"
+    );
+    assert!(item.live_quote_request.is_none());
+}
+
+#[test]
+fn an_iryo_ticket_goes_to_sbb() {
+    let (link, _) = site_ride(("ES", "ES"), "iryo", (40.4060, -3.6898), (41.3789, 2.1404));
+    assert!(link.starts_with("https://www.sbb.ch/en?stops="), "{link}");
+    assert!(link.contains("_I7171801"), "{link}");
+}

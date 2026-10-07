@@ -21,21 +21,86 @@ use smol_str::SmolStr;
 use crate::links::{pass_link, shop_link};
 use crate::rides::RideInput;
 
-/// Operators that sell tickets for their own trains only, as `data/operators.toml` names them.
-/// A ticket never joins one of their rides with a ride of another operator.
-const OWN_TICKET_OPERATORS: &[&str] = &[
-    "italo",
-    "flixtrain",
-    "regiojet",
-    "leo-express",
-    "westbahn",
-    "european-sleeper",
-    "snalltaget",
-    "eurostar",
-    "ouigo",
-    "ouigo-espana",
-    "iryo",
+/// An operator that sells tickets for its own trains only.
+struct OwnTicketOperator {
+    /// The operator as `data/operators.toml` names it.
+    id: &'static str,
+    /// The name of its shop on a booking link.
+    shop: &'static str,
+    /// The start page of its shop.
+    shop_url: &'static str,
+}
+
+/// The operators that sell tickets for their own trains only. A ticket never joins one of their
+/// rides with a ride of another operator.
+const OWN_TICKET_OPERATORS: &[OwnTicketOperator] = &[
+    OwnTicketOperator {
+        id: "italo",
+        shop: "italotreno.com",
+        shop_url: "https://www.italotreno.com/en",
+    },
+    OwnTicketOperator {
+        id: "flixtrain",
+        shop: "flixtrain.com",
+        shop_url: "https://www.flixtrain.com/",
+    },
+    OwnTicketOperator {
+        id: "regiojet",
+        shop: "regiojet.com",
+        shop_url: "https://regiojet.com/",
+    },
+    OwnTicketOperator {
+        id: "leo-express",
+        shop: "leoexpress.com",
+        shop_url: "https://www.leoexpress.com/en",
+    },
+    OwnTicketOperator {
+        id: "westbahn",
+        shop: "westbahn.at",
+        shop_url: "https://westbahn.at/en/",
+    },
+    OwnTicketOperator {
+        id: "european-sleeper",
+        shop: "europeansleeper.eu",
+        shop_url: "https://www.europeansleeper.eu/",
+    },
+    OwnTicketOperator {
+        id: "snalltaget",
+        shop: "snalltaget.se",
+        shop_url: "https://www.snalltaget.se/en",
+    },
+    OwnTicketOperator {
+        id: "eurostar",
+        shop: "eurostar.com",
+        shop_url: "https://www.eurostar.com/",
+    },
+    OwnTicketOperator {
+        id: "ouigo",
+        shop: "ouigo.com",
+        shop_url: "https://www.ouigo.com/",
+    },
+    OwnTicketOperator {
+        id: "ouigo-espana",
+        shop: "ouigo.com",
+        shop_url: "https://www.ouigo.com/es/",
+    },
+    OwnTicketOperator {
+        id: "iryo",
+        shop: "iryo.eu",
+        shop_url: "https://iryo.eu/en/",
+    },
 ];
+
+/// Returns the operator of a run that sells its own tickets, or `None` when the run has none.
+/// Such an operator runs every ride of the run, because a ticket never joins its rides with
+/// others.
+fn own_ticket_operator(rides: &[RideInput]) -> Option<&'static OwnTicketOperator> {
+    OWN_TICKET_OPERATORS.iter().find(|operator| {
+        rides
+            .iter()
+            .any(|ride| ride.train_label.operator == operator.id)
+    })
+}
 
 /// Who the tickets are for and how they are chosen.
 pub struct Settings<'a> {
@@ -239,7 +304,11 @@ impl<'a> Problem<'a> {
     fn sold_together(&self, first: usize, last: usize) -> bool {
         let rides = &self.rides[first..=last];
         let operator = &rides[0].train_label.operator;
-        let own_tickets_only = |operator: &str| OWN_TICKET_OPERATORS.contains(&operator);
+        let own_tickets_only = |operator: &str| {
+            OWN_TICKET_OPERATORS
+                .iter()
+                .any(|listed| listed.id == operator)
+        };
         rides
             .iter()
             .all(|ride| ride.train_label.operator == *operator)
@@ -576,9 +645,10 @@ impl<'a> Problem<'a> {
     /// Returns the link to buy a ticket for a run of rides, and the request for its live price
     /// when the booking site can tell it.
     ///
-    /// Italo, Snälltåget and Eurostar trains are sold on the sites of their operators. Any other
-    /// run goes to the site of the country it leaves from, which for a run that crosses a border
-    /// is the most likely seller:
+    /// Italo, Snälltåget and Eurostar trains are sold on the sites of their operators, and iryo
+    /// trains on SBB. Other operators that sell only their own trains get the start page of their
+    /// shop and no live price. Any other run goes to the site of the country it leaves from,
+    /// which for a run that crosses a border is the most likely seller:
     ///
     /// - DB for Germany, SBB for Switzerland, ÖBB for Austria and Trenitalia for Italy, which
     ///   all sell trips abroad too.
@@ -598,7 +668,15 @@ impl<'a> Problem<'a> {
             .operator_site_link(rides)
             .or_else(|| self.country_site_link(rides))
         else {
-            return (shop_link(first.from_country.as_deref()), None);
+            let shop = own_ticket_operator(rides).map_or_else(
+                || shop_link(first.from_country.as_deref()),
+                |operator| btt_model::BookingLink {
+                    label: format!("Open {}", operator.shop).into(),
+                    url: operator.shop_url.into(),
+                    kind: btt_model::BookingLinkKind::Search,
+                },
+            );
+            return (shop, None);
         };
         // Booking sites sell no tickets for trains that have left.
         let departed = first.departure_date < self.settings.today;
@@ -623,8 +701,9 @@ impl<'a> Problem<'a> {
         })
     }
 
-    /// Returns the link to the site of the operator of a run whose trains all belong to an
-    /// operator that sells its own tickets, with the search to run there.
+    /// Returns the link to the shop of the operator of a run whose operator sells its own
+    /// tickets, with the search to run there, or `None` when no site with live prices sells
+    /// its trains. Italo, Snälltåget and Eurostar sell their own, and SBB sells iryo.
     fn operator_site_link(
         &self,
         rides: &[RideInput],
@@ -641,14 +720,30 @@ impl<'a> Problem<'a> {
             let search = crate::links::italo_site_search(&data.italo_stations, first, last);
             return Some((link, search));
         }
-        let (link, search) = if Self::run_of_operator(rides, "snalltaget") {
-            crate::links::snalltaget_link(&data.snalltaget_stations, first, last)?
-        } else if Self::run_of_operator(rides, "eurostar") {
-            crate::links::eurostar_link(&data.eurostar_stations, first, last)?
-        } else {
-            return None;
+        let operator = own_ticket_operator(rides)?;
+        let with_search = |link: Option<(btt_model::BookingLink, btt_model::SiteSearch)>| {
+            link.map(|(link, search)| (link, Some(search)))
         };
-        Some((link, Some(search)))
+        match operator.id {
+            "snalltaget" => with_search(crate::links::snalltaget_link(
+                &data.snalltaget_stations,
+                first,
+                last,
+            )),
+            "eurostar" => with_search(crate::links::eurostar_link(
+                &data.eurostar_stations,
+                first,
+                last,
+            )),
+            "iryo" => crate::links::sbb_link(
+                &data.sbb_abroad_stations,
+                &data.sbb_abroad_stations,
+                first,
+                last,
+            )
+            .map(|link| (link, None)),
+            _ => None,
+        }
     }
 
     /// Returns the link to the site of the country a run leaves from, or to DB for a run across
@@ -658,6 +753,10 @@ impl<'a> Problem<'a> {
         &self,
         rides: &[RideInput],
     ) -> Option<(btt_model::BookingLink, Option<btt_model::SiteSearch>)> {
+        // The sites of countries do not sell the trains of operators with their own shops.
+        if own_ticket_operator(rides).is_some() {
+            return None;
+        }
         let (first, last) = (&rides[0], &rides[rides.len() - 1]);
         let data = self.data;
         let departure_country = first.from_country.as_deref();

@@ -72,10 +72,10 @@ write('ns_stations.csv', (row) => {
   return country(row) === 'NL' && /^84\d{5}$/.test(uic) && !isBus(row) ? uic : null;
 });
 
-// The SBB site sells French trips and trips from Switzerland to its neighbours, and takes UIC
-// numbers of the stations there. Entries for the RER share a position with the main line
-// station and are left out.
-const sbbAbroadPrefixes = { FR: '87', IT: '83', AT: '81', DE: '80' };
+// The SBB site sells French trips, iryo trips in Spain and trips from Switzerland to its
+// neighbours, and takes UIC numbers of the stations there. Entries for the RER share a position
+// with the main line station and are left out.
+const sbbAbroadPrefixes = { FR: '87', IT: '83', AT: '81', DE: '80', ES: '71' };
 write('sbb_abroad_stations.csv', (row) => {
   const uic = row[column('uic')];
   const prefix = sbbAbroadPrefixes[country(row)];
