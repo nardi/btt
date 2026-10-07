@@ -40,17 +40,22 @@ write('db_stations.csv', (row) => {
   return /^\d{7}$/.test(eva) ? eva : null;
 });
 
-// Trenitalia location ids are 830000000 plus the station number after the country code 83.
+// A Trenitalia location id is the two-digit country code times 10 million plus the station
+// number after it, such as 830008409 for 8308409 and 850003000 for 8503000. Trenitalia sells
+// trips from Italy abroad, so the table has the foreign stations it knows too.
 write('trenitalia_stations.csv', (row) => {
   const id = row[column('trenitalia_id')];
-  return /^83\d{5}$/.test(id) ? String(830000000 + Number(id.slice(2))) : null;
+  return /^\d{7}$/.test(id) && !isBus(row)
+    ? String(Number(id.slice(0, 2)) * 10_000_000 + Number(id.slice(2)))
+    : null;
 });
 
-// The ÖBB shop takes ÖBB station numbers. Wien Hbf is 1290401 in the shop and 8103000 here.
+// The ÖBB shop takes ÖBB station numbers, also for the foreign stations it sells trips to. Wien
+// Hbf is 1290401 in the shop and 8103000 here.
 const obbOverrides = { 8103000: '1290401' };
 write('obb_stations.csv', (row) => {
   const id = row[column('obb_id')];
-  return country(row) === 'AT' && /^8\d{6}$/.test(id) && !isBus(row) ? obbOverrides[id] || id : null;
+  return /^\d{7}$/.test(id) && !isBus(row) ? obbOverrides[id] || id : null;
 });
 
 // PKP Intercity takes the same numbers as DB for Polish stations. Numbers from 5196000 are towns
@@ -66,10 +71,15 @@ write('ns_stations.csv', (row) => {
   return country(row) === 'NL' && /^84\d{5}$/.test(uic) && !isBus(row) ? uic : null;
 });
 
-// The SBB site sells French trips too and takes UIC numbers of French stations. Entries for the
-// RER share a position with the main line station and are left out.
-write('sbb_france_stations.csv', (row) => {
+// The SBB site sells French trips and trips from Switzerland to its neighbours, and takes UIC
+// numbers of the stations there. Entries for the RER share a position with the main line
+// station and are left out.
+const sbbAbroadPrefixes = { FR: '87', IT: '83', AT: '81', DE: '80' };
+write('sbb_abroad_stations.csv', (row) => {
   const uic = row[column('uic')];
+  const prefix = sbbAbroadPrefixes[country(row)];
   const isRer = /\bRER\b/.test(row[column('name')]);
-  return country(row) === 'FR' && /^87\d{5}$/.test(uic) && !isBus(row) && !isRer ? uic : null;
+  return prefix && uic.length === 7 && uic.startsWith(prefix) && /^\d+$/.test(uic) && !isBus(row) && !isRer
+    ? uic
+    : null;
 });

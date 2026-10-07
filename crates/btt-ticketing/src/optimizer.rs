@@ -233,7 +233,9 @@ impl<'a> Problem<'a> {
         let rides = &self.rides[first..=last];
         let operator = &rides[0].train_label.operator;
         let own_tickets_only = |operator: &str| OWN_TICKET_OPERATORS.contains(&operator);
-        rides.iter().all(|ride| ride.train_label.operator == *operator)
+        rides
+            .iter()
+            .all(|ride| ride.train_label.operator == *operator)
             || !rides
                 .iter()
                 .any(|ride| own_tickets_only(&ride.train_label.operator))
@@ -567,10 +569,17 @@ impl<'a> Problem<'a> {
     /// Returns the link to buy a ticket for a run of rides, and the request for its live price
     /// when the booking site can tell it.
     ///
-    /// Italo trains are sold on the Italo site. A run that touches Germany goes to the DB site,
-    /// which also sells the trips to its neighbours. A run inside one country goes to the site of
-    /// that country: SBB, NS, ÖBB, PKP Intercity or Trenitalia, and a run inside France goes to
-    /// SBB too. Anything else gets the shop of the country of the first ride and no live price.
+    /// Italo trains are sold on the Italo site. Any other run goes to the site of the country it
+    /// leaves from, which for a run that crosses a border is the most likely seller:
+    ///
+    /// - DB for Germany, SBB for Switzerland, ÖBB for Austria and Trenitalia for Italy, which
+    ///   all sell trips abroad too.
+    /// - NS for the Netherlands, PKP Intercity for Poland and SBB for France, which only get
+    ///   runs that stay in their country.
+    ///
+    /// A run that crosses a border and that the site of its departure country cannot take goes
+    /// to DB, which prices most trips in Europe. Anything else gets the shop of the country of
+    /// the first ride and no live price.
     fn single_ticket_link(
         &self,
         rides: &[RideInput],
@@ -602,20 +611,13 @@ impl<'a> Problem<'a> {
                     travel_class: self.settings.class,
                 })
         };
-        let touches = |country: &str| {
-            rides.iter().any(|ride| {
-                ride.from_country.as_deref() == Some(country)
-                    || ride.to_country.as_deref() == Some(country)
-            })
-        };
-        let inside = |country: &str| {
-            rides.iter().all(|ride| {
-                ride.from_country.as_deref() == Some(country)
-                    && ride.to_country.as_deref() == Some(country)
-            })
-        };
         let data = self.data;
-        let link = if touches("DE") {
+        let departure_country = first.from_country.as_deref();
+        let domestic = rides.iter().all(|ride| {
+            ride.from_country.as_deref() == departure_country
+                && ride.to_country.as_deref() == departure_country
+        });
+        let db_link = || {
             crate::links::db_link(
                 &data.db_stations,
                 first,
@@ -623,28 +625,44 @@ impl<'a> Problem<'a> {
                 self.settings.class,
                 self.settings.age_group,
             )
-        } else if inside("CH") {
-            crate::links::sbb_link(&data.sbb_stations, first, last)
-        } else if inside("FR") {
-            // The SBB site sells French trips, while SNCF Connect has no link to a search and
-            // blocks scripted clients.
-            crate::links::sbb_link(&data.sbb_france_stations, first, last)
-        } else if inside("NL") {
-            crate::links::ns_link(&data.ns_stations, first, last)
-        } else if inside("AT") {
-            crate::links::obb_link(&data.obb_stations, first, last)
-        } else if inside("PL") {
-            crate::links::pkp_link(&data.pkp_stations, first, last)
-        } else if inside("IT") {
-            crate::links::trenitalia_link(
+        };
+        let departure_site_link = match (departure_country, domestic) {
+            (Some("DE"), _) => db_link(),
+            (Some("CH"), _) => {
+                let stations = |country: Option<&str>| {
+                    if country == Some("CH") {
+                        &data.sbb_stations
+                    } else {
+                        &data.sbb_abroad_stations
+                    }
+                };
+                crate::links::sbb_link(
+                    &data.sbb_stations,
+                    stations(last.to_country.as_deref()),
+                    first,
+                    last,
+                )
+            }
+            (Some("AT"), _) => crate::links::obb_link(&data.obb_stations, first, last),
+            (Some("IT"), _) => crate::links::trenitalia_link(
                 &data.trenitalia_stations,
                 first,
                 last,
                 self.settings.age_group,
-            )
-        } else {
-            None
+            ),
+            // The SBB site sells French trips, while SNCF Connect has no link to a search and
+            // blocks scripted clients.
+            (Some("FR"), true) => crate::links::sbb_link(
+                &data.sbb_abroad_stations,
+                &data.sbb_abroad_stations,
+                first,
+                last,
+            ),
+            (Some("NL"), true) => crate::links::ns_link(&data.ns_stations, first, last),
+            (Some("PL"), true) => crate::links::pkp_link(&data.pkp_stations, first, last),
+            _ => None,
         };
+        let link = departure_site_link.or_else(|| if domestic { None } else { db_link() });
         match link {
             Some(link) => {
                 let request = live_request(&link);

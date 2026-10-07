@@ -593,3 +593,35 @@ fn an_italo_ride_gets_a_ticket_of_its_own() {
         .collect();
     assert_eq!(runs, [&[0][..], &[1, 2][..]]);
 }
+
+/// Plans one ride between two countries and returns its booking link.
+fn border_ride_link(countries: (&str, &str), from: (f64, f64), to: (f64, f64)) -> String {
+    let mut ride = ride(0, countries, "EC", 300.0, false);
+    ride.from_coordinates = btt_model::GeoCoordinates::from_degrees(from.0, from.1).unwrap();
+    ride.to_coordinates = btt_model::GeoCoordinates::from_degrees(to.0, to.1).unwrap();
+    let plan = plan(vec![ride], None);
+    plan.strategies[0].items[0]
+        .booking_link
+        .as_ref()
+        .unwrap()
+        .url
+        .to_string()
+}
+
+#[test]
+fn a_ticket_across_a_border_goes_to_the_site_of_its_departure_country() {
+    let zurich = (47.3782, 8.5392);
+    let rogoredo = (45.4337, 9.2390);
+    let link = border_ride_link(("CH", "IT"), zurich, rogoredo);
+    assert!(
+        link.contains("stops=Z%C3%BCrich+HB_I8503000~Milano+Rogoredo_I8301820"),
+        "{link}"
+    );
+    let link = border_ride_link(("IT", "CH"), rogoredo, zurich);
+    assert!(link.contains("arrivalStation=Z%C3%BCrich+HB"), "{link}");
+    let link = border_ride_link(("AT", "DE"), (48.1851, 16.3780), (48.1402, 11.5600));
+    assert!(link.starts_with("https://shop.oebbtickets.at/"), "{link}");
+    // No site of Sweden is known, so DB gets the ticket.
+    let link = border_ride_link(("SE", "DE"), (59.3300, 18.0576), (53.5527, 10.0069));
+    assert!(link.starts_with("https://int.bahn.de/"), "{link}");
+}
