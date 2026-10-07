@@ -90,6 +90,8 @@ pub async fn look_up(
         }
         Some(BookingSite::Trenitalia) => look_up_trenitalia(state, request).await,
         Some(BookingSite::Ns) => look_up_ns(state, request).await,
+        Some(BookingSite::Db) => look_up_db(state, request).await,
+        Some(BookingSite::Obb) => look_up_obb(state, request).await,
         Some(site) => look_up_in_web_view(state, request, site).await,
     }
 }
@@ -143,8 +145,8 @@ fn live_price(
 
 /// Looks up the live price of a ticket by reading the site's page in the web view.
 ///
-/// The ÖBB shop and PKP Intercity show second class prices on their lists, so a first class
-/// ticket gets no live price there.
+/// PKP Intercity shows second class prices on its list, so a first class ticket gets no live
+/// price there.
 async fn look_up_in_web_view(
     state: &AppState,
     request: &LiveQuoteRequest,
@@ -153,9 +155,7 @@ async fn look_up_in_web_view(
     let Some(service) = &state.webview_service else {
         return (LiveQuoteOutcome::NoService, None);
     };
-    if request.travel_class == TravelClass::First
-        && matches!(site, BookingSite::Obb | BookingSite::Pkp)
-    {
+    if request.travel_class == TravelClass::First && site == BookingSite::Pkp {
         return (LiveQuoteOutcome::NoPriceForClass, None);
     }
     let Some(departure) = crate::booking_links::search_time(&request.booking_link) else {
@@ -189,6 +189,138 @@ async fn look_up_in_web_view(
     let currency = card.currency.as_deref().unwrap_or("EUR");
     (
         live_price(state, request, site, amount, currency, &note),
+        answer,
+    )
+}
+
+/// Looks up the live price of a ticket on the service of the DB app, from the stations, time,
+/// class and traveller of its bahn.de link.
+async fn look_up_db(
+    state: &AppState,
+    request: &LiveQuoteRequest,
+) -> (LiveQuoteOutcome, Option<serde_json::Value>) {
+    let Some(service) = &state.db_service else {
+        return (LiveQuoteOutcome::NoService, None);
+    };
+    let link = &request.booking_link;
+    let traveller_type = parameter(link, "r")
+        .and_then(|travellers| travellers.split(':').next().map(str::to_owned))
+        .and_then(|id| btt_quotes::db::traveller_type(&id));
+    let departure =
+        chrono::DateTime::from_timestamp(i64::from(request.first_departure_time.0) * 60, 0)
+            .map(|moment| moment.fixed_offset());
+    let (Some(origin_eva), Some(destination_eva), Some(traveller_type), Some(departure)) = (
+        parameter(link, "soei"),
+        parameter(link, "zoei"),
+        traveller_type,
+        departure,
+    ) else {
+        return (LiveQuoteOutcome::UnsupportedLink, None);
+    };
+    let search = btt_quotes::db::Search {
+        origin_eva,
+        destination_eva,
+        departure,
+        class: match request.travel_class {
+            TravelClass::First => "KLASSE_1",
+            TravelClass::Second => "KLASSE_2",
+        }
+        .to_owned(),
+        traveller_type: traveller_type.to_owned(),
+    };
+    let connections = match service.connections(&search).await {
+        Ok(connections) => connections,
+        Err(error) => {
+            tracing::info!(%error, "no live price from the DB app service");
+            return (
+                LiveQuoteOutcome::Failed {
+                    error: error.to_string(),
+                },
+                None,
+            );
+        }
+    };
+    let answer = serde_json::to_value(&connections).ok();
+    let Some(connection) = btt_quotes::db::find_connection(
+        &connections,
+        departure.timestamp(),
+        usize::from(request.ride_count),
+    ) else {
+        return (LiveQuoteOutcome::NoMatchingTrip, answer);
+    };
+    let Some(amount) = connection.price else {
+        return (LiveQuoteOutcome::NotSold, answer);
+    };
+    let note = format!(
+        "The lowest price DB shows for {}, for one traveller with no discount card. It can be a \
+         saver fare that ties the ticket to the train.",
+        connection.trains.join(" and ")
+    );
+    (
+        live_price(state, request, BookingSite::Db, amount, "EUR", &note),
+        answer,
+    )
+}
+
+/// Looks up the live price of a ticket on the service of the ÖBB shop, from the stations and
+/// time of its shop link. The shop lists second class prices, so a first class ticket gets none.
+async fn look_up_obb(
+    state: &AppState,
+    request: &LiveQuoteRequest,
+) -> (LiveQuoteOutcome, Option<serde_json::Value>) {
+    let Some(service) = &state.obb_service else {
+        return (LiveQuoteOutcome::NoService, None);
+    };
+    if request.travel_class == TravelClass::First {
+        return (LiveQuoteOutcome::NoPriceForClass, None);
+    }
+    let link = &request.booking_link;
+    let number = |name: &str| parameter(link, name).and_then(|value| value.parse().ok());
+    let departure = parameter(link, "outwardDateTime")
+        .and_then(|text| chrono::NaiveDateTime::parse_from_str(&text, "%Y-%m-%dT%H:%M").ok());
+    let (Some(origin), Some(destination), Some(departure)) = (
+        number("stationOrigEva"),
+        number("stationDestEva"),
+        departure,
+    ) else {
+        return (LiveQuoteOutcome::UnsupportedLink, None);
+    };
+    let search = btt_quotes::obb::Search {
+        origin,
+        destination,
+        departure,
+    };
+    let connections = match service.connections(&search).await {
+        Ok(connections) => connections,
+        Err(error) => {
+            tracing::info!(%error, "no live price from the ÖBB shop");
+            return (
+                LiveQuoteOutcome::Failed {
+                    error: error.to_string(),
+                },
+                None,
+            );
+        }
+    };
+    let answer = serde_json::to_value(&connections).ok();
+    let Some(connection) =
+        btt_quotes::obb::find_connection(&connections, departure, usize::from(request.ride_count))
+    else {
+        return (LiveQuoteOutcome::NoMatchingTrip, answer);
+    };
+    let Some(amount) = connection.price else {
+        return (LiveQuoteOutcome::NotSold, answer);
+    };
+    let kind = connection
+        .note
+        .as_deref()
+        .map_or_else(String::new, |note| format!(" It is a {note}."));
+    let note = format!(
+        "The lowest price the ÖBB shop shows for {}, for one adult with no discount card.{kind}",
+        connection.trains.join(" and ")
+    );
+    (
+        live_price(state, request, BookingSite::Obb, amount, "EUR", &note),
         answer,
     )
 }

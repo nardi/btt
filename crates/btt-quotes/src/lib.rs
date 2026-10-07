@@ -4,8 +4,10 @@
 //! can break without notice and can be blocked. Each lives in its own module and is meant to be
 //! switched off by default.
 
+pub mod db;
 pub mod limiter;
 pub mod ns;
+pub mod obb;
 pub mod sbb;
 pub mod store;
 pub mod trenitalia;

@@ -66,7 +66,7 @@
       onchange={(event) => update({ live_prices: event.currentTarget.checked })}
     />
     Look up live prices on booking sites
-    <span class="hint">unofficial: SBB, DB, ÖBB, PKP Intercity, Trenitalia and NS</span>
+    <span class="hint">unofficial: SBB, DB, ÖBB, PKP Intercity, Trenitalia and NS, and SBB for France</span>
   </label>
   <label>
     <span class="label">Buying on</span>

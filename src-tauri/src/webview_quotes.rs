@@ -1,5 +1,5 @@
 //! Live prices from the booking sites that refuse scripted clients, read from a hidden window of
-//! the app: DB, the ÖBB shop and PKP Intercity.
+//! the app. PKP Intercity is read this way.
 
 use std::sync::Arc;
 use std::time::Duration;

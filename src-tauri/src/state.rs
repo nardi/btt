@@ -113,6 +113,11 @@ pub struct AppState {
     pub trenitalia_service: Option<btt_quotes::trenitalia::TrenitaliaService>,
     /// Looks up NS fares. `None` when its HTTP client could not be built.
     pub ns_service: Option<btt_quotes::ns::NsService>,
+    /// Looks up prices on the service of the DB app. `None` when its HTTP client could not be
+    /// built.
+    pub db_service: Option<btt_quotes::db::DbService>,
+    /// Looks up prices on the ÖBB shop. `None` when its HTTP client could not be built.
+    pub obb_service: Option<btt_quotes::obb::ObbService>,
     /// The timetable bundle the planner loaded, if any.
     pub bundle_path: Option<PathBuf>,
     /// The most recent log lines, for problem reports.
@@ -182,6 +187,12 @@ impl AppState {
         let ns_service = btt_quotes::ns::NsService::new(Arc::clone(&quote_store))
             .map_err(|error| tracing::warn!(%error, "NS fares are not available"))
             .ok();
+        let db_service = btt_quotes::db::DbService::new(Arc::clone(&quote_store))
+            .map_err(|error| tracing::warn!(%error, "live DB prices are not available"))
+            .ok();
+        let obb_service = btt_quotes::obb::ObbService::new(Arc::clone(&quote_store))
+            .map_err(|error| tracing::warn!(%error, "live ÖBB prices are not available"))
+            .ok();
         let webview_service = Some(crate::webview_quotes::WebviewQuoteService::new(
             app,
             Arc::clone(&quote_store),
@@ -196,6 +207,8 @@ impl AppState {
             webview_service,
             trenitalia_service,
             ns_service,
+            db_service,
+            obb_service,
             storage,
             planning_backend,
             photon: PhotonClient::new(PUBLIC_PHOTON_BASE_URL, USER_AGENT)?,

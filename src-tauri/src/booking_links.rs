@@ -5,9 +5,9 @@
 pub enum BookingSite {
     /// sbb.ch, read with plain requests.
     Sbb,
-    /// int.bahn.de, read in the web view.
+    /// int.bahn.de, read with plain requests to the service of the DB app.
     Db,
-    /// The ÖBB shop, read in the web view.
+    /// The ÖBB shop, read with plain requests to the shop's service.
     Obb,
     /// PKP Intercity, read in the web view.
     Pkp,

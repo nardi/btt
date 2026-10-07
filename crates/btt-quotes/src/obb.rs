@@ -1,0 +1,385 @@
+//! Prices from the ÖBB shop.
+//!
+//! The shop's own service answers plain requests with an anonymous token and a session that the
+//! token opens. A search then takes three requests in a row, as the shop's page makes them: an
+//! entry point for the two stations, which returns a travel action, the timetable of that travel
+//! action, and the prices of its connections. The token is kept and fetched again shortly before
+//! it runs out.
+
+use std::sync::Arc;
+use std::time::Duration;
+
+use chrono::NaiveDateTime;
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+use tokio::sync::Mutex;
+use tokio::time::Instant;
+
+use crate::{QuoteError, QuoteStore, RequestLimiter};
+
+/// What the client says about itself, in the generic form the booking sites accept.
+const USER_AGENT: &str = concat!(
+    "Mozilla/5.0 (compatible; BigTrainTrip/",
+    env!("CARGO_PKG_VERSION"),
+    ")"
+);
+
+/// The address of the shop.
+const SHOP: &str = "https://shop.oebbtickets.at";
+
+/// The least time between two searches. The requests of one search follow each other at once,
+/// as the shop's page makes them.
+const MINIMUM_INTERVAL: Duration = Duration::from_secs(2);
+
+/// How long searches stop after one fails.
+const FAILURE_PAUSE: Duration = Duration::from_mins(15);
+
+/// How long the connections of a search are kept. Saver prices change with demand, so the time
+/// is short.
+const QUOTE_LIFETIME: Duration = Duration::from_mins(30);
+
+/// How long a token is used. The shop's tokens run for five minutes.
+const TOKEN_LIFETIME: Duration = Duration::from_mins(4);
+
+/// A search on the shop.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Search {
+    /// ÖBB number of the departure station, such as `8100002` for Salzburg Hbf.
+    pub origin: u64,
+    /// ÖBB number of the arrival station.
+    pub destination: u64,
+    /// The local time to leave at or after.
+    pub departure: NaiveDateTime,
+}
+
+impl Search {
+    /// Returns the key under which the connections of the search are kept.
+    fn cache_key(&self) -> String {
+        format!(
+            "obb:{}:{}:{}",
+            self.origin, self.destination, self.departure
+        )
+    }
+}
+
+/// A connection the shop found.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Connection {
+    /// Local departure of the first train.
+    pub departure: NaiveDateTime,
+    /// The trains, such as `RJX 187`.
+    pub trains: Vec<String>,
+    /// The lowest price in euro, or `None` when the shop sells no ticket for it.
+    pub price: Option<f64>,
+    /// The kind of the lowest price, such as `Sparschiene ticket`, when the shop names one.
+    pub note: Option<String>,
+}
+
+/// Reads the connections from the timetable answer and the prices answer of the shop.
+///
+/// # Errors
+///
+/// Returns an error when the timetable answer has no list of connections.
+pub fn parse_connections(timetable: &Value, prices: &Value) -> Result<Vec<Connection>, QuoteError> {
+    let connections = timetable
+        .get("connections")
+        .and_then(Value::as_array)
+        .ok_or_else(|| QuoteError::Unexpected("no connections in the timetable".to_owned()))?;
+    let offers = prices
+        .get("offers")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    Ok(connections
+        .iter()
+        .filter_map(|connection| {
+            let id = connection.get("id")?.as_str()?;
+            let departure = connection
+                .pointer("/from/departure")?
+                .as_str()
+                .and_then(|text| {
+                    NaiveDateTime::parse_from_str(text, "%Y-%m-%dT%H:%M:%S%.f").ok()
+                })?;
+            let trains = connection
+                .get("sections")?
+                .as_array()?
+                .iter()
+                .filter_map(|section| {
+                    let category = section.get("category")?;
+                    let name = category.get("name")?.as_str()?;
+                    let number = category.get("number")?.as_str()?;
+                    Some(format!("{name} {number}"))
+                })
+                .collect();
+            let offer = offers
+                .iter()
+                .find(|offer| offer.get("connectionId").and_then(Value::as_str) == Some(id));
+            let price = offer
+                .filter(|offer| offer.get("offerError").and_then(Value::as_bool) != Some(true))
+                .and_then(|offer| offer.get("price")?.as_f64());
+            let note = offer
+                .and_then(|offer| offer.pointer("/specialNote/en")?.as_str())
+                .map(str::to_owned);
+            Some(Connection {
+                departure,
+                trains,
+                price,
+                note,
+            })
+        })
+        .collect())
+}
+
+/// Returns the connection that leaves at the given local time with the given number of trains.
+pub fn find_connection(
+    connections: &[Connection],
+    departure: NaiveDateTime,
+    train_count: usize,
+) -> Option<&Connection> {
+    connections.iter().find(|connection| {
+        connection.departure == departure && connection.trains.len() == train_count
+    })
+}
+
+/// Fetches connections and prices from the ÖBB shop, keeps them for a while and spaces its
+/// searches out.
+pub struct ObbService {
+    /// The HTTP client.
+    client: Client,
+    /// Keeps the connections of searches.
+    store: Arc<dyn QuoteStore>,
+    /// Spaces searches out and stops them after a failure.
+    limiter: RequestLimiter,
+    /// The anonymous token and when it was fetched.
+    token: Mutex<Option<(String, Instant)>>,
+}
+
+impl ObbService {
+    /// Creates a service that keeps its answers in a store.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the HTTP client cannot be built.
+    pub fn new(store: Arc<dyn QuoteStore>) -> Result<Self, QuoteError> {
+        Ok(Self {
+            client: Client::builder()
+                .user_agent(USER_AGENT)
+                .timeout(Duration::from_secs(20))
+                .build()?,
+            store,
+            limiter: RequestLimiter::new(MINIMUM_INTERVAL, FAILURE_PAUSE),
+            token: Mutex::new(None),
+        })
+    }
+
+    /// Returns the connections of a search with their prices. A search made in the last half
+    /// hour is answered from the store.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when searches are paused after a failure, a request fails or is refused,
+    /// or an answer has an unexpected shape. A failure pauses searches for 15 minutes.
+    pub async fn connections(&self, search: &Search) -> Result<Vec<Connection>, QuoteError> {
+        let key = search.cache_key();
+        if let Some(connections) = self
+            .store
+            .load(&key, QUOTE_LIFETIME)
+            .and_then(|document| serde_json::from_str(&document).ok())
+        {
+            return Ok(connections);
+        }
+        let result = self.fetch(search).await;
+        match &result {
+            Ok(connections) => {
+                if let Ok(document) = serde_json::to_string(connections) {
+                    self.store.save(&key, &document);
+                }
+            }
+            Err(QuoteError::Paused) => {}
+            Err(_) => {
+                *self.token.lock().await = None;
+                self.limiter.report_failure().await;
+            }
+        }
+        result
+    }
+
+    /// Makes the requests of one search.
+    async fn fetch(&self, search: &Search) -> Result<Vec<Connection>, QuoteError> {
+        if !self.limiter.wait_for_turn().await {
+            return Err(QuoteError::Paused);
+        }
+        let token = self.token().await?;
+        let entry = self
+            .send(
+                &token,
+                "POST",
+                "/api/hafas/v2/externalEntrypoint",
+                Some(json!({
+                    "cref": "oebb-startseite",
+                    "stations": {
+                        "from": { "number": search.origin },
+                        "to": { "number": search.destination },
+                    },
+                })),
+            )
+            .await?;
+        let travel_action = entry
+            .get("travelActionId")
+            .and_then(Value::as_str)
+            .ok_or_else(|| QuoteError::Unexpected("no travel action".to_owned()))?;
+        let timetable = self
+            .send(
+                &token,
+                "POST",
+                "/api/hafas/v4/timetable",
+                Some(json!({
+                    "travelActionId": travel_action,
+                    "datetimeDeparture": search.departure.format("%Y-%m-%dT%H:%M:00.000").to_string(),
+                    "filter": {
+                        "regionaltrains": false, "direct": false, "wheelchair": false,
+                        "bikes": false, "trains": false, "motorail": false, "connections": [],
+                    },
+                    "passengers": [{
+                        "me": false, "remembered": false, "cards": [], "relations": [],
+                        "challengedFlags": {
+                            "hasHandicappedPass": false, "hasAssistanceDog": false,
+                            "hasWheelchair": false, "hasAttendant": false,
+                        },
+                        "id": 1, "type": "ADULT",
+                    }],
+                    "count": 5,
+                    "sortType": "DEPARTURE",
+                })),
+            )
+            .await?;
+        let query: Vec<String> = timetable
+            .get("connections")
+            .and_then(Value::as_array)
+            .map(|connections| {
+                connections
+                    .iter()
+                    .filter_map(|connection| connection.get("id")?.as_str())
+                    .map(|id| format!("connectionIds%5B%5D={id}"))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let prices = if query.is_empty() {
+            Value::Null
+        } else {
+            self.send(
+                &token,
+                "GET",
+                &format!("/api/offer/v1/prices?{}", query.join("&")),
+                None,
+            )
+            .await?
+        };
+        parse_connections(&timetable, &prices)
+    }
+
+    /// Returns a token that is still good, fetching a new one when needed.
+    async fn token(&self) -> Result<String, QuoteError> {
+        let mut token = self.token.lock().await;
+        if let Some((value, fetched)) = token.as_ref()
+            && fetched.elapsed() < TOKEN_LIFETIME
+        {
+            return Ok(value.clone());
+        }
+        let url = format!("{SHOP}/api/domain/v1/anonymousToken");
+        let response = self
+            .client
+            .get(&url)
+            .header("accept", "application/json")
+            .send()
+            .await?;
+        if !response.status().is_success() {
+            return Err(QuoteError::Refused {
+                url,
+                status: response.status().as_u16(),
+            });
+        }
+        let answer: Value = response.json().await?;
+        let value = answer
+            .get("access_token")
+            .and_then(Value::as_str)
+            .ok_or_else(|| QuoteError::Unexpected("no access token".to_owned()))?
+            .to_owned();
+        // The shop opens a session for the token, and refuses the entry point with status 440
+        // until it has one.
+        self.send(
+            &value,
+            "POST",
+            "/api/domain/v1/initUserData",
+            Some(json!({})),
+        )
+        .await?;
+        *token = Some((value.clone(), Instant::now()));
+        Ok(value)
+    }
+
+    /// Sends one request of the shop with its headers and returns the JSON answer.
+    async fn send(
+        &self,
+        token: &str,
+        method: &str,
+        path: &str,
+        body: Option<Value>,
+    ) -> Result<Value, QuoteError> {
+        let url = format!("{SHOP}{path}");
+        let request = if method == "POST" {
+            self.client.post(&url).json(&body.unwrap_or(Value::Null))
+        } else {
+            self.client.get(&url)
+        };
+        let response = request
+            .header("accept", "application/json")
+            .header("Channel", "inet")
+            .header("Lang", "en")
+            .header("ClientId", "2")
+            .header("AccessToken", token)
+            .send()
+            .await?;
+        if !response.status().is_success() {
+            return Err(QuoteError::Refused {
+                url,
+                status: response.status().as_u16(),
+            });
+        }
+        Ok(response.json().await?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn connections_take_their_prices_by_id() {
+        let timetable = json!({ "connections": [
+            { "id": "a", "from": { "departure": "2026-10-22T14:56:00.000" },
+              "sections": [{ "category": { "name": "RJX", "number": "19982" } }] },
+            { "id": "b", "from": { "departure": "2026-10-22T15:28:00.000" },
+              "sections": [
+                  { "category": { "name": "IC", "number": "648" } },
+                  { "type": "walk" },
+                  { "category": { "name": "RJX", "number": "187" } }
+              ] }
+        ] });
+        let prices = json!({ "offers": [
+            { "connectionId": "a", "price": 19.9, "offerError": false,
+              "specialNote": { "en": "Sparschiene ticket" } },
+            { "connectionId": "b", "offerError": true }
+        ] });
+        let connections = parse_connections(&timetable, &prices).unwrap();
+        assert_eq!(connections[0].trains, ["RJX 19982"]);
+        assert_eq!(connections[0].price, Some(19.9));
+        assert_eq!(connections[0].note.as_deref(), Some("Sparschiene ticket"));
+        assert_eq!(connections[1].trains, ["IC 648", "RJX 187"]);
+        assert_eq!(connections[1].price, None);
+        let departure =
+            NaiveDateTime::parse_from_str("2026-10-22T14:56:00", "%Y-%m-%dT%H:%M:%S").unwrap();
+        assert!(find_connection(&connections, departure, 1).is_some());
+    }
+}
