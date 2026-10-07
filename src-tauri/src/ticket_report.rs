@@ -49,6 +49,8 @@ pub enum LiveQuoteOutcome {
     NoPriceForClass,
     /// The site shows the trip and sells no ticket for it.
     NotSold,
+    /// The site's price covers only part of the trip, so it is no price for the ticket.
+    PartialPrice,
     /// The site gave a price in a currency the app does not convert.
     UnknownCurrency {
         /// The currency code.
@@ -251,6 +253,9 @@ async fn look_up_db(
     let Some(amount) = connection.price else {
         return (LiveQuoteOutcome::NotSold, answer);
     };
+    if connection.partial_price {
+        return (LiveQuoteOutcome::PartialPrice, answer);
+    }
     let note = format!(
         "The lowest price DB shows for {}, for one traveller with no discount card. It can be a \
          saver fare that ties the ticket to the train.",

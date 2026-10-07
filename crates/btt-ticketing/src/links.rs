@@ -224,7 +224,10 @@ pub fn db_link(
     let destination = stations.station_near(last.to_coordinates)?;
     let location = |name: &str, code: &str| encode_component(&format!("A=1@O={name}@L={code}@"));
     let url = format!(
-        "https://int.bahn.de/en/buchung/fahrplan/suche#sts=true&so={}&zo={}&kl={}&r={}:16:KLASSENLOS:1         &soid={}&zoid={}&sot=ST&zot=ST&soei={}&zoei={}&hd={}T{}:00&hza=D&hz=%5B%5D&ar=false         &s=true&d=false&mud=10&vm=00,01,02,03,04,05,06,07,08,09&fm=false&bp=false&dlt=false         &nfv=false&dltv=false",
+        "https://int.bahn.de/en/buchung/fahrplan/suche#sts=true&so={}&zo={}&kl={}&r={}:16:KLASSENLOS:1\
+         &soid={}&zoid={}&sot=ST&zot=ST&soei={}&zoei={}&hd={}T{}:00&hza=D&hz=%5B%5D&ar=false\
+         &s=true&d=false&mud=10&vm=00,01,02,03,04,05,06,07,08,09&fm=false&bp=false&dlt=false\
+         &nfv=false&dltv=false",
         encode_component(&origin.name),
         encode_component(&destination.name),
         match class {
@@ -274,7 +277,9 @@ pub fn trenitalia_link(
     let (origin, destination) = end_stations(stations, first, last)?;
     let child = matches!(age_group, AgeGroup::Child | AgeGroup::Infant);
     let url = format!(
-        "https://www.lefrecce.it/Channels.Website.WEB/website/auth/handoff?action=searchTickets         &lang=en&departureStation={}&arrivalStation={}&departureDate={}&departureTime={}         &noOfAdults={}&noOfChildren={}&tripType=on&selectedTrainType=tutti",
+        "https://www.lefrecce.it/Channels.Website.WEB/website/auth/handoff?action=searchTickets\
+         &lang=en&departureStation={}&arrivalStation={}&departureDate={}&departureTime={}\
+         &noOfAdults={}&noOfChildren={}&tripType=on&selectedTrainType=tutti",
         encode_name(&origin.name),
         encode_name(&destination.name),
         first.departure_date.format("%d-%m-%Y"),
@@ -298,7 +303,8 @@ pub fn obb_link(
 ) -> Option<BookingLink> {
     let (origin, destination) = end_stations(stations, first, last)?;
     let url = format!(
-        "https://shop.oebbtickets.at/en/ticket?stationOrigEva={}&stationDestEva={}         &outwardDateTime={}T{}&outwardArrival=false",
+        "https://shop.oebbtickets.at/en/ticket?stationOrigEva={}&stationDestEva={}\
+         &outwardDateTime={}T{}&outwardArrival=false",
         origin.code,
         destination.code,
         first.departure_date,
@@ -320,7 +326,8 @@ pub fn pkp_link(
 ) -> Option<BookingLink> {
     let (origin, destination) = end_stations(stations, first, last)?;
     let url = format!(
-        "https://ebilet.intercity.pl/wyszukiwanie?dwyj={}&swyj={}&sprzy={}&time={}         &ticket50=&ticket100=1010",
+        "https://ebilet.intercity.pl/wyszukiwanie?dwyj={}&swyj={}&sprzy={}&time={}\
+         &ticket50=&ticket100=1010",
         first.departure_date,
         origin.code,
         destination.code,

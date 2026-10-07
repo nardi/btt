@@ -116,6 +116,10 @@ pub struct Connection {
     pub trains: Vec<String>,
     /// The lowest price in euro, or `None` when the site sells no ticket for it.
     pub price: Option<f64>,
+    /// Whether the price covers only part of the trip, as when a train of another operator
+    /// runs part of it.
+    #[serde(default)]
+    pub partial_price: bool,
 }
 
 /// Reads the connections from an answer of the service.
@@ -150,10 +154,15 @@ pub fn parse_connections(response: &Value) -> Result<Vec<Connection>, QuoteError
                 .pointer("/angebote/preise/gesamt/ab")
                 .filter(|amount| amount.get("waehrung").and_then(Value::as_str) == Some("EUR"))
                 .and_then(|amount| amount.get("betrag")?.as_f64());
+            let partial_price = entry
+                .pointer("/angebote/preise/istTeilpreis")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
             Some(Connection {
                 departure,
                 trains,
                 price,
+                partial_price,
             })
         })
         .collect())
@@ -270,6 +279,14 @@ mod tests {
             },
             {
                 "verbindung": { "verbindungsAbschnitte": [
+                    { "typ": "FAHRZEUG", "mitteltext": "IC 307",
+                      "abgangsDatum": "2026-11-19T10:43:00+01:00" }
+                ] },
+                "angebote": { "preise": { "istTeilpreis": true,
+                    "gesamt": { "ab": { "waehrung": "EUR", "betrag": 34.9 } } } }
+            },
+            {
+                "verbindung": { "verbindungsAbschnitte": [
                     { "typ": "FAHRZEUG", "mitteltext": "FLX 1234",
                       "abgangsDatum": "2026-10-22T10:18:00+02:00" }
                 ] },
@@ -279,7 +296,9 @@ mod tests {
         let connections = parse_connections(&response).unwrap();
         assert_eq!(connections[0].trains, ["ICE 604"]);
         assert_eq!(connections[0].price, Some(53.99));
-        assert_eq!(connections[1].price, None);
+        assert!(!connections[0].partial_price);
+        assert!(connections[1].partial_price);
+        assert_eq!(connections[2].price, None);
         let departure = DateTime::parse_from_rfc3339("2026-10-22T09:37:00+02:00")
             .unwrap()
             .timestamp();

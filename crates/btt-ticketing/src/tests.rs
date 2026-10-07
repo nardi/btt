@@ -472,6 +472,7 @@ fn a_german_ticket_gets_a_db_search_with_eva_numbers_and_a_live_price_request() 
         link.url
             .starts_with("https://int.bahn.de/en/buchung/fahrplan/suche#")
     );
+    assert!(!link.url.contains(char::is_whitespace), "{}", link.url);
     assert!(
         link.url
             .contains("&so=Berlin%20Hbf&zo=Hamburg%20Hbf&kl=2&r=13:16:KLASSENLOS:1")
@@ -503,10 +504,9 @@ fn single_ride_link(
     ride.to_coordinates = btt_model::GeoCoordinates::from_degrees(to.0, to.1).unwrap();
     let plan = plan(vec![ride], None);
     let item = &plan.strategies[0].items[0];
-    (
-        item.booking_link.as_ref().unwrap().url.to_string(),
-        item.live_quote_request.is_some(),
-    )
+    let link = item.booking_link.as_ref().unwrap().url.to_string();
+    assert!(!link.contains(char::is_whitespace), "{link}");
+    (link, item.live_quote_request.is_some())
 }
 
 #[test]
@@ -569,4 +569,27 @@ fn a_flixtrain_with_an_ic_category_is_not_covered_by_a_pass() {
     let rides = [flix];
     let problem = Problem::new(&rides, data, &book, &settings);
     assert_eq!(problem.pass_covers_ride(), vec![false]);
+}
+
+#[test]
+fn an_italo_ride_gets_a_ticket_of_its_own() {
+    let mut italo = ride(0, ("IT", "IT"), "Italo", 570.0, false);
+    italo.train_label.operator = "italo".into();
+    let mut intercity = ride(0, ("IT", "IT"), "ICN", 900.0, false);
+    intercity.train_label.operator = "trenitalia".into();
+    let mut regional = ride(0, ("IT", "IT"), "R", 40.0, false);
+    regional.train_label.operator = "trenitalia".into();
+    let plan = plan(vec![italo, intercity, regional], None);
+    let singles = plan
+        .strategies
+        .iter()
+        .find(|strategy| strategy.kind == StrategyKind::SingleTickets)
+        .unwrap();
+    let runs: Vec<&[u16]> = singles
+        .items
+        .iter()
+        .filter(|item| item.product == TicketProduct::SingleTicket)
+        .map(|item| item.ride_indices.as_slice())
+        .collect();
+    assert_eq!(runs, [&[0][..], &[1, 2][..]]);
 }
