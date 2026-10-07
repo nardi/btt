@@ -135,7 +135,14 @@ pub fn parse_solutions(response: &Value) -> Result<Vec<Solution>, QuoteError> {
             let price = solution
                 .pointer("/price/amount")
                 .and_then(Value::as_f64)
-                .filter(|_| solution.get("status").and_then(Value::as_str) != Some("NOT_SALEABLE"));
+                .filter(|_| {
+                    // `INHIBITED` solutions show a price but cannot be bought, such as trains
+                    // whose sale has not opened.
+                    !matches!(
+                        solution.get("status").and_then(Value::as_str),
+                        Some("NOT_SALEABLE" | "INHIBITED")
+                    )
+                });
             Some(Solution {
                 departure: time("departureTime")?,
                 arrival: time("arrivalTime")?,

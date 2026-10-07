@@ -2,6 +2,7 @@
 
 import type {
   EuroCents,
+  LiveQuote,
   Price,
   PriceKind,
   PriceTotal,
@@ -85,8 +86,8 @@ export function ridesByDate(rides: readonly TicketRide[]): { date: string; indic
   return groups;
 }
 
-/** The live prices that came back, by the key of the ticket they are for. `null` means none. */
-export type LivePrices = ReadonlyMap<string, Price | null>;
+/** The answers of booking sites, by the key of the ticket they are for. `null` means none. */
+export type LivePrices = ReadonlyMap<string, LiveQuote | null>;
 
 /** Returns the key that a ticket's live price is kept under, or `null` for a ticket with none. */
 export function liveQuoteKey(item: TicketItem): string | null {
@@ -97,7 +98,14 @@ export function liveQuoteKey(item: TicketItem): string | null {
 /** Returns the live price of a ticket, or `null` when it has none yet. */
 export function livePriceOf(item: TicketItem, live: LivePrices): Price | null {
   const key = liveQuoteKey(item);
-  return key === null ? null : (live.get(key) ?? null);
+  const quote = key === null ? null : (live.get(key) ?? null);
+  return quote === null || quote === "Unavailable" ? null : quote.Priced;
+}
+
+/** Returns whether the booking site shows the trip of a ticket and sells no ticket for it. */
+export function isLiveUnavailable(item: TicketItem, live: LivePrices): boolean {
+  const key = liveQuoteKey(item);
+  return key !== null && live.get(key) === "Unavailable";
 }
 
 /** Returns the price to show for a ticket: its live price if it has one, else its estimate. */

@@ -10,6 +10,7 @@
     formatTotal,
     hasPendingLivePrice,
     isLivePending,
+    isLiveUnavailable,
     livePriceOf,
     type LivePrices,
     priceKindDescription,
@@ -174,6 +175,8 @@
                 {formatPriceRange(price.low, price.high)}
                 {#if isLivePending(item, livePrices, liveLoading)}
                   {@render spinner("Looking up the live price")}
+                {:else if isLiveUnavailable(item, livePrices)}
+                  <span class="badge unavailable" title="The booking site shows this trip but sells no ticket for it now, for example because the sale has not opened or it is sold out.">Unavailable</span>
                 {:else}
                   <span class="badge kind-{price.kind}">{priceKindLabel(price.kind)}</span>
                 {/if}
@@ -373,6 +376,11 @@
 
   .badge.kind-Range {
     border-color: #b2851f;
+  }
+
+  .badge.unavailable {
+    border-color: var(--color-danger);
+    color: var(--color-danger);
   }
 
   .spinner {

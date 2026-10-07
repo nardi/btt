@@ -5,7 +5,7 @@
     type GeoCoordinates,
     type Traveller,
     type TravellerId,
-    type Price,
+    type LiveQuote,
     type TicketLeg,
     type TicketPlan,
     type TripId,
@@ -46,7 +46,7 @@
   /** Legs of the open trip that have no journey, which the ticket plan leaves out. */
   let unplannedLegs = $state(0);
   /** Live prices from booking sites by ticket, with `null` for a ticket the site gave none for. */
-  let livePrices: Map<string, Price | null> = $state(new Map());
+  let livePrices: Map<string, LiveQuote | null> = $state(new Map());
   let liveLoading = $state(false);
   /** Numbers the pricing requests, so that a late answer to an old request is dropped. */
   let ticketRequestNumber = 0;

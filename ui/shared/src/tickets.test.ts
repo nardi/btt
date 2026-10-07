@@ -7,7 +7,9 @@ import {
   formatEuro,
   formatPriceRange,
   isLivePending,
+  isLiveUnavailable,
   liveQuoteKey,
+  livePriceOf,
   ridesByDate,
   ticketColour,
 } from "./tickets";
@@ -94,7 +96,7 @@ describe("live prices", () => {
       covers: [],
       notes: [],
     };
-    const live = new Map([[liveQuoteKey(strategy.items[0]!)!, price(4500, "Live")]]);
+    const live = new Map([[liveQuoteKey(strategy.items[0]!)!, { Priced: price(4500, "Live") }]]);
     expect(adjustedTotal(strategy, live)).toEqual({ low: 8500, high: 8500, kind: "Range" });
     expect(effectivePrice(strategy.items[0]!, live).kind).toBe("Live");
     expect(effectivePrice(strategy.items[1]!, live).kind).toBe("Range");
@@ -123,5 +125,13 @@ describe("pending live prices", () => {
     expect(isLivePending(ticket, new Map(), false)).toBe(false);
     expect(isLivePending(ticket, new Map([[key, null]]), true)).toBe(false);
     expect(isLivePending(item(false), new Map(), true)).toBe(false);
+  });
+
+  it("marks a ticket the site does not sell, and keeps its estimate", () => {
+    const ticket = item(true);
+    const live = new Map([[liveQuoteKey(ticket)!, "Unavailable" as const]]);
+    expect(isLiveUnavailable(ticket, live)).toBe(true);
+    expect(livePriceOf(ticket, live)).toBeNull();
+    expect(isLiveUnavailable(ticket, new Map())).toBe(false);
   });
 });

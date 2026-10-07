@@ -5,9 +5,9 @@
 
 use btt_model::edit::NewTripPlace;
 use btt_model::{
-    GeoCoordinates, LiveQuoteRequest, PlaceInsertionPoint, PlaceSearchResult, PlanningSessionEvent,
-    Price, StationSearchRadius, TicketLeg, TicketPlan, Traveller, TravellerId, Trip, TripEdit,
-    TripEditError, TripEditOutcome, TripId, TripSummary,
+    GeoCoordinates, LiveQuote, LiveQuoteRequest, PlaceInsertionPoint, PlaceSearchResult,
+    PlanningSessionEvent, StationSearchRadius, TicketLeg, TicketPlan, Traveller, TravellerId, Trip,
+    TripEdit, TripEditError, TripEditOutcome, TripId, TripSummary,
 };
 use chrono::NaiveDate;
 use serde::Serialize;
@@ -279,6 +279,7 @@ pub fn plan_tickets(
 
 /// Asks the booking site named in a ticket's booking link for the live price of the ticket.
 ///
+/// Returns `LiveQuote::Unavailable` when the site shows the trip and sells no ticket for it.
 /// Returns `None` when the site is not one the app reads, a failure of the site leaves no price,
 /// or the site has no trip at the time. The site's answers are kept for half an hour, and
 /// requests are spaced out and paused after a failure. Every lookup goes into a log that
@@ -288,10 +289,13 @@ pub fn plan_tickets(
 pub async fn fetch_live_quote(
     state: State<'_, AppState>,
     request: LiveQuoteRequest,
-) -> Result<Option<Price>, CommandError> {
+) -> Result<Option<LiveQuote>, CommandError> {
     let (outcome, site_answer) = crate::ticket_report::look_up(&state, &request).await;
-    let price = match &outcome {
-        crate::ticket_report::LiveQuoteOutcome::Quoted { price } => Some(price.clone()),
+    let quote = match &outcome {
+        crate::ticket_report::LiveQuoteOutcome::Quoted { price } => {
+            Some(LiveQuote::Priced(price.clone()))
+        }
+        crate::ticket_report::LiveQuoteOutcome::NotSold => Some(LiveQuote::Unavailable),
         _ => None,
     };
     let mut log = state
@@ -299,7 +303,7 @@ pub async fn fetch_live_quote(
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     crate::ticket_report::log_lookup(&mut log, &request, outcome, site_answer);
-    Ok(price)
+    Ok(quote)
 }
 
 /// Searches settlements and railway stations by name. Answers repeated searches from the

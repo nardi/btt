@@ -172,6 +172,16 @@ pub struct LiveQuoteRequest {
     pub travel_class: TravelClass,
 }
 
+/// The answer of a booking site about a ticket.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub enum LiveQuote {
+    /// The site sells the ticket at this price.
+    Priced(Price),
+    /// The site shows the trip and sells no ticket for it, such as a train whose sale has not
+    /// opened or that is sold out.
+    Unavailable,
+}
+
 /// What a strategy is.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
 pub enum StrategyKind {
