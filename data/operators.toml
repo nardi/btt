@@ -1,0 +1,258 @@
+# Train operators, recognised from the agency names of the timetable feeds.
+#
+# The feeds name one operator in many ways, such as "SNCF Voyageurs LO" and "SNCF VOYAGEURS", or
+# "RegioJet a.s." and "RegioJet,a.s.". Each rule below gives the operator of a train whose agency
+# matches `agency` and, when the rule has one, whose category matches `category`. Rules are tried
+# in order and the first that matches wins, so a rule with a category comes before the general
+# rule of the same agency. A train that no rule matches keeps its agency name as its operator.
+#
+# `id` is the name the app uses for the operator, such as in the choice of booking site and in
+# price models. `country` is the country of the operator's home network. The example
+# `agency_survey` of `btt-planner` lists the agency names of a bundle.
+
+# France. The French feed names TER regions as agencies, such as "CFF" and "TMR SA", and runs the
+# brands of SNCF under the same agencies.
+[[operator]]
+id = "ouigo"
+name = "OUIGO"
+country = "FR"
+agency = '^(SNCF|CFF$|TMR SA$)'
+category = '^OUIGO'
+
+[[operator]]
+id = "lyria"
+name = "TGV Lyria"
+country = "FR"
+agency = '^(SNCF|CFF$|TMR SA$)'
+category = '^Lyria$'
+
+[[operator]]
+id = "sncf"
+name = "SNCF"
+country = "FR"
+agency = '^(SNCF|CFF$|TMR SA$)'
+
+[[operator]]
+id = "eurostar"
+name = "Eurostar"
+country = "FR"
+agency = '^Eurostar$'
+
+# Germany.
+[[operator]]
+id = "db-fernverkehr"
+name = "DB Fernverkehr"
+country = "DE"
+agency = '^DB Fernverkehr'
+
+[[operator]]
+id = "db-regio"
+name = "DB Regio"
+country = "DE"
+agency = '^(DB Regio|S-Bahn (Berlin|Hamburg))'
+
+[[operator]]
+id = "flixtrain"
+name = "FlixTrain"
+country = "DE"
+agency = '^FlixTrain'
+
+[[operator]]
+id = "laenderbahn"
+name = "Die Länderbahn"
+country = "DE"
+agency = 'Die Länderbahn GmbH'
+
+[[operator]]
+id = "european-sleeper"
+name = "European Sleeper"
+country = "NL"
+agency = '^European Sleeper$'
+
+# Switzerland.
+[[operator]]
+id = "sbb"
+name = "SBB"
+country = "CH"
+agency = '^Schweizerische Bundesbahnen'
+
+[[operator]]
+id = "bls"
+name = "BLS"
+country = "CH"
+agency = '^BLS'
+
+[[operator]]
+id = "sob"
+name = "Südostbahn"
+country = "CH"
+agency = '^Schweizerische Südostbahn'
+
+[[operator]]
+id = "rhb"
+name = "Rhätische Bahn"
+country = "CH"
+agency = '^Rhätische Bahn'
+
+# Austria.
+[[operator]]
+id = "oebb"
+name = "ÖBB"
+country = "AT"
+agency = '^(OEBB|ÖBB)'
+
+[[operator]]
+id = "westbahn"
+name = "WESTbahn"
+country = "AT"
+agency = '^WESTbahn'
+
+[[operator]]
+id = "gysev"
+name = "GYSEV"
+country = "HU"
+agency = 'GYSEV'
+
+# Italy.
+[[operator]]
+id = "trenitalia"
+name = "Trenitalia"
+country = "IT"
+agency = '^TRENITALIA$|^Trenitalia'
+
+[[operator]]
+id = "italo"
+name = "Italo"
+country = "IT"
+agency = '^Italo'
+
+# Spain and Portugal.
+[[operator]]
+id = "ouigo-espana"
+name = "OUIGO España"
+country = "ES"
+agency = '^OUIGO Espa'
+
+[[operator]]
+id = "iryo"
+name = "iryo"
+country = "ES"
+agency = '^iryo'
+
+[[operator]]
+id = "renfe"
+name = "Renfe"
+country = "ES"
+agency = '^(RENFE|Renfe)'
+
+[[operator]]
+id = "cp"
+name = "CP"
+country = "PT"
+agency = '^CP - Comboios'
+
+# The Benelux.
+[[operator]]
+id = "sncb"
+name = "SNCB"
+country = "BE"
+agency = '^NMBS/SNCB$'
+
+[[operator]]
+id = "ns"
+name = "NS"
+country = "NL"
+agency = '^NS( International)?$'
+
+# The Nordic countries.
+[[operator]]
+id = "dsb"
+name = "DSB"
+country = "DK"
+agency = '^DSB'
+
+[[operator]]
+id = "sj"
+name = "SJ"
+country = "SE"
+agency = '^SJ( Nord)?$'
+
+[[operator]]
+id = "vy"
+name = "Vy"
+country = "NO"
+agency = '^Vy$'
+
+[[operator]]
+id = "vr"
+name = "VR"
+country = "FI"
+agency = '^VR'
+
+# Central and Eastern Europe.
+[[operator]]
+id = "cd"
+name = "České dráhy"
+country = "CZ"
+agency = '^(České dráhy|Ceske Drahy)'
+
+[[operator]]
+id = "regiojet"
+name = "RegioJet"
+country = "CZ"
+agency = '^RegioJet'
+
+[[operator]]
+id = "leo-express"
+name = "Leo Express"
+country = "CZ"
+agency = '^(Leo|LEO) Express'
+
+[[operator]]
+id = "zssk"
+name = "ZSSK"
+country = "SK"
+agency = '^Železničná spoločnosť Slovensko'
+
+[[operator]]
+id = "mav"
+name = "MÁV"
+country = "HU"
+agency = '^(MÁV|MAV)$'
+
+[[operator]]
+id = "pkp-intercity"
+name = "PKP Intercity"
+country = "PL"
+agency = '^PKP (Intercity|INTERCITY)'
+
+[[operator]]
+id = "polregio"
+name = "Polregio"
+country = "PL"
+agency = '^PolRegio'
+
+[[operator]]
+id = "sz"
+name = "Slovenske železnice"
+country = "SI"
+agency = '^Slovenske (zeleznice|železnice)'
+
+[[operator]]
+id = "hz"
+name = "HŽ Putnički prijevoz"
+country = "HR"
+agency = '^HŽ'
+
+[[operator]]
+id = "hellenic-train"
+name = "Hellenic Train"
+country = "GR"
+agency = '^Hellenic Train$'
+
+# Ireland.
+[[operator]]
+id = "irish-rail"
+name = "Irish Rail"
+country = "IE"
+agency = 'Irish Rail'

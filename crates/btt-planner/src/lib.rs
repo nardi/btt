@@ -6,6 +6,7 @@ mod chain;
 mod cost_model;
 pub mod explanation;
 pub mod input;
+mod operators;
 mod ride_path;
 pub mod scoring;
 pub mod session;

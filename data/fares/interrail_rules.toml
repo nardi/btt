@@ -33,3 +33,5 @@ second = "A second class pass is valid in second class only."
 # do not take the pass.
 [coverage]
 not_accepted_categories = ["OUIGO", "ITALO", "FLX", "FLIXTRAIN"]
+# Operators, as `data/operators.toml` names them, whose trains an Interrail pass does not cover.
+not_accepted_operators = ["italo", "flixtrain"]

@@ -79,6 +79,8 @@ impl StubBackend {
                 train_label: TrainLabel {
                     category: "STUB".into(),
                     number: "1".into(),
+                    operator: "stub".into(),
+                    agency: "Stub railway".into(),
                 },
                 offers_berths,
                 intermediate_station_coordinates: SmallVec::new(),

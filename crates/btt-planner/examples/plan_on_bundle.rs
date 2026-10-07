@@ -141,11 +141,12 @@ fn print_plan(plan: &LegPlan, chosen_only: bool) {
             .rides()
             .map(|ride| {
                 format!(
-                    "{} {} {} {} {} {}",
+                    "{} {} {} {} [{}] {} {}",
                     clock(ride.departure_time.0),
                     station(ride.boarding_station),
                     ride.train_label.category,
                     ride.train_label.number,
+                    ride.train_label.operator,
                     clock(ride.arrival_time.0),
                     station(ride.alighting_station),
                 )

@@ -556,6 +556,8 @@ mod tests {
                     train_label: TrainLabel {
                         category: "ICE".into(),
                         number: "913".into(),
+                        operator: "db-fernverkehr".into(),
+                        agency: "DB Fernverkehr AG".into(),
                     },
                     offers_berths: true,
                     intermediate_station_coordinates: smallvec::smallvec![

@@ -131,6 +131,8 @@ The ways between a place and a station, and between nearby stations, are estimat
 
 The costs are only as good as the timetable. Stations from different feeds are matched by code, by name and distance, and by distance alone, and copies of the same train in different feeds are merged. A mistake in either step shows up as a train that is missing, a change that isn't possible in reality, or a change that the traveller doesn't need. A station that the Trainline dataset lists as part of another only joins it when the two lie within one kilometre, because the dataset also files separate stations under a main station, such as an airport station under the city's main station.
 
+Each ride in a plan names its operator, from the agency of its trip in the bundle. The feeds name one operator in many ways, so `data/operators.toml` maps the agency names, and for some brands the category too, to one name per operator, such as `regiojet` for "RegioJet a.s." and "RegioJet,a.s.", or `ouigo` for an OUIGO train of an SNCF agency. The operator plays no part in the costs. It decides where a ticket is bought and whether a pass covers the train. When copies of a train from several feeds are merged, the agency of the copy that is kept wins, so a train run by two operators together can carry either name.
+
 The minimum time for a change is the traveller's setting at every station. Feeds that give a longer time for particular stations or trains are not followed, so a change that the setting allows can be too short in reality. This matters most for trains with check-in, such as Eurostar, which closes boarding well before departure.
 
 ### Comparison with MOTIS

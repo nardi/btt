@@ -263,6 +263,11 @@ impl LoadedTimetableBundle {
         self.archived().raptor_routes.len()
     }
 
+    /// Returns the number of trips.
+    pub fn trip_count(&self) -> usize {
+        self.archived().trips.len()
+    }
+
     /// Returns a route's layout.
     #[inline]
     pub fn route(&self, route: RaptorRouteIndex) -> RaptorRoute {

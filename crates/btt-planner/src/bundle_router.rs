@@ -26,6 +26,7 @@ use crate::chain::{ChainJourney, ChainStay, chain_through_costs};
 use crate::cost_model::LegCostModel;
 use crate::explanation::{CandidateExplanation, LegExplanation, RankedJourneyExplanation};
 use crate::input::{LegChainInput, LegEndpoint, LegPlanningInput, SameDayStop};
+use crate::operators::OperatorTable;
 use crate::ride_path::StationHopGraph;
 use crate::scoring::{
     JourneyCostInputs, ScoringWeights, journey_cost, journey_cost_parts, transfer_cost_minutes,
@@ -105,6 +106,8 @@ pub struct TimetableBundleRouter {
     routes_with_berths: Vec<bool>,
     /// Search buffers of finished searches, reused by later ones to avoid allocating.
     spare_search_buffers: Mutex<Vec<CostSearchBuffers>>,
+    /// Tells the operator of a train from its agency and category.
+    operators: OperatorTable,
 }
 
 impl TimetableBundleRouter {
@@ -154,6 +157,7 @@ impl TimetableBundleRouter {
             bundle_start_unix_minutes,
             routes_with_berths,
             spare_search_buffers: Mutex::new(Vec::new()),
+            operators: OperatorTable::bundled(),
         }
     }
 
@@ -968,7 +972,7 @@ impl TimetableBundleRouter {
         ride: &btt_router::RaptorRide,
         stations: &mut LegPlanStations,
     ) -> Option<TrainRide> {
-        let (category, number, _) = self.bundle.trip_train_label(ride.trip);
+        let (category, number, agency) = self.bundle.trip_train_label(ride.trip);
         let route = self.bundle.route(ride.raptor_route);
         let station_at = |position| self.bundle.pattern_stop(&route, position).station();
         let intermediate_station_coordinates = (ride.boarding_position + 1
@@ -993,6 +997,8 @@ impl TimetableBundleRouter {
             train_label: TrainLabel {
                 category: category.into(),
                 number: number.into(),
+                operator: self.operators.operator_of(agency, category),
+                agency: agency.into(),
             },
             offers_berths: self.bundle.trip_offers_berths(ride.trip),
             intermediate_station_coordinates,

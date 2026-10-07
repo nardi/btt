@@ -250,11 +250,13 @@ pub(crate) mod tests {
             trains: smallvec::smallvec![btt_model::TrainLabel {
                 category: "ICE".into(),
                 number: "145".into(),
+                operator: "db-fernverkehr".into(),
+                agency: "DB Fernverkehr AG".into(),
             }],
         };
         trip.apply_edit(TripEdit::ChooseJourney {
             arrival_place_id: place_id(&trip, 1),
-            choice: Some(choice.clone()),
+            choice: Some(Box::new(choice.clone())),
         })
         .unwrap();
         let inputs = leg_planning_inputs(&trip);

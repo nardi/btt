@@ -111,8 +111,9 @@ pub enum TripEdit {
     ChooseJourney {
         /// Place at which the leg arrives.
         arrival_place_id: TripPlaceId,
-        /// The picked journey, or `None` for the planner's pick.
-        choice: Option<JourneyChoice>,
+        /// The picked journey, or `None` for the planner's pick. Boxed, because a choice holds
+        /// several train labels and would make every edit as large.
+        choice: Option<Box<JourneyChoice>>,
     },
 }
 
@@ -337,7 +338,7 @@ impl Trip {
                     self.chosen_journeys.push(ChosenJourney {
                         departure_place_id,
                         arrival_place_id,
-                        choice,
+                        choice: *choice,
                     });
                 }
                 Ok(TripEditNotices::new())
@@ -640,6 +641,8 @@ mod tests {
             trains: smallvec::smallvec![crate::plan::TrainLabel {
                 category: "ICE".into(),
                 number: number.into(),
+                operator: "db-fernverkehr".into(),
+                agency: "DB Fernverkehr AG".into(),
             }],
         }
     }
@@ -651,13 +654,13 @@ mod tests {
         let vienna = id_of(&trip, "Vienna");
         trip.apply_edit(TripEdit::ChooseJourney {
             arrival_place_id: berlin,
-            choice: Some(choice_of_one_train("145")),
+            choice: Some(Box::new(choice_of_one_train("145"))),
         })
         .unwrap();
         // A second choice for the same leg replaces the first.
         trip.apply_edit(TripEdit::ChooseJourney {
             arrival_place_id: berlin,
-            choice: Some(choice_of_one_train("147")),
+            choice: Some(Box::new(choice_of_one_train("147"))),
         })
         .unwrap();
         assert_eq!(trip.chosen_journeys.len(), 1);

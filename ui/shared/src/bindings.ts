@@ -809,6 +809,16 @@ export type TrainLabel = {
 	category: string,
 	/**  Train number within the category. */
 	number: string,
+	/**
+	 *  The operator as the app names it, such as `db-fernverkehr` or `regiojet`. Empty in plans
+	 *  stored without it.
+	 */
+	operator?: string,
+	/**
+	 *  The operating agency as the timetable names it, such as "DB Fernverkehr AG". Empty in
+	 *  plans stored without it.
+	 */
+	agency?: string,
 };
 
 /**  One train ridden from boarding to alighting. */
@@ -975,7 +985,10 @@ export type TripEdit =
 ({ ChooseJourney: {
 	/**  Place at which the leg arrives. */
 	arrival_place_id: TripPlaceId,
-	/**  The picked journey, or `None` for the planner's pick. */
+	/**
+	 *  The picked journey, or `None` for the planner's pick. Boxed, because a choice holds
+	 *  several train labels and would make every edit as large.
+	 */
 	choice: JourneyChoice | null,
 } }) & { AddPlace?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never };
 

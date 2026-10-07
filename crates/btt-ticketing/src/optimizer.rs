@@ -309,7 +309,7 @@ impl<'a> Problem<'a> {
             .map(|ride| {
                 self.data
                     .reservations
-                    .pass_accepted(&ride.train_label.category)
+                    .pass_accepted(&ride.train_label.category, &ride.train_label.operator)
             })
             .collect();
         let Some(residence) = self.settings.residence_country else {
@@ -546,9 +546,11 @@ impl<'a> Problem<'a> {
         rides: &[RideInput],
     ) -> (btt_model::BookingLink, Option<btt_model::LiveQuoteRequest>) {
         let (first, last) = (&rides[0], &rides[rides.len() - 1]);
-        let all_italo = rides
-            .iter()
-            .all(|ride| ride.train_label.category.eq_ignore_ascii_case("Italo"));
+        let all_italo = rides.iter().all(|ride| {
+            // Plans stored without an operator still name Italo trains by their category.
+            ride.train_label.operator == "italo"
+                || ride.train_label.category.eq_ignore_ascii_case("Italo")
+        });
         if all_italo
             && let Some(link) = crate::links::italo_link(
                 &self.data.italo_stations,

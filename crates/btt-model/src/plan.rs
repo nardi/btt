@@ -34,6 +34,14 @@ pub struct TrainLabel {
     pub category: SmolStr,
     /// Train number within the category.
     pub number: SmolStr,
+    /// The operator as the app names it, such as `db-fernverkehr` or `regiojet`. Empty in plans
+    /// stored without it.
+    #[serde(default)]
+    pub operator: SmolStr,
+    /// The operating agency as the timetable names it, such as "DB Fernverkehr AG". Empty in
+    /// plans stored without it.
+    #[serde(default)]
+    pub agency: SmolStr,
 }
 
 /// One train ridden from boarding to alighting.

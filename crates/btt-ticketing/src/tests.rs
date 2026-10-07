@@ -36,6 +36,8 @@ fn ride(
         train_label: TrainLabel {
             category: category.into(),
             number: "1".into(),
+            operator: "".into(),
+            agency: "".into(),
         },
         from_name: "From".into(),
         to_name: "To".into(),
@@ -547,4 +549,24 @@ fn a_french_ticket_goes_to_sbb_and_a_luxembourg_ride_is_free() {
     ride.to_coordinates = btt_model::GeoCoordinates::from_degrees(49.4958, 5.9806).unwrap();
     let plan = plan(vec![ride], None);
     assert_eq!(plan.strategies[0].total.high, EuroCents::ZERO);
+}
+
+#[test]
+fn a_flixtrain_with_an_ic_category_is_not_covered_by_a_pass() {
+    let mut flix = ride(0, ("DE", "DE"), "IC", 600.0, false);
+    flix.train_label.operator = "flixtrain".into();
+    let data = fare_data();
+    let book = PriceBook::from_data(data);
+    let preferences = TicketPreferences::default();
+    let settings = Settings {
+        class: TravelClass::Second,
+        age_group: btt_model::AgeGroup::Adult,
+        residence_country: None,
+        preferences: &preferences,
+        purchase_date: date(0),
+        single_ticket_percent: 100,
+    };
+    let rides = [flix];
+    let problem = Problem::new(&rides, data, &book, &settings);
+    assert_eq!(problem.pass_covers_ride(), vec![false]);
 }

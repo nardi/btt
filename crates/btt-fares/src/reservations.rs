@@ -128,6 +128,8 @@ pub struct ReservationRules {
     pub rules: Vec<ReservationRule>,
     /// Categories of trains that an Interrail pass does not cover, in upper case.
     pub not_accepted_categories: Vec<SmolStr>,
+    /// Operators whose trains an Interrail pass does not cover.
+    pub not_accepted_operators: Vec<SmolStr>,
 }
 
 /// The `[[rule]]` list of the reservations file.
@@ -149,6 +151,9 @@ struct CoverageFile {
 struct Coverage {
     /// The categories in upper case.
     not_accepted_categories: Vec<SmolStr>,
+    /// The operators, as `data/operators.toml` names them.
+    #[serde(default)]
+    not_accepted_operators: Vec<SmolStr>,
 }
 
 impl ReservationRules {
@@ -172,16 +177,22 @@ impl ReservationRules {
         Ok(Self {
             rules: file.rule,
             not_accepted_categories: coverage.coverage.not_accepted_categories,
+            not_accepted_operators: coverage.coverage.not_accepted_operators,
         })
     }
 
-    /// Returns whether a pass covers a train of this category.
-    pub fn pass_accepted(&self, category: &str) -> bool {
+    /// Returns whether a pass covers a train of this category and operator. An empty operator,
+    /// as in plans stored without one, is judged by the category alone.
+    pub fn pass_accepted(&self, category: &str, operator: &str) -> bool {
         let category = category.to_uppercase();
         !self
             .not_accepted_categories
             .iter()
             .any(|listed| listed.to_uppercase() == category)
+            && !self
+                .not_accepted_operators
+                .iter()
+                .any(|listed| listed == operator)
     }
 
     /// Returns the rule for a ride, or `None` when no rule is known and no fee is charged.
@@ -297,7 +308,9 @@ mod tests {
     #[test]
     fn some_categories_are_not_covered_by_a_pass() {
         let rules = rules();
-        assert!(!rules.pass_accepted("Italo"));
-        assert!(rules.pass_accepted("ICE"));
+        assert!(!rules.pass_accepted("Italo", ""));
+        assert!(rules.pass_accepted("ICE", "db-fernverkehr"));
+        // A FlixTrain runs as `IC` in the German feed, so only its operator tells it apart.
+        assert!(!rules.pass_accepted("IC", "flixtrain"));
     }
 }
