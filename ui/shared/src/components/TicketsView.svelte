@@ -115,24 +115,6 @@
                   {/each}
                 </span>
               </div>
-              {#if strategies.length > 1}
-                <details>
-                  <summary>Other ways to cover it</summary>
-                  <ul class="alternatives">
-                    {#each strategies as strategy, strategyIndex (strategyIndex)}
-                      {#if strategy !== selected}
-                        <li>
-                          {strategy.title}:
-                          {(strategy.covers[index] ?? [])
-                            .map((id) => strategy.items.find((item) => item.id === id)?.title)
-                            .join(" and ")}
-                          ({#if anyPending}{@render spinner("Comparing")}{:else}{difference(strategy)}{/if} in all)
-                        </li>
-                      {/if}
-                    {/each}
-                  </ul>
-                </details>
-              {/if}
             </li>
           {/each}
         </ol>
@@ -290,16 +272,6 @@
   .chip.none {
     background: var(--color-surface-muted);
     color: var(--color-text-muted);
-  }
-
-  details {
-    margin-top: var(--space-1);
-    color: var(--color-text-muted);
-  }
-
-  .alternatives li {
-    border: none;
-    padding: var(--space-1) 0;
   }
 
   .buy {

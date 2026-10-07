@@ -73,14 +73,13 @@
     });
   }
 
-  /** Describes the trip defaults in one line. */
+  /** Describes the default time windows of the trip in one line. */
   function preferencesSummary(preferences: TripPreferences): string {
     const { departure, arrival } = preferences.default_windows;
-    const travellers = preferences.traveller_ids.length;
     return (
-      `Depart ${formatMinutesOfDay(departure.start)} to ${formatMinutesOfDay(departure.start + departure.length)}, ` +
-      `arrive ${formatMinutesOfDay(arrival.start)} to ${formatMinutesOfDay(arrival.start + arrival.length)}, ` +
-      `${travellers === 1 ? "1 traveller" : `${travellers} travellers`}.`
+      "Using the default settings of departure between " +
+      `${formatMinutesOfDay(departure.start)} and ${formatMinutesOfDay(departure.start + departure.length)}, ` +
+      `arrival between ${formatMinutesOfDay(arrival.start)} and ${formatMinutesOfDay(arrival.start + arrival.length)}.`
     );
   }
 
