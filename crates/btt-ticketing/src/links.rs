@@ -437,6 +437,21 @@ pub fn snalltaget_link(
     )
 }
 
+/// Returns a link to regiojet.com for a run of RegioJet, with the search to run there.
+pub fn regiojet_link(
+    stations: &StationTable,
+    first: &RideInput,
+    last: &RideInput,
+) -> Option<(BookingLink, SiteSearch)> {
+    start_page_link(
+        stations,
+        first,
+        last,
+        "Open regiojet.com",
+        "https://regiojet.com/",
+    )
+}
+
 /// Returns a link to the MÁV ticket shop for a run in Hungary, with the search to run there.
 pub fn mav_link(
     stations: &StationTable,

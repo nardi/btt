@@ -2,7 +2,8 @@
 //!
 //! Run `cargo run -p btt-quotes --example site_quote -- <site> <origin> <destination>
 //! <YYYY-MM-DDTHH:MM> <UTC offset in hours>`, where the site is one of `dsb`, `sj`,
-//! `snalltaget`, `mav`, `italo`, `renfe` and `eurostar`, and the time is the local departure.
+//! `snalltaget`, `mav`, `italo`, `renfe`, `regiojet` and `eurostar`, and the time is the local
+//! departure.
 
 use std::sync::Arc;
 
@@ -43,6 +44,7 @@ async fn main() {
         "mav" => connections(btt_quotes::mav::Mav, &search).await,
         "italo" => connections(btt_quotes::italo::Italo::default(), &search).await,
         "renfe" => connections(btt_quotes::renfe::Renfe, &search).await,
+        "regiojet" => connections(btt_quotes::regiojet::Regiojet, &search).await,
         "eurostar" => connections(btt_quotes::eurostar::Eurostar, &search).await,
         other => panic!("unknown site {other}"),
     };

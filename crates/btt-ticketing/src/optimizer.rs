@@ -645,10 +645,10 @@ impl<'a> Problem<'a> {
     /// Returns the link to buy a ticket for a run of rides, and the request for its live price
     /// when the booking site can tell it.
     ///
-    /// Italo, Snälltåget and Eurostar trains are sold on the sites of their operators, and iryo
-    /// trains on SBB. Other operators that sell only their own trains get the start page of their
-    /// shop and no live price. Any other run goes to the site of the country it leaves from,
-    /// which for a run that crosses a border is the most likely seller:
+    /// Italo, Snälltåget, RegioJet and Eurostar trains are sold on the sites of their operators,
+    /// and iryo trains on SBB. Other operators that sell only their own trains get the start page
+    /// of their shop and no live price. Any other run goes to the site of the country it leaves
+    /// from, which for a run that crosses a border is the most likely seller:
     ///
     /// - DB for Germany, SBB for Switzerland, ÖBB for Austria and Trenitalia for Italy, which
     ///   all sell trips abroad too.
@@ -703,7 +703,8 @@ impl<'a> Problem<'a> {
 
     /// Returns the link to the shop of the operator of a run whose operator sells its own
     /// tickets, with the search to run there, or `None` when no site with live prices sells
-    /// its trains. Italo, Snälltåget and Eurostar sell their own, and SBB sells iryo.
+    /// its trains. Italo, Snälltåget, RegioJet and Eurostar sell their own, and SBB sells
+    /// iryo.
     fn operator_site_link(
         &self,
         rides: &[RideInput],
@@ -727,6 +728,11 @@ impl<'a> Problem<'a> {
         match operator.id {
             "snalltaget" => with_search(crate::links::snalltaget_link(
                 &data.snalltaget_stations,
+                first,
+                last,
+            )),
+            "regiojet" => with_search(crate::links::regiojet_link(
+                &data.regiojet_stations,
                 first,
                 last,
             )),

@@ -146,6 +146,15 @@ function trainlineStation(name, countryCode) {
   };
 }
 
+/** Runs the making of a table from a site, and keeps the old table when the site fails. */
+async function keepOnFailure(file, make) {
+  try {
+    await make();
+  } catch (error) {
+    console.log(file, 'kept, because the site failed:', error.cause?.code ?? error.message);
+  }
+}
+
 // The sites answer clients that name themselves like the app does.
 const userAgent = 'Mozilla/5.0 (compatible; BigTrainTrip/tools)';
 
@@ -165,6 +174,7 @@ const snalltagetNames = {
   810000462: ['Salzburg Hbf', 'AT'],
   810000522: ['Innsbruck Hbf', 'AT'],
 };
+await keepOnFailure('snalltaget_stations.csv', async () => {
 const snalltagetToken = await (await fetch('https://www.snalltaget.se/token/v2', { headers: { accept: 'application/json', 'user-agent': userAgent } })).json();
 const snalltagetStops = await (
   await fetch('https://apiv2.snalltaget.se/navigation/stops', {
@@ -183,8 +193,10 @@ writeRows(
     return station ? [{ ...station, code: stop.code, name: stop.name }] : [];
   }),
 );
+});
 
 // Eurostar takes UIC numbers, and its own list names the stations its trains call at.
+await keepOnFailure('eurostar_stations.csv', async () => {
 const eurostarStations = await (
   await fetch('https://site-api.eurostar.com/search/stations/graphql', {
     method: 'POST',
@@ -209,9 +221,11 @@ write('eurostar_stations.csv', (row) => {
   const uic = row[column('uic')];
   return eurostarCodes.has(uic) && !isBus(row) ? uic : null;
 });
+});
 
 // MÁV takes the UIC numbers of Hungarian stations with two leading zeros. Its station list names
 // each station's number in the MÁV timetable feed, whose stops have the positions.
+await keepOnFailure('mav_stations.csv', async () => {
 const mavPositions = new Map(
   execSync('unzip -p build-cache/feeds/hu_mav.gtfs.zip stops.txt', { maxBuffer: 1 << 28 })
     .toString('utf8')
@@ -237,3 +251,28 @@ writeRows(
       return position ? [{ code: station.code, name: station.name, ...position }] : [];
     }),
 );
+});
+
+// RegioJet lists its stations with positions in its open API. Only train stations are kept.
+await keepOnFailure('regiojet_stations.csv', async () => {
+const regiojetCountries = await (
+  await fetch('https://brn-ybus-pubapi.sa.cz/restapi/consts/locations', {
+    headers: { accept: 'application/json', 'user-agent': userAgent, 'x-lang': 'en' },
+  })
+).json();
+writeRows(
+  'regiojet_stations.csv',
+  regiojetCountries.flatMap((country) =>
+    country.cities.flatMap((city) =>
+      city.stations
+        .filter((station) => (station.stationsTypes ?? []).includes('TRAIN_STATION') && station.latitude && station.longitude)
+        .map((station) => ({
+          code: String(station.id),
+          name: station.fullname ?? station.name,
+          latitude: Number(station.latitude),
+          longitude: Number(station.longitude),
+        })),
+    ),
+  ),
+);
+});

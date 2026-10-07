@@ -8,6 +8,7 @@ use btt_quotes::dsb::Dsb;
 use btt_quotes::eurostar::Eurostar;
 use btt_quotes::italo::Italo;
 use btt_quotes::mav::Mav;
+use btt_quotes::regiojet::Regiojet;
 use btt_quotes::renfe::Renfe;
 use btt_quotes::sj::Sj;
 use btt_quotes::snalltaget::Snalltaget;
@@ -29,6 +30,8 @@ pub struct SiteServices {
     italo: SiteService<Italo>,
     /// Renfe.
     renfe: SiteService<Renfe>,
+    /// RegioJet.
+    regiojet: SiteService<Regiojet>,
     /// Eurostar.
     eurostar: SiteService<Eurostar>,
 }
@@ -47,6 +50,7 @@ impl SiteServices {
             mav: SiteService::new(Mav, Arc::clone(store))?,
             italo: SiteService::new(Italo::default(), Arc::clone(store))?,
             renfe: SiteService::new(Renfe, Arc::clone(store))?,
+            regiojet: SiteService::new(Regiojet, Arc::clone(store))?,
             eurostar: SiteService::new(Eurostar, Arc::clone(store))?,
         })
     }
@@ -65,6 +69,7 @@ impl SiteServices {
             BookingSite::Mav => self.mav.connections(search).await,
             BookingSite::Italo => self.italo.connections(search).await,
             BookingSite::Renfe => self.renfe.connections(search).await,
+            BookingSite::Regiojet => self.regiojet.connections(search).await,
             BookingSite::Eurostar => self.eurostar.connections(search).await,
             _ => return None,
         })

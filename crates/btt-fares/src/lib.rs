@@ -59,6 +59,8 @@ const SNALLTAGET_STATIONS_CSV: &str = include_str!("../../../data/fares/snalltag
 const MAV_STATIONS_CSV: &str = include_str!("../../../data/fares/mav_stations.csv");
 /// The Spanish stations with the codes that Renfe takes, as they are compiled in.
 const RENFE_STATIONS_CSV: &str = include_str!("../../../data/fares/renfe_stations.csv");
+/// The train stations of RegioJet with its station ids, as they are compiled in.
+const REGIOJET_STATIONS_CSV: &str = include_str!("../../../data/fares/regiojet_stations.csv");
 /// The stations of Eurostar with their UIC numbers, as they are compiled in.
 const EUROSTAR_STATIONS_CSV: &str = include_str!("../../../data/fares/eurostar_stations.csv");
 /// The booking windows, as they are compiled in.
@@ -125,6 +127,8 @@ pub struct FareData {
     pub renfe_stations: StationTable,
     /// The stations of Eurostar with their UIC numbers.
     pub eurostar_stations: StationTable,
+    /// The train stations of RegioJet with its station ids.
+    pub regiojet_stations: StationTable,
     /// Fixed rates to euro, for when the ECB reference rates cannot be fetched.
     pub exchange_rates: ExchangeRates,
     /// How far ahead tickets can be bought, by country.
@@ -179,6 +183,7 @@ impl FareData {
             mav_stations: StationTable::from_csv(MAV_STATIONS_CSV),
             renfe_stations: StationTable::from_csv(RENFE_STATIONS_CSV),
             eurostar_stations: StationTable::from_csv(EUROSTAR_STATIONS_CSV),
+            regiojet_stations: StationTable::from_csv(REGIOJET_STATIONS_CSV),
             exchange_rates: tariff::exchange_rates(TARIFFS_TOML)?,
             booking_windows: tariff::windows_from_toml(BOOKING_WINDOWS_TOML)?,
             residence_journeys_each_way: rules.residence.outbound_journeys,

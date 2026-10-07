@@ -9,8 +9,8 @@ use btt_quotes::ecb::ExchangeRateService;
 
 #[tokio::main]
 async fn main() {
-    let service = ExchangeRateService::new(Arc::new(MemoryStore::default()))
-        .expect("the HTTP client builds");
+    let service =
+        ExchangeRateService::new(Arc::new(MemoryStore::default())).expect("the HTTP client builds");
     let Some(rates) = service.rates().await else {
         println!("no rates");
         return;

@@ -115,6 +115,7 @@ fn site_name(site: BookingSite) -> &'static str {
         BookingSite::Italo => "Italo booking site",
         BookingSite::Renfe => "Renfe booking site",
         BookingSite::Eurostar => "Eurostar booking site",
+        BookingSite::Regiojet => "RegioJet booking site",
     }
 }
 

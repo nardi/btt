@@ -29,6 +29,8 @@ pub enum BookingSite {
     Renfe,
     /// eurostar.com, read with plain requests.
     Eurostar,
+    /// regiojet.com, read with plain requests to its open API.
+    Regiojet,
 }
 
 impl BookingSite {
@@ -48,6 +50,7 @@ impl BookingSite {
             ("https://biglietti.italotreno.com/", Self::Italo),
             ("https://venta.renfe.com/", Self::Renfe),
             ("https://www.eurostar.com/", Self::Eurostar),
+            ("https://regiojet.com/", Self::Regiojet),
         ];
         sites
             .into_iter()

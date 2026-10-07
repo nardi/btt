@@ -740,3 +740,17 @@ fn an_iryo_ticket_goes_to_sbb() {
     assert!(link.starts_with("https://www.sbb.ch/en?stops="), "{link}");
     assert!(link.contains("_I7171801"), "{link}");
 }
+
+#[test]
+fn a_regiojet_ticket_gets_a_search_on_regiojet() {
+    let (link, search) = site_ride(
+        ("CZ", "CZ"),
+        "regiojet",
+        (50.0829, 14.4356),
+        (49.1909, 16.6125),
+    );
+    assert_eq!(link, "https://regiojet.com/");
+    let search = search.unwrap();
+    assert_eq!(search.origin_code, "372825000");
+    assert_eq!(search.destination_code, "3088864001");
+}
