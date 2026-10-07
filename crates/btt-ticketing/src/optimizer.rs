@@ -21,6 +21,21 @@ use smol_str::SmolStr;
 use crate::links::{pass_link, shop_link};
 use crate::rides::RideInput;
 
+/// Operators that sell tickets for their own trains only, as `data/operators.toml` names them.
+/// A ticket never joins one of their rides with a ride of another operator.
+const OWN_TICKET_OPERATORS: &[&str] = &[
+    "italo",
+    "flixtrain",
+    "regiojet",
+    "leo-express",
+    "westbahn",
+    "european-sleeper",
+    "snalltaget",
+    "ouigo",
+    "ouigo-espana",
+    "iryo",
+];
+
 /// Who the tickets are for and how they are chosen.
 pub struct Settings<'a> {
     /// Class of travel.
@@ -212,6 +227,18 @@ impl<'a> Problem<'a> {
         &self.run_prices[first][last - first]
     }
 
+    /// Returns whether one ticket can cover rides `first` to `last`. It can't when a ride
+    /// of an operator that sells only its own trains shares the run with another operator.
+    fn sold_together(&self, first: usize, last: usize) -> bool {
+        let rides = &self.rides[first..=last];
+        let operator = &rides[0].train_label.operator;
+        let own_tickets_only = |operator: &str| OWN_TICKET_OPERATORS.contains(&operator);
+        rides.iter().all(|ride| ride.train_label.operator == *operator)
+            || !rides
+                .iter()
+                .any(|ride| own_tickets_only(&ride.train_label.operator))
+    }
+
     /// Finds the cheapest single tickets for the rides of a day that `needs_ticket` accepts.
     fn cover(&self, day: &Range<usize>, needs_ticket: impl Fn(usize) -> bool) -> Cover {
         let mut cover = Cover {
@@ -236,6 +263,9 @@ impl<'a> Problem<'a> {
             best[0] = 0;
             for end in 1..=length {
                 for start in 0..end {
+                    if !self.sold_together(segment_start + start, segment_start + end - 1) {
+                        continue;
+                    }
                     let price = u64::from(
                         self.run_price(segment_start + start, segment_start + end - 1)
                             .middle()

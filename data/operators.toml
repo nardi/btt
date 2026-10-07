@@ -69,6 +69,13 @@ name = "European Sleeper"
 country = "NL"
 agency = '^European Sleeper$'
 
+# Sweden.
+[[operator]]
+id = "snalltaget"
+name = "Snälltåget"
+country = "SE"
+agency = '^Snälltåget'
+
 # Switzerland.
 [[operator]]
 id = "sbb"
