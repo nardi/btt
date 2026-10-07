@@ -229,6 +229,14 @@ export type FareType =
 /**  The cheaper ticket that ties the traveller to one train. */
 "Saver";
 
+/**  An amount in a currency other than the euro. */
+export type ForeignAmount = {
+	/**  The amount in hundredths of the currency, such as 5000 for 50 francs. */
+	hundredths: number,
+	/**  ISO code of the currency, such as `CHF`. */
+	currency: string,
+};
+
 /**
  *  A point on the Earth's surface.
  * 
@@ -603,6 +611,8 @@ export type Price = {
 	kind: PriceKind,
 	/**  Where the price comes from. */
 	source: PriceSource,
+	/**  The price in the currency the source gave it in, when that is not the euro. */
+	original?: ForeignAmount | null,
 };
 
 /**

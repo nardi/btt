@@ -125,7 +125,7 @@ pub struct FareData {
     pub renfe_stations: StationTable,
     /// The stations of Eurostar with their UIC numbers.
     pub eurostar_stations: StationTable,
-    /// Fixed rough rates to euro.
+    /// Fixed rates to euro, for when the ECB reference rates cannot be fetched.
     pub exchange_rates: ExchangeRates,
     /// How far ahead tickets can be bought, by country.
     pub booking_windows: Vec<BookingWindow>,

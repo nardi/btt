@@ -22,6 +22,21 @@ export function formatPriceRange(low: EuroCents, high: EuroCents): string {
   return low === high ? formatEuro(low) : `${formatEuro(low)} to ${formatEuro(high)}`;
 }
 
+/**
+ * Formats a price as its range in euro, followed by the amount in the currency the source gave
+ * it in when that is not the euro, such as `€52 (50 CHF)`.
+ */
+export function formatPrice(price: Price): string {
+  const euro = formatPriceRange(price.low, price.high);
+  const original = price.original ?? null;
+  if (original === null) {
+    return euro;
+  }
+  const units = original.hundredths / 100;
+  const amount = Number.isInteger(units) ? String(units) : units.toFixed(2);
+  return `${euro} (${amount} ${original.currency})`;
+}
+
 /** Formats the total of a strategy as a range. */
 export function formatTotal(total: PriceTotal): string {
   return formatPriceRange(total.low, total.high);

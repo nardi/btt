@@ -6,7 +6,7 @@
     adjustedTotal,
     effectivePrice,
     formatEuro,
-    formatPriceRange,
+    formatPrice,
     formatTotal,
     hasPendingLivePrice,
     isLivePending,
@@ -172,7 +172,7 @@
             <div class="item-header">
               <span class="item-title">{item.title}</span>
               <span class="item-price" title={sourceText(price)}>
-                {formatPriceRange(price.low, price.high)}
+                {formatPrice(price)}
                 {#if isLivePending(item, livePrices, liveLoading)}
                   {@render spinner("Looking up the live price")}
                 {:else if isLiveUnavailable(item, livePrices)}
@@ -185,7 +185,7 @@
             <p class="detail">{item.detail}</p>
             {#if livePriceOf(item, livePrices) !== null}
               <p class="detail">
-                Estimate was {formatPriceRange(item.price.low, item.price.high)}.
+                Estimate was {formatPrice(item.price)}.
               </p>
             {/if}
             {#if item.booking_link !== null}

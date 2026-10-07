@@ -121,6 +121,9 @@ pub struct AppState {
     /// Looks up prices on the sites that answer a search with their connections. `None` when
     /// an HTTP client could not be built.
     pub site_services: Option<crate::site_quotes::SiteServices>,
+    /// Fetches the ECB reference rates. `None` when its HTTP client could not be built, and
+    /// then the fixed rates of the fare data convert prices.
+    pub exchange_rate_service: Option<btt_quotes::ecb::ExchangeRateService>,
     /// The timetable bundle the planner loaded, if any.
     pub bundle_path: Option<PathBuf>,
     /// The most recent log lines, for problem reports.
@@ -201,6 +204,10 @@ impl AppState {
                 |error| tracing::warn!(%error, "live prices of several sites are not available"),
             )
             .ok();
+        let exchange_rate_service =
+            btt_quotes::ecb::ExchangeRateService::new(Arc::clone(&quote_store))
+                .map_err(|error| tracing::warn!(%error, "ECB exchange rates are not available"))
+                .ok();
         let webview_service = Some(crate::webview_quotes::WebviewQuoteService::new(
             app,
             Arc::clone(&quote_store),
@@ -218,6 +225,7 @@ impl AppState {
             db_service,
             obb_service,
             site_services,
+            exchange_rate_service,
             storage,
             planning_backend,
             photon: PhotonClient::new(PUBLIC_PHOTON_BASE_URL, USER_AGENT)?,
@@ -229,6 +237,19 @@ impl AppState {
             live_quote_log: Mutex::new(Vec::new()),
             open_trips: Mutex::new(FxHashMap::default()),
         })
+    }
+
+    /// Returns euro for one unit of a currency: from the latest ECB reference rates when the
+    /// app has them, else from the fixed rates of the fare data. Returns `None` for a currency
+    /// that neither knows.
+    pub async fn euro_per(&self, currency: &str) -> Option<f64> {
+        let reference_rates = match &self.exchange_rate_service {
+            Some(service) => service.rates().await,
+            None => None,
+        };
+        reference_rates
+            .and_then(|rates| rates.euro_per(currency))
+            .or_else(|| self.fare_data.exchange_rates.euro_per(currency))
     }
 
     /// Locks the open trips. Every section that holds the lock replaces whole values, so a

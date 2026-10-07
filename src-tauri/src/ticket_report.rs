@@ -4,8 +4,8 @@
 //! booking link names.
 
 use btt_model::{
-    EuroCents, LiveQuoteRequest, Price, PriceKind, PriceSource, TicketLeg, TicketPlan,
-    TicketPreferences, TravelClass, Traveller,
+    EuroCents, ForeignAmount, LiveQuoteRequest, Price, PriceKind, PriceSource, TicketLeg,
+    TicketPlan, TicketPreferences, TravelClass, Traveller,
 };
 use btt_quotes::sbb::{Quote, Search, find_trip};
 use serde::Serialize;
@@ -118,9 +118,9 @@ fn site_name(site: BookingSite) -> &'static str {
     }
 }
 
-/// Returns a live price in euro from an amount in a currency, with a note on its source, or the
-/// outcome for a currency the app does not convert.
-fn live_price(
+/// Returns a live price in euro from an amount in a currency, with a note on its source and the
+/// amount as the site gave it, or the outcome for a currency the app does not convert.
+async fn live_price(
     state: &AppState,
     request: &LiveQuoteRequest,
     site: BookingSite,
@@ -128,16 +128,17 @@ fn live_price(
     currency: &str,
     note: &str,
 ) -> LiveQuoteOutcome {
-    let Some(rate) = state.fare_data.exchange_rates.euro_per(currency) else {
+    let Some(rate) = state.euro_per(currency).await else {
         return LiveQuoteOutcome::UnknownCurrency {
             currency: currency.to_owned(),
         };
     };
-    let conversion = if currency == "EUR" {
-        String::new()
-    } else {
-        format!(" {currency} {amount:.2}, converted at a fixed rough rate of {rate} euro.")
-    };
+    let original = (currency != "EUR").then(|| ForeignAmount {
+        // Prices on booking sites are far inside the range of `u32` hundredths.
+        #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        hundredths: (amount * 100.0).round() as u32,
+        currency: currency.into(),
+    });
     LiveQuoteOutcome::Quoted {
         price: Price {
             low: EuroCents::from_euro(amount * rate),
@@ -145,10 +146,11 @@ fn live_price(
             kind: PriceKind::Live,
             source: PriceSource {
                 name: site_name(site).into(),
-                note: format!("{note}{conversion} The booking site shows the final price.").into(),
+                note: format!("{note} The booking site shows the final price.").into(),
                 as_of: Some(crate::commands::today_utc()),
                 page: Some(request.booking_link.clone()),
             },
+            original,
         },
     }
 }
@@ -198,7 +200,7 @@ async fn look_up_in_web_view(
     );
     let currency = card.currency.as_deref().unwrap_or("EUR");
     (
-        live_price(state, request, site, amount, currency, &note),
+        live_price(state, request, site, amount, currency, &note).await,
         answer,
     )
 }
@@ -249,7 +251,7 @@ async fn look_up_on_site(
         }
     );
     (
-        live_price(state, request, site, amount, &connection.currency, &note),
+        live_price(state, request, site, amount, &connection.currency, &note).await,
         answer,
     )
 }
@@ -321,7 +323,7 @@ async fn look_up_db(
         connection.trains.join(" and ")
     );
     (
-        live_price(state, request, BookingSite::Db, amount, "EUR", &note),
+        live_price(state, request, BookingSite::Db, amount, "EUR", &note).await,
         answer,
     )
 }
@@ -384,7 +386,7 @@ async fn look_up_obb(
         connection.trains.join(" and ")
     );
     (
-        live_price(state, request, BookingSite::Obb, amount, "EUR", &note),
+        live_price(state, request, BookingSite::Obb, amount, "EUR", &note).await,
         answer,
     )
 }
@@ -469,7 +471,8 @@ async fn look_up_trenitalia(
             amount,
             "EUR",
             &note,
-        ),
+        )
+        .await,
         answer,
     )
 }
@@ -524,6 +527,7 @@ async fn look_up_ns(
             as_of: Some(crate::commands::today_utc()),
             page: Some(request.booking_link.clone()),
         },
+        original: None,
     };
     (LiveQuoteOutcome::Quoted { price }, answer)
 }
@@ -567,34 +571,20 @@ async fn look_up_sbb(
     }) else {
         return (LiveQuoteOutcome::NoPriceForClass, Some(quotes));
     };
-    if class_price.price.currency != "CHF" {
-        let currency = class_price.price.currency.clone();
-        return (LiveQuoteOutcome::UnknownCurrency { currency }, Some(quotes));
-    }
-    let francs = f64::from(class_price.price.amount) / 100.0;
-    let cents = EuroCents::from_euro(francs * state.fare_data.exchange_rates.chf_to_eur);
-    let price = Price {
-        low: cents,
-        high: cents,
-        kind: PriceKind::Live,
-        source: PriceSource {
-            name: "SBB booking site".into(),
-            note: format!(
-                "CHF {francs:.2} for {} class, {}, converted at 1 CHF = {} EUR, a fixed rough \
-                 rate. The booking site shows the final price.",
-                class.to_lowercase(),
-                class_price
-                    .after_sale_flexibility
-                    .to_lowercase()
-                    .replace('_', " "),
-                state.fare_data.exchange_rates.chf_to_eur
-            )
-            .into(),
-            as_of: Some(crate::commands::today_utc()),
-            page: Some(request.booking_link.clone()),
-        },
-    };
-    (LiveQuoteOutcome::Quoted { price }, Some(quotes))
+    let amount = f64::from(class_price.price.amount) / 100.0;
+    let note = format!(
+        "The price for {} class, {}.",
+        class.to_lowercase(),
+        class_price
+            .after_sale_flexibility
+            .to_lowercase()
+            .replace('_', " "),
+    );
+    let currency = class_price.price.currency.clone();
+    (
+        live_price(state, request, BookingSite::Sbb, amount, &currency, &note).await,
+        Some(quotes),
+    )
 }
 
 /// Adds a lookup to the log, dropping the oldest when the log is full.

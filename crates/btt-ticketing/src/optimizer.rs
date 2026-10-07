@@ -101,6 +101,9 @@ fn scaled(price: &Price, percent: u32) -> Price {
     let mut price = price.clone();
     price.low = scale(price.low);
     price.high = scale(price.high);
+    if let Some(original) = &mut price.original {
+        original.hundredths = original.hundredths * percent / 100;
+    }
     price.source.note = format!(
         "{} The traveller pays {percent}% of the adult price.",
         price.source.note
@@ -141,6 +144,7 @@ fn fee_price(rule: &ReservationRule, class: TravelClass) -> Price {
             as_of: None,
             page: None,
         },
+        original: None,
     }
 }
 
@@ -829,6 +833,7 @@ impl<'a> Problem<'a> {
                 as_of: Some(self.data.passes.as_of),
                 page: Some(self.data.passes.source.clone()),
             },
+            original: None,
         };
         let continuous_days = if matches!(choice.pass.kind, PassKind::Continuous) {
             let mut day = choice.start;

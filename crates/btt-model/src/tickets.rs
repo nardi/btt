@@ -78,6 +78,18 @@ pub struct Price {
     pub kind: PriceKind,
     /// Where the price comes from.
     pub source: PriceSource,
+    /// The price in the currency the source gave it in, when that is not the euro.
+    #[serde(default)]
+    pub original: Option<ForeignAmount>,
+}
+
+/// An amount in a currency other than the euro.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub struct ForeignAmount {
+    /// The amount in hundredths of the currency, such as 5000 for 50 francs.
+    pub hundredths: u32,
+    /// ISO code of the currency, such as `CHF`.
+    pub currency: SmolStr,
 }
 
 impl Price {

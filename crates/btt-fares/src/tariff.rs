@@ -1,6 +1,6 @@
 //! Operator tariffs that are a function of the distance, and booking windows.
 
-use btt_model::{EuroCents, Price, PriceKind, PriceSource};
+use btt_model::{EuroCents, ForeignAmount, Price, PriceKind, PriceSource};
 use chrono::NaiveDate;
 use serde::Deserialize;
 use smol_str::SmolStr;
@@ -34,7 +34,12 @@ pub struct DistanceTariff {
 impl DistanceTariff {
     /// Returns the price in euro of a ticket for a distance in kilometres.
     pub fn price_euro(&self, kilometres: f64) -> f64 {
-        (self.base + self.per_kilometre * kilometres) * self.euro_per_crown
+        self.price_crowns(kilometres) * self.euro_per_crown
+    }
+
+    /// Returns the price in crowns of a ticket for a distance in kilometres.
+    pub fn price_crowns(&self, kilometres: f64) -> f64 {
+        self.base + self.per_kilometre * kilometres
     }
 }
 
@@ -64,6 +69,12 @@ impl TicketPriceSource for DistanceTariff {
                 as_of: Some(self.as_of),
                 page: Some(self.source.clone()),
             },
+            original: Some(ForeignAmount {
+                // Prices in crowns are whole numbers well inside the range of `u32` hundredths.
+                #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                hundredths: (self.price_crowns(kilometres).round() * 100.0) as u32,
+                currency: "CZK".into(),
+            }),
         })
     }
 }

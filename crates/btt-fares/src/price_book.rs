@@ -58,6 +58,7 @@ impl TicketPriceSource for FreeTravel {
                 as_of: None,
                 page: None,
             },
+            original: None,
         })
     }
 }

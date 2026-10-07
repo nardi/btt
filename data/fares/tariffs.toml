@@ -16,7 +16,7 @@ source = "https://www.mesec.cz/clanky/ceske-drahy-zmeni-ceny-nabidnou-vice-slev-
 as_of = "2026-01-01"
 notes = "Basic fare of the 2026 tariff, which applies when no better offer exists. It fits the published prices of 68 Kč for 25 km, 221 Kč for 100 km and 527 Kč for 250 km."
 # The exchange rate is a fixed rough value.
-euro_per_crown = 0.041
+euro_per_crown = 0.040938
 
 # A rough price per kilometre for every ride that no other source prices. Single fares on long
 # distance trains in Europe mostly fall between these two values, from a cheap saver fare to a
@@ -27,11 +27,12 @@ high_per_kilometre = 0.20
 minimum_fare = 2.5
 currency = "EUR"
 
-# Fixed rough exchange rates to euro, for prices quoted in another currency. They are not live
-# rates, and the app says so next to a converted price.
+# Exchange rates to euro from the ECB reference rates of 7 October 2026, for prices quoted in
+# another currency. The app uses the latest ECB rates when it can fetch them, and these when it
+# cannot.
 [exchange_rates]
-chf_to_eur = 1.07
-pln_to_eur = 0.235
-sek_to_eur = 0.087
-dkk_to_eur = 0.134
-huf_to_eur = 0.0025
+chf_to_eur = 1.0742
+pln_to_eur = 0.22818
+sek_to_eur = 0.089095
+dkk_to_eur = 0.13379
+huf_to_eur = 0.0027267

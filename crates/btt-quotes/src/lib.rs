@@ -6,6 +6,7 @@
 
 pub mod db;
 pub mod dsb;
+pub mod ecb;
 pub mod eurostar;
 pub mod italo;
 mod js_literal;

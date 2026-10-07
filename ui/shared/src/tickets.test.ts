@@ -7,6 +7,7 @@ import {
   formatEuro,
   formatPriceRange,
   isLivePending,
+  formatPrice,
   isLiveUnavailable,
   liveQuoteKey,
   livePriceOf,
@@ -101,6 +102,17 @@ describe("live prices", () => {
     expect(effectivePrice(strategy.items[0]!, live).kind).toBe("Live");
     expect(effectivePrice(strategy.items[1]!, live).kind).toBe("Range");
     expect(liveQuoteKey(strategy.items[2]!)).toBeNull();
+  });
+});
+
+describe("prices in another currency", () => {
+  it("show the original amount after the euro price", () => {
+    const source = { name: "t", note: "", as_of: null, page: null };
+    const francs = { low: 5370, high: 5370, kind: "Live" as const, source, original: { hundredths: 5000, currency: "CHF" } };
+    expect(formatPrice(francs)).toBe("€53.70 (50 CHF)");
+    const forints = { ...francs, original: { hundredths: 460050, currency: "HUF" } };
+    expect(formatPrice(forints)).toBe("€53.70 (4600.50 HUF)");
+    expect(formatPrice({ ...francs, original: null })).toBe("€53.70");
   });
 });
 
