@@ -116,7 +116,7 @@ impl NsService {
         {
             return Ok(fare);
         }
-        let result = self.fetch(from_uic, to_uic, date).await;
+        let result = crate::with_one_retry(|| self.fetch(from_uic, to_uic, date)).await;
         match &result {
             Ok(fare) => {
                 if let Ok(document) = serde_json::to_string(fare) {

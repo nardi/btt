@@ -25,9 +25,6 @@ const MINIMUM_INTERVAL: Duration = Duration::from_secs(2);
 /// How long searches on a site stop after one fails.
 const FAILURE_PAUSE: Duration = Duration::from_mins(15);
 
-/// How long a search waits before it is tried again after a transient error.
-const RETRY_DELAY: Duration = Duration::from_secs(2);
-
 /// How long the connections of a search are kept. Prices change with demand, so the time is
 /// short.
 const QUOTE_LIFETIME: Duration = Duration::from_mins(30);
@@ -163,13 +160,7 @@ impl<S: ConnectionSource> SiteService<S> {
         if !self.limiter.wait_for_turn().await {
             return Err(QuoteError::Paused);
         }
-        let mut result = self.source.fetch(&self.client, search).await;
-        // A server error or a dropped connection is often gone a moment later, as with the
-        // offer service of MÁV, so the search is tried once more before the site is paused.
-        if result.as_ref().is_err_and(QuoteError::is_transient) {
-            tokio::time::sleep(RETRY_DELAY).await;
-            result = self.source.fetch(&self.client, search).await;
-        }
+        let result = crate::with_one_retry(|| self.source.fetch(&self.client, search)).await;
         match &result {
             Ok(connections) => {
                 if let Ok(document) = serde_json::to_string(connections) {

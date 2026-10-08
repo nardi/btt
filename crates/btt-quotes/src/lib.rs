@@ -69,3 +69,23 @@ impl QuoteError {
         }
     }
 }
+
+/// How long a lookup waits before it is tried again after a transient error.
+const RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Runs a lookup, and runs it once more after a short wait when it fails with a transient
+/// error. A server error or a dropped connection is often gone a moment later, and a failure
+/// pauses the site for a quarter of an hour.
+pub(crate) async fn with_one_retry<T, Lookup>(
+    mut lookup: impl FnMut() -> Lookup,
+) -> Result<T, QuoteError>
+where
+    Lookup: std::future::Future<Output = Result<T, QuoteError>>,
+{
+    let result = lookup().await;
+    if result.as_ref().is_err_and(QuoteError::is_transient) {
+        tokio::time::sleep(RETRY_DELAY).await;
+        return lookup().await;
+    }
+    result
+}

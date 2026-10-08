@@ -470,7 +470,7 @@ impl SbbService {
         {
             return Ok(quotes);
         }
-        let result = self.fetch(search).await;
+        let result = crate::with_one_retry(|| self.fetch(search)).await;
         match &result {
             Ok(quotes) => {
                 if let Ok(document) = serde_json::to_string(quotes) {

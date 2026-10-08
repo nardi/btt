@@ -189,7 +189,7 @@ impl ObbService {
         {
             return Ok(connections);
         }
-        let result = self.fetch(search).await;
+        let result = crate::with_one_retry(|| self.fetch(search)).await;
         match &result {
             Ok(connections) => {
                 if let Ok(document) = serde_json::to_string(connections) {
