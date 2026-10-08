@@ -447,6 +447,12 @@ export type LiveQuoteRequest = {
 	travel_class: TravelClass,
 	/**  The search to run on the booking site, for a site whose booking link does not name it. */
 	site_search?: SiteSearch | null,
+	/**
+	 *  The run of trains the ticket covers, so the price model can learn from the live price.
+	 *  `None` for a ticket that is not for one adult in second class, whose price the model
+	 *  does not predict.
+	 */
+	run?: RunDescription | null,
 };
 
 /**  A time of day on the local clock of a place, from 00:00 to 23:59. */
@@ -660,6 +666,34 @@ export type ProblemReportView = {
 	map_center: GeoCoordinates,
 	/**  Zoom level of the map. */
 	map_zoom: number | null,
+};
+
+/**  One train of a run, as the price model reads it. */
+export type RideDescription = {
+	/**  The operator as the app names it, such as `db-fernverkehr`. Empty when not known. */
+	operator: string,
+	/**  Category of the train, such as "ICE". */
+	category: string,
+	/**  Country of the boarding station as a two-letter code, if known. */
+	from_country: string | null,
+	/**  Country of the alighting station, if known. */
+	to_country: string | null,
+	/**  Length of the ride along its line, in metres. */
+	distance_metres: number,
+	/**  Whether the train has couchettes or sleepers. */
+	offers_berths: boolean,
+};
+
+/**  The run of trains that one ticket covers, as the price model reads it. */
+export type RunDescription = {
+	/**  Name of the station where the run starts. */
+	from_station: string,
+	/**  Name of the station where the run ends. */
+	to_station: string,
+	/**  Departure of the first train on the local clock of its station. */
+	local_departure: string,
+	/**  The trains of the run in order. */
+	rides: RideDescription[],
 };
 
 /**

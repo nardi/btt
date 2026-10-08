@@ -5,6 +5,8 @@ mod booking_page;
 mod commands;
 mod log_buffer;
 mod place_naming;
+mod price_learning;
+mod price_seed;
 mod probe;
 mod problem_report;
 mod site_quotes;
@@ -91,13 +93,16 @@ pub fn run() {
             let data_directory = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_directory)?;
             let storage = Storage::open(&data_directory.join("btt.sqlite3"))?;
-            app.manage(AppState::new(
+            let state = AppState::new(
                 app.handle().clone(),
                 storage,
                 &data_directory,
                 recent_log_lines,
-            )?);
+            )?;
+            price_learning::replay_observations(&state);
+            app.manage(state);
             probe::start(app.handle());
+            price_seed::start(app.handle());
             Ok(())
         })
         .run(tauri::generate_context!())

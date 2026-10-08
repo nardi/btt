@@ -125,6 +125,7 @@ mod tests {
                 destination_code: "8600512".into(),
                 local_departure: "2026-11-20T09:32".into(),
             }),
+            run: None,
         };
         let search = connection_search(BookingSite::Dsb, &request).unwrap();
         assert_eq!(search.origin, "8600626");

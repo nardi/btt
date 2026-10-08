@@ -18,15 +18,6 @@ notes = "Basic fare of the 2026 tariff, which applies when no better offer exist
 # The exchange rate is a fixed rough value.
 euro_per_crown = 0.040938
 
-# A rough price per kilometre for every ride that no other source prices. Single fares on long
-# distance trains in Europe mostly fall between these two values, from a cheap saver fare to a
-# flexible one. It is an estimate and the app labels it as one.
-[distance_model]
-low_per_kilometre = 0.07
-high_per_kilometre = 0.20
-minimum_fare = 2.5
-currency = "EUR"
-
 # Exchange rates to euro from the ECB reference rates of 7 October 2026, for prices quoted in
 # another currency. The app uses the latest ECB rates when it can fetch them, and these when it
 # cannot.

@@ -10,7 +10,9 @@ license-file.workspace = true
 [dependencies]
 btt-model.workspace = true
 chrono.workspace = true
+nalgebra.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 smol_str.workspace = true
 thiserror.workspace = true
 toml.workspace = true

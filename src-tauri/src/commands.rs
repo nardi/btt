@@ -291,6 +291,7 @@ pub async fn fetch_live_quote(
     request: LiveQuoteRequest,
 ) -> Result<Option<LiveQuote>, CommandError> {
     let (outcome, site_answer) = crate::ticket_report::look_up(&state, &request).await;
+    let model_estimate = crate::price_learning::learn_from_lookup(&state, &request, &outcome);
     let quote = match &outcome {
         crate::ticket_report::LiveQuoteOutcome::Quoted { price } => {
             Some(LiveQuote::Priced(price.clone()))
@@ -302,7 +303,7 @@ pub async fn fetch_live_quote(
         .live_quote_log
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    crate::ticket_report::log_lookup(&mut log, &request, outcome, site_answer);
+    crate::ticket_report::log_lookup(&mut log, &request, outcome, site_answer, model_estimate);
     Ok(quote)
 }
 

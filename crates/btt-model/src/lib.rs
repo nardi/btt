@@ -35,8 +35,9 @@ pub use plan::{
 };
 pub use tickets::{
     BookingLink, BookingLinkKind, EuroCents, ForeignAmount, LiveQuote, LiveQuoteRequest, Price,
-    PriceKind, PriceSource, PriceTotal, SiteSearch, StrategyKind, TicketItem, TicketLeg,
-    TicketPlan, TicketProduct, TicketRide, TicketStrategy,
+    PriceKind, PriceObservation, PriceSource, PriceTotal, RideDescription, RunDescription,
+    SiteSearch, StrategyKind, TicketItem, TicketLeg, TicketPlan, TicketProduct, TicketRide,
+    TicketStrategy,
 };
 pub use time::{
     DailyTimeWindow, DailyWindowLength, DurationMinutes, LocalTimeOfDay, TravelDayWindows,

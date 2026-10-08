@@ -275,8 +275,10 @@ impl<'a> Problem<'a> {
                             .map(|ride| RideFacts {
                                 from_country: ride.from_country.as_deref(),
                                 to_country: ride.to_country.as_deref(),
+                                operator: &ride.train_label.operator,
                                 category: &ride.train_label.category,
                                 distance_kilometres: ride.distance_kilometres,
+                                offers_berths: ride.offers_berths,
                             })
                             .collect();
                         scaled(&book.price_run(&facts), settings.single_ticket_percent)
@@ -687,9 +689,36 @@ impl<'a> Problem<'a> {
                 ride_count: u8::try_from(rides.len()).unwrap_or(u8::MAX),
                 travel_class: self.settings.class,
                 site_search,
+                run: self.run_description(rides),
             }
         });
         (link, request)
+    }
+
+    /// Describes a run for the price model, or returns `None` when the traveller is not an
+    /// adult in second class, whose fare is the one the model predicts.
+    fn run_description(&self, rides: &[RideInput]) -> Option<btt_model::RunDescription> {
+        let adult_in_second_class = self.settings.class == TravelClass::Second
+            && self.settings.age_group == AgeGroup::Adult;
+        let (first, last) = (rides.first()?, rides.last()?);
+        adult_in_second_class.then(|| btt_model::RunDescription {
+            from_station: first.from_name.clone(),
+            to_station: last.to_name.clone(),
+            local_departure: first.departure_date.and_time(first.departure_clock),
+            rides: rides
+                .iter()
+                .map(|ride| btt_model::RideDescription {
+                    operator: ride.train_label.operator.clone(),
+                    category: ride.train_label.category.clone(),
+                    from_country: ride.from_country.clone(),
+                    to_country: ride.to_country.clone(),
+                    // Rides are far shorter than the 4 million km that `u32` metres hold.
+                    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                    distance_metres: (ride.distance_kilometres * 1000.0).round() as u32,
+                    offers_berths: ride.offers_berths,
+                })
+                .collect(),
+        })
     }
 
     /// Returns whether every ride of a run is a train of an operator.

@@ -200,8 +200,10 @@ mod tests {
         let ride = |from, to| RideFacts {
             from_country: Some(from),
             to_country: Some(to),
+            operator: "cd",
             category: "EC",
             distance_kilometres: 100.0,
+            offers_berths: false,
         };
         assert!(tariff.price_run(&[ride("CZ", "CZ")]).is_some());
         assert!(tariff.price_run(&[ride("CZ", "AT")]).is_none());

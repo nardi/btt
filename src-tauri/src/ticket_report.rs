@@ -74,6 +74,9 @@ pub struct LiveQuoteLogEntry {
     pub outcome: LiveQuoteOutcome,
     /// Every trip with its prices that the site answered with, as it came back.
     pub site_answer: Option<serde_json::Value>,
+    /// What the price model estimated for the ticket before it learned from the live price,
+    /// so a report shows how far off the model is.
+    pub model_estimate: Option<Price>,
 }
 
 /// Looks up the live price of a ticket, and returns how it ended with the answer of the site.
@@ -594,6 +597,7 @@ pub fn log_lookup(
     request: &LiveQuoteRequest,
     outcome: LiveQuoteOutcome,
     site_answer: Option<serde_json::Value>,
+    model_estimate: Option<Price>,
 ) {
     if log.len() >= MAXIMUM_LOGGED_LOOKUPS {
         log.remove(0);
@@ -603,6 +607,7 @@ pub fn log_lookup(
         request: request.clone(),
         outcome,
         site_answer,
+        model_estimate,
     });
 }
 
@@ -619,6 +624,7 @@ mod tests {
             ride_count: 1,
             travel_class: TravelClass::Second,
             site_search: None,
+            run: None,
         }
     }
 
@@ -630,6 +636,7 @@ mod tests {
                 &mut log,
                 &request(minute),
                 LiveQuoteOutcome::NoMatchingTrip,
+                None,
                 None,
             );
         }
@@ -646,6 +653,7 @@ mod tests {
             LiveQuoteOutcome::Failed {
                 error: "refused".to_owned(),
             },
+            None,
             None,
         );
         let json = serde_json::to_string(&log).unwrap();

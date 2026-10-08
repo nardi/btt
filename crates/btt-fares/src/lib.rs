@@ -4,10 +4,10 @@
 //! files at run time and no network.
 
 mod country;
-mod distance;
 mod italo;
 mod passes;
 mod price_book;
+mod price_model;
 mod reservations;
 mod station_table;
 mod tariff;
@@ -15,10 +15,10 @@ mod tariff;
 use thiserror::Error;
 
 pub use country::country_of_time_zone;
-pub use distance::DistanceModel;
 pub use italo::{ItaloStation, ItaloStations};
 pub use passes::{PassCatalogue, PassKind, PassPrices, PassType, PriceAgeGroup, Validity};
 pub use price_book::{FreeTravel, PriceBook, RideFacts, TicketPriceSource};
+pub use price_model::{PriceEstimate, PriceModel, SharedPriceModel, TrainKind, seed_observations};
 pub use reservations::{ReservationMode, ReservationRule, ReservationRules, RuleScope, SeatFee};
 pub use station_table::{CodedStation, StationTable};
 pub use tariff::{BookingWindow, DistanceTariff, ExchangeRates};
@@ -29,7 +29,7 @@ const PASSES_TOML: &str = include_str!("../../../data/fares/interrail_passes.tom
 const RULES_TOML: &str = include_str!("../../../data/fares/interrail_rules.toml");
 /// The reservation rules, as they are compiled in.
 const RESERVATIONS_TOML: &str = include_str!("../../../data/fares/interrail_reservations.toml");
-/// The tariffs and the distance model, as they are compiled in.
+/// The tariffs and the exchange rates, as they are compiled in.
 const TARIFFS_TOML: &str = include_str!("../../../data/fares/tariffs.toml");
 /// The Italo stations, as they are compiled in.
 const ITALO_STATIONS_CSV: &str = include_str!("../../../data/fares/italo_stations.csv");
@@ -65,6 +65,12 @@ const REGIOJET_STATIONS_CSV: &str = include_str!("../../../data/fares/regiojet_s
 const EUROSTAR_STATIONS_CSV: &str = include_str!("../../../data/fares/eurostar_stations.csv");
 /// The booking windows, as they are compiled in.
 const BOOKING_WINDOWS_TOML: &str = include_str!("../../../data/fares/booking_windows.toml");
+/// The priors of the price model, as they are compiled in.
+const PRICE_MODEL_TOML: &str = include_str!("../../../data/fares/price_model.toml");
+/// The operators with their home countries, as they are compiled in.
+const OPERATORS_TOML: &str = include_str!("../../../data/operators.toml");
+/// The live prices of the seed run, as they are compiled in.
+const PRICE_SEED_JSONL: &str = include_str!("../../../data/fares/price_seed.jsonl");
 
 /// A data file that does not match what the crate expects.
 #[derive(Debug, Error)]
@@ -94,8 +100,9 @@ pub struct FareData {
     pub passes: PassCatalogue,
     /// Which rides need a seat reservation on a pass, and for how much.
     pub reservations: ReservationRules,
-    /// The rough price per kilometre.
-    pub distance_model: DistanceModel,
+    /// The model that estimates fares no other source prices, shared with the code that feeds
+    /// it live prices.
+    pub price_model: SharedPriceModel,
     /// Tariffs that price the domestic rides of one country.
     pub tariffs: Vec<DistanceTariff>,
     /// The stations of Italo with the codes of its booking site.
@@ -167,7 +174,7 @@ impl FareData {
         Ok(Self {
             passes: PassCatalogue::from_toml(PASSES_TOML)?,
             reservations: ReservationRules::from_toml(RESERVATIONS_TOML, RULES_TOML)?,
-            distance_model: DistanceModel::from_toml(TARIFFS_TOML)?,
+            price_model: SharedPriceModel::new(PriceModel::bundled()?),
             tariffs: tariff::tariffs_from_toml(TARIFFS_TOML)?,
             italo_stations: ItaloStations::from_csv(ITALO_STATIONS_CSV),
             sbb_stations: StationTable::from_csv(SBB_STATIONS_CSV),

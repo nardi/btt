@@ -1,6 +1,6 @@
 //! The tickets a trip needs, as the optimizer reports them.
 
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 use specta::Type;
@@ -185,6 +185,56 @@ pub struct LiveQuoteRequest {
     /// The search to run on the booking site, for a site whose booking link does not name it.
     #[serde(default)]
     pub site_search: Option<SiteSearch>,
+    /// The run of trains the ticket covers, so the price model can learn from the live price.
+    /// `None` for a ticket that is not for one adult in second class, whose price the model
+    /// does not predict.
+    #[serde(default)]
+    pub run: Option<RunDescription>,
+}
+
+/// The run of trains that one ticket covers, as the price model reads it.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub struct RunDescription {
+    /// Name of the station where the run starts.
+    pub from_station: SmolStr,
+    /// Name of the station where the run ends.
+    pub to_station: SmolStr,
+    /// Departure of the first train on the local clock of its station.
+    pub local_departure: NaiveDateTime,
+    /// The trains of the run in order.
+    pub rides: Vec<RideDescription>,
+}
+
+/// One train of a run, as the price model reads it.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub struct RideDescription {
+    /// The operator as the app names it, such as `db-fernverkehr`. Empty when not known.
+    pub operator: SmolStr,
+    /// Category of the train, such as "ICE".
+    pub category: SmolStr,
+    /// Country of the boarding station as a two-letter code, if known.
+    pub from_country: Option<SmolStr>,
+    /// Country of the alighting station, if known.
+    pub to_country: Option<SmolStr>,
+    /// Length of the ride along its line, in metres.
+    pub distance_metres: u32,
+    /// Whether the train has couchettes or sleepers.
+    pub offers_berths: bool,
+}
+
+/// A live price of a ticket, kept so the price model can learn from it.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub struct PriceObservation {
+    /// The run the ticket covers.
+    pub run: RunDescription,
+    /// The lowest price for one adult in second class.
+    pub price: EuroCents,
+    /// The price in the currency of the booking site, when that is not the euro.
+    pub original: Option<ForeignAmount>,
+    /// The day the price was looked up.
+    pub looked_up_on: NaiveDate,
+    /// Name of the source, such as "DB booking site".
+    pub source: SmolStr,
 }
 
 /// A search on a booking site whose booking link opens its start page.

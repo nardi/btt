@@ -249,8 +249,10 @@ impl Brute<'_> {
             .map(|ride| RideFacts {
                 from_country: ride.from_country.as_deref(),
                 to_country: ride.to_country.as_deref(),
+                operator: &ride.train_label.operator,
                 category: &ride.train_label.category,
                 distance_kilometres: ride.distance_kilometres,
+                offers_berths: ride.offers_berths,
             })
             .collect();
         u64::from(self.book.price_run(&facts).middle().0)
@@ -436,6 +438,13 @@ fn a_swiss_ticket_gets_an_sbb_search_and_a_live_price_request() {
     let request = item.live_quote_request.as_ref().unwrap();
     assert_eq!(request.booking_link, link.url);
     assert_eq!(request.ride_count, 1);
+    // Without a traveller the plan assumes one adult in second class, whose fare the price
+    // model learns from.
+    let run = request.run.as_ref().unwrap();
+    assert_eq!(run.rides.len(), 1);
+    assert_eq!(run.rides[0].category, "IC");
+    assert_eq!(run.rides[0].distance_metres, 100_000);
+    assert_eq!(run.local_departure.to_string(), "2026-07-01 08:00:00");
 }
 
 #[test]

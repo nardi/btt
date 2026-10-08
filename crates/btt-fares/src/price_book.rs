@@ -1,6 +1,6 @@
 //! The sources that price a single ticket, tried from the most to the least exact.
 
-use btt_model::{EuroCents, Price, PriceKind, PriceSource};
+use btt_model::{EuroCents, Price, PriceKind, PriceSource, RideDescription};
 
 use crate::FareData;
 
@@ -11,10 +11,28 @@ pub struct RideFacts<'a> {
     pub from_country: Option<&'a str>,
     /// Country of the alighting station, if known.
     pub to_country: Option<&'a str>,
+    /// The operator as the app names it, such as `db-fernverkehr`. Empty when not known.
+    pub operator: &'a str,
     /// Category of the train, such as "ICE".
     pub category: &'a str,
     /// Length of the ride along its line, in kilometres.
     pub distance_kilometres: f64,
+    /// Whether the train has couchettes or sleepers.
+    pub offers_berths: bool,
+}
+
+impl<'a> RideFacts<'a> {
+    /// Returns the facts of a ride as a live price request describes it.
+    pub fn of_description(ride: &'a RideDescription) -> Self {
+        Self {
+            from_country: ride.from_country.as_deref(),
+            to_country: ride.to_country.as_deref(),
+            operator: &ride.operator,
+            category: &ride.category,
+            distance_kilometres: f64::from(ride.distance_metres) / 1000.0,
+            offers_berths: ride.offers_berths,
+        }
+    }
 }
 
 /// Prices a run of consecutive rides that one ticket covers.
@@ -78,7 +96,7 @@ impl PriceBook {
                 .iter()
                 .map(|tariff| Box::new(tariff.clone()) as Box<dyn TicketPriceSource>),
         );
-        sources.push(Box::new(data.distance_model));
+        sources.push(Box::new(data.price_model.clone()));
         Self { sources }
     }
 
@@ -108,8 +126,10 @@ mod tests {
         RideFacts {
             from_country: Some(from),
             to_country: Some(to),
+            operator: "cfl",
             category: "RE",
             distance_kilometres: 30.0,
+            offers_berths: false,
         }
     }
 

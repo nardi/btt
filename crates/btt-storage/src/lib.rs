@@ -11,7 +11,8 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use btt_model::{
-    LegPlanningResult, PlaceSearchResult, Traveller, TravellerId, Trip, TripId, TripSummary,
+    EuroCents, ForeignAmount, LegPlanningResult, PlaceSearchResult, PriceObservation,
+    RunDescription, Traveller, TravellerId, Trip, TripId, TripSummary,
 };
 use chrono::NaiveDate;
 use rusqlite::{Connection, OptionalExtension, params};
@@ -71,6 +72,24 @@ const SCHEMA_MIGRATIONS: &[M<'static>] = &[
         document TEXT NOT NULL
     ) STRICT;",
     ),
+    // Live prices of tickets, which the price model learns from. Each row holds the facts of
+    // the lookup and nothing derived, so a change of the model can read old rows anew. The
+    // rides are a JSON array. One route keeps at most one price per departure and lookup day.
+    M::up(
+        "CREATE TABLE price_observations (
+        observation_id INTEGER PRIMARY KEY,
+        from_station TEXT NOT NULL,
+        to_station TEXT NOT NULL,
+        local_departure TEXT NOT NULL,
+        looked_up_on TEXT NOT NULL,
+        price_cents INTEGER NOT NULL,
+        original_hundredths INTEGER,
+        original_currency TEXT,
+        source TEXT NOT NULL,
+        rides TEXT NOT NULL,
+        UNIQUE (from_station, to_station, local_departure, looked_up_on)
+    ) STRICT;",
+    ),
 ];
 
 /// Errors from reading or writing storage.
@@ -94,6 +113,9 @@ pub enum StorageError {
     /// A cache entry could not be read or written.
     #[error("invalid cache entry: {0}")]
     CacheEntry(#[from] postcard::Error),
+    /// The rides of a live price could not be read or written.
+    #[error("invalid rides of a live price: {0}")]
+    ObservationRides(serde_json::Error),
 }
 
 /// The app's SQLite database. One connection behind a mutex, because the app has one writer.
@@ -402,6 +424,105 @@ impl Storage {
             .prepare_cached("DELETE FROM leg_cache WHERE cache_namespace <> ?1")?
             .execute([sqlite_integer(cache_namespace)])?)
     }
+
+    /// Saves a live price for the price model. Returns `false` and keeps the earlier row when
+    /// the route already has a price for the same departure from the same day of lookup.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the query fails.
+    pub fn store_price_observation(
+        &self,
+        observation: &PriceObservation,
+    ) -> Result<bool, StorageError> {
+        let run = &observation.run;
+        let rides = serde_json::to_string(&run.rides).map_err(StorageError::ObservationRides)?;
+        let inserted = self
+            .connection()
+            .prepare_cached(
+                "INSERT OR IGNORE INTO price_observations (from_station, to_station,
+                 local_departure, looked_up_on, price_cents, original_hundredths,
+                 original_currency, source, rides)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            )?
+            .execute(params![
+                run.from_station.as_str(),
+                run.to_station.as_str(),
+                run.local_departure,
+                observation.looked_up_on,
+                observation.price.0,
+                observation
+                    .original
+                    .as_ref()
+                    .map(|amount| amount.hundredths),
+                observation
+                    .original
+                    .as_ref()
+                    .map(|amount| amount.currency.as_str()),
+                observation.source.as_str(),
+                rides,
+            ])?;
+        Ok(inserted > 0)
+    }
+
+    /// Returns the saved live prices in the order of their lookup.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the query fails or a row holds rides that do not decode.
+    pub fn list_price_observations(&self) -> Result<Vec<PriceObservation>, StorageError> {
+        let connection = self.connection();
+        let mut statement = connection.prepare_cached(
+            "SELECT from_station, to_station, local_departure, looked_up_on, price_cents,
+             original_hundredths, original_currency, source, rides
+             FROM price_observations ORDER BY looked_up_on, observation_id",
+        )?;
+        let rows = statement.query_map([], |row| {
+            let hundredths: Option<u32> = row.get(5)?;
+            let currency: Option<String> = row.get(6)?;
+            let rides: String = row.get(8)?;
+            Ok((
+                PriceObservation {
+                    run: RunDescription {
+                        from_station: row.get::<_, String>(0)?.into(),
+                        to_station: row.get::<_, String>(1)?.into(),
+                        local_departure: row.get(2)?,
+                        rides: Vec::new(),
+                    },
+                    looked_up_on: row.get(3)?,
+                    price: EuroCents(row.get(4)?),
+                    original: hundredths.zip(currency).map(|(hundredths, currency)| {
+                        ForeignAmount {
+                            hundredths,
+                            currency: currency.into(),
+                        }
+                    }),
+                    source: row.get::<_, String>(7)?.into(),
+                },
+                rides,
+            ))
+        })?;
+        let mut observations = Vec::new();
+        for row in rows {
+            let (mut observation, rides) = row?;
+            observation.run.rides =
+                serde_json::from_str(&rides).map_err(StorageError::ObservationRides)?;
+            observations.push(observation);
+        }
+        Ok(observations)
+    }
+
+    /// Deletes the live prices looked up before a day, and returns how many went.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the query fails.
+    pub fn delete_price_observations_before(&self, day: NaiveDate) -> Result<usize, StorageError> {
+        Ok(self
+            .connection()
+            .prepare_cached("DELETE FROM price_observations WHERE looked_up_on < ?1")?
+            .execute([day])?)
+    }
 }
 
 /// Stores a 64-bit key in SQLite, whose integers are signed, by keeping its bits.
@@ -489,6 +610,55 @@ mod tests {
         );
         // A document older than the age asked for is not returned.
         assert_eq!(storage.cached_quote("key", -1).unwrap(), None);
+    }
+
+    /// A live price of one ride, looked up on a day of July 2026.
+    fn price_observation(looked_up_on: u32, departure_hour: u32) -> PriceObservation {
+        let looked_up_on = NaiveDate::from_ymd_opt(2026, 7, looked_up_on).unwrap();
+        PriceObservation {
+            run: RunDescription {
+                from_station: "Basel SBB".into(),
+                to_station: "Bern".into(),
+                local_departure: looked_up_on.and_hms_opt(departure_hour, 0, 0).unwrap(),
+                rides: vec![btt_model::RideDescription {
+                    operator: "sbb".into(),
+                    category: "IC".into(),
+                    from_country: Some("CH".into()),
+                    to_country: Some("CH".into()),
+                    distance_metres: 95_000,
+                    offers_berths: false,
+                }],
+            },
+            price: EuroCents(4210),
+            original: Some(ForeignAmount {
+                hundredths: 3920,
+                currency: "CHF".into(),
+            }),
+            looked_up_on,
+            source: "SBB booking site".into(),
+        }
+    }
+
+    #[test]
+    fn price_observations_round_trip_once_per_departure_and_day() {
+        let storage = Storage::open_in_memory().unwrap();
+        let later = price_observation(3, 9);
+        let earlier = price_observation(2, 9);
+        assert!(storage.store_price_observation(&later).unwrap());
+        assert!(storage.store_price_observation(&earlier).unwrap());
+        // The same departure looked up again on the same day keeps the first price.
+        let mut again = earlier.clone();
+        again.price = EuroCents(9999);
+        assert!(!storage.store_price_observation(&again).unwrap());
+        assert_eq!(
+            storage.list_price_observations().unwrap(),
+            vec![earlier.clone(), later.clone()]
+        );
+        let deleted = storage
+            .delete_price_observations_before(later.looked_up_on)
+            .unwrap();
+        assert_eq!(deleted, 1);
+        assert_eq!(storage.list_price_observations().unwrap(), vec![later]);
     }
 
     #[test]

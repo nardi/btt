@@ -22,6 +22,10 @@ use btt_timetable::{
 use chrono::NaiveDate;
 use smallvec::SmallVec;
 
+mod fare_samples;
+
+pub use fare_samples::FareSampleRide;
+
 use crate::chain::{ChainJourney, ChainStay, chain_through_costs};
 use crate::cost_model::LegCostModel;
 use crate::explanation::{CandidateExplanation, LegExplanation, RankedJourneyExplanation};

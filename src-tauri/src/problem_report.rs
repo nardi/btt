@@ -83,6 +83,8 @@ struct TicketsReport {
     plan: Option<TicketPlanRecord>,
     /// The most recent live price lookups, of every trip, with the answers of the booking site.
     live_quote_lookups: Vec<LiveQuoteLogEntry>,
+    /// The number of live prices the price model has learned from, with those of the seed run.
+    price_model_observations: u32,
 }
 
 /// Asks where to save a problem report for a trip and writes it there. Returns the path of the
@@ -143,6 +145,7 @@ pub async fn export_problem_report(
         bundle: state.bundle_path.as_deref().and_then(bundle_summary),
     };
     let tickets = TicketsReport {
+        price_model_observations: state.fare_data.price_model.read().observation_count(),
         plan: state
             .ticket_plans
             .lock()

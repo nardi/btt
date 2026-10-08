@@ -14,7 +14,7 @@ pub mod session;
 pub mod stub;
 
 pub use backend::LegPlanningBackend;
-pub use bundle_router::TimetableBundleRouter;
+pub use bundle_router::{FareSampleRide, TimetableBundleRouter};
 pub use explanation::{CandidateExplanation, LegExplanation, RankedJourneyExplanation};
 pub use input::{
     IdentifiedLegInput, LegCacheKey, LegChainInput, LegEndpoint, LegPlanningInput, SameDayStop,

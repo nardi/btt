@@ -1,0 +1,246 @@
+# The price model, which estimates the lowest single fare for one adult in second class.
+#
+# The model is a Bayesian linear regression on the logarithm of the price. It splits the log
+# price into a level per country, an offset per operator and a shape that all countries share:
+#
+#   log(price) = global + country + operator + kind + country × kind + category + border
+#
+# where the global, country, operator and kind terms each have an intercept and a slope on the
+# distance `u = log((km + shift) / (reference + shift))`. The intercepts are the log price at the
+# reference distance. This file holds the prior of every term. The app starts from it, replays
+# the observations in `price_seed.jsonl` and then the live prices it has seen itself.
+
+# Days after which an observation counts half.
+half_life_days = 182.0
+# Share of fares that the price range should hold.
+interval_share = 0.8
+# Residuals beyond this many standard deviations count less, as if the noise were larger.
+outlier_limit = 3.0
+# The shift in kilometres for a country without one of its own. It stands in for a base fee.
+default_shift_kilometres = 10.0
+# The distance at which the intercepts hold, in kilometres.
+reference_kilometres = 100.0
+
+# The noise of a single fare around the model, as a standard deviation of the log price. The
+# prior weight is the number of observations the prior counts as.
+[noise]
+standard_deviation = 0.3
+prior_weight = 20.0
+
+# The level that every country starts from: the price per kilometre of a slope of 1, so
+# `euro_per_kilometre × (km + shift)`. This is a lowest fare between a saver fare and a regional
+# fare, and the terms below move away from it.
+[global]
+euro_per_kilometre = 0.11
+slope = 1.0
+intercept_standard_deviation = 0.2
+slope_standard_deviation = 0.05
+
+# Prior standard deviations of the offsets on the log price. A value of 0.2 lets a term move the
+# price by about 20 percent before the data have to argue for more. Every prediction adds up the
+# spreads of its terms, so they also set how wide the range is before any observation.
+[spread]
+country = 0.35
+country_slope = 0.1
+operator = 0.15
+operator_slope = 0.1
+operator_base = 0.3
+operator_curve = 0.1
+kind = 0.2
+kind_slope = 0.05
+country_kind = 0.1
+category = 0.1
+border = 0.2
+
+# Prior means of the kind offsets, as a share on the log price. They are rough and the seed run
+# replaces them.
+[kind_offsets]
+high_speed = 0.2
+long_distance = 0.0
+regional = -0.1
+night = 0.3
+bus = -0.3
+
+# Price levels of countries. A country with a published tariff gets it with a tight spread. The
+# others are rough guesses of the lowest second-class fare, with the default wide spread, until
+# the seed run measures them.
+[[country]]
+code = "CZ"
+euro_per_kilometre = 0.0835
+shift_kilometres = 8.3
+standard_deviation = 0.1
+source = "ČD basic fare of 2026, 17 + 2.04 × km crowns, at 0.0409 euro per crown."
+
+[[country]]
+code = "CH"
+euro_per_kilometre = 0.25
+
+[[country]]
+code = "DE"
+euro_per_kilometre = 0.12
+
+[[country]]
+code = "AT"
+euro_per_kilometre = 0.10
+
+[[country]]
+code = "FR"
+euro_per_kilometre = 0.12
+
+[[country]]
+code = "IT"
+euro_per_kilometre = 0.10
+
+[[country]]
+code = "NL"
+euro_per_kilometre = 0.19
+shift_kilometres = 15.0
+source = "NS fares have a base of about 2.80 euro and taper with the distance."
+
+[[country]]
+code = "BE"
+euro_per_kilometre = 0.15
+shift_kilometres = 17.0
+source = "SNCB fares go from 2.60 euro to 20.90 euro at 120 km."
+
+[[country]]
+code = "LU"
+euro_per_kilometre = 0.10
+
+[[country]]
+code = "PL"
+euro_per_kilometre = 0.06
+
+[[country]]
+code = "SK"
+euro_per_kilometre = 0.05
+
+[[country]]
+code = "HU"
+euro_per_kilometre = 0.07
+
+[[country]]
+code = "SI"
+euro_per_kilometre = 0.06
+
+[[country]]
+code = "HR"
+euro_per_kilometre = 0.06
+
+[[country]]
+code = "ES"
+euro_per_kilometre = 0.09
+
+[[country]]
+code = "PT"
+euro_per_kilometre = 0.07
+
+[[country]]
+code = "DK"
+euro_per_kilometre = 0.14
+
+[[country]]
+code = "SE"
+euro_per_kilometre = 0.10
+
+[[country]]
+code = "NO"
+euro_per_kilometre = 0.12
+
+[[country]]
+code = "FI"
+euro_per_kilometre = 0.10
+
+[[country]]
+code = "GB"
+euro_per_kilometre = 0.25
+
+[[country]]
+code = "IE"
+euro_per_kilometre = 0.12
+
+[[country]]
+code = "GR"
+euro_per_kilometre = 0.07
+
+# Operators that price differently from the rest of their country, with the prior mean of their
+# offset on the log price, and the kind of their trains when no category rule below says
+# otherwise. The ids are those of `data/operators.toml`.
+[[operator]]
+id = "ouigo"
+offset = -0.4
+kind = "high_speed"
+
+[[operator]]
+id = "ouigo-espana"
+offset = -0.3
+kind = "high_speed"
+
+[[operator]]
+id = "flixtrain"
+offset = -0.4
+kind = "long_distance"
+
+[[operator]]
+id = "eurostar"
+offset = 0.5
+kind = "high_speed"
+
+[[operator]]
+id = "lyria"
+kind = "high_speed"
+
+[[operator]]
+id = "italo"
+kind = "high_speed"
+
+[[operator]]
+id = "iryo"
+kind = "high_speed"
+
+[[operator]]
+id = "regiojet"
+offset = -0.2
+
+[[operator]]
+id = "leo-express"
+kind = "long_distance"
+
+[[operator]]
+id = "westbahn"
+kind = "long_distance"
+
+[[operator]]
+id = "snalltaget"
+kind = "long_distance"
+
+[[operator]]
+id = "european-sleeper"
+kind = "night"
+
+# The kind of a train from its category, compared without regard to case. A rule with operators
+# applies to their trains only. A train with couchettes or sleepers is a night train whatever
+# its category, and a train no rule matches is regional.
+[[kind_rule]]
+kind = "high_speed"
+categories = [
+    "ICE", "ICE Sprinter", "TGV", "TGV INOUI", "INOUI", "OUIGO", "Lyria", "Eurostar", "FR",
+    "FA", "Frecciarossa", "Frecciargento", "Italo", "AVE", "AVLO", "iryo", "Euromed", "EIP",
+    "Intercity direct", "SJ Snabbtåg", "X2000",
+]
+
+[[kind_rule]]
+kind = "long_distance"
+categories = [
+    "IC", "ICN", "ICL", "ICD", "ICS", "EC", "ECE", "EuroCity", "Eurocity Direct", "RJ", "RJX",
+    "IR", "EIC", "TLK", "INTERCITES", "Intercités", "Intercity", "FB", "Alvia", "WB", "FLX", "LE",
+    "SC", "Ex", "D", "IN", "AP",
+]
+
+[[kind_rule]]
+kind = "night"
+categories = ["NJ", "EN", "Nightjet", "EuroNight", "INTERCITÉS de nuit"]
+
+[[kind_rule]]
+kind = "bus"
+categories = ["Bus", "EV", "SEV", "Drempelvrije bus"]
