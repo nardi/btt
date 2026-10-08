@@ -490,7 +490,7 @@ impl SbbService {
         let ids: Vec<String> = trips.iter().map(|trip| trip.id.clone()).collect();
         let prices = parse_prices(
             &self
-                .post(&address, &search.prices_request(Uuid::now_v7(), &ids))
+                .post_now(&address, &search.prices_request(Uuid::now_v7(), &ids))
                 .await?,
         )?;
         Ok(trips
@@ -528,11 +528,18 @@ impl SbbService {
         Ok(address)
     }
 
-    /// Posts a GraphQL request and returns the JSON answer.
+    /// Waits for the turn of a new search and posts its first GraphQL request.
     async fn post(&self, address: &str, body: &Value) -> Result<Value, QuoteError> {
         if !self.limiter.wait_for_turn().await {
             return Err(QuoteError::Paused);
         }
+        self.post_now(address, body).await
+    }
+
+    /// Posts a GraphQL request at once and returns the JSON answer. The request for the prices
+    /// of a search goes out this way, right after its trips arrive, as on the site itself. The
+    /// spacing applies between searches, not within one.
+    async fn post_now(&self, address: &str, body: &Value) -> Result<Value, QuoteError> {
         let response = self
             .client
             .post(address)
