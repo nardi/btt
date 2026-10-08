@@ -654,9 +654,9 @@ impl<'a> Problem<'a> {
     ///
     /// - DB for Germany, SBB for Switzerland, ÖBB for Austria and Trenitalia for Italy, which
     ///   all sell trips abroad too.
-    /// - NS for the Netherlands, PKP Intercity for Poland, SBB for France, DSB for Denmark, SJ
-    ///   for Sweden, MÁV for Hungary, Renfe for Spain and DB for Czechia, which only get runs
-    ///   that stay in their country.
+    /// - NS for the Netherlands, Koleo for Poland, SBB for France, DSB for Denmark, SJ for
+    ///   Sweden, MÁV for Hungary, Renfe for Spain and DB for Czechia, which only get runs that
+    ///   stay in their country. Koleo sells PKP Intercity and most Polish regional operators.
     ///
     /// A run that crosses a border and that the site of its departure country cannot take goes
     /// to DB, which prices most trips in Europe. Anything else gets the shop of the country of
@@ -844,7 +844,9 @@ impl<'a> Problem<'a> {
                 last,
             ),
             (Some("NL"), true) => crate::links::ns_link(&data.ns_stations, first, last),
-            (Some("PL"), true) => crate::links::pkp_link(&data.pkp_stations, first, last),
+            (Some("PL"), true) => {
+                return with_search(crate::links::koleo_link(&data.koleo_stations, first, last));
+            }
             (Some("DK"), true) => {
                 return with_search(crate::links::dsb_link(&data.dsb_stations, first, last));
             }

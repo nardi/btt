@@ -1,0 +1,2956 @@
+code,name,latitude,longitude
+szczecin-port-centralny,Szczecin Port Centralny,53.41282,14.56645
+szczecin-gumience,Szczecin Gumieńce,53.39789,14.49524
+szczecin-glowny,Szczecin Główny,53.41813,14.54910
+szczecin-podjuchy,Szczecin Podjuchy,53.35991,14.58575
+daleszewo,Daleszewo,53.30610,14.52899
+czepino,Czepino,53.28538,14.51293
+dolna-odra,Dolna Odra,53.21122,14.48092
+gryfino,Gryfino,53.25433,14.49292
+widuchowa,Widuchowa,53.12369,14.44611
+krzywin-gryfinski,Krzywin Gryfiński,53.08822,14.45385
+pacholeta,Pacholęta,53.17129,14.47149
+swinoujscie,Świnoujście,53.90469,14.26650
+miedzyzdroje,Międzyzdroje,53.92413,14.45466
+swinoujscie-przytor,Świnoujście Przytór,53.89747,14.33667
+swinoujscie-warszow,Świnoujście Warszów,53.90039,14.28467
+swinoujscie-port,Świnoujście Port,53.90122,14.26014
+szczecin-dabie,Szczecin Dąbie,53.39121,14.66928
+szczecin-zdroje,Szczecin Zdroje,53.37885,14.63703
+szczecin-zalom,Szczecin Załom,53.42944,14.74397
+kliniska,Kliniska,53.46058,14.78393
+szczecin-zdunowo,Szczecin Zdunowo,53.38324,14.76319
+goleniow,Goleniów,53.55950,14.83961
+rurka,Rurka,53.49453,14.79621
+bialun,Białuń,53.61439,14.84056
+loznica,Łoźnica,53.69060,14.86637
+wysoka-kamienska,Wysoka Kamieńska,53.82536,14.83211
+parlowko,Parłówko,53.84564,14.74951
+troszyn,Troszyn,53.84407,14.71545
+warnowo,Warnowo,53.92837,14.53543
+ladzin,Ładzin,53.91138,14.56233
+mokrzyca-wielka,Mokrzyca Wielka,53.87497,14.58003
+wolin,Wolin,53.84872,14.60961
+kamien-pomorski,Kamień Pomorski,53.96615,14.77428
+jarszewo,Jarszewo,53.92989,14.79980
+gorki-pomorskie,Górki Pomorskie,53.89908,14.82428
+rokita,Rokita,53.76655,14.85488
+stawno,Stawno,53.86685,14.82783
+nowogard,Nowogard,53.66606,15.12075
+wyszomierz,Wyszomierz,53.62575,15.06317
+osina,Osina,53.60879,15.01236
+mosty,Mosty,53.57431,14.94039
+ploty,Płoty,53.80806,15.26131
+zabowo,Żabowo,53.71720,15.19002
+trzebiatow,Trzebiatów,54.05957,15.27714
+gabin,Gąbin,54.01069,15.28681
+gorzyca-reska,Górzyca Reska,53.96943,15.23354
+gryfice,Gryfice,53.91494,15.19183
+baszewice,Baszewice,53.86257,15.19246
+stargard,Stargard,53.33901,15.03155
+ulikowo,Ulikowo,53.34828,15.11682
+gogolewo,Gogolewo,53.37196,15.17586
+reptowo,Reptowo,53.37232,14.86424
+miedwiecko,Miedwiecko,53.36481,14.92380
+grzedzice,Grzędzice,53.35804,14.97430
+kolin,Kolin,53.24386,15.12491
+witkowo,Witkowo,53.28597,15.07581
+morzyca,Morzyca,53.21853,15.15536
+dolice,Dolice,53.19861,15.21092
+tarnowo-pomorskie,Tarnowo Pomorskie,53.30634,15.36611
+barzkowice,Barzkowice,53.32704,15.26405
+sulino,Sulino,53.31807,15.31486
+ognica,Ognica,53.31605,15.45435
+sokoliniec,Sokoliniec,53.29402,15.50560
+recz-pomorski,Recz Pomorski,53.27061,15.56118
+pezino,Pęzino,53.33551,15.19540
+szczecinek-chyze,Szczecinek Chyże,53.71803,16.69775
+szczecinek,Szczecinek,53.69354,16.70497
+iwin,Iwin,53.79512,16.51541
+lubowo,Łubowo,53.58407,16.38989
+dalecino,Dalęcino,53.74781,16.60878
+przeradz,Przeradz,53.77053,16.53671
+gwda-mala,Gwda Mała,53.73203,16.82794
+drzonowo,Drzonowo,53.80683,16.86624
+bialy-bor,Biały Bór,53.88680,16.85540
+silnowo,Silnowo,53.63486,16.49158
+jelenino,Jelenino,53.65931,16.62516
+czarne,Czarne,53.68003,16.93806
+czarnobor,Czarnobór,53.69976,16.76779
+zoltnica,Żółtnica,53.69520,16.81259
+domislaw,Domisław,53.66803,17.03250
+bincze,Bińcze,53.66013,17.12941
+biskupnica,Biskupnica,53.65502,17.21204
+lotyn,Lotyń,53.60004,16.77973
+turowo-pomorskie,Turowo Pomorskie,53.64717,16.72289
+brokecino,Brokęcino,53.56331,16.81704
+okonek,Okonek,53.51989,16.83033
+rzesnica,Rzęśnica,53.52446,15.95191
+jankowo-pomorskie,Jankowo Pomorskie,53.51661,15.77415
+zlocieniec,Złocieniec,53.52796,16.01820
+suliszewo-drawskie,Suliszewo Drawskie,53.51713,15.89267
+drawsko-pomorskie,Drawsko Pomorskie,53.52319,15.82417
+bobrowo-pomorskie,Bobrowo Pomorskie,53.52824,16.07973
+zelislawie-pomorskie,Żelisławie Pomorskie,53.52475,16.14403
+czaplinek,Czaplinek,53.53757,16.23936
+czarne-male,Czarne Małe,53.55748,16.31924
+runowo-pomorskie,Runowo Pomorskie,53.55589,15.52942
+worowo,Worowo,53.68892,15.63489
+klepnica,Klepnica,53.71672,15.65375
+lobez,Łobez,53.63669,15.62769
+chociwel,Chociwel,53.47072,15.33603
+lisowo,Lisowo,53.43128,15.29760
+trabki,Trąbki,53.39544,15.23828
+cieszyno-lobeskie,Cieszyno Łobeskie,53.52028,15.46818
+wegorzyno,Węgorzyno,53.54346,15.56055
+wiewiecko,Wiewiecko,53.52627,15.65057
+lesiecin,Lesięcin,53.58627,15.57084
+swidwin,Świdwin,53.78113,15.77271
+rabino,Rąbino,53.86947,15.95251
+bialogard,Białogard,54.00995,15.97771
+kosciernica,Kościernica,54.05420,16.01094
+nosowko,Nosówko,54.09328,16.05311
+dunowo,Dunowo,54.12244,16.09275
+podborsko,Podborsko,53.93420,16.13879
+tychowo,Tychowo,53.92146,16.23497
+wielanowo,Wielanowo,53.87382,16.32635
+grzmiaca,Grzmiąca,53.83250,16.42111
+nielep,Nielep,53.82962,15.87070
+czarnowesy-pomorskie,Czarnowęsy Pomorskie,53.94003,15.98137
+karlino,Karlino,54.04561,15.88303
+daszewo,Daszewo,54.07677,15.87512
+kolobrzeg,Kołobrzeg,54.18216,15.57226
+wrzosowo,Wrzosowo,54.11447,15.83783
+ustronie-morskie,Ustronie Morskie,54.20026,15.74675
+dygowo,Dygowo,54.14081,15.72683
+jazy,Jazy,54.12915,15.79040
+stramnica,Stramnica,54.15490,15.65013
+glowaczewo,Głowaczewo,54.13069,15.43867
+stary-borek,Stary Borek,54.13794,15.48134
+karcino,Karcino,54.10876,15.39705
+bieczyno-pomorskie,Bieczyno Pomorskie,54.09579,15.35331
+koszalin,Koszalin,54.19074,16.16973
+mscice,Mścice,54.21430,16.07336
+bedzino,Będzino,54.21122,15.99277
+slowienkowo,Słowienkowo,54.20721,15.94197
+milogoszcz,Miłogoszcz,54.20536,15.90941
+tymien,Tymień,54.20534,15.84535
+skibno,Skibno,54.24973,16.30500
+wiekowo,Wiekowo,54.30334,16.38889
+miastko,Miastko,53.99830,16.96541
+slosinko,Słosinko,53.93903,16.97436
+kawcze,Kawcze,54.07253,16.88286
+przytocko,Przytocko,54.12292,16.85744
+ciecholub,Ciecholub,54.17306,16.88781
+biesowice,Biesowice,54.19347,16.88791
+kepka,Kępka,54.21536,16.89711
+galezinowo,Gałęzinowo,54.52302,16.93975
+slupsk,Słupsk,54.46714,17.01656
+kobylnica-slupska,Kobylnica Słupska,54.44243,16.98612
+widzino,Widzino,54.42882,16.96259
+slonowice,Słonowice,54.38356,16.92656
+wrzaca-pomorska,Wrząca Pomorska,54.34341,16.91709
+sycewice,Sycewice,54.41465,16.85029
+reblino,Reblino,54.43042,16.91694
+wrzesnica,Wrześnica,54.40295,16.77830
+jezierzyce-slupskie,Jezierzyce Słupskie,54.50430,17.12141
+damnica,Damnica,54.49798,17.27056
+strzyzyno-slupskie,Strzyżyno Słupskie,54.49108,17.37264
+gluszyno-pomorskie,Głuszyno Pomorskie,54.48989,17.41784
+potegowo,Potęgowo,54.48515,17.48570
+kepice,Kępice,54.24071,16.89079
+ustka,Ustka,54.57874,16.86106
+charnowo-slupskie,Charnowo Słupskie,54.53230,16.91940
+strzelinko,Strzelinko,54.51315,16.96300
+slawno,Sławno,54.35564,16.66852
+korzybie,Korzybie,54.29698,16.87370
+karwice,Karwice,54.34509,16.53591
+darlowo,Darłowo,54.41700,16.40444
+sinczyca,Sińczyca,54.39959,16.48690
+nowy-jaroslaw,Nowy Jarosław,54.39246,16.52592
+boleszewo,Boleszewo,54.37259,16.58445
+lebork,Lębork,54.53362,17.75043
+pogorzelice,Pogorzelice,54.50392,17.64212
+lesnice,Leśnice,54.51410,17.66909
+godetowo,Godętowo,54.58192,17.86328
+bozepole-wielkie,Bożepole Wielkie,54.56903,17.96689
+strzebielino-morskie,Strzebielino Morskie,54.56296,18.02763
+luzino,Luzino,54.56693,18.10260
+gdynia-glowna,Gdynia Główna,54.52113,18.52866
+gdynia-redlowo,Gdynia Redłowo,54.49159,18.53839
+gdynia-wzgorze-sw-maksymiliana,Gdynia Wzgórze Św.Maksymiliana,54.50763,18.53553
+gdynia-orlowo,Gdynia Orłowo,54.47665,18.54888
+sopot,Sopot,54.44175,18.56167
+sopot-kamienny-potok,Sopot Kamienny Potok,54.45746,18.55347
+sopot-wyscigi,Sopot Wyścigi,54.43159,18.56518
+gdynia-chylonia,Gdynia Chylonia,54.54594,18.46310
+gdynia-stocznia-uniwersytet-morski,Gdynia Stocznia Uniwersytet Morski,54.52554,18.51927
+gdynia-grabowek,Gdynia Grabówek,54.53446,18.49607
+gdynia-leszczynki,Gdynia Leszczynki,54.54134,18.47857
+rumia-janowo,Rumia Janowo,54.55954,18.40484
+rumia,Rumia,54.56914,18.38668
+reda,Reda,54.59438,18.35358
+reda-pieleszewo,Reda Pieleszewo,54.60253,18.31592
+gdansk-osowa,Gdańsk Osowa,54.42228,18.45269
+wejherowo,Wejherowo,54.60573,18.22992
+wejherowo-smiechowo,Wejherowo Śmiechowo,54.60193,18.27565
+wejherowo-nanice,Wejherowo Nanice,54.60360,18.24932
+goscicino-wejherowskie,Gościcino Wejherowskie,54.60512,18.16116
+puck,Puck,54.71569,18.40828
+swarzewo,Swarzewo,54.75255,18.38244
+chalupy,Chałupy,54.76141,18.50314
+wladyslawowo,Władysławowo,54.79369,18.40181
+jurata,Jurata,54.68538,18.71272
+kuznica-hel,Kuźnica Hel,54.73642,18.57583
+jastarnia,Jastarnia,54.70166,18.67666
+jastarnia-wczasy,Jastarnia Wczasy,54.70816,18.65477
+hel,Hel,54.61117,18.80094
+wladyslawowo-port,Władysławowo Port,54.79336,18.41819
+zelistrzewo,Żelistrzewo,54.67397,18.41611
+reda-rekowo,Reda Rekowo,54.63169,18.36328
+mrzezino,Mrzezino,54.65306,18.41300
+rozyny,Różyny,54.21147,18.66218
+skowarcz,Skowarcz,54.18566,18.68169
+pszczolki,Pszczółki,54.17450,18.70187
+milobadz,Miłobądz,54.14771,18.73994
+tczew,Tczew,54.09722,18.79006
+lisewo,Lisewo,54.09297,18.82472
+szymankowo,Szymankowo,54.07286,18.92682
+gdansk-lipce,Gdańsk Lipce,54.30233,18.63564
+gdansk-orunia,Gdańsk Orunia,54.32378,18.63433
+stogi-malborskie,Stogi Malborskie,54.06397,18.96903
+pruszcz-gdanski,Pruszcz Gdański,54.25753,18.64696
+cieplewo,Cieplewo,54.23360,18.64759
+stara-pila,Stara Piła,54.32645,18.41344
+gdansk-kokoszki,Gdańsk Kokoszki,54.36208,18.48725
+gdansk-glowny,Gdańsk Główny,54.35628,18.64418
+gdansk-stocznia,Gdańsk Stocznia,54.36463,18.64181
+gdansk-politechnika,Gdańsk Politechnika,54.37418,18.62743
+gdansk-wrzeszcz,Gdańsk Wrzeszcz,54.38213,18.60481
+gdansk-zaspa,Gdańsk Zaspa,54.38992,18.59128
+gdansk-przymorze-uniwersytet,Gdańsk Przymorze-Uniwersytet,54.40059,18.57673
+gdansk-oliwa,Gdańsk Oliwa,54.41014,18.57179
+gdansk-zabianka-awfis,Gdańsk Żabianka - AWFiS,54.42072,18.56850
+malbork-kaldowo,Malbork Kałdowo,54.04683,19.02506
+malbork,Malbork,54.03611,19.04311
+stare-pole,Stare Pole,54.05337,19.20547
+krolewo-malborskie,Królewo Malborskie,54.03724,19.11720
+fiszewo,Fiszewo,54.06735,19.24828
+komorowo-zulawskie,Komorowo Żuławskie,54.10480,19.50997
+dabrowka-malborska,Dąbrówka Malborska,53.97236,19.09169
+gronajny,Gronajny,53.99156,19.05357
+mleczewo,Mleczewo,53.91950,19.12233
+sztum,Sztum,53.92486,19.02115
+gosciszewo,Gościszewo,53.97528,19.01832
+elblag,Elbląg,54.15100,19.41536
+gronowo-elblaskie,Gronowo Elbląskie,54.08967,19.30519
+pelplin,Pelplin,53.92661,18.70669
+kulice-tczewskie,Kulice Tczewskie,53.88035,18.69063
+morzeszczyn,Morzeszczyn,53.83653,18.68613
+smetowo,Smętowo,53.74810,18.68591
+majewo,Majewo,53.80159,18.67972
+subkowy,Subkowy,53.98588,18.75353
+czarlin,Czarlin,54.04800,18.76672
+starogard-gdanski,Starogard Gdański,53.97734,18.52600
+piesienice,Piesienice,53.96501,18.39547
+pinczyn,Pinczyn,53.96235,18.34874
+zblewo,Zblewo,53.94255,18.30507
+bytonia,Bytonia,53.93168,18.26644
+swarozyn,Swarożyn,54.03804,18.65621
+szpegawsk,Szpęgawsk,54.00669,18.60939
+rokitki-tczewskie,Rokitki Tczewskie,54.08097,18.73713
+czersk,Czersk,53.80056,17.97019
+gutowiec,Gutowiec,53.77755,17.86113
+rytel-wies,Rytel Wieś,53.76057,17.77319
+rytel,Rytel,53.74830,17.72541
+krojanty,Krojanty,53.72981,17.65510
+czarna-woda,Czarna Woda,53.85137,18.10899
+lag,Łąg,53.83073,18.06218
+kamienna-karczma,Kamienna Karczma,53.87721,18.16261
+kaliska,Kaliska,53.90336,18.21639
+szlachta,Szlachta,53.76300,18.11919
+bedzmirowice,Będźmirowice,53.78795,18.04256
+olsztyn-glowny,Olsztyn Główny,53.78554,20.49619
+olsztyn-zachodni,Olsztyn Zachodni,53.77852,20.46856
+bukwald,Bukwałd,53.86831,20.37967
+cerkiewnik,Cerkiewnik,53.90949,20.39669
+swobodna,Swobodna,53.93547,20.39267
+dobre-miasto,Dobre Miasto,53.98360,20.38485
+bzowiec,Bzowiec,54.01998,20.31597
+rogiedle,Rogiedle,54.03794,20.28280
+lubomino,Lubomino,54.06655,20.23263
+legajny,Łęgajny,53.82106,20.61734
+barczewo,Barczewo,53.84472,20.70040
+marcinkowo,Marcinkowo,53.69540,20.67116
+pasym,Pasym,53.63238,20.76444
+klewki,Klewki,53.73627,20.56819
+stawiguda,Stawiguda,53.65097,20.40785
+bartag,Bartąg,53.71312,20.44727
+gaglawki,Gągławki,53.68081,20.43750
+gryzliny,Gryźliny,53.61305,20.34648
+olsztynek,Olsztynek,53.58485,20.29507
+waplewo,Waplewo,53.51172,20.35456
+bujaki,Bujaki,53.47939,20.37603
+dobrzyn,Dobrzyń,53.43651,20.38469
+olsztyn-gutkowo,Olsztyn Gutkowo,53.80881,20.40229
+jonkowo,Jonkowo,53.81576,20.29629
+godki,Godki,53.81783,20.25194
+wolowno,Wołowno,53.81667,20.19875
+gamerki-wielkie,Gamerki Wielkie,53.84493,20.13881
+naterki,Naterki,53.74619,20.37661
+unieszewo,Unieszewo,53.72896,20.29936
+czerwonka,Czerwonka,53.91408,20.89311
+gorowo,Górowo,53.95947,20.98440
+wipsowo,Wipsowo,53.89486,20.79782
+korsze,Korsze,54.17250,21.13616
+lankiejmy,Łankiejmy,54.14171,21.06878
+satopy-samulewo,Sątopy-Samulewo,54.07292,21.02419
+tolkiny,Tołkiny,54.11758,21.23539
+linkowo,Linkowo,54.09044,21.26577
+nowy-mlyn,Nowy Młyn,54.06739,21.32450
+ketrzyn,Kętrzyn,54.07276,21.38518
+martiany,Martiany,54.02662,21.51666
+szczytno,Szczytno,53.56033,20.99648
+szymany,Szymany,53.48696,20.96643
+siodmak,Siódmak,53.52442,20.97148
+jesionowiec,Jesionowiec,53.44675,20.99583
+grom,Grom,53.60634,20.86196
+swietajno,Świętajno,53.56274,21.22899
+olszyny,Olszyny,53.55383,21.10728
+jeruty,Jeruty,53.55269,21.15404
+kolonia,Kolonia,53.56730,21.27180
+spychowo,Spychowo,53.59100,21.35436
+ruciane-nida,Ruciane-Nida,53.64916,21.56301
+ruciane-nida-zachod,Ruciane-Nida Zachód,53.64230,21.52273
+morag,Morąg,53.91903,19.92289
+zielonka-paslecka,Zielonka Pasłęcka,53.98138,19.70073
+nowa-wies-cierpkie,Nowa Wieś Cierpkie,54.02449,19.65638
+paslek,Pasłęk,54.05583,19.65633
+bogaczewo,Bogaczewo,54.10017,19.57348
+maldyty,Małdyty,53.92101,19.73603
+dobrocin,Dobrocin,53.91001,19.82918
+zabi-rog,Żabi Róg,53.87642,20.01753
+morag-kolonia,Morąg Kolonia,53.90991,19.94582
+kozia-gora,Kozia Góra,53.85381,20.08022
+braniewo,Braniewo,54.38116,19.84213
+jarzebiec,Jarzębiec,54.31264,19.99336
+wysoka-braniewska,Wysoka Braniewska,54.27924,20.02124
+pieniezno,Pieniężno,54.24014,20.12468
+zugienie,Żugienie,54.25933,20.08807
+henrykowo,Henrykowo,54.17403,20.14453
+orneta,Orneta,54.11447,20.15106
+grodzie,Grodzie,54.34520,19.96175
+elk,Ełk,53.82536,22.36207
+stare-juchy,Stare Juchy,53.92496,22.16922
+woszczele,Woszczele,53.85986,22.24876
+wydminy,Wydminy,53.97689,22.03260
+prostki,Prostki,53.69512,22.43181
+elk-szyba-wschod,Ełk Szyba Wschód,53.80100,22.37294
+lipinskie-male,Lipińskie Małe,53.73625,22.39758
+grajewo,Grajewo,53.64975,22.44856
+bajtkowo,Bajtkowo,53.73713,22.24008
+elk-szyba-zachod,Ełk Szyba Zachód,53.80230,22.37027
+nowa-wies-elcka,Nowa Wieś Ełcka,53.77008,22.32050
+pogorzel-wielka,Pogorzel Wielka,53.70725,22.14992
+drygaly,Drygały,53.67919,22.10393
+biala-piska,Biała Piska,53.61494,22.06563
+kaliszki,Kaliszki,53.62044,22.00633
+stare-guty,Stare Guty,53.61407,21.92450
+pisz,Pisz,53.63182,21.79382
+szeroki-bor,Szeroki Bór,53.63975,21.69964
+gizycko,Giżycko,54.03186,21.77798
+siedliska,Siedliska,54.00040,21.91370
+sterlawki-wielkie,Sterławki Wielkie,54.01513,21.57506
+wilkasy-niegocin,Wilkasy Niegocin,54.01961,21.73798
+sterlawki-male,Sterławki Małe,54.01171,21.64638
+suwalki,Suwałki,54.10598,22.94503
+trakiszki,Trakiszki,54.23963,23.20813
+plociczno-kolo-suwalk,Płociczno koło Suwałk,54.03786,22.94891
+szczepki,Szczepki,53.96707,22.98429
+blizna,Blizna,53.90638,23.01501
+augustow-port,Augustów Port,53.86258,23.00360
+augustow,Augustów,53.85256,23.02636
+kostrzyn,Kostrzyn,52.59146,14.64698
+namyslin,Namyślin,52.67811,14.57052
+lugi-gorzyckie,Ługi Górzyckie,52.51589,14.65093
+gorzyca,Górzyca,52.49966,14.65704
+laski-lubuskie,Laski Lubuskie,52.45977,14.71271
+radow,Radów,52.43191,14.74240
+kowalow,Kowalów,52.39731,14.75983
+godkow,Godków,52.90107,14.45863
+chojna,Chojna,52.96347,14.44425
+lisie-pole,Lisie Pole,53.02233,14.45066
+witnica-chojenska,Witnica Chojeńska,52.86621,14.45120
+mieszkowice,Mieszkowice,52.78206,14.48569
+boleszkowice,Boleszkowice,52.73739,14.51831
+bielin,Bielin,52.82314,14.46644
+gorzow-wielkopolski,Gorzów Wielkopolski,52.72759,15.22871
+gorzow-wielkopolski-zieleniec,Gorzów Wielkopolski Zieleniec,52.69983,15.26153
+gorzow-wielkopolski-karnin,Gorzów Wielkopolski Karnin,52.68919,15.28055
+gorzow-wielkopolski-zamoscie,Gorzów Wielkopolski Zamoście,52.72266,15.23906
+gorzow-wielkopolski-wieprzyce,Gorzów Wielkopolski Wieprzyce,52.71831,15.18193
+lupowo,Łupowo,52.70086,15.12345
+bogdaniec,Bogdaniec,52.68911,15.07853
+nowiny-wielkie,Nowiny Wielkie,52.67265,15.00300
+witnica,Witnica,52.66742,14.89682
+kamien-maly,Kamień Mały,52.64171,14.78038
+dabroszyn,Dąbroszyn,52.61878,14.71217
+zwierzyn,Zwierzyn,52.83635,15.58335
+stare-kurowo,Stare Kurowo,52.85444,15.67754
+sarbiewo,Sarbiewo,52.81939,15.54594
+gorki-noteckie,Górki Noteckie,52.79329,15.48850
+santok,Santok,52.74312,15.41545
+pila-glowna,Piła Główna,53.14329,16.74331
+dziembowko,Dziembówko,53.07078,16.81524
+pila-kalina,Piła Kalina,53.10175,16.78806
+kaczory,Kaczory,53.10592,16.88021
+miasteczko-krajenskie,Miasteczko Krajeńskie,53.09262,17.02067
+bialosliwie,Białośliwie,53.09728,17.12208
+krostkowo,Krostkowo,53.10779,17.20731
+wyrzysk-osiek,Wyrzysk Osiek,53.11919,17.29516
+stobno,Stobno,53.10873,16.62509
+biala-pilska,Biała Pilska,53.06127,16.51709
+trzcianka,Trzcianka,53.03358,16.46600
+walcz,Wałcz,53.27452,16.48446
+walcz-radun,Wałcz Raduń,53.27678,16.45738
+straczno,Strączno,53.24314,16.36089
+rutwica,Rutwica,53.22937,16.28299
+tuczno-krajenskie,Tuczno Krajeńskie,53.21902,16.17591
+dobino-waleckie,Dobino Wałeckie,53.22687,16.52487
+szydlowo-krajenskie,Szydłowo Krajeńskie,53.16676,16.60695
+kalisz-pomorski,Kalisz Pomorski,53.27783,15.88067
+bialy-zdroj-poludniowy,Biały Zdrój Południowy,53.25652,15.95449
+krepa-krajenska,Krępa Krajeńska,53.22778,16.05764
+jeziorki-waleckie,Jeziorki Wałeckie,53.22562,16.10748
+prostynia,Prostynia,53.30523,15.77394
+cybowo,Cybowo,53.29311,15.81676
+zolwino,Żółwino,53.28893,15.69041
+zlotow,Złotów,53.35930,17.05312
+zakrzewo-zlotowskie,Zakrzewo Złotowskie,53.41677,17.14137
+lipka-krajenska,Lipka Krajeńska,53.49727,17.25718
+krajenka,Krajenka,53.28883,16.99111
+dolnik,Dolnik,53.25619,16.93081
+skorka,Skórka,53.21858,16.86997
+pila-podlasie,Piła Podlasie,53.16296,16.77719
+brzezno-czluchowskie,Brzeźno Człuchowskie,53.67088,17.48187
+czluchow,Człuchów,53.65749,17.37079
+chojnice,Chojnice,53.68927,17.57755
+powalki,Powałki,53.74339,17.59978
+mecikal,Męcikał,53.83231,17.67105
+zabno-kolo-chojnic,Żabno koło Chojnic,53.85437,17.70707
+brusy,Brusy,53.88229,17.72792
+lubnia,Lubnia,53.93557,17.74237
+raclawki,Racławki,53.66789,17.65428
+silno,Silno,53.64408,17.69344
+piastoszyn,Piastoszyn,53.62111,17.72961
+zalno,Żalno,53.59811,17.75908
+tuchola,Tuchola,53.58422,17.85925
+cekcyn,Cekcyn,53.57639,18.02761
+wierzchowo-czluchowskie,Wierzchowo Człuchowskie,53.61778,17.44698
+moszczenica-pomorska,Moszczenica Pomorska,53.64208,17.48829
+bukowo-czluchowskie,Bukowo Człuchowskie,53.57346,17.37228
+rogozno-wielkopolskie,Rogoźno Wielkopolskie,52.75431,16.97169
+tarnowo-rogozinskie,Tarnowo Rogozińskie,52.80388,16.97524
+sokolowo-budzynskie,Sokołowo Budzyńskie,52.83840,16.96922
+budzyn,Budzyń,52.89421,16.96613
+ostrowki-kolo-chodziezy,Ostrówki koło Chodzieży,52.93344,16.92666
+chodziez,Chodzież,52.99422,16.90967
+milcz,Milcz,53.04236,16.85683
+jastrowie,Jastrowie,53.40830,16.79833
+ptusza,Ptusza,53.36478,16.78389
+plytnica,Płytnica,53.29503,16.75025
+stara-lubianka,Stara Łubianka,53.23242,16.70532
+maksymilianowo,Maksymilianowo,53.21497,18.02983
+stronno,Stronno,53.28569,18.05917
+wudzyn,Wudzyn,53.32242,18.07567
+serock,Serock,53.36108,18.08975
+lubania-lipiny,Lubania Lipiny,53.38889,18.09706
+swiekatowo,Świekatowo,53.41700,18.10508
+lipienica,Lipienica,53.44656,18.11244
+bladzim,Błądzim,53.47603,18.11506
+wierzchucin,Wierzchucin,53.54794,18.11292
+wierzchucin-stary,Wierzchucin Stary,53.55703,18.09122
+zielonka-pomorska,Zielonka Pomorska,53.57744,18.10922
+male-gacno,Małe Gacno,53.60825,18.10936
+zarosle,Zarośle,53.66439,18.11742
+rosochatka,Rosochatka,53.70539,18.11464
+lipowa-tucholska,Lipowa Tucholska,53.75339,18.10911
+kotomierz,Kotomierz,53.28436,18.12081
+bydgoszcz-wschod,Bydgoszcz Wschód,53.12789,18.08220
+bydgoszcz-bielawy,Bydgoszcz Bielawy,53.13185,18.05309
+bydgoszcz-brdyujscie,Bydgoszcz Brdyujście,53.13375,18.11189
+bydgoszcz-politechnika,Bydgoszcz Politechnika,53.14067,18.13675
+bydgoszcz-legnowo,Bydgoszcz Łęgnowo,53.10822,18.11328
+terespol-pomorski,Terespol Pomorski,53.40954,18.35161
+parlin,Parlin,53.37106,18.27053
+pruszcz-pomorski,Pruszcz Pomorski,53.33445,18.20056
+laskowice-pomorskie,Laskowice Pomorskie,53.49092,18.45577
+warlubie,Warlubie,53.58839,18.62261
+twarda-gora,Twarda Góra,53.68242,18.67147
+czersk-swiecki,Czersk Świecki,53.55133,18.46789
+dabrowy,Dąbrowy,53.51747,18.48992
+kwiatki,Kwiatki,53.57833,18.42158
+osie,Osie,53.59361,18.34761
+tlen,Tleń,53.61428,18.26678
+lazek,Łążek,53.64047,18.21547
+sliwiczki,Śliwiczki,53.68717,18.19294
+sliwice,Śliwice,53.71339,18.18208
+laski-tucholskie,Laski Tucholskie,53.67036,18.20475
+leosia,Leosia,53.48665,18.38718
+drzycim,Drzycim,53.50606,18.31089
+jastrzebie-pomorskie,Jastrzębie Pomorskie,53.51981,18.26708
+lniano,Lniano,53.52659,18.20552
+jezewo,Jeżewo,53.50732,18.48846
+dubielno,Dubielno,53.50871,18.55648
+grupa,Grupa,53.50397,18.62997
+dolna-grupa,Dolna Grupa,53.49880,18.67716
+koscierzyna,Kościerzyna,54.12114,17.99392
+lubiana,Łubiana,54.11478,17.86627
+garczyn,Garczyn,54.12370,17.91060
+lipusz,Lipusz,54.09685,17.78023
+lipuska-huta,Lipuska Huta,54.07029,17.76728
+kalisz-kaszubski,Kalisz Kaszubski,54.04507,17.78610
+dziemiany-kaszubskie,Dziemiany Kaszubskie,54.01143,17.77533
+radun,Raduń,53.96956,17.77861
+skorzewo,Skorzewo,54.16514,17.98096
+golubie-kaszubskie,Gołubie Kaszubskie,54.21237,18.03654
+krzeszna,Krzeszna,54.23550,18.08825
+wiezyca,Wieżyca,54.23457,18.12750
+slawki,Sławki,54.25714,18.17606
+somonino,Somonino,54.26953,18.19278
+kielpino-kartuskie,Kiełpino Kartuskie,54.28722,18.23136
+borkowo,Borkowo,54.33336,18.33349
+zukowo-wschodnie,Żukowo Wschodnie,54.34830,18.37281
+pepowo-kartuskie,Pępowo Kartuskie,54.36686,18.40171
+rebiechowo,Rębiechowo,54.38857,18.42142
+kartuzy,Kartuzy,54.33452,18.20665
+zukowo-zachodnie,Żukowo Zachodnie,54.33246,18.34772
+naklo-nad-notecia,Nakło nad Notecią,53.14258,17.60717
+samostrzel,Samostrzel,53.12781,17.43488
+anieliny,Anieliny,53.12898,17.48443
+jadwizyn,Jadwiżyn,53.12387,17.37120
+bydgoszcz-lesna,Bydgoszcz Leśna,53.14428,18.03099
+bydgoszcz-glowna,Bydgoszcz Główna,53.13534,17.99198
+rynkowo-wiadukt,Rynkowo Wiadukt,53.15203,18.00538
+zielonczyn,Zielonczyn,53.15101,17.80809
+bydgoszcz-zachod,Bydgoszcz Zachód,53.13614,17.94871
+bydgoszcz-osowa-gora,Bydgoszcz Osowa Góra,53.14815,17.91220
+pawlowek,Pawłówek,53.15226,17.85704
+slesin,Ślesin,53.15609,17.70016
+trzciniec,Trzciniec,53.08590,17.94802
+brzoza-bydgoska,Brzoza Bydgoska,53.02737,18.02045
+bydgoszcz-fordon,Bydgoszcz Fordon,53.14656,18.15783
+ostromecko,Ostromecko,53.14392,18.21461
+dabrowa-chelminska,Dąbrowa Chełmińska,53.17500,18.28156
+gzin,Gzin,53.19206,18.33189
+inowroclaw,Inowrocław,52.80520,18.24356
+wieclawice,Więcławice,52.84092,18.30406
+wierzchoslawice,Wierzchosławice,52.86793,18.35746
+gniewkowo,Gniewkowo,52.88796,18.40355
+suchatowka,Suchatówka,52.91030,18.47978
+inowroclaw-rabinek,Inowrocław Rąbinek,52.76923,18.24375
+jaksice,Jaksice,52.85567,18.19981
+zlotniki-kujawskie,Złotniki Kujawskie,52.90340,18.14756
+nowa-wies-wielka,Nowa Wieś Wielka,52.96933,18.09647
+chmielniki-bydgoskie,Chmielniki Bydgoskie,53.00253,18.04910
+janikowo,Janikowo,52.74943,18.11668
+kolodziejewo,Kołodziejewo,52.71336,18.03573
+babiak,Babiak,52.35358,18.67014
+piotrkow-kujawski,Piotrków Kujawski,52.53733,18.51961
+zdunska-wola-karsznice,Zduńska Wola Karsznice,51.58890,18.99487
+zdunska-wola-poludniowa,Zduńska Wola Południowa,51.58038,19.00530
+zdunska-wola,Zduńska Wola,51.61127,18.94663
+mecka-wola,Męcka Wola,51.60912,18.84666
+sieradz,Sieradz,51.59756,18.71336
+sieradz-meka,Sieradz Męka,51.61489,18.77811
+sieradz-warta,Sieradz Warta,51.60302,18.73036
+kozuby,Kozuby,51.49358,19.02275
+siedlce-laskie,Siedlce Łaskie,51.45689,19.01536
+chociw-laski,Chociw Łaski,51.40610,18.98257
+rusiec-lodzki,Rusiec Łódzki,51.31703,18.96944
+huta,Huta,51.27003,18.96336
+wielowies,Wielowieś,50.62531,21.75869
+torun-glowny,Toruń Główny,53.00007,18.61443
+torun-czerniewice,Toruń Czerniewice,52.97553,18.67342
+brzoza-torunska,Brzoza Toruńska,52.96136,18.68532
+otloczyn,Otłoczyn,52.91256,18.69257
+torun-kluczyki,Toruń Kluczyki,52.99005,18.57829
+torun-miasto,Toruń Miasto,53.01318,18.61921
+cierpice,Cierpice,52.98877,18.46994
+przylubie,Przyłubie,53.04956,18.32468
+solec-kujawski,Solec Kujawski,53.07841,18.22475
+torun-wschodni,Toruń Wschodni,53.02657,18.63361
+lubicz,Lubicz,53.02794,18.74531
+grebocin,Grębocin,53.04594,18.68964
+dobrzejewice,Dobrzejewice,52.99978,18.82078
+obrowo,Obrowo,52.96833,18.88267
+czernikowo,Czernikowo,52.93947,18.95108
+ograszka,Ograszka,52.90583,19.02622
+konotopie,Konotopie,52.86989,19.10297
+lipno,Lipno,52.85414,19.17897
+karnkowo,Karnkowo,52.86703,19.26458
+skepe,Skępe,52.87211,19.34172
+czermno,Czermno,52.86367,19.42494
+papowo-torunskie,Papowo Toruńskie,53.06722,18.69231
+chelmza,Chełmża,53.18492,18.59833
+wroclawki,Wrocławki,53.24094,18.61011
+kornatowo,Kornatowo,53.29703,18.64764
+firlus,Firlus,53.26928,18.62933
+ostaszewo-torunskie,Ostaszewo Toruńskie,53.10556,18.62725
+grzywna,Grzywna,53.15450,18.61722
+lysomice,Łysomice,53.08569,18.62025
+unislaw-pomorski,Unisław Pomorski,53.20661,18.38419
+grzybno,Grzybno,53.20361,18.44600
+nawra,Nawra,53.20322,18.48450
+gluchowo,Głuchowo,53.20206,18.54367
+grudziadz,Grudziądz,53.48197,18.76156
+grudziadz-owczarki,Grudziądz Owczarki,53.50275,18.84681
+rogozno-pomorskie,Rogóźno Pomorskie,53.54352,18.91101
+gardeja,Gardeja,53.59169,18.93289
+nicwald,Nicwałd,53.45986,18.87958
+melno,Mełno,53.43666,18.94800
+grudziadz-mniszek,Grudziądz Mniszek,53.43297,18.72522
+grudziadz-przedmiescie,Grudziądz Przedmieście,53.47492,18.74897
+waldowo-szlacheckie,Wałdowo Szlacheckie,53.38722,18.72275
+gorzuchowo-chelminskie,Gorzuchowo Chełmińskie,53.35036,18.69319
+dragacz,Dragacz,53.49133,18.71078
+kowalewo-pomorskie,Kowalewo Pomorskie,53.16428,18.86986
+zielen,Zieleń,53.21652,18.93096
+wabrzezno,Wąbrzeźno,53.26482,18.98155
+rychnowo-wielkie,Rychnowo Wielkie,53.14256,18.81467
+kamionki-jezioro,Kamionki Jezioro,53.12917,18.77811
+turzno,Turzno,53.10048,18.73612
+jablonowo-pomorskie,Jabłonowo Pomorskie,53.39353,19.16334
+ksiazki,Książki,53.32989,19.06744
+bursztynowo,Bursztynowo,53.40136,19.07004
+linowo,Linowo,53.41113,19.03322
+boguszewo,Boguszewo,53.42202,19.00056
+konojady,Konojady,53.34944,19.22754
+ostrowite-kolo-jablonowa,Ostrowite koło Jabłonowa,53.43310,19.26721
+biskupiec-pomorski,Biskupiec Pomorski,53.48935,19.38916
+lipinki,Lipinki,53.46399,19.31739
+brodnica,Brodnica,53.26350,19.40556
+najmowo,Najmowo,53.30672,19.32176
+rypin,Rypin,53.06905,19.42770
+aleksandrow-kujawski,Aleksandrów Kujawski,52.87586,18.69639
+nieszawa-waganiec,Nieszawa Waganiec,52.80307,18.87028
+turzno-kujawskie,Turzno Kujawskie,52.83341,18.78109
+ciechocinek,Ciechocinek,52.88119,18.78794
+odolion,Odolion,52.86982,18.74664
+wloclawek,Włocławek,52.65358,19.05869
+wloclawek-zazamcze,Włocławek Zazamcze,52.66861,19.03720
+lubanie,Lubanie,52.74294,18.92422
+czerniewice,Czerniewice,52.50873,19.08942
+warzachewka,Warząchewka,52.58476,19.08077
+golaszewo-kujawskie,Gołaszewo Kujawskie,52.54683,19.09115
+wiktorowo,Wiktorowo,52.46411,19.10633
+kaliska-kujawskie,Kaliska Kujawskie,52.41186,19.12396
+rutkowice,Rutkowice,52.36122,19.15914
+ilawa-glowna,Iława Główna,53.58105,19.57313
+ilawa-miasto,Iława Miasto,53.59563,19.54873
+rudzienice-suskie,Rudzienice Suskie,53.63849,19.66926
+pikus,Pikus,53.65642,19.73794
+samborowo,Samborowo,53.67179,19.82144
+smolniki,Smolniki,53.53992,19.60467
+rakowice,Rakowice,53.47813,19.64152
+zajaczkowo-lubawskie,Zajączkowo Lubawskie,53.44439,19.71276
+montowo,Montowo,53.41586,19.78047
+hartowiec,Hartowiec,53.39615,19.84518
+jeglia,Jeglia,53.39105,19.87621
+jamielnik,Jamielnik,53.52904,19.50164
+ostroda,Ostróda,53.69963,19.95108
+stare-jablonki,Stare Jabłonki,53.69134,20.09364
+lubajny,Lubajny,53.70005,20.02680
+biesal,Biesal,53.72019,20.19335
+nidzica,Nidzica,53.35757,20.41413
+kozlowo,Kozłowo,53.30956,20.31172
+zakrzow-sarnowo,Zakrzów-Sarnowo,53.28257,20.28325
+ilowo,Iłowo,53.16500,20.29428
+narzym,Narzym,53.18956,20.25436
+dzialdowo,Działdowo,53.23750,20.16797
+burkat,Burkat,53.27504,20.13543
+turza-wielka,Turza Wielka,53.30450,20.08497
+gralewo,Gralewo,53.32012,20.03510
+zabiny,Żabiny,53.34272,19.98179
+tuczki,Tuczki,53.35196,19.95490
+rybno-pomorskie,Rybno Pomorskie,53.38098,19.91319
+prabuty,Prabuty,53.75894,19.20950
+susz,Susz,53.71112,19.32925
+redaki,Redaki,53.67056,19.40953
+zabrowo,Ząbrowo,53.63189,19.46536
+mikolajki-pomorskie,Mikołajki Pomorskie,53.84973,19.15848
+gdakowo,Gdakowo,53.81647,19.17012
+kwidzyn,Kwidzyn,53.73131,18.93375
+sadlinki,Sadlinki,53.66723,18.88031
+dziwno,Dziwno,53.61825,18.90192
+brachlewo,Brachlewo,53.80275,18.96086
+ryjewo,Ryjewo,53.84285,18.95688
+sztumska-wies,Sztumska Wieś,53.89524,19.00180
+ostroleka,Ostrołęka,53.05617,21.61711
+grabowo,Grabowo,53.07254,21.53418
+nowa-wies-koscielna,Nowa Wieś Kościelna,53.08372,21.41644
+zabiele-wielkie,Zabiele Wielkie,53.08513,21.33980
+jastrzabka,Jastrząbka,53.13218,21.24904
+parciaki,Parciaki,53.17558,21.14025
+olszewka,Olszewka,53.21717,21.05461
+raszujka,Raszujka,53.24610,21.00392
+chorzele,Chorzele,53.28375,20.93664
+wielbark,Wielbark,53.39867,20.95267
+kurpie,Kurpie,53.05583,21.75463
+sniadowo,Śniadowo,53.04381,21.98975
+kulesze-koscielne,Kulesze Kościelne,53.01969,22.52039
+sokoly,Sokoły,53.00000,22.71881
+gierwaty,Gierwaty,52.99168,21.60425
+goworowo,Goworowo,52.92104,21.58198
+pasieki,Pasieki,52.85390,21.56067
+prabuty-gory,Prabuty Góry,52.80604,21.56980
+przetycz,Przetycz,52.76907,21.55112
+dalekie,Dalekie,52.68251,21.49446
+leszczydol,Leszczydół,52.64573,21.46918
+zygmuntowo-mazowieckie,Zygmuntowo Mazowieckie,52.72743,21.52550
+lomza,Łomża,53.17221,22.06464
+bialystok,Białystok,53.13352,23.13536
+bialystok-starosielce,Białystok Starosielce,53.12117,23.08670
+bialystok-bacieczki,Białystok Bacieczki,53.15122,23.07153
+fasty,Fasty,53.17668,23.02500
+dobrzyniewo-duze,Dobrzyniewo Duże,53.19449,23.00232
+borsukowka,Borsukówka,53.22731,22.93089
+knyszyn,Knyszyn,53.28412,22.89680
+zastocze,Zastocze,53.31175,22.85783
+czechowizna,Czechowizna,53.35120,22.83684
+monki,Mońki,53.40258,22.79667
+goniadz,Goniądz,53.45945,22.72646
+osowiec,Osowiec,53.47306,22.65666
+podlasek,Podlasek,53.55804,22.53477
+ruda,Ruda,53.58929,22.52063
+wasilkow,Wasilków,53.19783,23.17672
+czarny-blok,Czarny Blok,53.24854,23.20924
+wolka-ratowiecka,Wólka Ratowiecka,53.27917,23.24300
+czarna-bialostocka,Czarna Białostocka,53.30594,23.28011
+machnacz,Machnacz,53.33172,23.31824
+rozedranka,Rozedranka,53.35912,23.36541
+lewickie,Lewickie,53.02796,23.12483
+bialystok-stadion,Białystok Stadion,53.09781,23.12944
+holowki-duze,Hołówki Duże,52.97132,23.09534
+zimnochy,Zimnochy,52.95478,23.08555
+strabla,Strabla,52.90164,23.11339
+rajsk,Rajsk,52.84356,23.14114
+bielsk-podlaski,Bielsk Podlaski,52.76142,23.18811
+lewki,Lewki,52.73031,23.21133
+gregorowce,Gregorowce,52.66272,23.24131
+podbiele,Podbiele,52.69181,23.21056
+lapy,Łapy,52.99051,22.88436
+uhowo,Uhowo,53.00468,22.90933
+bojary,Bojary,53.02734,22.94897
+baciuty,Baciuty,53.04655,22.98255
+trypucie,Trypucie,53.07100,23.02533
+niewodnica,Niewodnica,53.08277,23.04579
+klepacze,Klepacze,53.10242,23.08013
+szepietowo,Szepietowo,52.87014,22.54119
+lapy-osse,Łapy Osse,52.97403,22.83997
+zdrody-nowe,Zdrody Nowe,52.95406,22.78222
+racibory,Racibory,52.92908,22.71014
+jablon-koscielna,Jabłoń Kościelna,52.90853,22.65106
+szymbory,Szymbory,52.89221,22.60418
+dabrowa-lazy,Dąbrowa Łazy,52.84044,22.45672
+kity,Kity,52.82755,22.42018
+czyzew,Czyżew,52.79978,22.34217
+szulborze-wielkie,Szulborze Wielkie,52.76047,22.22708
+sokolka,Sokółka,53.40312,23.50648
+kundzin,Kundzin,53.43926,23.59056
+czuprynowo,Czuprynowo,53.47232,23.63159
+gliniszcze,Gliniszcze,53.46514,23.50139
+racewo,Racewo,53.49793,23.48458
+sidra,Sidra,53.54478,23.44650
+rozanystok,Różanystok,53.62344,23.39200
+dabrowa-bialostocka,Dąbrowa Białostocka,53.64858,23.36478
+kamienna-nowa,Kamienna Nowa,53.69152,23.26281
+ostrowie-biebrzanskie,Ostrowie Biebrzańskie,53.71977,23.24395
+jastrzebna,Jastrzębna,53.74567,23.19849
+balinka,Balinka,53.76796,23.16119
+kuznica-bialostocka,Kuźnica Białostocka,53.51200,23.64249
+czeremcha,Czeremcha,52.51867,23.35356
+dobrowoda,Dobrowoda,52.56140,23.39120
+policzna,Policzna,52.58956,23.42392
+kleszczele,Kleszczele,52.56419,23.31925
+suchowolce,Suchowolce,52.61732,23.28370
+borowiki,Borowiki,52.48324,23.22140
+nowy-nurzec,Nowy Nurzec,52.47254,23.17653
+nurzec,Nurzec,52.46008,23.08291
+sycze,Sycze,52.42969,22.99997
+siemiatycze,Siemiatycze,52.38994,22.94386
+hajnowka,Hajnówka,52.73335,23.58356
+orzeszkowo,Orzeszkowo,52.68221,23.53402
+rzepin,Rzepin,52.35019,14.81529
+drzensko,Drzeńsko,52.36985,14.77144
+jerzmanice-lubuskie,Jerzmanice Lubuskie,52.30663,14.86744
+gadkow-wielki,Gądków Wielki,52.24622,14.96356
+kunowice,Kunowice,52.34180,14.63885
+boczow,Boczów,52.32676,14.94641
+torzym,Torzym,52.31269,15.05819
+zbaszynek,Zbąszynek,52.24197,15.81758
+zbaszyn,Zbąszyń,52.25948,15.89514
+zbaszyn-przedmiescie,Zbąszyń Przedmieście,52.25683,15.92712
+babimost,Babimost,52.16818,15.81506
+chrosnica,Chrośnica,52.28137,15.99170
+jastrzebsko,Jastrzębsko,52.29516,16.06126
+nowy-tomysl,Nowy Tomyśl,52.30414,16.13086
+satopy,Sątopy,52.30331,16.20350
+porazyn,Porażyn,52.30228,16.28670
+lutol-suchy,Lutol Suchy,52.34383,15.75458
+panowice,Panowice,52.36075,15.73469
+bukowiec-miedzyrzecki,Bukowiec Miedzyrzecki,52.38538,15.70622
+stefanowo,Stefanowo,52.23600,15.97223
+chociszewo-rogoziniec,Chociszewo Rogoziniec,52.30715,15.76989
+dabrowka-wielkopolska,Dąbrówka Wielkopolska,52.27775,15.80003
+belecin-wielkopolski,Belęcin Wielkopolski,52.20367,16.00842
+tuchorza,Tuchorza,52.16737,16.04786
+skwierzyna,Skwierzyna,52.59044,15.49972
+brzozowiec-gorzowski,Brzozowiec Gorzowski,52.65294,15.36844
+trzebiszewo,Trzebiszewo,52.62550,15.40554
+deszczno,Deszczno,52.67175,15.30667
+popowo-skwierzynskie,Popowo Skwierzyńskie,52.53568,15.52225
+glebokie-miedzyrzeckie,Głębokie Międzyrzeckie,52.48474,15.53395
+miedzyrzecz,Międzyrzecz,52.44497,15.59357
+opalenica,Opalenica,52.30947,16.39871
+buk,Buk,52.34344,16.52063
+wojnowice-wielkopolskie,Wojnowice Wielkopolskie,52.32700,16.46694
+otusz,Otusz,52.34670,16.59740
+dopiewo,Dopiewo,52.35373,16.67794
+sulechow,Sulechów,52.09225,15.61772
+legowo-sulechowskie,Łęgowo Sulechowskie,52.13241,15.67451
+czerwiensk,Czerwieńsk,52.01525,15.41209
+bedow,Będów,52.07343,15.31121
+nietkowice,Nietkowice,52.05726,15.35206
+radnica,Radnica,52.09015,15.26885
+bytnica,Bytnica,52.13140,15.14819
+budachow,Budachów,52.15300,15.08157
+pliszka,Pliszka,52.20461,15.01681
+ciemnice,Ciemnice,52.03945,15.23349
+laski-odrzanskie,Laski Odrzańskie,52.03595,15.30632
+nietkow,Nietków,52.02586,15.34361
+krosno-odrzanskie,Krosno Odrzańskie,52.03187,15.09391
+wezyska,Wężyska,52.01276,14.95156
+zielona-gora-glowna,Zielona Góra Główna,51.94744,15.51348
+buchalow,Buchałów,51.91700,15.36289
+letnica,Letnica,51.89006,15.31874
+kozla-kozuchowska,Koźla Kożuchowska,51.87241,15.31884
+bogaczow,Bogaczów,51.84374,15.26764
+nowogrod-bobrzanski,Nowogród Bobrzański,51.81208,15.24444
+nowogrod-osiedle,Nowogród Osiedle,51.79508,15.22561
+zielona-gora-stary-kisielin,Zielona Góra Stary Kisielin,51.93639,15.59025
+zielona-gora-przylep,Zielona Góra Przylep,51.97706,15.43847
+niedoradz,Niedoradz,51.86544,15.66441
+gubin,Gubin,51.97848,14.72107
+walowice,Wałowice,51.98453,14.79312
+swiebodzin,Świebodzin,52.24518,15.53968
+szczaniec,Szczaniec,52.26439,15.69356
+kupienino,Kupienino,52.25740,15.61407
+wilkowo-swiebodzinskie,Wilkowo Świebodzińskie,52.25653,15.46858
+mostki,Mostki,52.26930,15.39410
+toporow,Toporów,52.26013,15.26058
+drzewce,Drzewce,52.26722,15.16667
+poznan-antoninek,Poznań Antoninek,52.40636,17.03936
+swarzedz,Swarzędz,52.40423,17.07410
+paczkowo,Paczkowo,52.39676,17.16074
+poznan-staroleka,Poznań Starołęka,52.36657,16.93373
+poznan-debina,Poznań Dębina,52.37339,16.91074
+poznan-krzesiny,Poznań Krzesiny,52.34028,16.97775
+zlotniki,Złotniki,52.49600,16.83596
+poznan-podolany,Poznań Podolany,52.44735,16.88090
+wargowo,Wargowo,52.58490,16.82271
+goleczewo,Golęczewo,52.53595,16.82786
+chludowo,Chludowo,52.56014,16.82530
+poznan-gorczyn,Poznań Górczyn,52.38025,16.87958
+poznan-junikowo,Poznań Junikowo,52.37783,16.82443
+paledzie,Palędzie,52.37456,16.74905
+szamotuly,Szamotuły,52.60342,16.58558
+baborowko,Baborówko,52.58278,16.62686
+pamiatkowo,Pamiątkowo,52.55365,16.68508
+peckowo,Pęckowo,52.66420,16.48892
+wronki,Wronki,52.70503,16.38694
+mokrz,Mokrz,52.74117,16.27797
+mialy,Miały,52.80925,16.17596
+drawski-mlyn,Drawski Młyn,52.85989,16.09453
+krzyz,Krzyż,52.87743,16.01791
+stare-bielice,Stare Bielice,52.85345,15.92181
+drawiny,Drawiny,52.89708,15.94976
+podlesiec,Podlesiec,52.93639,15.87772
+mierzecin,Mierzęcin,52.94936,15.83292
+dobiegniew,Dobiegniew,52.96828,15.74728
+bierzwnik,Bierzwnik,53.02431,15.65753
+nowe-drezdenko,Nowe Drezdenko,52.85381,15.83386
+wielen,Wieleń,52.90730,16.17975
+biernatowo,Biernatowo,52.95713,16.34288
+siedlisko-czarnkowskie,Siedlisko Czarnkowskie,52.98354,16.39836
+choszczno,Choszczno,53.16528,15.40322
+stary-klukom,Stary Klukom,53.13255,15.45401
+slonice,Słonice,53.09128,15.51732
+rebusz,Rębusz,53.05301,15.59196
+ziemomysl,Ziemomyśl,53.16700,15.30256
+oborniki-wielkopolskie,Oborniki Wielkopolskie,52.65750,16.83111
+parkowo,Parkowo,52.70837,16.91521
+oborniki-wielkopolskie-miasto,Oborniki Wielkopolskie Miasto,52.64629,16.82043
+roznowo,Rożnowo,52.67914,16.87173
+poznan-wschod,Poznań Wschód,52.41821,16.97150
+poznan-karolin,Poznań Karolin,52.43835,16.98142
+czerwonak,Czerwonak,52.46852,16.97964
+owinska,Owińska,52.51151,16.98760
+bolechowo,Bolechowo,52.53948,16.97927
+murowana-goslina,Murowana Goślina,52.57480,17.01553
+lopuchowo,Łopuchowo,52.61365,17.09532
+poznan-garbary,Poznań Garbary,52.41643,16.93685
+wrzesnia,Września,52.32729,17.55527
+podstolice,Podstolice,52.34129,17.48159
+nekla,Nekla,52.35442,17.40000
+kostrzyn-wielkopolski,Kostrzyn Wielkopolski,52.39328,17.22547
+gutowo-wielkopolskie,Gutowo Wielkopolskie,52.33244,17.64350
+otoczna,Otoczna,52.32530,17.69166
+wolka,Wólka,52.32170,17.75340
+strzalkowo,Strzałkowo,52.31092,17.80464
+slupca,Słupca,52.28735,17.85210
+gultowy,Gułtowy,52.36813,17.31660
+sroda-wielkopolska,Środa Wielkopolska,52.21842,17.27399
+pierzchno,Pierzchno,52.26339,17.15722
+gadki,Gądki,52.30184,17.04586
+kornik,Kórnik,52.28202,17.10328
+sulecinek,Sulęcinek,52.13866,17.30879
+solec-wielkopolski,Solec Wielkopolski,52.10973,17.31961
+chocicza,Chocicza,52.07031,17.34957
+lubon-kolo-poznania,Luboń koło Poznania,52.34396,16.89283
+puszczykowo,Puszczykowo,52.29556,16.87110
+puszczykowko,Puszczykówko,52.27291,16.86376
+mosina,Mosina,52.24108,16.85233
+druzyna-poznanska,Drużyna Poznańska,52.21024,16.82383
+ilowiec,Iłowiec,52.18460,16.80018
+szreniawa,Szreniawa,52.31772,16.80072
+wiry,Wiry,52.31522,16.86806
+trzebaw-rosnowko,Trzebaw Rosnówko,52.29652,16.76742
+steszew,Stęszew,52.28065,16.71008
+poznan-debiec,Poznań Dębiec,52.36794,16.90100
+poznan-glowny,Poznań Główny,52.40121,16.91089
+poznan-strzeszyn,Poznań Strzeszyn,52.46083,16.86533
+poznan-wola,Poznań Wola,52.43347,16.85048
+kiekrz,Kiekrz,52.47581,16.78980
+rokietnica,Rokietnica,52.51206,16.75381
+gniezno,Gniezno,52.52965,17.60278
+gebarzewo,Gębarzewo,52.48161,17.57006
+zydowo,Żydowo,52.45292,17.56803
+czerniejewo,Czerniejewo,52.42459,17.56518
+marzenin,Marzenin,52.38625,17.56139
+pierzyska,Pierzyska,52.50568,17.48255
+falkowo,Fałkowo,52.49842,17.42357
+lednogora,Lednogóra,52.49090,17.36316
+pobiedziska,Pobiedziska,52.47922,17.27728
+biskupice-wielkopolskie,Biskupice Wielkopolskie,52.46703,17.17033
+pobiedziska-letnisko,Pobiedziska Letnisko,52.47430,17.23985
+promno,Promno,52.47173,17.21256
+kobylnica,Kobylnica,52.44602,17.08028
+ligowiec,Ligowiec,52.43478,17.03557
+slawa-wielkopolska,Sława Wielkopolska,52.63422,17.14394
+skoki,Skoki,52.67429,17.16209
+wagrowiec,Wągrowiec,52.80944,17.20211
+kobylec,Kobylec,52.84836,17.20086
+grylewo,Grylewo,52.88794,17.22781
+laskownica,Laskownica,52.91594,17.25098
+golancz,Gołańcz,52.94743,17.30568
+przysieczyn,Przysieczyn,52.75386,17.18397
+roszkowo-wagrowieckie,Roszkowo Wągrowieckie,52.70885,17.17630
+mogilno,Mogilno,52.65852,17.94604
+wydartowo,Wydartowo,52.61085,17.90363
+jankowo-dolne,Jankowo Dolne,52.53846,17.71845
+trzemeszno,Trzemeszno,52.56980,17.81747
+kutno,Kutno,52.22719,19.34814
+krzewie,Krzewie,52.23546,19.16686
+nowe-kutnowskie,Nowe Kutnowskie,52.23774,19.22651
+turzynow,Turzynów,52.23045,19.02588
+klodawa,Kłodawa,52.22738,18.89052
+ostrowy,Ostrowy,52.29886,19.19226
+strzelce-kujawskie,Strzelce Kujawskie,52.32291,19.36885
+kutno-azory,Kutno Azory,52.23987,19.30429
+raciborow-kutnowski,Raciborów Kutnowski,52.28016,19.34166
+sierakowek,Sierakówek,52.37077,19.42043
+gostynin,Gostynin,52.43336,19.47614
+rogozew,Rogożew,52.46177,19.54134
+lack,Łąck,52.48692,19.59572
+plock-radziwie,Płock Radziwie,52.52445,19.67237
+zychlin,Żychlin,52.21325,19.61859
+skleczki,Sklęczki,52.22540,19.40553
+zlotniki-kutnowskie,Złotniki Kutnowskie,52.22518,19.49126
+zosinow,Zosinów,52.18574,19.71623
+jackowice,Jackowice,52.15689,19.79591
+niedzwiada-lowicka,Niedźwiada Łowicka,52.14055,19.88251
+witonia,Witonia,52.15685,19.27667
+leczyca,Łęczyca,52.04926,19.19314
+sierpow,Sierpów,52.01731,19.22381
+ozorkow,Ozorków,51.97235,19.26597
+chociszew,Chociszew,51.92406,19.26711
+gawrony,Gawrony,52.11231,19.21960
+plock,Płock,52.55278,19.71239
+plock-trzepowo,Płock Trzepowo,52.59040,19.73310
+sierpc,Sierpc,52.84822,19.65413
+koziolek,Koziołek,52.86586,19.49872
+podwierzbie,Podwierzbie,52.86483,19.57911
+zawidz,Zawidz,52.82947,19.84365
+mieszaki,Mieszaki,52.83676,19.74517
+zawidz-koscielny,Zawidz Kościelny,52.82422,19.87761
+gozdowo,Gozdowo,52.72937,19.69537
+susk,Susk,52.78447,19.68328
+proboszczewice-plockie,Proboszczewice Płockie,52.66014,19.71381
+lowicz-glowny,Łowicz Główny,52.10459,19.95589
+bednary,Bednary,52.10522,20.06367
+jasionna-lowicka,Jasionna Łowicka,52.12462,20.12369
+keszyce,Kęszyce,52.13822,20.14798
+nowa-sucha,Nowa Sucha,52.16147,20.17228
+bobrowniki,Bobrowniki,52.05844,20.01050
+belchow,Bełchów,52.02664,20.03293
+mokra,Mokra,51.97879,20.09953
+sierakowice-skierniewickie,Sierakowice Skierniewickie,51.99868,20.06165
+lowicz-przedmiescie,Łowicz Przedmieście,52.09297,19.94635
+myslakow,Mysłaków,52.09217,20.01457
+konin,Konin,52.23158,18.25094
+patrzykow,Patrzyków,52.22939,18.36703
+kramsk,Kramsk,52.24525,18.47611
+budki-nowe,Budki Nowe,52.24444,18.56412
+kolo,Koło,52.21098,18.63213
+barlogi,Barłogi,52.21572,18.76668
+splawie,Spławie,52.25757,18.09212
+kawnice,Kawnice,52.24966,18.15226
+konin-zachod,Konin Zachód,52.23695,18.22155
+cienin,Cienin,52.27256,17.96598
+cienin-koscielny,Cienin Kościelny,52.27006,18.00958
+warszawa-golabki,Warszawa Gołąbki,52.20841,20.86405
+warszawa-aleje-jerozolimskie,Warszawa Aleje Jerozolimskie,52.20586,20.94104
+warszawa-glowna,Warszawa Główna,52.22520,20.98572
+warszawa-ochota,Warszawa Ochota,52.22584,20.99097
+warszawa-zachodnia,Warszawa Zachodnia,52.22014,20.96507
+warszawa-wlochy,Warszawa Włochy,52.20576,20.91547
+warszawa-ursus,Warszawa Ursus,52.19646,20.88539
+warszawa-ursus-polnocny,Warszawa Ursus Północny,52.20566,20.88984
+warszawa-rakowiec,Warszawa Rakowiec,52.19686,20.96589
+warszawa-sluzewiec,Warszawa Służewiec,52.18071,20.98701
+warszawa-srodmiescie,Warszawa Śródmieście,52.22939,21.00760
+warszawa-centralna,Warszawa Centralna,52.22882,21.00318
+warszawa-powisle,Warszawa Powiśle,52.23379,21.02838
+warszawa-stadion,Warszawa Stadion,52.24477,21.04397
+warszawa-okecie,Warszawa Okęcie,52.16708,20.98739
+warszawa-dawidy,Warszawa Dawidy,52.12862,20.99108
+warszawa-jeziorki,Warszawa Jeziorki,52.10947,20.99325
+piaseczno,Piaseczno,52.06686,21.01697
+nowa-iwiczna,Nowa Iwiczna,52.09143,20.99519
+zalesie-gorne,Zalesie Górne,52.02725,21.04128
+ustanowek,Ustanówek,51.99578,21.06064
+pruszkow,Pruszków,52.16825,20.79887
+piastow,Piastów,52.18259,20.84275
+brwinow,Brwinów,52.14187,20.71895
+milanowek,Milanówek,52.12497,20.66767
+grodzisk-mazowiecki,Grodzisk Mazowiecki,52.11046,20.62373
+zyrardow,Żyrardów,52.05255,20.44923
+sucha-zyrardowska,Sucha Żyrardowska,52.02289,20.35939
+jesionka,Jesionka,52.01439,20.33342
+radziwillow-mazowiecki,Radziwiłłów Mazowiecki,52.00071,20.29164
+jaktorow,Jaktorów,52.08620,20.55028
+miedzyborow,Międzyborów,52.06366,20.48267
+ozarow-mazowiecki,Ożarów Mazowiecki,52.20740,20.79664
+plochocin,Płochocin,52.19997,20.70119
+blonie,Błonie,52.18652,20.60752
+witanow,Witanów,52.18591,20.57421
+boza-wola,Boża Wola,52.18989,20.52694
+seroki,Seroki,52.19650,20.46739
+teresin-niepokalanow,Teresin Niepokalanów,52.20216,20.41604
+piasecznica,Piasecznica,52.21003,20.34427
+sochaczew,Sochaczew,52.21499,20.23830
+kornelin,Kornelin,52.18315,20.20623
+warszawa-mlynow,Warszawa Młynów,52.23903,20.95840
+warszawa-wola,Warszawa Wola,52.22991,20.95779
+warszawa-zachodnia-p9,Warszawa Zachodnia P9,52.22141,20.96138
+warszawa-srodmiescie-wkd,Warszawa Śródmieście WKD,52.22750,20.99950
+warszawa-reduta-ordona,Warszawa Reduta Ordona,52.21438,20.94790
+warszawa-rakow-wkd,Warszawa Raków Wkd,52.19447,20.93582
+warszawa-salomea-wkd,Warszawa Salomea Wkd,52.18643,20.92427
+opacz,Opacz,52.18151,20.90514
+michalowice,Michałowice,52.17521,20.88071
+reguly,Reguły,52.17042,20.85920
+malichy,Malichy,52.16929,20.84150
+tworki,Tworki,52.16896,20.82326
+pruszkow-wkd,Pruszków WKD,52.16162,20.81658
+komorow,Komorów,52.14813,20.81135
+nowa-wies-warszawska,Nowa Wieś Warszawska,52.14054,20.79574
+kanie-helenowskie,Kanie Helenowskie,52.13165,20.77431
+otrebusy,Otrębusy,52.12635,20.76154
+podkowa-lesna-wschodnia,Podkowa Leśna Wschodnia,52.12376,20.73845
+podkowa-lesna-glowna,Podkowa Leśna Główna,52.12235,20.72517
+podkowa-lesna-zachodnia,Podkowa Leśna Zachodnia,52.12070,20.71136
+polesie,Polesie,52.12181,20.69719
+milanowek-grudow,Milanówek Grudów,52.12230,20.68205
+kazimierowka,Kazimierówka,52.11113,20.69838
+brzozki,Brzózki,52.10480,20.67758
+grodzisk-mazowiecki-okrezna,Grodzisk Mazowiecki Okrężna,52.10070,20.66025
+grodzisk-mazowiecki-piaskowa,Grodzisk Mazowiecki Piaskowa,52.10264,20.65136
+grodzisk-mazowiecki-radonska,Grodzisk Mazowiecki Radońska,52.10056,20.62825
+warszawa-gdanska,Warszawa Gdańska,52.25910,20.99183
+warszawa-zoo,Warszawa Zoo,52.26353,21.01785
+warszawa-praga,Warszawa Praga,52.27817,21.02075
+warszawa-torunska,Warszawa Toruńska,52.29376,21.01325
+warszawa-zeran,Warszawa Żerań,52.31405,20.99895
+warszawa-pludy,Warszawa Płudy,52.33403,20.98591
+warszawa-choszczowka,Warszawa Choszczówka,52.35765,20.97238
+zielonka,Zielonka,52.31089,21.15569
+zielonka-bankowa,Zielonka Bankowa,52.29264,21.15258
+kobylka-ossow,Kobyłka Ossów,52.32718,21.19297
+kobylka,Kobyłka,52.33694,21.21545
+wolomin,Wołomin,52.34675,21.23810
+wolomin-sloneczna,Wołomin Słoneczna,52.35437,21.25577
+zagosciniec,Zagościniec,52.36443,21.27953
+dobczyn,Dobczyn,52.37859,21.31247
+klembow,Klembów,52.39570,21.35241
+jasienica-mazowiecka,Jasienica Mazowiecka,52.41494,21.39741
+nowy-dwor-mazowiecki,Nowy Dwór Mazowiecki,52.42528,20.72391
+modlin,Modlin,52.44383,20.70477
+pomiechowek,Pomiechówek,52.47369,20.74397
+brody-warszawskie,Brody Warszawskie,52.51379,20.74801
+studzianki-nowe,Studzianki Nowe,52.53783,20.75152
+legionowo,Legionowo,52.40136,20.94169
+legionowo-przystanek,Legionowo Przystanek,52.41129,20.91423
+legionowo-piaski,Legionowo Piaski,52.41263,20.94276
+chotomow,Chotomów,52.41569,20.88470
+janowek,Janówek,52.42531,20.77881
+michalow-reginow,Michałów Reginów,52.42266,20.96280
+wieliszew,Wieliszew,52.42820,20.97489
+nieporet,Nieporęt,52.43072,21.03178
+dabkowizna,Dąbkowizna,52.42385,21.08498
+nasielsk,Nasielsk,52.57238,20.76768
+wkra,Wkra,52.58479,20.57173
+cieksyn,Cieksyn,52.57746,20.66406
+dalanowek,Dalanówek,52.59444,20.46402
+plonsk,Płońsk,52.61597,20.36617
+arcelin,Arcelin,52.65979,20.31837
+baboszewo,Baboszewo,52.68324,20.26017
+kaczorowo,Kaczorowo,52.72714,20.17300
+raciaz,Raciąż,52.77887,20.10486
+koziebrody,Koziebrody,52.79886,19.99208
+swiercze,Świercze,52.67039,20.76287
+katne,Kątne,52.60668,20.76219
+jackowo-dworskie,Jackowo Dworskie,52.63142,20.77503
+kaleczyn,Kałęczyn,52.70735,20.74749
+gasocin,Gąsocin,52.73864,20.72036
+golotczyzna,Gołotczyzna,52.78455,20.68185
+ciechanow-przemyslowy,Ciechanów Przemysłowy,52.86466,20.61540
+ciechanow,Ciechanów,52.88348,20.59119
+czeruchy,Czeruchy,52.93611,20.50604
+krosnice-mazowieckie,Krośnice Mazowieckie,52.96728,20.49153
+konopki,Konopki,52.99572,20.46061
+stupsk-mazowiecki,Stupsk Mazowiecki,53.02118,20.43399
+wyszyny,Wyszyny,53.06117,20.39206
+mlawa-miasto,Mława Miasto,53.10817,20.36441
+mlawa,Mława,53.12717,20.35017
+warszawa-wilenska,Warszawa Wileńska,52.25566,21.03821
+zabki,Ząbki,52.29246,21.11338
+tluszcz,Tłuszcz,52.43111,21.43545
+krusze,Krusze,52.42733,21.37047
+wyszkow,Wyszków,52.60144,21.44651
+jarzebia-laka,Jarzębia Łąka,52.45858,21.44744
+grzegorzewo,Grzegorzewo,52.48614,21.42847
+mostowka,Mostówka,52.51909,21.44207
+lucynow,Lucynów,52.55308,21.45928
+rybienko,Rybienko,52.58249,21.45794
+lochow,Łochów,52.53398,21.68753
+barchow,Barchów,52.51767,21.64758
+urle,Urle,52.50669,21.62064
+szewnica,Szewnica,52.48339,21.56341
+mokra-wies,Mokra Wieś,52.45586,21.49600
+chrzesne,Chrzęsne,52.44683,21.47394
+ostrowek-wegrowski,Ostrówek Węgrowski,52.55969,21.75070
+topor,Topór,52.58451,21.81183
+sadowne-wegrowskie,Sadowne Węgrowskie,52.60512,21.85815
+radzymin,Radzymin,52.42422,21.17561
+malkinia,Małkinia,52.69438,22.03424
+kietlanka,Kietlanka,52.74428,22.17961
+zareby-koscielne,Zaręby Kościelne,52.73088,22.14054
+prostyn,Prostyń,52.65927,21.96108
+warszawa-goclawek,Warszawa Gocławek,52.23622,21.13664
+warszawa-wschodnia,Warszawa Wschodnia,52.25132,21.05192
+warszawa-rembertow,Warszawa Rembertów,52.25713,21.15822
+warszawa-wesola,Warszawa Wesoła,52.25437,21.22518
+warszawa-wola-grzybowska,Warszawa Wola Grzybowska,52.25283,21.25087
+sulejowek,Sulejówek,52.24774,21.27710
+sulejowek-milosna,Sulejówek Miłosna,52.24222,21.29639
+warszawa-wawer,Warszawa Wawer,52.22339,21.14954
+warszawa-olszynka-grochowska,Warszawa Olszynka Grochowska,52.24979,21.10687
+warszawa-anin,Warszawa Anin,52.21328,21.15967
+warszawa-miedzylesie,Warszawa Międzylesie,52.20379,21.16909
+warszawa-radosc,Warszawa Radość,52.18573,21.18712
+warszawa-miedzeszyn,Warszawa Miedzeszyn,52.17267,21.20015
+warszawa-falenica,Warszawa Falenica,52.16194,21.21091
+michalin,Michalin,52.14817,21.22458
+jozefow,Józefów,52.13593,21.23677
+otwock-swider,Otwock Świder,52.12103,21.25158
+otwock,Otwock,52.11005,21.26261
+otwock-srodborow,Otwock Śródborów,52.10122,21.29457
+pogorzel-warszawska,Pogorzel Warszawska,52.09470,21.34061
+stara-wies,Stara Wieś,52.08365,21.35988
+celestynow,Celestynów,52.05890,21.39187
+kolbiel,Kołbiel,52.04025,21.43431
+chrosna,Chrosna,52.03150,21.44848
+zabiezki,Zabieżki,52.01244,21.47199
+augustowka,Augustówka,51.98722,21.51372
+minsk-mazowiecki,Mińsk Mazowiecki,52.17598,21.55211
+mienia,Mienia,52.14944,21.68510
+barczaca,Barcząca,52.15678,21.62656
+debe-wielkie,Dębe Wielkie,52.19969,21.42136
+halinow,Halinów,52.22380,21.34903
+cisie,Cisie,52.21006,21.39022
+wrzosow,Wrzosów,52.18440,21.48261
+pilawa,Pilawa,51.95494,21.53403
+garwolin,Garwolin,51.90161,21.55357
+wola-rowska,Wola Rowska,51.82186,21.60103
+laskarzew,Łaskarzew,51.79810,21.60860
+leokadia,Leokadia,51.76801,21.63169
+sobolew,Sobolew,51.74089,21.67383
+wygoda,Wygoda,51.70360,21.71940
+mika,Mika,51.67262,21.74865
+zyczyn,Życzyn,51.64736,21.76063
+ruda-talubska,Ruda Talubska,51.85286,21.58978
+siedlce,Siedlce,52.16192,22.27147
+stok-lacki,Stok Lacki,52.16159,22.38651
+krzymosze,Krzymosze,52.17797,22.43912
+bialki-siedleckie,Białki Siedleckie,52.12966,22.30841
+kosiorki,Kosiorki,52.10719,22.33589
+borki-kosy,Borki-Kosy,52.08815,22.35944
+dziewule,Dziewule,52.05473,22.38750
+radomysl,Radomyśl,52.03021,22.38083
+mordy,Mordy,52.19589,22.49688
+mordy-miasto,Mordy Miasto,52.20334,22.52132
+cierpigorz,Cierpigórz,52.22633,22.59569
+niemojki,Niemojki,52.25828,22.70003
+patkow,Patków,52.27089,22.74546
+platerow,Platerów,52.30106,22.82062
+sarnaki,Sarnaki,52.32489,22.87883
+fronolow,Fronołów,52.36086,22.92906
+kotun,Kotuń,52.17619,22.06728
+minsk-mazowiecki-anielina,Mińsk Mazowiecki Anielina,52.16778,21.58556
+sabinka,Sabinka,52.17316,22.17265
+koszewnica,Koszewnica,52.16967,21.98486
+sosnowe,Sosnowe,52.17588,21.94055
+grodziszcze-mazowieckie,Grodziszcze Mazowieckie,52.16024,21.87052
+mrozy,Mrozy,52.16412,21.80119
+ceglow,Cegłów,52.14836,21.73537
+lukow,Łuków,51.94189,22.38931
+krynka-lukowska,Krynka Łukowska,52.00559,22.37555
+matysy,Matysy,51.93994,22.49339
+radzyn-podlaski,Radzyń Podlaski,51.82709,22.66865
+jaski,Jaski,51.85967,22.59083
+milanow,Milanów,51.70025,22.87525
+parczew,Parczew,51.62619,22.87152
+grodek,Gródek,51.57969,22.79408
+brzeznica-bychawska,Brzeźnica Bychawska,51.52887,22.74255
+tarlo,Tarło,51.50635,22.68640
+lukow-lapiguz,Łuków Łapiguz,51.92339,22.35933
+sarnow,Sarnów,51.84291,22.29596
+borowina,Borowina,51.82500,22.27025
+hordziezka,Hordzieżka,51.75451,22.16081
+krzywda,Krzywda,51.79478,22.20481
+okrzeja,Okrzeja,51.73225,22.13683
+gora-kalwaria,Góra Kalwaria,51.98926,21.19304
+czachowek-wschodni,Czachówek Wschodni,51.97200,21.09611
+czachowek-gorny,Czachówek Górny,51.96778,21.07777
+czachowek-poludniowy,Czachówek Południowy,51.95975,21.08100
+biala-podlaska,Biała Podlaska,52.02028,23.13097
+miedzyrzec-podlaski,Międzyrzec Podlaski,51.97603,22.78558
+brzozowica,Brzozowica,51.95417,22.62222
+misie,Misie,51.95949,22.68901
+sitno,Sitno,51.98556,22.86667
+szachy,Szachy,51.99161,22.90967
+porosiuki,Porosiuki,52.01198,23.06319
+chotylow,Chotyłów,51.99685,23.35577
+ogrodniki,Ogrodniki,52.00062,23.24161
+perkowice,Perkowice,51.99680,23.27814
+dobrynka,Dobrynka,51.99881,23.44316
+terespol,Terespol,52.07511,23.60157
+zagan,Żagań,51.60392,15.31552
+malomice,Małomice,51.54973,15.44691
+leszno-gorne,Leszno Górne,51.46689,15.61592
+bieniow,Bieniów,51.71606,15.17869
+zary,Żary,51.63450,15.13767
+lubanice,Lubanice,51.69232,15.12058
+lipinki-luzyckie,Lipinki Łużyckie,51.64912,15.00889
+zary-kunice,Żary Kunice,51.59881,15.16601
+konin-zaganski,Konin Żagański,51.54606,15.19146
+jankowa-zaganska,Jankowa Żagańska,51.56726,15.18096
+ilowa-zaganska,Iłowa Żagańska,51.50211,15.18850
+tuplice,Tuplice,51.67166,14.83764
+zasieki,Zasieki,51.73553,14.66892
+tuplice-debinka,Tuplice Dębinka,51.66618,14.90968
+nowa-sol,Nowa Sól,51.79879,15.70893
+bytom-odrzanski,Bytom Odrzański,51.72643,15.82153
+glogow,Głogów,51.67009,16.07808
+glogow-krzepow,Głogów Krzepów,51.64439,16.13406
+grebocice,Grębocice,51.59317,16.18528
+glogow-wroblin,Głogów Wróblin,51.68657,15.95458
+glogow-huta,Głogów Huta,51.67545,15.99220
+brzeg-glogowski,Brzeg Głogowski,51.69103,15.91813
+czerna,Czerna,51.70228,15.88440
+glogowko,Głogówko,51.73511,16.09557
+leszno,Leszno,51.84617,16.56542
+lipno-nowe,Lipno Nowe,51.91998,16.57080
+gorka-duchowna,Górka Duchowna,51.95536,16.57714
+stare-bojanowo,Stare Bojanowo,51.99569,16.58486
+przysieka-stara,Przysieka Stara,52.03591,16.60420
+kakolewo,Kąkolewo,51.85786,16.68678
+leszno-grzybowo,Leszno Grzybowo,51.86025,16.61231
+pawlowice,Pawłowice,51.81982,16.75920
+poniec,Poniec,51.76162,16.80793
+dzieczyn,Dzięczyn,51.75728,16.85414
+karzec,Karzec,51.75478,16.90449
+krobia,Krobia,51.75908,16.97055
+rydzyna,Rydzyna,51.77072,16.64703
+kaczkowo,Kaczkowo,51.74280,16.68076
+lasocice,Lasocice,51.81589,16.48592
+wschowa,Wschowa,51.79395,16.31655
+stare-drzewce,Stare Drzewce,51.77673,16.19569
+wilkowice,Wilkowice,51.88686,16.54117
+krzycko-wielkie,Krzycko Wielkie,51.90419,16.45275
+wloszakowice,Włoszakowice,51.93277,16.37350
+wolsztyn,Wolsztyn,52.11140,16.10820
+rostarzewo,Rostarzewo,52.13498,16.20694
+tloki,Tłoki,52.11623,16.17223
+rakoniewice,Rakoniewice,52.13883,16.26531
+drzymalowo,Drzymałowo,52.15689,16.29678
+ruchocice,Ruchocice,52.17725,16.34183
+ptaszkowo-wielkopolskie,Ptaszkowo Wielkopolskie,52.22922,16.44138
+grodzisk-wielkopolski,Grodzisk Wielkopolski,52.23058,16.36383
+granowo,Granowo,52.22556,16.53000
+strykowo-poznanskie,Strykowo Poznańskie,52.24343,16.61371
+powodowo,Powodowo,52.12339,16.05456
+wroniawy,Wroniawy,52.05984,16.16502
+nowy-widzim,Nowy Widzim,52.08069,16.14265
+nowy-solec,Nowy Solec,52.03058,16.19495
+nowawies-mochy,Nowawieś Mochy,52.01458,16.21601
+perkowo,Perkowo,52.00354,16.26999
+blotnica,Błotnica,51.99293,16.30032
+starkowo,Starkowo,51.97904,16.31235
+boszkowo,Boszkowo,51.96091,16.33540
+koscian,Kościan,52.07790,16.64067
+oborzyska-stare,Oborzyska Stare,52.11092,16.70217
+czempin,Czempiń,52.13983,16.75342
+krotoszyn,Krotoszyn,51.70182,17.42633
+biadki,Biadki,51.67737,17.56576
+gorzupia,Gorzupia,51.69206,17.50361
+lakociny,Łąkociny,51.65679,17.66897
+daniszyn,Daniszyn,51.66731,17.61506
+dzierzanow-wielkopolski,Dzierżanów Wielkopolski,51.71239,17.35307
+kuklinow,Kuklinów,51.71919,17.31795
+kobylin,Kobylin,51.72000,17.22308
+czeluscin,Czeluścin,51.72800,17.16350
+pepowo,Pępowo,51.73712,17.11263
+wlostowo,Włostowo,51.75279,17.02645
+zduny,Zduny,51.64643,17.36634
+cieszkow,Cieszków,51.63175,17.35292
+rawicz,Rawicz,51.60895,16.84051
+zmigrod,Żmigród,51.47480,16.90180
+garbce,Garbce,51.51376,16.88961
+korzensko,Korzeńsko,51.54459,16.87225
+bojanowo,Bojanowo,51.70025,16.74465
+zaborowice,Zaborowice,51.68906,16.67564
+gora-slaska,Góra Śląska,51.67494,16.54242
+jarocin,Jarocin,51.96839,17.49404
+radlin-wielkopolski,Radlin Wielkopolski,52.03335,17.49953
+mieszkow,Mieszków,52.02265,17.44116
+zerkow,Żerków,52.06967,17.49769
+orzechowo,Orzechowo,52.12729,17.47785
+miloslaw,Miłosław,52.20855,17.47680
+ksiazno,Książno,52.24595,17.49366
+chwalibogowo,Chwalibogowo,52.28296,17.52479
+witaszyce,Witaszyce,51.93644,17.56039
+kotlin,Kotlin,51.91463,17.64908
+pleszew,Pleszew,51.89265,17.73213
+taczanow,Taczanów,51.84096,17.75617
+bronow,Bronów,51.79580,17.77360
+biniew,Biniew,51.73894,17.79237
+nowe-skalmierzyce,Nowe Skalmierzyce,51.70836,17.99803
+ociaz,Ociąż,51.70207,17.93354
+kalisz,Kalisz,51.74262,18.07066
+kalisz-szczypiorno,Kalisz Szczypiorno,51.72592,18.02731
+kalisz-winiary,Kalisz Winiary,51.73350,18.14117
+opatowek,Opatówek,51.74339,18.22714
+radliczyce,Radliczyce,51.72337,18.34974
+skalmierz,Skalmierz,51.69719,18.43044
+blaszki,Błaszki,51.67378,18.47087
+sedzice,Sędzice,51.62876,18.57018
+domanin,Domanin,51.34471,17.99521
+ostrzeszow,Ostrzeszów,51.42974,17.94044
+niedzwiedz-wielkopolski,Niedźwiedź Wielkopolski,51.48590,17.88376
+wieruszow-miasto,Wieruszów Miasto,51.29918,18.16566
+wielun-dabrowa,Wieluń Dąbrowa,51.23944,18.55100
+wielun,Wieluń,51.22402,18.58201
+patnow-wielunski,Pątnów Wieluński,51.15925,18.63342
+slupia,Słupia,51.25178,18.04150
+leka-opatowska,Łęka Opatowska,51.21731,18.09133
+sycow,Syców,51.28958,17.71103
+stradomia,Stradomia,51.26617,17.64156
+ostrow-wielkopolski,Ostrów Wielkopolski,51.64922,17.80525
+ostrow-wielkopolski-gorzyce,Ostrów Wielkopolski Gorzyce,51.64745,17.73179
+czekanow,Czekanów,51.68528,17.85960
+jankow-przygodzki,Janków Przygodzki,51.60964,17.80942
+przygodzice,Przygodzice,51.57117,17.82939
+antonin,Antonin,51.51251,17.86109
+topola-osiedle,Topola-Osiedle,51.61288,17.76197
+tarchaly-wielkie,Tarchały Wielkie,51.58707,17.70149
+odolanow,Odolanów,51.57445,17.66750
+garki,Garki,51.54050,17.64875
+granowiec,Granowiec,51.51139,17.64525
+sosnie-ostrowskie,Sośnie Ostrowskie,51.47148,17.63941
+pawlow-wielkopolski,Pawłów Wielkopolski,51.42205,17.65451
+miedzyborz-sycowski,Międzybórz Sycowski,51.40103,17.65310
+bukowina-sycowska,Bukowina Sycowska,51.38817,17.58331
+kozmin-wielkopolski,Koźmin Wielkopolski,51.83288,17.44380
+obra-stara,Obra Stara,51.88731,17.44927
+golina,Golina,51.90669,17.45988
+wolenice,Wolenice,51.77345,17.43795
+bozacin,Bożacin,51.73245,17.43391
+lodz-widzew,Łódź Widzew,51.76311,19.54380
+lodz-niciarniana,Łódź Niciarniana,51.76686,19.50569
+lodz-fabryczna,Łódź Fabryczna,51.76974,19.46710
+bedon,Bedoń,51.73201,19.64237
+lodz-andrzejow,Łódź Andrzejów,51.74056,19.61814
+galkowek,Gałkówek,51.72986,19.73179
+justynow,Justynów,51.73088,19.68372
+zakowice,Żakowice,51.73218,19.79105
+lodz-chojny,Łódź Chojny,51.72621,19.48490
+lodz-lublinek,Łódź Lublinek,51.71990,19.35800
+pabianice,Pabianice,51.66085,19.32502
+chechlo,Chechło,51.64501,19.28668
+lask,Łask,51.60367,19.11205
+borszewice,Borszewice,51.60974,19.03571
+lodz-kaliska,Łódź Kaliska,51.75837,19.42974
+lodz-zabieniec,Łódź Żabieniec,51.79379,19.40695
+zgierz,Zgierz,51.84947,19.42575
+zgierz-pln,Zgierz Płn,51.86913,19.38409
+zgierz-kontrew,Zgierz Kontrew.,51.86479,19.34047
+grotniki,Grotniki,51.88715,19.31112
+strykow,Stryków,51.91053,19.59333
+bratoszewice,Bratoszewice,51.93857,19.65280
+glowno,Głowno,51.96151,19.70310
+domaniewice,Domaniewice,52.02046,19.82073
+stare-grudze,Stare Grudze,52.04864,19.90168
+kamien-lowicki,Kamień Łowicki,51.98876,19.75313
+swedow,Swędów,51.90586,19.54029
+glinnik,Glinnik,51.88685,19.49684
+smardzew,Smardzew,51.87114,19.46754
+skierniewice,Skierniewice,51.96711,20.14986
+skierniewice-rawka,Skierniewice Rawka,51.97758,20.22131
+koluszki,Koluszki,51.74379,19.81861
+zakowice-poludniowe,Żakowice Południowe,51.72959,19.78936
+rogow,Rogów,51.81778,19.88581
+wagry,Wągry,51.79110,19.84943
+przylek-duzy,Przyłęk Duży,51.84097,19.91748
+krosnowa,Krosnowa,51.86335,19.92328
+lipce-reymontowskie,Lipce Reymontowskie,51.90523,19.94335
+plycwia,Płyćwia,51.91672,20.00200
+makow,Maków,51.94224,20.04565
+dabrowice-skierniewickie,Dąbrowice Skierniewickie,51.93338,20.10239
+baby,Baby,51.53700,19.71681
+chrusty-nowe,Chrusty Nowe,51.69475,19.79437
+rokiciny,Rokiciny,51.66752,19.78067
+laznow,Łaznów,51.63111,19.75475
+wolborka,Wolbórka,51.59329,19.72341
+slotwiny,Słotwiny,51.72275,19.83846
+wykno,Wykno,51.66012,19.90527
+zaosie,Zaosie,51.63281,19.93436
+skrzynki,Skrzynki,51.60215,19.96703
+tomaszow-mazowiecki,Tomaszów Mazowiecki,51.54701,20.03345
+piotrkow-trybunalski,Piotrków Trybunalski,51.41075,19.68482
+milejow,Milejów,51.35469,19.67561
+jarosty,Jarosty,51.46161,19.69320
+moszczenica,Moszczenica,51.50357,19.70048
+rozprza,Rozprza,51.30167,19.66019
+luciazanka,Luciążanka,51.27714,19.64813
+wilkoszewice,Wilkoszewice,51.25247,19.63106
+gorzkowice,Gorzkowice,51.21834,19.60500
+gorzedow,Gorzędów,51.19698,19.54366
+kamiensk,Kamieńsk,51.18553,19.49719
+gomunice,Gomunice,51.16428,19.48697
+dobryszyce-k-radomska,Dobryszyce k/Radomska,51.12367,19.44397
+bobry,Bobry,51.02876,19.40487
+radomsko,Radomsko,51.07436,19.43767
+skarzysko-kamienna,Skarżysko-Kamienna,51.11567,20.88071
+skarzysko-koscielne,Skarżysko Kościelne,51.12214,20.91750
+skarzysko-zachodnie,Skarżysko Zachodnie,51.10026,20.85935
+szydlowiec,Szydłowiec,51.20767,20.92331
+lipowe-pole,Lipowe Pole,51.15517,20.90108
+marcinkow,Marcinków,51.09333,20.97999
+wachock,Wąchock,51.07990,21.01603
+starachowice,Starachowice,51.05134,21.05848
+starachowice-wschodnie,Starachowice Wschodnie,51.04181,21.07906
+starachowice-michalow,Starachowice Michałów,51.01522,21.10714
+suchedniow,Suchedniów,51.04640,20.84973
+suchedniow-polnocny,Suchedniów Północny,51.06528,20.84916
+berezow,Berezów,51.02336,20.83571
+blizyn,Bliżyn,51.11055,20.75697
+gilow,Gilów,51.11959,20.72965
+brzask,Brzask,51.09720,20.80318
+skarzysko-milica,Skarżysko Milica,51.10818,20.85085
+radom-glowny,Radom Główny,51.39126,21.15642
+radom-stara-wola,Radom Stara Wola,51.43926,21.18490
+trablice,Trablice,51.34948,21.10112
+bartodzieje,Bartodzieje,51.52490,21.17806
+lesiow,Lesiów,51.47929,21.19377
+wola-bierwiecka,Wola Bierwiecka,51.54306,21.17733
+wolanow,Wolanów,51.35333,21.00010
+radom-potkanow,Radom Potkanów,51.35286,21.10142
+konczyce-radomskie,Kończyce Radomskie,51.34905,21.04569
+warka,Warka,51.79343,21.16917
+dobieszyn,Dobieszyn,51.63139,21.17643
+grabow-n-pilica,Grabów n/Pilicą,51.74206,21.18211
+strzyzyna,Strzyżyna,51.69366,21.17268
+kruszyna,Kruszyna,51.57947,21.17900
+chynow,Chynów,51.90353,21.10039
+sulkowice,Sułkowice,51.92658,21.09244
+krezel,Krężel,51.87235,21.11110
+michalczew,Michalczew,51.84500,21.12055
+gosniewice,Gośniewice,51.81780,21.13803
+pionki,Pionki,51.47989,21.46294
+pionki-zachodnie,Pionki Zachodnie,51.47204,21.44150
+jedlnia-koscielna,Jedlnia Kościelna,51.45514,21.40782
+jedlnia-letnisko,Jedlnia Letnisko,51.42969,21.32769
+antoniowka,Antoniówka,51.42476,21.27873
+rajec-poduchowny,Rajec Poduchowny,51.41497,21.25300
+zytkowice,Żytkowice,51.48317,21.55814
+przysucha,Przysucha,51.37795,20.65919
+drzewica,Drzewica,51.43772,20.46447
+smogorzow-przysuski,Smogorzów Przysuski,51.39522,20.60444
+zygmuntow,Zygmuntów,51.40909,20.57085
+bieliny-opoczynskie,Bieliny Opoczyńskie,51.42376,20.50298
+deba-opoczynska,Dęba Opoczyńska,51.48195,20.25841
+tomaszow-mazowiecki-bialobrzegi,Tomaszów Mazowiecki Białobrzegi,51.52454,20.06628
+antoniow,Antoniów,51.47578,20.19830
+brzustow,Brzustów,51.49328,20.14683
+opoczno-poludnie,Opoczno Południe,51.35877,20.23209
+wieniawa,Wieniawa,51.36347,20.78953
+chronow,Chronów,51.35812,20.93009
+podbor,Podbór,51.36046,20.87599
+skrzynno,Skrzynno,51.36518,20.72185
+jastrzab,Jastrząb,51.24910,20.98505
+ruda-wielka,Ruda Wielka,51.30180,21.04380
+wola-lipieniecka,Wola Lipieniecka,51.27685,21.02631
+gasawy-plebanskie,Gąsawy Plebańskie,51.23181,20.94736
+rozki,Rożki,51.33873,21.05405
+ostrowiec-swietokrzyski,Ostrowiec Świętokrzyski,50.93389,21.37681
+kunow,Kunów,50.96778,21.29546
+boksycka,Boksycka,50.95013,21.32230
+staw-kunowski,Staw Kunowski,51.00549,21.24526
+brody-ilzeckie,Brody Iłżeckie,51.02159,21.20102
+stykow-ilzecki,Styków Iłżecki,51.01085,21.15159
+bodzechow,Bodzechów,50.91322,21.43518
+brzostowa,Brzóstowa,50.89800,21.48411
+cmielow,Ćmielów,50.88791,21.52901
+jasice,Jasice,50.85275,21.62719
+drygulec,Drygulec,50.87581,21.57692
+jakubowice,Jakubowice,50.81084,21.66487
+konskie,Końskie,51.19043,20.42280
+czeslawice,Czesławice,51.30808,22.26242
+kornica,Kornica,51.21740,20.40467
+staporkow,Stąporków,51.14323,20.57534
+wasosz-konecki,Wąsosz Konecki,51.14526,20.47754
+czarniecka-gora,Czarniecka Góra,51.14374,20.51910
+soltykow,Sołtyków,51.13800,20.69100
+wolka-plebanska,Wólka Plebańska,51.15303,20.63058
+opoczno,Opoczno,51.37285,20.27171
+slomianka,Słomianka,51.40156,20.20427
+szadkowice,Szadkowice,51.41947,20.16884
+bratkow,Bratków,51.45508,20.11522
+jelen,Jeleń,51.50213,20.07295
+petrykozy,Petrykozy,51.29551,20.36333
+sitowa,Sitowa,51.33897,20.32445
+ruda-bialaczowska,Ruda Białaczowska,51.26229,20.38233
+deblin,Dęblin,51.57767,21.83500
+rokitnia-stara,Rokitnia Stara,51.61200,21.79834
+leopoldow,Leopoldów,51.66817,22.01242
+grabow-szlachecki,Grabów Szlachecki,51.70317,22.09553
+zajezierze-k-deblina,Zajezierze k/Dęblina,51.54167,21.81945
+pulawy-azoty,Puławy Azoty,51.47495,21.94902
+pulawy-chemia,Puławy Chemia,51.44673,21.96809
+pulawy-miasto,Puławy Miasto,51.42763,21.98419
+pulawy,Puławy,51.40983,22.01239
+skoki-borowa,Skoki-Borowa,51.54002,21.84847
+golab,Gołąb,51.50553,21.90953
+konskowola,Końskowola,51.39847,22.04824
+naleczow,Nałęczów,51.31812,22.21160
+sadurki,Sadurki,51.28626,22.28434
+milocin-lubelski,Miłocin Lubelski,51.26819,22.31347
+motycz,Motycz,51.22127,22.42431
+motycz-lesny,Motycz Leśny,51.23761,22.37258
+klementowice,Klementowice,51.36275,22.11034
+lopatki,Łopatki,51.32913,22.15290
+bakowiec,Bąkowiec,51.51756,21.72453
+garbatka-letnisko,Garbatka Letnisko,51.49478,21.63008
+lublin-polnocny,Lublin Północny,51.24219,22.59943
+swidnik-miasto,Świdnik Miasto,51.22381,22.69489
+swidnik-wschod,Świdnik Wschód,51.22105,22.71388
+lublin-glowny,Lublin Główny,51.23096,22.56835
+podzamcze,Podzamcze,51.21006,22.78622
+stasin-polny,Stasin Polny,51.21357,22.47527
+lubartow,Lubartów,51.44581,22.60808
+wandzin,Wandzin,51.39854,22.62992
+bystrzyca-kolo-lublina,Bystrzyca koło Lublina,51.34841,22.63761
+ciecierzyn,Ciecierzyn,51.31894,22.60808
+rudnik-przystanek,Rudnik Przystanek,51.28771,22.62266
+jaszczow,Jaszczów,51.20206,22.91072
+trawniki,Trawniki,51.13628,22.99296
+biskupice-lubelskie,Biskupice Lubelskie,51.16146,22.94699
+minkowice,Minkowice,51.21700,22.76532
+dominow,Dominów,51.21232,22.84352
+rejowiec,Rejowiec,51.11759,23.23853
+wolka-kanska,Wólka Kańska,51.12843,23.06624
+kanie,Kanie,51.12465,23.10406
+zalesie-krasienskie,Zalesie Krasieńskie,51.12172,23.16643
+chelm,Chełm,51.14127,23.49336
+zawadowka,Zawadówka,51.12420,23.35451
+chelm-miasto,Chełm Miasto,51.13792,23.45791
+dorohusk,Dorohusk,51.17211,23.78416
+krasnystaw-miasto,Krasnystaw Miasto,50.98505,23.18303
+krasnystaw-fabryczny,Krasnystaw Fabryczny,51.02438,23.18266
+tarzymiechy,Tarzymiechy,50.85434,23.12225
+zulin,Żulin,51.06185,23.17188
+niedrzwica,Niedrzwica,51.11411,22.37671
+niedrzwica-koscielna,Niedrzwica Kościelna,51.08131,22.36203
+lesniczowka,Leśniczówka,51.04967,22.35675
+wilkolaz-wies,Wilkołaz Wieś,51.00715,22.33597
+wilkolaz,Wilkołaz,50.98606,22.32932
+pulankowice,Pułankowice,50.95917,22.30674
+lublin-zemborzyce,Lublin Zemborzyce,51.17150,22.50285
+kreznica-jara,Krężnica Jara,51.15317,22.46623
+majdan,Majdan,51.14849,22.42676
+krasnik,Kraśnik,50.92949,22.28343
+szastarka,Szastarka,50.85328,22.33183
+sulow,Sulów,50.90574,22.33317
+polichna-krasnicka,Polichna Kraśnicka,50.83100,22.30647
+rzeczyca-kolonia,Rzeczyca-Kolonia,50.84089,22.26894
+wegliniec,Węgliniec,51.29002,15.22281
+stary-wegliniec,Stary Węgliniec,51.30736,15.19539
+zagajnik,Zagajnik,51.27018,15.29942
+zgorzelec,Zgorzelec,51.14032,15.00268
+zgorzelec-miasto,Zgorzelec Miasto,51.15477,15.02011
+gieraltow-wykroty,Gierałtów Wykroty,51.21681,15.28465
+gieraltow,Gierałtów,51.19193,15.29988
+piensk,Pieńsk,51.24523,15.04701
+lasow,Lasów,51.22517,15.03503
+jedrzychowice,Jędrzychowice,51.17405,15.01772
+jerzmanki,Jerzmanki,51.12780,15.06093
+ruszow,Ruszów,51.40100,15.17658
+jagodzin,Jagodzin,51.35500,15.17028
+okraglica,Okrąglica,51.43720,15.18169
+zebrzydowa,Zebrzydowa,51.25466,15.38932
+gryfow-slaski,Gryfów Śląski,51.03397,15.42897
+rebiszow,Rębiszów,50.94815,15.45608
+mlynsko,Młyńsko,50.98933,15.45042
+proszowka,Proszówka,51.00900,15.42317
+mirsk,Mirsk,50.97315,15.38043
+mroczkowice,Mroczkowice,50.94754,15.36163
+orlowice,Orłowice,50.93186,15.35209
+swieradow-zdroj,Świeradów Zdrój,50.91142,15.34356
+luban-slaski,Lubań Śląski,51.11147,15.29353
+zareba,Zaręba,51.09798,15.21834
+batowice-lubanskie,Batowice Lubańskie,51.09088,15.15577
+olszyna-lubanska,Olszyna Lubańska,51.06973,15.38103
+ubocze,Ubocze,51.05634,15.42001
+milkowice,Miłkowice,51.25614,16.05386
+legnica,Legnica,51.21400,16.16894
+szczedrzykowice,Szczedrzykowice,51.21516,16.35076
+jaskowice-legnickie,Jaśkowice Legnickie,51.21511,16.31401
+legnica-piekary,Legnica Piekary,51.20162,16.19803
+raszowka,Raszówka,51.30163,16.18164
+rzeszotary,Rzeszotary,51.24960,16.16593
+gorzelin,Gorzelin,51.32786,16.18095
+chrostnik,Chróstnik,51.35586,16.18092
+lubin,Lubin,51.39584,16.19358
+rynarcice,Rynarcice,51.47257,16.22734
+malczyce,Malczyce,51.21571,16.48647
+jawor,Jawor,51.05542,16.19714
+przybylowice,Przybyłowice,51.12699,16.15954
+stary-jawor,Stary Jawor,51.07893,16.16139
+boleslawiec,Bolesławiec,51.26608,15.56897
+tomaszow-boleslawiecki,Tomaszów Bolesławiecki,51.28599,15.67832
+chojnow,Chojnów,51.27756,15.93567
+okmiany,Okmiany,51.27092,15.77882
+osetnica,Osetnica,51.26178,15.84715
+biala-gorna,Biała Górna,51.29689,15.92839
+rokitki,Rokitki,51.33559,15.89321
+modla,Modła,51.37566,15.81341
+studzianka,Studzianka,51.42711,15.69497
+wierzbowa-slaska,Wierzbowa Śląska,51.39692,15.75875
+chocianow,Chocianów,51.41657,15.91197
+jaworzyna-slaska,Jaworzyna Śląska,50.91223,16.42839
+stanowice,Stanowice,50.93017,16.37459
+swiebodzice,Świebodzice,50.86031,16.33264
+walbrzych-szczawienko,Wałbrzych Szczawienko,50.81604,16.30250
+walbrzych-miasto,Wałbrzych Miasto,50.78611,16.28503
+zarow,Żarów,50.93945,16.49256
+imbramowice,Imbramowice,50.96342,16.57886
+boleslawice-swidnickie,Bolesławice Świdnickie,50.88765,16.46465
+swidnica-przedmiescie,Świdnica Przedmieście,50.83522,16.50448
+bystrzyca-gorna,Bystrzyca Górna,50.78126,16.45617
+lubachow,Lubachów,50.77421,16.43426
+zagorze-slaskie,Zagórze Śląskie,50.75374,16.40356
+jugowice,Jugowice,50.73194,16.40522
+swidnica-miasto,Świdnica Miasto,50.84112,16.48151
+pszenno,Pszenno,50.85681,16.53053
+marcinowice-swidnickie,Marcinowice Świdnickie,50.87682,16.58676
+szczepanow,Szczepanów,50.89833,16.62504
+strzelce-swidnickie,Strzelce Świdnickie,50.91097,16.66117
+dzierzoniow-slaski,Dzierżoniów Śląski,50.72442,16.64071
+bielawa-zachodnia,Bielawa Zachodnia,50.68569,16.60645
+moscisko-dzierzoniowskie,Mościsko Dzierżoniowskie,50.77215,16.58021
+krzyzowa,Krzyżowa,50.79392,16.53026
+pilawa-gorna,Piława Górna,50.67873,16.77325
+walbrzych-glowny,Wałbrzych Główny,50.74361,16.27958
+jedlina-zdroj,Jedlina-Zdrój,50.71151,16.34311
+jedlina-zdroj-borowa,Jedlina-Zdrój Borowa,50.72992,16.32219
+gluszyca,Głuszyca,50.68792,16.35393
+bartnica,Bartnica,50.64192,16.40797
+gluszyca-gorna,Głuszyca Górna,50.67303,16.37014
+boguszow-gorce,Boguszów-Gorce,50.75025,16.20194
+boguszow-gorce-wschod,Boguszów-Gorce Wschód,50.74799,16.22212
+boguszow-gorce-zachod,Boguszów-Gorce Zachód,50.76237,16.16721
+kamienna-gora,Kamienna Góra,50.78513,16.02271
+walbrzych-fabryczny,Wałbrzych Fabryczny,50.76142,16.26712
+blazkowa,Błażkowa,50.74423,15.99008
+lubawka,Lubawka,50.70664,16.00331
+marciszow,Marciszów,50.85125,16.00788
+sedzislaw,Sędzisław,50.81345,16.06958
+witkow-slaski,Witków Śląski,50.79422,16.12733
+janowice-wielkie,Janowice Wielkie,50.87852,15.91886
+ciechanowice,Ciechanowice,50.86551,15.97831
+jelenia-gora,Jelenia Góra,50.90257,15.75615
+stara-kamienica,Stara Kamienica,50.91402,15.56592
+kwieciszowice,Kwieciszowice,50.92434,15.50348
+rybnica,Rybnica,50.91045,15.64581
+wojanow,Wojanów,50.88475,15.82122
+trzcinsko,Trzcińsko,50.88320,15.87209
+myslakowice,Mysłakowice,50.83533,15.78797
+myslakowice-orzel,Mysłakowice Orzeł,50.82555,15.78655
+milkow,Miłków,50.81014,15.76403
+karpacz,Karpacz,50.78264,15.76164
+lomnica,Łomnica,50.86178,15.79803
+lomnica-dolna,Łomnica Dolna,50.87794,15.80136
+lomnica-srednia,Łomnica Średnia,50.88669,15.79456
+jelenia-gora-zachodnia,Jelenia Góra Zachodnia,50.90061,15.71925
+jelenia-gora-cieplice,Jelenia Góra Cieplice,50.87010,15.68880
+jelenia-gora-orle,Jelenia Góra Orle,50.86407,15.65745
+jelenia-gora-sobieszow,Jelenia Góra Sobieszów,50.85189,15.64556
+piechowice-dolne,Piechowice Dolne,50.85044,15.61673
+piechowice,Piechowice,50.85183,15.59133
+gorzyniec,Górzyniec,50.86035,15.56706
+szklarska-poreba-dolna,Szklarska Poręba Dolna,50.84864,15.55731
+szklarska-poreba-srednia,Szklarska Poręba Średnia,50.83847,15.53998
+szklarska-poreba-gorna,Szklarska Poręba Górna,50.83282,15.51810
+polana-jakuszycka,Polana Jakuszycka,50.81489,15.42992
+strzegom,Strzegom,50.97465,16.35887
+rogoznica,Rogoźnica,51.01453,16.30196
+goczalkow,Goczałków,51.00900,16.32444
+kamieniec-zabkowicki,Kamieniec Ząbkowicki,50.53631,16.89797
+ziebice,Ziębice,50.60858,17.03383
+starczow,Starczów,50.56417,16.94717
+henrykow,Henryków,50.66342,17.02986
+doboszowice,Doboszowice,50.50704,16.94284
+bardo-przylek,Bardo Przyłęk,50.50949,16.75796
+suszka,Suszka,50.53071,16.82366
+bardo-slaskie,Bardo Śląskie,50.50484,16.73419
+lawica,Ławica,50.47759,16.67080
+nysa,Nysa,50.47786,17.34181
+nowy-swietow,Nowy Świętów,50.37792,17.36914
+nowy-las,Nowy Las,50.36198,17.41410
+goswinowice,Goświnowice,50.47856,17.25722
+wojcice,Wójcice,50.46854,17.22001
+otmuchow,Otmuchów,50.47414,17.15261
+otmuchow-jezioro,Otmuchów Jezioro,50.48141,17.11046
+paczkow,Paczków,50.47840,17.01111
+jasienica-dolna,Jasienica Dolna,50.50413,17.50395
+budziszowice,Budziszowice,50.52283,17.53342
+lambinowice,Łambinowice,50.53763,17.56535
+sowin,Sowin,50.55566,17.60913
+tulowice,Tułowice,50.59814,17.64931
+mankowice,Mańkowice,50.48906,17.47670
+kubice,Kubice,50.47572,17.44284
+wyszkow-slaski,Wyszków Śląski,50.46647,17.39100
+mysliczyn,Myśliczyn,50.52699,17.33264
+pakoslawice,Pakosławice,50.54500,17.35319
+skoroszyce,Skoroszyce,50.59330,17.37504
+chroscina-nyska,Chróścina Nyska,50.61666,17.37819
+prudnik,Prudnik,50.32914,17.57744
+szybowice,Szybowice,50.34458,17.48121
+dytmarow,Dytmarów,50.32985,17.67655
+glucholazy,Głuchołazy,50.33037,17.39448
+glucholazy-miasto,Głuchołazy Miasto,50.31681,17.38986
+miedzylesie,Międzylesie,50.14383,16.65478
+klodzko-glowne,Kłodzko Główne,50.44962,16.65756
+gorzuchow-klodzki,Gorzuchów Kłodzki,50.48991,16.57122
+bierkowice,Bierkowice,50.47531,16.60463
+krosnowice-klodzkie,Krosnowice Kłodzkie,50.39247,16.63697
+gorzanow,Gorzanów,50.35437,16.64087
+bystrzyca-klodzka-przedmiescie,Bystrzyca Kłodzka Przedmieście,50.28554,16.64704
+bystrzyca-klodzka,Bystrzyca Kłodzka,50.29710,16.65517
+dlugopole-zdroj,Długopole-Zdrój,50.23903,16.63711
+domaszkow,Domaszków,50.21292,16.65531
+roztoki-bystrzyckie,Roztoki Bystrzyckie,50.18767,16.66569
+klodzko-ksiazek,Kłodzko Książek,50.41568,16.64084
+klodzko-miasto,Kłodzko Miasto,50.43616,16.65879
+klodzko-zagorze,Kłodzko Zagórze,50.41538,16.61198
+stary-wielislaw,Stary Wielisław,50.40537,16.57722
+polanica-zdroj,Polanica-Zdrój,50.39763,16.51362
+szczytna,Szczytna,50.40840,16.44974
+duszniki-zdroj,Duszniki-Zdrój,50.40889,16.38628
+kulin-klodzki,Kulin Kłodzki,50.41934,16.32559
+lewin-klodzki,Lewin Kłodzki,50.40554,16.27459
+kudowa-zdroj,Kudowa-Zdrój,50.42973,16.24423
+oldrzychowice-klodzkie,Ołdrzychowice Kłodzkie,50.35867,16.70822
+trzebieszowice,Trzebieszowice,50.34358,16.77683
+radochow,Radochów,50.33908,16.81797
+ladek-zdroj,Lądek Zdrój,50.34183,16.85936
+ladek-stojkow,Lądek Stójków,50.32675,16.87394
+stronie-slaskie,Stronie Śląskie,50.30284,16.87608
+zelazno,Żelazno,50.37100,16.66792
+zabkowice-slaskie,Ząbkowice Śląskie,50.59728,16.81273
+scinawka-srednia,Ścinawka Średnia,50.52640,16.50523
+nowa-ruda,Nowa Ruda,50.57733,16.49685
+nowa-ruda-przedmiescie,Nowa Ruda Przedmieście,50.58840,16.51609
+nowa-ruda-zdrojowisko,Nowa Ruda Zdrojowisko,50.61205,16.50951
+swierki-dolne,Świerki Dolne,50.63237,16.43249
+jelcz-miloszyce,Jelcz Miłoszyce,51.04469,17.30519
+nadolice-wielkie,Nadolice Wielkie,51.07986,17.25061
+dobrzykowice-wroclawskie,Dobrzykowice Wrocławskie,51.08755,17.18003
+swieta-katarzyna,Święta Katarzyna,51.02975,17.12289
+zebice-wroclawskie,Zębice Wrocławskie,51.00738,17.16087
+lizawice,Lizawice,50.97194,17.21489
+olawa,Oława,50.93114,17.29712
+lipki,Lipki,50.89826,17.37247
+siechnice,Siechnice,51.03820,17.14274
+zakrzow-kotowice,Zakrzów Kotowice,51.03572,17.21004
+czernica-wroclawska,Czernica Wrocławska,51.04965,17.23624
+jelcz-laskowice,Jelcz-Laskowice,51.03717,17.34506
+kopalina,Kopalina,51.02109,17.40421
+minkowice-olawskie,Minkowice Oławskie,51.01184,17.45717
+biskupice-olawskie,Biskupice Oławskie,50.99375,17.51633
+kobierzyce,Kobierzyce,50.97375,16.92615
+wierzbice-wroclawskie,Wierzbice Wrocławskie,50.96504,16.89884
+pustkow-zurawski,Pustków Żurawski,50.95406,16.85676
+rogow-sobocki,Rogów Sobócki,50.93433,16.75989
+sobotka,Sobótka,50.90522,16.74031
+sobotka-zachodnia,Sobótka Zachodnia,50.90728,16.70256
+wroclaw-nowy-dwor,Wrocław Nowy Dwór,51.11970,16.95508
+wroclaw-popowice,Wrocław Popowice,51.12705,17.00133
+wroclaw-mikolajow,Wrocław Mikołajów,51.11630,16.99841
+wroclaw-osobowice,Wrocław Osobowice,51.16694,16.99673
+wroclaw-swiniary,Wrocław Świniary,51.19804,16.96984
+szewce,Szewce,51.21468,16.95531
+pegow,Pęgów,51.24809,16.92635
+oborniki-slaskie,Oborniki Śląskie,51.29963,16.90732
+osola,Osola,51.33830,16.86565
+skokowa,Skokowa,51.38701,16.84896
+wroclaw-muchobor,Wrocław Muchobór,51.11159,16.97414
+wroclaw-zachodni,Wrocław Zachodni,51.08996,16.94950
+smolec,Smolec,51.07181,16.88273
+sadowice-wroclawskie,Sadowice Wrocławskie,51.05602,16.82467
+katy-wroclawskie,Kąty Wrocławskie,51.03829,16.75100
+mietkow,Mietków,50.98470,16.65470
+wroclaw-zerniki,Wrocław Żerniki,51.12620,16.91608
+wroclaw-lesnica,Wrocław Leśnica,51.14267,16.86639
+mrozow,Mrozów,51.18368,16.79391
+miekinia,Miękinia,51.18836,16.73836
+przedmoscie-swiete,Przedmoście Święte,51.19050,16.66463
+sroda-slaska,Środa Śląska,51.18942,16.60588
+wroclaw-kuzniki,Wrocław Kuźniki,51.12797,16.95241
+wroclaw-pracze,Wrocław Pracze,51.17023,16.90290
+wroclaw-nadodrze,Wrocław Nadodrze,51.12570,17.03275
+wroclaw-soltysowice,Wrocław Sołtysowice,51.14257,17.08368
+wroclaw-kowale,Wrocław Kowale,51.13505,17.10009
+wroclaw-psie-pole,Wrocław Psie Pole,51.15042,17.11841
+wroclaw-pawlowice,Wrocław Pawłowice,51.16870,17.10847
+wroclaw-zakrzow,Wrocław Zakrzów,51.15873,17.12217
+wroclaw-swojczyce,Wrocław Swojczyce,51.11583,17.12138
+wroclaw-wojnow,Wrocław Wojnów,51.10350,17.15778
+dlugoleka,Długołęka,51.17839,17.19411
+borowa-olesnicka,Borowa Oleśnicka,51.18412,17.27614
+siedlec-trzebnicki,Siedlec Trzebnicki,51.23363,17.11896
+pasikurowice,Pasikurowice,51.20871,17.10948
+brochocin-trzebnicki,Brochocin Trzebnicki,51.27606,17.09423
+trzebnica,Trzebnica,51.30400,17.06336
+olesnica,Oleśnica,51.20072,17.38601
+grabowno-wielkie,Grabowno Wielkie,51.34326,17.40355
+dobroszyce,Dobroszyce,51.26997,17.36336
+olesnica-rataje,Oleśnica Rataje,51.21513,17.36450
+bierutow,Bierutów,51.12842,17.54631
+solniki-wielkie,Solniki Wielkie,51.15392,17.49403
+bukowice-trzebnickie,Bukowice Trzebnickie,51.39953,17.36849
+krosnice,Krośnice,51.47144,17.37386
+wierzchowice,Wierzchowice,51.50283,17.35177
+milicz,Milicz,51.52728,17.29506
+twardogora,Twardogóra,51.36029,17.46770
+ciesle,Cieśle,51.21617,17.47381
+poniatowice,Poniatowice,51.22519,17.53731
+jemielna-olesnicka,Jemielna Oleśnicka,51.24044,17.57922
+strzelin,Strzelin,50.78469,17.06033
+bialy-kosciol,Biały Kościół,50.72625,17.03053
+warkocz,Warkocz,50.82959,17.04623
+wroclaw-glowny,Wrocław Główny,51.09805,17.03786
+smardzow-wroclawski,Smardzów Wrocławski,51.02989,17.06606
+zorawina,Żórawina,50.98333,17.04953
+boreczek,Boreczek,50.87917,17.02465
+wegry,Węgry,50.92581,17.03284
+wroclaw-partynice,Wrocław Partynice,51.06095,16.99826
+wroclaw-wojszyce,Wrocław Wojszyce,51.06890,17.03144
+bielany-wroclawskie,Bielany Wrocławskie,51.03623,16.97580
+domaslaw,Domasław,51.01001,16.95287
+brzeg-dolny,Brzeg Dolny,51.26695,16.72491
+brzezinka-sredzka,Brzezinka Średzka,51.21964,16.83695
+czerna-mala,Czerna Mała,51.22996,16.80360
+wolow,Wołów,51.33404,16.63290
+lososiowice,Łososiowice,51.29712,16.67501
+ksieginice,Księginice,51.24208,16.76431
+scinawa,Ścinawa,51.40953,16.42117
+rudna-gwizdanow,Rudna Gwizdanów,51.53003,16.28067
+rudna-miasto,Rudna Miasto,51.50601,16.26998
+chelmek-wolowski,Chełmek Wołowski,51.45608,16.35952
+malowice-wolowskie,Małowice Wołowskie,51.40442,16.47140
+orzeszkow,Orzeszków,51.39391,16.50822
+opole-glowne,Opole Główne,50.66191,17.92760
+opole-zachodnie,Opole Zachodnie,50.66079,17.89782
+dabrowa-niemodlinska,Dąbrowa Niemodlińska,50.69163,17.75375
+chroscina-opolska,Chróścina Opolska,50.67008,17.81702
+komprachcice,Komprachcice,50.63155,17.82133
+opole-chmielowice,Opole Chmielowice,50.64449,17.86646
+szydlow,Szydłów,50.60604,17.70504
+chrzastowice,Chrząstowice,50.66071,18.07527
+suchy-bor-opolski,Suchy Bór Opolski,50.65731,18.03654
+opole-goslawice,Opole Gosławice,50.67404,17.98801
+kotorz-maly,Kotórz Mały,50.72872,18.03581
+osowiec-przystanek,Osowiec Przystanek,50.75358,18.04354
+jelowa,Jełowa,50.79394,18.04669
+opole-wschodnie,Opole Wschodnie,50.67444,17.93460
+opole-czarnowasy,Opole Czarnowąsy,50.71643,17.90332
+opole-borki,Opole Borki,50.74303,17.88161
+dobrzen-wielki,Dobrzeń Wielki,50.77187,17.85948
+chroscice,Chróścice,50.79282,17.81665
+popielow,Popielów,50.82961,17.76231
+karlowice,Karłowice,50.87950,17.69931
+tarnowiec-brzeski,Tarnowiec Brzeski,50.91360,17.65256
+makoszyce,Mąkoszyce,50.93825,17.63228
+rogalice,Rogalice,50.96346,17.59796
+kluczbork,Kluczbork,50.97137,18.20070
+smardy,Smardy,50.99189,18.14561
+wolczyn,Wołczyn,51.01350,18.04719
+wierzbica-gorna,Wierzbica Górna,51.02226,17.97568
+krzywizna,Krzywizna,51.02722,18.20197
+biskupice-kolo-kluczborka,Biskupice koło Kluczborka,51.07111,18.21030
+byczyna-kluczborska,Byczyna Kluczborska,51.11408,18.19983
+kostow,Kostów,51.16539,18.14614
+bakow,Bąków,50.95616,18.31457
+tuly,Tuły,50.87406,18.09997
+bukowo,Bukowo,50.89630,18.10689
+borkowice,Borkowice,50.93211,18.15594
+laskowice-oleskie,Laskowice Oleskie,50.85607,18.09502
+kaly,Kały,50.82731,18.08064
+fosowskie,Fosowskie,50.66031,18.35972
+kolonowskie,Kolonowskie,50.65194,18.38802
+zawadzkie,Zawadzkie,50.60910,18.47345
+debska-kuznia,Dębska Kuźnia,50.66433,18.11279
+ozimek,Ozimek,50.66998,18.21026
+krasiejow,Krasiejów,50.66835,18.25004
+staniszcze-male,Staniszcze Małe,50.66450,18.31814
+strzelce-opolskie,Strzelce Opolskie,50.51673,18.30666
+blotnica-strzelecka,Błotnica Strzelecka,50.48380,18.40410
+szymiszow,Szymiszów,50.52836,18.22409
+gogolin,Gogolin,50.49267,18.01897
+gorazdze,Górażdże,50.52848,18.00350
+opole-groszowice,Opole Groszowice,50.63604,17.95517
+opole-grotowice,Opole Grotowice,50.60975,17.97601
+przywory-opolskie,Przywory Opolskie,50.58022,17.98947
+tarnow-opolski,Tarnów Opolski,50.57184,18.07818
+otmice,Otmice,50.55111,18.12422
+brzeg,Brzeg,50.85290,17.47093
+przecza,Przecza,50.73229,17.66924
+losiow,Łosiów,50.78857,17.55179
+olszanka,Olszanka,50.79522,17.47764
+lipowa-slaska,Lipowa Śląska,50.73710,17.42714
+grodkow-slaski,Grodków Śląski,50.69756,17.37632
+stary-grodkow,Stary Grodków,50.65021,17.37769
+czeska-wies,Czeska Wieś,50.75805,17.45938
+namyslow,Namysłów,51.07453,17.71636
+domaszowice,Domaszowice,51.04864,17.88331
+greboszow,Gręboszów,51.06538,17.80004
+wilkow-namyslowski,Wilków Namysłowski,51.09425,17.65836
+czestochowa,Częstochowa,50.80832,19.12100
+czestochowa-rakow,Częstochowa Raków,50.78752,19.15560
+korwinow,Korwinów,50.73825,19.17669
+maslonskie-natalin,Masłońskie Natalin,50.65107,19.25328
+zarki-letnisko,Żarki Letnisko,50.62219,19.27356
+czestochowa-stradom,Częstochowa Stradom,50.79741,19.10719
+turow,Turów,50.76800,19.31741
+kusieta-nowe,Kusięta Nowe,50.77787,19.26149
+luslawice,Lusławice,50.76086,19.38731
+julianka,Julianka,50.76464,19.47314
+staropole-czestochowskie,Staropole Częstochowskie,50.76474,19.52868
+podlesie,Podlesie,50.76497,19.60453
+koniecpol-magdasz,Koniecpol Magdasz,50.77252,19.65335
+koniecpol,Koniecpol,50.77625,19.69911
+czestochowa-aniolow,Częstochowa Aniołów,50.83547,19.15200
+rzasawa,Rząsawa,50.88389,19.17675
+mykanow,Mykanów,50.92572,19.17917
+stary-cykarzew,Stary Cykarzew,50.95244,19.16944
+wazne-mlyny,Ważne Młyny,51.03964,19.14669
+dubidze,Dubidze,51.10247,19.14300
+wistka,Wistka,51.14511,19.09656
+dubidze-kolonia,Dubidze Kolonia,51.11675,19.12939
+herby-stare,Herby Stare,50.74733,18.88072
+rudniki-k-czestochowy,Rudniki k/Częstochowy,50.87815,19.23230
+rzerzeczyce,Rzerzęczyce,50.89737,19.32853
+klomnice,Kłomnice,50.91554,19.34143
+jackow,Jacków,50.96427,19.35464
+kielce-herbskie,Kielce Herbskie,50.88592,20.60230
+kielce-piaski,Kielce Piaski,50.88978,20.62534
+kielce-glowne,Kielce Główne,50.87482,20.61830
+kielce-bialogon,Kielce Białogon,50.85518,20.57426
+szczukowskie-gorki,Szczukowskie Górki,50.88322,20.52581
+kielce-slichowice,Kielce Ślichowice,50.88887,20.58368
+zagnansk,Zagnańsk,50.97434,20.66468
+laczna,Łączna,50.99167,20.79847
+tumlin,Tumlin,50.96750,20.60214
+kostomloty,Kostomłoty,50.92173,20.61535
+sitkowka-nowiny,Sitkówka Nowiny,50.81815,20.55043
+kielce-slowik,Kielce Słowik,50.83359,20.53863
+radkowice,Radkowice,50.78050,20.52875
+brzeziny,Brzeziny,50.77744,20.56586
+nida,Nida,50.76022,20.57886
+wolica,Wolica,50.75342,20.46967
+sobkow,Sobków,50.73123,20.43064
+busko-zdroj,Busko-Zdrój,50.46189,20.68575
+grochowiska,Grochowiska,50.49437,20.64185
+kije,Kije,50.60750,20.57808
+stawiany-pinczowskie,Stawiany Pińczowskie,50.58144,20.59087
+wloszczowice,Włoszczowice,50.64950,20.58497
+debska-wola,Dębska Wola,50.70195,20.59779
+sedziszow,Sędziszów,50.56514,20.05322
+kozlow,Kozłów,50.47516,20.01230
+klimontow,Klimontów,50.52578,20.03042
+jedrzejow,Jędrzejów,50.64483,20.27603
+potok,Potok,50.61741,20.19653
+krzciecice,Krzcięcice,50.58755,20.14050
+miasowa,Miąsowa,50.71939,20.36520
+gajowka,Gajówka,50.39463,19.87859
+charsznica,Charsznica,50.39608,19.94185
+tunel,Tunel,50.43494,19.99206
+malogoszcz,Małogoszcz,50.85050,20.27114
+ludynia,Ludynia,50.85175,20.16259
+bukowa,Bukowa,50.85944,20.20033
+ludynia-dwor,Ludynia Dwór,50.84739,20.11359
+rykoszyn,Rykoszyn,50.86818,20.37893
+wierna-rzeka,Wierna Rzeka,50.86514,20.31282
+piekoszow-laziska,Piekoszów Łaziska,50.87036,20.44833
+wloszczowa,Włoszczowa,50.83781,20.01532
+zelislawice,Żelisławice,50.80378,19.85869
+wloszczowa-polnoc,Włoszczowa Północ,50.85601,19.94590
+czarnca,Czarnca,50.82387,19.94427
+stalowa-wola-rozwadow,Stalowa Wola Rozwadów,50.59119,22.04219
+stalowa-wola-centrum,Stalowa Wola Centrum,50.57048,22.05488
+stalowa-wola,Stalowa Wola,50.56255,22.06087
+stalowa-wola-poludnie,Stalowa Wola Południe,50.54507,22.07869
+moskale,Moskale,50.52458,22.10829
+nisko-osiedle,Nisko Osiedle,50.52085,22.12282
+nisko,Nisko,50.51401,22.14092
+nisko-raclawice,Nisko Racławice,50.50465,22.15791
+nisko-podwolina,Nisko Podwolina,50.49546,22.17348
+rudnik-stroza,Rudnik Stróża,50.45824,22.21677
+rudnik-nad-sanem,Rudnik nad Sanem,50.43572,22.24942
+letownia,Łętownia,50.36283,22.25686
+zbydniow,Zbydniów,50.63483,21.92047
+turbia,Turbia,50.61782,21.97254
+lipa,Lipa,50.68905,22.06815
+zaklikow,Zaklików,50.76842,22.10752
+potok-krasnicki,Potok Kraśnicki,50.79685,22.16322
+rzeczyca,Rzeczyca,50.83993,22.20807
+pilchow,Pilchów,50.61675,22.02694
+kepa,Kępa,50.65381,22.03272
+sandomierz,Sandomierz,50.66102,21.76543
+dwikozy,Dwikozy,50.73219,21.79119
+stary-garbow,Stary Garbów,50.76397,21.75022
+metan,Metan,50.69235,21.80593
+grebow,Grębów,50.60514,21.83926
+tarnobrzeg,Tarnobrzeg,50.56794,21.69622
+jadachy,Jadachy,50.48291,21.69638
+deba-rozalin,Dęba Rozalin,50.42876,21.74312
+nowa-deba,Nowa Dęba,50.41557,21.73980
+majdan-krolewski,Majdan Królewski,50.37896,21.72507
+komorow-podmurynia,Komorów Podmurynia,50.34940,21.73309
+chmielow-k-tarnobrzega,Chmielów k/Tarnobrzega,50.52364,21.68588
+dabrowica-malopolska,Dąbrowica Małopolska,49.97697,20.44852
+baranow-sandomierski,Baranów Sandomierski,50.49143,21.55068
+zamosc,Zamość,50.71363,23.23854
+krzak,Krzak,50.80653,23.09558
+zlojec,Złojec,50.76856,23.10103
+zawada,Zawada,50.71594,23.12525
+wolka-niedzieliska,Wólka Niedzieliska,50.70867,23.08686
+niedzieliska-kolonia,Niedzieliska-Kolonia,50.69772,23.03656
+hrubieszow-miasto,Hrubieszów Miasto,50.79670,23.90860
+werbkowice,Werbkowice,50.74564,23.76628
+belzec,Bełżec,50.37736,23.44883
+lubycza-krolewska,Lubycza Królewska,50.33992,23.53000
+susiec,Susiec,50.41624,23.22586
+belzec-drugi,Bełżec Drugi,50.38074,23.40364
+mazily,Maziły,50.40502,23.31438
+nowiny,Nowiny,50.44909,23.14137
+dlugi-kat,Długi Kąt,50.48234,23.10245
+jozefow-roztoczanski,Józefów Roztoczański,50.51792,23.03969
+bilgoraj,Biłgoraj,50.55145,22.73201
+tereszpol-bilgorajski,Tereszpol Biłgorajski,50.57411,22.88486
+zwierzyniec,Zwierzyniec,50.60910,22.98440
+kedzierzyn-kozle,Kędzierzyn-Koźle,50.34444,18.20522
+zdzieszowice,Zdzieszowice,50.42267,18.12567
+raszowa,Raszowa,50.38857,18.16029
+jasiona,Jasiona,50.45948,18.07512
+bierawa,Bierawa,50.29275,18.25769
+kedzierzyn-kozle-azoty,Kędzierzyn-Koźle Azoty,50.31067,18.23966
+dziergowice,Dziergowice,50.24303,18.29983
+kedzierzyn-kozle-zachodnie,Kędzierzyn-Koźle Zachodnie,50.34660,18.13131
+kedzierzyn-kozle-przystanek,Kędzierzyn-Koźle Przystanek,50.35059,18.15444
+twardawa,Twardawa,50.34709,17.99924
+pokrzywnica,Pokrzywnica,50.34389,18.07955
+glogowek,Głogówek,50.34761,17.87572
+raclawice-slaskie,Racławice Śląskie,50.31230,17.76075
+slawiecice,Sławięcice,50.35139,18.31382
+rudziniec-gliwicki,Rudziniec Gliwicki,50.36666,18.40409
+chalupki,Chałupki,49.92627,18.31110
+rudyszwald,Rudyszwałd,49.94024,18.30303
+roszkow-raciborski,Roszków Raciborski,49.96591,18.29384
+krzyzanowice,Krzyżanowice,49.98914,18.27606
+rybnik-towarowy,Rybnik Towarowy,50.06664,18.51576
+rybnik-rymer,Rybnik Rymer,50.05672,18.49806
+leszczyny,Leszczyny,50.14108,18.61850
+rybnik-paruszowiec,Rybnik Paruszowiec,50.10236,18.56497
+czerwionka,Czerwionka,50.14881,18.68509
+orzesze-jaskowice,Orzesze Jaśkowice,50.14477,18.74094
+laziska-srednie,Łaziska Średnie,50.13002,18.86792
+orzesze-miasto,Orzesze Miasto,50.14198,18.77412
+rybnik,Rybnik,50.08883,18.54761
+szczejkowice,Szczejkowice,50.07958,18.67194
+rybnik-gotartowice,Rybnik Gotartowice,50.08806,18.62300
+rybnik-piaski,Rybnik Piaski,50.09652,18.58606
+rybnik-niewiadom,Rybnik Niewiadom,50.06938,18.46952
+rybnik-niedobczyce,Rybnik Niedobczyce,50.06594,18.49569
+rydultowy,Rydułtowy,50.06917,18.42750
+sumina,Sumina,50.13682,18.40176
+lukow-slaski,Łuków Śląski,50.10070,18.40909
+sumina-wies,Sumina Wieś,50.12212,18.41051
+wodzislaw-slaski,Wodzisław Śląski,50.00838,18.47630
+wodzislaw-slaski-radlin,Wodzisław Śląski Radlin,50.02017,18.48120
+radlin-obszary,Radlin Obszary,50.04010,18.49590
+olza,Olza,49.96006,18.33800
+belsznica,Bełsznica,49.97287,18.37295
+raciborz,Racibórz,50.08993,18.22600
+nedza,Nędza,50.15667,18.29169
+raciborz-markowice,Racibórz Markowice,50.11344,18.27036
+nedza-wies,Nędza Wieś,50.16472,18.31257
+szymocice,Szymocice,50.15111,18.34971
+gorki-slaskie,Górki Śląskie,50.14226,18.38882
+kuznia-raciborska,Kuźnia Raciborska,50.20042,18.29847
+tworkow,Tworków,50.01678,18.24924
+orzesze,Orzesze,50.15442,18.77770
+laziska-gorne-brada,Łaziska Górne Brada,50.15808,18.82078
+laziska-gorne,Łaziska Górne,50.15943,18.84530
+mikolow,Mikołów,50.17256,18.89892
+mikolow-jamna,Mikołów Jamna,50.19446,18.92365
+zory,Żory,50.05167,18.70267
+suszec-kopalnia,Suszec Kopalnia,50.03958,18.77389
+suszec-rudziczka,Suszec Rudziczka,50.04565,18.75444
+suszec,Suszec,50.03501,18.79216
+radostowice,Radostowice,50.02067,18.88853
+warszowice,Warszowice,49.99017,18.71542
+pszczyna-czarkow,Pszczyna Czarków,50.01137,18.92120
+gliwice,Gliwice,50.30083,18.67787
+zabrze-polnocne,Zabrze Północne,50.32417,18.78719
+zabrze,Zabrze,50.30530,18.78738
+ruda-slaska,Ruda Śląska,50.31592,18.85085
+przyszowice,Przyszowice,50.24761,18.73672
+gliwice-labedy,Gliwice Łabędy,50.34036,18.62219
+gliwice-kuznica,Gliwice Kuźnica,50.35694,18.62146
+rzeczyce-slaskie,Rzeczyce Śląskie,50.35659,18.56775
+taciszow,Taciszów,50.35798,18.50774
+pyskowice,Pyskowice,50.38440,18.61820
+paczyna,Paczyna,50.41275,18.57100
+toszek,Toszek,50.44178,18.51312
+ligota-toszecka,Ligota Toszecka,50.45629,18.46392
+kotulin,Kotulin,50.46875,18.43598
+ruda-chebzie,Ruda Chebzie,50.30389,18.87797
+knurow,Knurów,50.21732,18.68829
+tarnowskie-gory,Tarnowskie Góry,50.44646,18.86463
+miasteczko-slaskie,Miasteczko Śląskie,50.49761,18.90022
+naklo-slaskie,Nakło Śląskie,50.42980,18.90346
+radzionkow,Radzionków,50.40875,18.91484
+radzionkow-rojca,Radzionków Rojca,50.39580,18.89980
+lubliniec,Lubliniec,50.67317,18.69003
+kochcice-glinica,Kochcice-Glinica,50.71381,18.65761
+pawonkow,Pawonków,50.68076,18.56696
+pludry,Pludry,50.66471,18.46871
+lisowice,Lisowice,50.68272,18.63017
+ciasna,Ciasna,50.75653,18.62936
+sierakow,Sieraków,50.79884,18.59359
+sowczyce,Sowczyce,50.84589,18.50175
+olesno-slaskie,Olesno Śląskie,50.88206,18.42480
+stare-olesno,Stare Olesno,50.91583,18.37433
+kochanowice,Kochanowice,50.69958,18.74866
+lisow,Lisów,50.72089,18.79110
+herby-nowe,Herby Nowe,50.74825,18.85403
+kuleje,Kuleje,50.82892,18.79252
+panki,Panki,50.89678,18.74836
+krzepice,Krzepice,50.96956,18.69658
+jaworzno-kolo-wielunia,Jaworzno koło Wielunia,51.01460,18.65321
+janinow,Janinów,51.05617,18.60506
+dzietrzniki,Dzietrzniki,51.11713,18.61490
+klobuck,Kłobuck,50.90783,18.92353
+dzialoszyn,Działoszyn,51.11652,18.91491
+chorzew-siemkowice,Chorzew Siemkowice,51.20998,18.94126
+boronow,Boronów,50.66625,18.90064
+kalety,Kalety,50.56648,18.88832
+koszecin,Koszęcin,50.62263,18.83662
+rusinowice,Rusinowice,50.64888,18.76426
+strzebin,Strzebiń,50.61778,18.89972
+chorzow-stary,Chorzów Stary,50.31626,18.95812
+chorzow-miasto,Chorzów Miasto,50.29869,18.94968
+bytom,Bytom,50.34294,18.91511
+bytom-karb,Bytom Karb,50.35189,18.88158
+katowice-ligota,Katowice Ligota,50.22528,18.97797
+katowice-piotrowice,Katowice Piotrowice,50.21333,18.97030
+katowice-podlesie,Katowice Podlesie,50.18294,18.96033
+chorzow-batory,Chorzów Batory,50.27839,18.94477
+swietochlowice,Świętochłowice,50.28897,18.91840
+katowice,Katowice,50.25765,19.01716
+katowice-zaleze,Katowice Załęże,50.26388,18.98960
+sosnowiec-dandowka,Sosnowiec Dańdówka,50.26552,19.17270
+sosnowiec-poludniowy,Sosnowiec Południowy,50.27019,19.12484
+myslowice,Mysłowice,50.23781,19.14183
+katowice-zawodzie,Katowice Zawodzie,50.25736,19.05644
+katowice-szopienice-poludniowe,Katowice Szopienice Południowe,50.25887,19.09209
+myslowice-brzezinka,Mysłowice Brzezinka,50.19728,19.15446
+tychy,Tychy,50.13558,18.96416
+wyry,Wyry,50.12444,18.91117
+tychy-zachodnie,Tychy Zachodnie,50.12114,18.97884
+jaworzno-szczakowa,Jaworzno Szczakowa,50.24686,19.29442
+sosnowiec-maczki,Sosnowiec Maczki,50.26156,19.26986
+dabrowa-gornicza-poludniowa,Dąbrowa Górnicza Południowa,50.31067,19.28731
+bukowno,Bukowno,50.26393,19.45842
+slawkow,Sławków,50.29555,19.37377
+bukowno-przymiarki,Bukowno Przymiarki,50.27539,19.40960
+olkusz,Olkusz,50.27378,19.57421
+jaroszowiec-olkuski,Jaroszowiec Olkuski,50.34119,19.61933
+chrzastowice-olkuskie,Chrząstowice Olkuskie,50.34462,19.68586
+zarzecze,Zarzecze,50.36350,19.69940
+wolbrom,Wolbrom,50.37594,19.77218
+jezowka,Jeżówka,50.39927,19.81551
+dabrowa-gornicza-zabkowice,Dąbrowa Górnicza Ząbkowice,50.36630,19.26446
+dabrowa-gornicza-sikorka,Dąbrowa Górnicza Sikorka,50.38875,19.29756
+dabrowa-gornicza-golonog,Dąbrowa Górnicza Gołonóg,50.34378,19.22570
+dabrowa-gornicza,Dąbrowa Górnicza,50.33042,19.18467
+bedzin-ksawera,Będzin Ksawera,50.33053,19.15798
+bedzin-miasto,Będzin Miasto,50.31886,19.13551
+sosnowiec-glowny,Sosnowiec Główny,50.27880,19.12626
+dabrowa-gornicza-strzemieszyce,Dąbrowa Górnicza Strzemieszyce,50.31098,19.26806
+dabrowa-gornicza-wschodnia,Dąbrowa Górnicza Wschodnia,50.30329,19.31140
+sosnowiec-kazimierz,Sosnowiec Kazimierz,50.28868,19.23164
+sosnowiec-porabka,Sosnowiec Porąbka,50.27204,19.21623
+lazy,Łazy,50.42908,19.39089
+wiesiolka,Wiesiółka,50.41478,19.34926
+chruszczobrod,Chruszczobród,50.40037,19.32904
+zawiercie,Zawiercie,50.47953,19.42341
+zawiercie-borowe-pole,Zawiercie Borowe Pole,50.51108,19.39861
+siewierz,Siewierz,50.47930,19.23741
+myszkow,Myszków,50.57447,19.32828
+myszkow-nowa-wies,Myszków Nowa Wieś,50.59485,19.29153
+myszkow-swiatowit,Myszków Światowit,50.56563,19.35954
+myszkow-mrzyglod,Myszków Mrzygłód,50.54444,19.37686
+zebrzydowice,Zebrzydowice,49.87057,18.62200
+kaczyce,Kaczyce,49.83220,18.61057
+konczyce,Kończyce,49.85118,18.62594
+pogwizdow,Pogwizdów,49.80622,18.59769
+cieszyn-marklowice,Cieszyn Marklowice,49.78556,18.60369
+cieszyn,Cieszyn,49.75128,18.63624
+zabrzeg,Zabrzeg,49.90763,18.93886
+piersciec,Pierściec,49.83034,18.81319
+zaborze,Zaborze,49.87080,18.81140
+skoczow,Skoczów,49.79333,18.78990
+chybie,Chybie,49.89303,18.81122
+chybie-mnich,Chybie Mnich,49.88750,18.82076
+pruchna,Pruchna,49.87876,18.68834
+drogomysl,Drogomyśl,49.88687,18.75811
+strumien,Strumień,49.91208,18.75275
+pszczyna,Pszczyna,49.97487,18.95333
+goczalkowice,Goczałkowice,49.94497,18.96600
+goczalkowice-zdroj,Goczałkowice-Zdrój,49.93536,18.97708
+kobior,Kobiór,50.06594,18.92351
+tychy-zwakow,Tychy Żwaków,50.11007,18.95318
+piasek,Piasek,50.01274,18.94005
+czechowice-dziedzice,Czechowice-Dziedzice,49.91539,19.00673
+kaniow,Kaniów,49.92641,19.05336
+czechowice-dziedzice-poludniowe,Czechowice-Dziedzice Południowe,49.89004,19.02441
+czechowice-dziedzice-przystanek,Czechowice-Dziedzice Przystanek,49.90642,19.02242
+bielsko-biala-glowna,Bielsko-Biała Główna,49.82989,19.04539
+bielsko-biala-polnoc,Bielsko-Biała Północ,49.84162,19.04149
+bielsko-biala-komorowice,Bielsko-Biała Komorowice,49.86147,19.03583
+bielsko-biala-wschod,Bielsko-Biała Wschód,49.83467,19.05842
+krzemionki,Krzemionki,49.84092,19.11525
+kozy,Kozy,49.84939,19.14164
+kozy-zagroda,Kozy Zagroda,49.85756,19.16428
+kety-podlesie,Kęty Podlesie,49.87822,19.19685
+kety,Kęty,49.88067,19.22678
+zamek-bulowicki,Zamek Bulowicki,49.88011,19.26352
+bulowice,Bulowice,49.87625,19.28983
+andrychow-gornica,Andrychów Górnica,49.85848,19.32402
+andrychow,Andrychów,49.85581,19.35342
+chocznia-gorna,Chocznia Górna,49.86265,19.43205
+inwald,Inwałd,49.85303,19.38786
+bielsko-biala-leszczyny,Bielsko-Biała Leszczyny,49.79794,19.05989
+bielsko-biala-lipnik,Bielsko-Biała Lipnik,49.81407,19.04965
+bielsko-biala-mikuszowice,Bielsko-Biała Mikuszowice,49.78281,19.07429
+wilkowice-bystra,Wilkowice Bystra,49.76097,19.08747
+lodygowice-gorne,Łodygowice Górne,49.73581,19.12366
+lodygowice,Łodygowice,49.72531,19.14103
+pietrzykowice-zywieckie,Pietrzykowice Żywieckie,49.70995,19.17204
+zywiec,Żywiec,49.67940,19.18569
+zywiec-sporysz,Żywiec Sporysz,49.67627,19.22226
+pewel-mala,Pewel Mała,49.66691,19.27904
+jelesnia,Jeleśnia,49.65242,19.32073
+pewel-wielka-centrum,Pewel Wielka Centrum,49.66058,19.35234
+pewel-wielka,Pewel Wielka,49.66910,19.38000
+hucisko,Hucisko,49.68922,19.40753
+kurow-suski,Kurów Suski,49.70786,19.43358
+lachowice-centrum,Lachowice Centrum,49.71225,19.47309
+wegierska-gorka,Węgierska Górka,49.60364,19.11868
+radziechowy-wieprz,Radziechowy Wieprz,49.64719,19.16375
+ciecina,Cięcina,49.60961,19.13618
+cisiec,Cisiec,49.58363,19.10570
+milowka,Milówka,49.55508,19.09356
+rajcza,Rajcza,49.51689,19.11322
+milowka-zabawa,Milówka Zabawa,49.54007,19.10273
+rycerka,Rycerka,49.49857,19.08170
+sol,Sól,49.49453,19.05063
+sol-kiczora,Sól Kiczora,49.51694,19.03150
+laliki,Laliki,49.52296,19.00492
+zwardon,Zwardoń,49.50422,18.97704
+goleszow,Goleszów,49.74691,18.74933
+goleszow-gorny,Goleszów Górny,49.73703,18.73353
+bazanowice,Bażanowice,49.73447,18.70221
+skoczow-bladnice,Skoczów Bładnice,49.77215,18.77922
+ustron,Ustroń,49.72800,18.80193
+ustron-zdroj,Ustroń Zdrój,49.72074,18.81645
+wisla-uzdrowisko,Wisła Uzdrowisko,49.65873,18.85453
+wisla-dziechcinka,Wisła Dziechcinka,49.64741,18.86554
+wisla-kopydlo,Wisła Kopydło,49.63503,18.86967
+wisla-glebce,Wisła Głębce,49.62170,18.87602
+ustron-polana,Ustroń Polana,49.69654,18.83013
+oswiecim,Oświęcim,50.04188,19.20007
+gorzow-chrzanowski,Gorzów Chrzanowski,50.07374,19.24209
+brzeszcze-jawiszowice,Brzeszcze Jawiszowice,49.97258,19.12852
+jawiszowice-jaznik,Jawiszowice Jaźnik,49.94970,19.11559
+dankowice-old,Dankowice,49.93746,19.08282
+nowy-bierun,Nowy Bieruń,50.07397,19.18478
+chelm-slaski,Chełm Śląski,50.10929,19.18386
+imielin,Imielin,50.14233,19.17614
+myslowice-kosztowy,Mysłowice Kosztowy,50.16953,19.16281
+dwory,Dwory,50.04543,19.28600
+trzebinia,Trzebinia,50.15388,19.45367
+balin,Balin,50.17936,19.38287
+jaworzno-ciezkowice,Jaworzno Ciężkowice,50.21300,19.33707
+dulowa,Dulowa,50.14049,19.52070
+wola-filipowska,Wola Filipowska,50.13084,19.57725
+myslowice-brzeczkowice,Mysłowice Brzęczkowice,50.21313,19.14716
+krzeszowice,Krzeszowice,50.13083,19.63523
+rudawa,Rudawa,50.11883,19.71936
+chrzanow,Chrzanów,50.13376,19.39908
+chrzanow-srodmiescie,Chrzanów Śródmieście,50.14456,19.41408
+libiaz,Libiąż,50.11314,19.32623
+chelmek,Chełmek,50.09969,19.25444
+spytkowice,Spytkowice,49.99511,19.47676
+wielkie-drogi,Wielkie Drogi,49.95952,19.71147
+jaskowice,Jaśkowice,49.96177,19.67446
+brzeznica,Brzeźnica,49.96744,19.62798
+polwies,Półwieś,49.97640,19.57572
+ryczow,Ryczów,49.98910,19.54065
+spytkowice-kepki,Spytkowice Kępki,49.99933,19.52198
+zator,Zator,50.00236,19.42822
+przeciszow,Przeciszów,50.01348,19.36879
+wlosienica,Włosienica,50.02303,19.32849
+wadowice,Wadowice,49.88573,19.50127
+chocznia,Chocznia,49.87395,19.45161
+klecza-gorna,Klecza Górna,49.86519,19.56701
+klecza-dolna,Klecza Dolna,49.87836,19.53459
+barwald-gorny,Barwałd Górny,49.86476,19.62100
+kalwaria-zebrzydowska,Kalwaria Zebrzydowska,49.87383,19.67344
+kalwaria-zebrzydowska-lanckorona,Kalwaria Zebrzydowska Lanckorona,49.87150,19.68809
+sucha-beskidzka,Sucha Beskidzka,49.74058,19.58050
+lachowice,Lachowice,49.72364,19.50383
+stryszawa,Stryszawa,49.73348,19.52522
+stronie,Stronie,49.83356,19.66915
+stryszow,Stryszów,49.82559,19.62177
+zembrzyce,Zembrzyce,49.77508,19.59137
+makow-podhalanski,Maków Podhalański,49.72694,19.67680
+juszczyn,Juszczyn,49.70717,19.69161
+kojszowka,Kojszówka,49.69044,19.72287
+osielec,Osielec,49.67472,19.75656
+bystra-podhalanska,Bystra Podhalańska,49.65811,19.78767
+jordanow,Jordanów,49.63759,19.83271
+skawa,Skawa,49.63085,19.87975
+skawa-srodkowa,Skawa Środkowa,49.61253,19.90041
+chabowka,Chabówka,49.59700,19.93658
+rabka-zdroj,Rabka-Zdrój,49.60928,19.95171
+rabka-zaryte,Rabka Zaryte,49.62679,19.98958
+raba-wyzna,Raba Wyżna,49.56570,19.88181
+rokiciny-podhalanskie,Rokiciny Podhalańskie,49.57858,19.90583
+sieniawa,Sieniawa,49.53900,19.92244
+nowy-targ,Nowy Targ,49.47241,20.01613
+lasek,Lasek,49.49873,19.97973
+pyzowka,Pyzówka,49.52113,19.96039
+szaflary,Szaflary,49.44030,20.01714
+bialy-dunajec,Biały Dunajec,49.37561,20.00683
+szaflary-centrum,Szaflary Centrum,49.42347,20.01900
+poronin,Poronin,49.34316,20.00359
+zakopane,Zakopane,49.30065,19.96277
+krakow-prokocim,Kraków Prokocim,50.02662,19.99851
+krakow-batowice,Kraków Batowice,50.10754,19.99549
+krakow-lubocza,Kraków Lubocza,50.09047,20.07404
+zastow,Zastów,50.12345,20.06846
+baranowka,Baranówka,50.14669,20.09544
+luczyce,Łuczyce,50.16271,20.07436
+goszcza,Goszcza,50.18499,20.06099
+niedzwiedz,Niedźwiedź,50.20472,20.08098
+slomniki-miasto,Słomniki Miasto,50.23573,20.07663
+slomniki,Słomniki,50.24831,20.06411
+smrokow,Smroków,50.27460,20.04677
+szczepanowice,Szczepanowice,50.30149,20.02438
+kamienczyce,Kamieńczyce,50.32745,20.00568
+miechow,Miechów,50.35335,20.01072
+pstroszyce,Pstroszyce,50.39917,20.00838
+podleze,Podłęże,50.01864,20.16733
+wegrzce-wielkie,Węgrzce Wielkie,50.01871,20.10534
+kokotow,Kokotów,50.01783,20.06986
+staniatki,Staniątki,50.01066,20.20667
+stanislawice,Stanisławice,49.99240,20.35297
+bochnia,Bochnia,49.97726,20.43133
+rzezawa,Rzezawa,49.98433,20.51167
+jasien-brzeski,Jasień Brzeski,49.98700,20.55812
+klaj,Kłaj,50.00178,20.30112
+szarow,Szarów,50.00955,20.25650
+cikowice,Cikowice,49.98428,20.38297
+brzesko-okocim,Brzesko Okocim,49.98676,20.60947
+sterkowiec,Sterkowiec,49.99431,20.68034
+biadoliny,Biadoliny,50.00377,20.73457
+krakow-plaszow,Kraków Płaszów,50.03492,19.97475
+krakow-zablocie,Kraków Zabłocie,50.04851,19.95693
+krakow-biezanow,Kraków Bieżanów,50.02165,20.02895
+krakow-biezanow-drozdzownia,Kraków Bieżanów Drożdżownia,50.01011,20.03539
+krakow-podgorze-p2,Kraków Podgórze P2,50.04090,19.95880
+krakow-bonarka,Kraków Bonarka,50.02940,19.94612
+krakow-lagiewniki,Kraków Łagiewniki,50.02236,19.93369
+krakow-swoszowice,Kraków Swoszowice,50.00029,19.92795
+krakow-sidzina,Kraków Sidzina,49.98550,19.87411
+skawina,Skawina,49.97736,19.82339
+skawina-zachodnia,Skawina Zachodnia,49.97314,19.79278
+podbory-skawinskie,Podbory Skawińskie,49.96644,19.77228
+zelczyna,Zelczyna,49.96114,19.74642
+rzozow,Rzozów,49.94589,19.80442
+radziszow,Radziszów,49.91773,19.80920
+wola-radziszowska,Wola Radziszowska,49.90642,19.77716
+lencze,Leńcze,49.89183,19.73092
+przytkowice,Przytkowice,49.89623,19.67900
+krakow-mydlniki,Kraków Mydlniki,50.08367,19.85903
+krakow-mydlniki-wapiennik,Kraków Mydlniki Wapiennik,50.09121,19.84443
+krakow-lobzow,Kraków Łobzów,50.08196,19.91778
+zabierzow,Zabierzów,50.11769,19.79925
+krakow-glowny,Kraków Główny,50.06864,19.94786
+wieliczka-park,Wieliczka Park,49.98909,20.04936
+tarnow,Tarnów,50.00530,20.97520
+bogumilowice,Bogumiłowice,50.00752,20.87185
+tarnow-moscice,Tarnów Mościce,50.00641,20.92395
+wola-rzedzinska,Wola Rzędzińska,50.03523,21.07244
+walki,Wałki,50.05054,21.14269
+czarna-tarnowska,Czarna Tarnowska,50.06039,21.24864
+lowczowek-plesna,Łowczówek Pleśna,49.92787,20.94963
+lowczow,Łowczów,49.91285,21.00332
+tuchow,Tuchów,49.89197,21.05683
+lubaszowa,Lubaszowa,49.86549,21.03726
+siedliska-kolo-tuchowa,Siedliska koło Tuchowa,49.86066,21.01957
+chojnik,Chojnik,49.85093,20.98366
+gromnik,Gromnik,49.83431,20.96118
+bogoniowice-ciezkowice,Bogoniowice Ciężkowice,49.79865,20.97666
+plawna,Pławna,49.75458,20.95056
+bobowa,Bobowa,49.71668,20.95758
+bobowa-miasto,Bobowa-Miasto,49.70818,20.93901
+jankowa,Jankowa,49.69490,20.93375
+wilczyska,Wilczyska,49.67603,20.94339
+debica,Dębica,50.05439,21.40506
+ropczyce,Ropczyce,50.07851,21.58072
+lubzina,Lubzina,50.07225,21.52907
+ropczyce-witkowice,Ropczyce Witkowice,50.07736,21.62787
+sedziszow-malopolski,Sędziszów Małopolski,50.07557,21.69097
+bedziemysl,Będziemyśl,50.06664,21.77404
+trzciana,Trzciana,50.07862,21.83901
+swilcza,Świlcza,50.07808,21.90118
+rudna-wielka,Rudna Wielka,50.08108,21.94148
+pustynia,Pustynia,50.07961,21.45703
+kochanowka-pustkow,Kochanówka Pustków,50.11122,21.49244
+pustkow,Pustków,50.14378,21.49631
+dabie-k-debicy,Dąbie k/Dębicy,50.17122,21.49594
+tuszyma,Tuszyma,50.18547,21.50233
+rzemien,Rzemień,50.21655,21.50617
+rzochow,Rzochów,50.23833,21.49653
+wojslaw,Wojsław,50.26992,21.46616
+grabiny,Grabiny,50.04603,21.33240
+mielec,Mielec,50.29250,21.42978
+chorzelow,Chorzelów,50.34208,21.45194
+tuszow-narodowy,Tuszów Narodowy,50.37247,21.45864
+jaslany,Jaślany,50.39997,21.46825
+stroze,Stróże,49.65489,20.97596
+polna,Polna,49.67525,20.99459
+szalowa,Szalowa,49.67929,21.02357
+wola-luzanska,Wola Łużańska,49.69403,21.05960
+moszczenica-malopolska,Moszczenica Małopolska,49.69694,21.12247
+grybow,Grybów,49.62598,20.95712
+ptaszkowa,Ptaszkowa,49.60336,20.88165
+gorlice-zagorzany,Gorlice Zagórzany,49.69510,21.19730
+mszalnica,Mszalnica,49.59287,20.82872
+gorlice,Gorlice,49.66281,21.16250
+gorlice-glinik,Gorlice Glinik,49.67212,21.17370
+biecz,Biecz,49.73285,21.26385
+libusza,Libusza,49.71198,21.24107
+siepietnica,Siepietnica,49.75450,21.29678
+skolyszyn,Skołyszyn,49.74511,21.33925
+nowy-sacz,Nowy Sącz,49.60654,20.70252
+nowy-sacz-miasto,Nowy Sącz Miasto,49.62125,20.69016
+nowy-sacz-chelmiec,Nowy Sącz Chełmiec,49.62983,20.67723
+marcinkowice,Marcinkowice,49.67103,20.65872
+stary-sacz,Stary Sącz,49.55967,20.64333
+nowy-sacz-biegonice,Nowy Sącz Biegonice,49.58604,20.66048
+barcice,Barcice,49.52626,20.64866
+rytro,Rytro,49.48622,20.68017
+mlodow,Młodów,49.46869,20.69606
+piwniczna-zdroj,Piwniczna-Zdrój,49.44072,20.71735
+piwniczna,Piwniczna,49.43172,20.71636
+kamionka-wielka,Kamionka Wielka,49.57803,20.78141
+nowy-sacz-jamnica,Nowy Sącz Jamnica,49.58745,20.74332
+muszyna,Muszyna,49.34548,20.89324
+muszyna-zdroj,Muszyna Zdrój,49.35802,20.89668
+powroznik,Powroźnik,49.36817,20.93978
+krynica-zdroj,Krynica-Zdrój,49.40996,20.95720
+zegiestow,Żegiestów,49.36763,20.78533
+milik,Milik,49.34579,20.85048
+andrzejowka,Andrzejówka,49.34036,20.82124
+zegiestow-zdroj,Żegiestów-Zdrój,49.36300,20.80314
+zubrzyk,Zubrzyk,49.38669,20.75508
+wierchomla-wielka,Wierchomla Wielka,49.40256,20.75528
+lomnica-zdroj,Łomnica-Zdrój,49.41904,20.72502
+rzeszow-staroniwa,Rzeszów Staroniwa,50.03881,21.98989
+strazow,Strażów,50.06757,22.11508
+rzeszow-zaleze,Rzeszów Załęże,50.05855,22.06923
+krzemienica,Krzemienica,50.08177,22.18734
+rzeszow-glowny,Rzeszów Główny,50.04297,22.00585
+rzeszow-osiedle,Rzeszów Osiedle,50.02252,21.97770
+boguchwala,Boguchwała,49.98407,21.93434
+rzeszow-zwieczyca,Rzeszów Zwięczyca,50.00593,21.95726
+wisloczanka,Wisłoczanka,49.95170,21.91472
+babica,Babica,49.93449,21.89982
+czudec,Czudec,49.94033,21.83301
+zaborow,Zaborów,49.90672,21.83031
+strzyzow-nad-wislokiem,Strzyżów nad Wisłokiem,49.86925,21.80190
+babica-kolonia,Babica Kolonia,49.93371,21.86949
+dobrzechow,Dobrzechów,49.87273,21.74422
+kalembina,Kalembina,49.86927,21.68527
+wisniowa,Wiśniowa,49.86621,21.65222
+frysztak,Frysztak,49.83152,21.61821
+przybowka,Przybówka,49.79893,21.64722
+wojaszowka,Wojaszówka,49.77575,21.65911
+szebnie,Szebnie,49.75619,21.61572
+zaczernie,Zaczernie,50.09537,21.97938
+glogow-malopolski,Głogów Małopolski,50.14736,21.95959
+budy-glogowskie,Budy Głogowskie,50.16843,21.91800
+widelka,Widełka,50.20161,21.87289
+kolbuszowa,Kolbuszowa,50.24678,21.78383
+zarebki,Zarębki,50.27230,21.76218
+cmolas,Cmolas,50.29388,21.75207
+lancut,Łańcut,50.08175,22.22582
+gluchow,Głuchów,50.08349,22.27941
+kosina,Kosina,50.08357,22.32282
+rogozno-kolo-lancuta,Rogóźno koło Łańcuta,50.08360,22.36175
+grzeska,Grzęska,50.08000,22.45282
+przeworsk,Przeworsk,50.06712,22.50449
+gniewczyna,Gniewczyna,50.09978,22.52087
+tryncza,Tryńcza,50.13647,22.53922
+grodzisko-dolne,Grodzisko Dolne,50.16984,22.50904
+wierzawice,Wierzawice,50.23847,22.46438
+lezajsk,Leżajsk,50.26369,22.42002
+jelna,Jelna,50.30406,22.36469
+nowa-sarzyna,Nowa Sarzyna,50.32100,22.34744
+nowa-sarzyna-kolonia,Nowa Sarzyna Kolonia,50.33098,22.33597
+jaroslaw,Jarosław,50.01061,22.67784
+pelkinie,Pełkinie,50.04773,22.61168
+przysieki,Przysieki,49.73302,21.39372
+jaslo-nieglowice,Jasło Niegłowice,49.72633,21.45181
+tarnowiec,Tarnowiec,49.73622,21.57782
+gliniczek,Gliniczek,49.73704,21.53868
+jedlicze-mecinka,Jedlicze Męcinka,49.72719,21.62594
+jedlicze,Jedlicze,49.71903,21.64790
+jaslo,Jasło,49.73772,21.47086
+krosno,Krosno,49.69394,21.74819
+krosno-turaszowka,Krosno Turaszówka,49.70923,21.69832
+krosno-polanka,Krosno Polanka,49.70188,21.72232
+sanok,Sanok,49.55314,22.21086
+zarszyn,Zarszyn,49.58408,22.01977
+zagorz,Zagórz,49.51356,22.26449
+zurawica-osobowa,Żurawica Osobowa,49.81987,22.82448
+radymno,Radymno,49.93939,22.82944
+ostrow-kolo-radymna,Ostrów koło Radymna,49.95392,22.78477
+sosnica-jaroslawska,Sośnica Jarosławska,49.90161,22.85155
+niziny,Niziny,49.87867,22.86194
+walawa,Walawa,49.85943,22.85535
+przemysl-glowny,Przemyśl Główny,49.78378,22.78012
+przemysl-zasanie,Przemyśl Zasanie,49.79353,22.77380
+medyka-towarowa,Medyka Towarowa,49.78623,22.88417
+medyka-rozrzadowa,Medyka Rozrządowa,49.79403,22.91000
+munina,Munina,49.99000,22.72056
+surochow,Surochów,50.01270,22.76896
+bobrowka,Bobrówka,50.04965,22.85824
+zagrody,Zagrody,50.05143,22.90481
+korzenica,Korzenica,50.05589,22.93700
+nowa-grobla,Nowa Grobla,50.08874,22.99351
+oleszyce,Oleszyce,50.15729,23.03688
+lubaczow,Lubaczów,50.16583,23.12591
+basznia-dolna,Basznia Dolna,50.19001,23.20724
+horyniec-zdroj,Horyniec-Zdrój,50.19442,23.35636
+hrebenne,Hrebenne,50.29836,23.57604
+dzierzazno,Dzierżążno,54.31510,18.26497
+orlanka,Orlanka,52.72696,23.34847
+morze,Morze,52.73039,23.41214
+stare-berezowo,Stare Berezowo,52.73193,23.45341
+chytra,Chytra,52.73908,23.51497
+koziki,Koziki,53.09924,22.04013
+zegrze-poludniowe,Zegrze Południowe,52.45246,21.00912
+siedlce-wschodnie,Siedlce Wschodnie,52.14432,22.29787
+lodz-arturowek,Łódź Arturówek,51.81542,19.45660
+lodz-stoki,Łódź Stoki,51.77662,19.51058
+lodz-marysin,Łódź Marysin,51.80025,19.48583
+lodz-olechow-wiadukt,Łódź Olechów Wiadukt,51.72371,19.54366
+lodz-olechow-wsch,Łódź Olechów Wsch.,51.72974,19.59391
+lodz-andrzejow-szosa,Łódź Andrzejów Szosa,51.74154,19.61291
+radzice,Radzice,51.46661,20.39738
+witowo,Witowo,52.63917,23.48452
+barwald-sredni,Barwałd Średni,49.86942,19.60280
+podolany,Podolany,49.89822,19.75347
+debica-wschodnia,Dębica Wschodnia,50.06240,21.44846
+lezno,Leźno,54.34771,18.45933
+brzezie,Brzezie,52.69619,18.96522
+olsztyn-likusy,Olsztyn Likusy,53.78935,20.44510
+brzeszcze,Brzeszcze,49.99578,19.15459
+slone,Słone,51.92869,15.38978
+rajcza-centrum,Rajcza Centrum,49.50669,19.10024
+ciecina-dolna,Cięcina Dolna,49.62140,19.15198
+bielawa-centralna,Bielawa Centralna,50.69267,16.62050
+szklarska-poreba-huta,Szklarska Poręba Huta,50.82750,15.49897
+hurko,Hurko,49.78523,22.86336
+krakow-nowa-huta,Kraków Nowa Huta,50.09032,20.12826
+klokowa,Kłokowa,49.95325,20.95722
+zurawica-rozrzadowa,Żurawica Rozrządowa,49.83417,22.84028
+kepno,Kępno,51.29180,18.00082
+czyzowice,Czyżowice,49.97444,18.42633
+poreba,Poręba,50.48400,19.33142
+czerwionka-debiensko,Czerwionka Dębieńsko,50.15681,18.66369
+dobron,Dobroń,51.62934,19.24083
+kolumna,Kolumna,51.61492,19.19600
+wroclaw-brochow,Wrocław Brochów,51.04560,17.10430
+spala,Spała,51.55261,20.13497
+gdynia-cisowa,Gdynia Cisowa,54.54983,18.44718
+jezierzany,Jezierzany,51.23631,16.09604
+dabrowa-olesnicka,Dąbrowa Oleśnicka,51.23023,17.36889
+kozlice,Koźlice,51.45244,16.23356
+ludwikowice-klodzkie,Ludwikowice Kłodzkie,50.61948,16.48081
+lukow-zapowiednik,Łuków Zapowiednik,51.93199,22.41453
+nowe-debe-wielkie,Nowe Dębe Wielkie,52.19344,21.44006
+basznia,Basznia,50.17867,23.24911
+geniusze,Geniusze,53.37939,23.41614
+borucice,Borucice,50.98161,17.55800
+lodz-olechow-zachod,Łódź Olechów Zachód,51.72506,19.56022
+slubice,Słubice,52.33584,14.59474
+siedlce-zachodnie,Siedlce Zachodnie,52.17379,22.23363
+lewin-brzeski,Lewin Brzeski,50.75807,17.61551
+krakow-lotnisko,Kraków Lotnisko,50.07081,19.80037
+zabierzow-rzaska,Zabierzów Rząska,50.10562,19.82360
+krakow-podgorze,Kraków Podgórze,50.04107,19.95958
+krakow-grzegorzki,Kraków Grzegórzki,50.05707,19.94802
+warszawa-zwirki-i-wigury,Warszawa Żwirki i Wigury,52.19341,20.98038
+cygany,Cygany,50.51279,21.69701
+tarnowska-wola,Tarnowska Wola,50.45166,21.73564
+rogoznica-kolo-rzeszowa,Rogoźnica koło Rzeszowa,50.11677,21.96899
+rzeszow-milocin,Rzeszów Miłocin,50.07547,21.98719
+port-lotniczy-szczecin-goleniow,Port Lotniczy Szczecin Goleniów,53.59380,14.89689
+wieliczka-rynek-kopalnia,Wieliczka Rynek-Kopalnia,49.98548,20.05758
+wroclaw-stadion,Wrocław Stadion,51.13707,16.94071
+warszawa-lotnisko-chopina,Warszawa Lotnisko Chopina,52.16980,20.97311
+kotowo,Kotowo,52.22836,16.48339
+zielone-wzgorza,Zielone Wzgórza,52.56523,17.00863
+czerwonak-osiedle,Czerwonak Osiedle,52.48002,16.97805
+wieliczka-bogucice,Wieliczka Bogucice,49.99844,20.03664
+tychy-grota-roweckiego,Tychy Grota Roweckiego,50.11411,18.98621
+tychy-aleja-bielska,Tychy Aleja Bielska,50.11715,18.98258
+tychy-lodowisko,Tychy Lodowisko,50.10772,19.00081
+glinnik-wies,Glinnik Wieś,51.88268,19.48204
+domaniewice-centrum,Domaniewice Centrum,52.01195,19.79189
+pierwoszow-milocin,Pierwoszów Miłocin,51.25521,17.09903
+zagrody-kosciol,Zagrody Kościół,51.07846,23.19047
+lublin-ponikwoda,Lublin Ponikwoda,51.26609,22.60605
+lublin-zadebie,Lublin Zadębie,51.25790,22.61004
+niemce,Niemce,51.36291,22.64643
+lubartow-lipowa,Lubartów Lipowa,51.46409,22.59943
+lubartow-slowackiego,Lubartów Słowackiego,51.47315,22.60521
+parczew-kolejowa,Parczew Kolejowa,51.63463,22.88089
+lublin-airport,Lublin Airport,51.23544,22.71524
+lodz-pabianicka,Łódź Pabianicka,51.72643,19.44506
+lodz-radogoszcz-zach,Łódź Radogoszcz Zach.,51.82278,19.41583
+ozorkow-n-miasto,Ozorków N.Miasto,51.95893,19.26961
+zgierz-jaracza,Zgierz Jaracza,51.86372,19.42267
+lodz-dabrowa,Łódź Dąbrowa,51.73594,19.51059
+ramiszow,Ramiszów,51.19318,17.09829
+warszawa-zacisze-wilno,Warszawa Zacisze-Wilno,52.27797,21.08029
+malaszewicze-przystanek,Małaszewicze Przystanek,52.02670,23.53040
+kolobrzeg-stadion,Kołobrzeg Stadion,54.17508,15.55916
+warszawa-ursus-niedzwiadek,Warszawa Ursus Niedźwiadek,52.19135,20.86947
+palecznica,Pałecznica,51.49041,22.65874
+zabiele,Zabiele,51.54283,22.76256
+lebork-mosty,Lębork Mosty,54.55036,17.79319
+wroclaw-grabiszyn,Wrocław Grabiszyn,51.09663,16.97421
+izbica,Izbica,50.88610,23.14930
+grablewo,Grąblewo,52.23534,16.39086
+kobylany,Kobylany,52.03766,23.56096
+gdansk-rebiechowo,Gdańsk Rębiechowo,54.38743,18.44656
+gdansk-port-lotniczy,Gdańsk Port Lotniczy,54.38279,18.46635
+gdansk-matarnia,Gdańsk Matarnia,54.37311,18.50688
+gdansk-jasien,Gdańsk Jasień,54.35372,18.55033
+gdansk-bretowo,Gdańsk Brętowo,54.36527,18.57364
+gdansk-niedzwiednik,Gdańsk Niedźwiednik,54.37771,18.57187
+gdansk-strzyza,Gdańsk Strzyża,54.39163,18.57868
+gdansk-firoga,Gdańsk Firoga,54.37829,18.48690
+gdansk-kielpinek,Gdańsk Kiełpinek,54.35537,18.52857
+zukowo,Żukowo,54.34439,18.36208
+wroclaw-rozanka,Wrocław Różanka,51.13788,17.00367
+zielona-gora-nowy-kisielin,Zielona Góra Nowy Kisielin,51.91570,15.62655
+gdansk-srodmiescie,Gdańsk Śródmieście,54.34693,18.64407
+krakow-sanktuarium,Kraków Sanktuarium,50.01392,19.93433
+krakow-zakliki,Kraków Zakliki,50.07981,19.84942
+krakow-mlynowka,Kraków Młynówka,50.08180,19.85849
+krakow-olszanica,Kraków Olszanica,50.07652,19.82559
+zamosc-starowka,Zamość Starówka,50.71703,23.26271
+zamosc-wschod,Zamość Wschód,50.72251,23.27609
+warszawa-mokry-lug,Warszawa Mokry Ług,52.27815,21.16947
+sucha-beskidzka-zamek,Sucha Beskidzka Zamek,49.74373,19.60324
+lopuchowo-osiedle,Łopuchowo Osiedle,52.61891,17.10947
+przebedowo,Przebędowo,52.58361,17.02369
+bydgoszcz-blonie,Bydgoszcz Błonie,53.11821,17.95158
+cierpice-kakol,Cierpice Kąkol,52.99181,18.44691
+szymany-lotnisko,Szymany Lotnisko,53.48333,20.94731
+chmielow-zagumnie,Chmielów Zagumnie,50.52366,21.68585
+mokre,Mokre,50.70803,23.20533
+wolka-orlowska,Wólka Orłowska,50.92717,23.18367
+gorzow-wielkopolski-wschodni,Gorzów Wielkopolski Wschodni,52.73181,15.24933
+gdynia-stadion,Gdynia Stadion,54.49584,18.53309
+gdynia-karwiny,Gdynia Karwiny,54.46961,18.50885
+ryki,Ryki,51.60627,21.92095
+zaborow-blonia,Zaborów Błonia,49.92401,21.81966
+jaslo-fabryczne,Jasło Fabryczne,49.74934,21.53402
+krakow-bronowice,Kraków Bronowice,50.08299,19.89262
+subkowy-centrum,Subkowy Centrum,54.00357,18.76118
+warszawa-kolo,Warszawa Koło,52.24630,20.95906
+rzeszow-zachodni,Rzeszów Zachodni,50.05272,21.99431
+markuszowa,Markuszowa,49.87414,21.70591
+jelenia-gora-przemyslowa,Jelenia Góra Przemysłowa,50.88800,15.70552
+jelenia-gora-zabobrze,Jelenia Góra Zabobrze,50.90987,15.74308
+majdan-krolewski-podlasek,Majdan Królewski Podlasek,50.36278,21.73658
+huta-komorowska,Huta Komorowska,50.38945,21.71574
+radziszow-centrum,Radziszów Centrum,49.93703,19.80679
+nysa-wschodnia,Nysa Wschodnia,50.46588,17.35862
+goszczowice,Goszczowice,50.57298,17.62217
+bogdanowo,Bogdanowo,52.62745,16.81816
+zlotkowo,Złotkowo,52.50989,16.83061
+zlotniki-grzybowe,Złotniki Grzybowe,52.48469,16.84375
+parzniew,Parzniew,52.15606,20.76181
+zaklikow-miasto,Zaklików Miasto,50.75481,22.09325
+skawina-jagielnia,Skawina Jagielnia,49.98131,19.84163
+krakow-opatkowice,Kraków Opatkowice,49.98839,19.89841
+walbrzych-centrum,Wałbrzych Centrum,50.77337,16.26990
+lublin-zachodni,Lublin Zachodni,51.21886,22.50849
+krakow-zlocien,Kraków Złocień,50.01829,20.04999
+grabniak,Grabniak,51.71314,21.70392
+pisz-wschodni,Pisz Wschodni,53.62736,21.83004
+olsztyn-srodmiescie,Olsztyn Śródmieście,53.78265,20.48231
+olsztyn-dajtki,Olsztyn Dajtki,53.76556,20.43808
+warszawa-targowek,Warszawa Targówek,52.26411,21.05236
+iwiny,Iwiny,51.05461,17.06882
+mokronos-gorny,Mokronos Górny,51.07871,16.90808
+laski,Laski,51.60793,22.84108
+berejow,Berejów,51.51422,22.72159
+wroclaw-popiele,Wrocław Popiele,51.12237,17.11432
+wroclaw-strachocin,Wrocław Strachocin,51.10985,17.14570
+wroclaw-wojnow-wschodni,Wrocław Wojnów Wschodni,51.09813,17.16813
+nadolice-male,Nadolice Małe,51.08179,17.21959
+chrzastawa-mala,Chrząstawa Mała,51.07349,17.27612
+szydlow-centrum,Szydłów Centrum,50.60532,17.71832
+slupsk-polnocny,Słupsk Północny,54.48337,17.01467
+ustka-uroczysko,Ustka Uroczysko,54.57983,16.84577
+goleniow-park-przemyslowy,Goleniów Park Przemysłowy,53.52985,14.81030
+szczecin-trzebusz,Szczecin Trzebusz,53.41176,14.71308
+szczecin-dunikowo,Szczecin Dunikowo,53.38567,14.74053
+szczecin-zydowce,Szczecin Żydowce,53.35253,14.57402
+szczecin-lasztownia,Szczecin Łasztownia,53.41833,14.55964
+warszawa-powazki,Warszawa Powązki,52.25605,20.97224
+bialystok-nowe-miasto,Białystok Nowe Miasto,53.10636,23.11414
+hryniewicze,Hryniewicze,53.07261,23.12806
+orzechowicze,Orzechowicze,52.81090,23.15872
+miklasze,Mikłasze,52.72695,23.31589
+lubin-stadion,Lubin Stadion,51.40853,16.19921
+burkatow,Burkatów,50.79359,16.47336
+jedlina-zdroj-centrum,Jedlina Zdrój Centrum,50.72113,16.34460
+szaniawy,Szaniawy,51.94689,22.54465
+sokule,Sokule,51.99788,22.95695
+wroclaw-szczepin,Wrocław Szczepin,51.12256,17.01311
+sieniawa-zarska,Sieniawa Żarska,51.63656,15.06232
+rzozow-centrum,Rzozów Centrum ,49.95822,19.80334
+wola-radziszowska-lipki,Wola Radziszowska Lipki,49.91067,19.79495
+poraj,Poraj,50.67687,19.21911
+wadowice-osiedle-podhalanin,Wadowice Osiedle Podhalanin,49.88808,19.48321
+lodz-retkinia,Łódź Retkinia,51.74024,19.40631
+lodz-warszawska,Łódź Warszawska,51.80796,19.47125
+lodz-radogoszcz-wschod,Łódź Radogoszcz Wschód,51.82663,19.44355
+skoczow-bajerki,Skoczów Bajerki,49.79840,18.80101
+cieszyn-uniwersytet,Cieszyn Uniwersytet,49.75072,18.64899
+ustron-brzegi,Ustroń Brzegi,49.70974,18.82127
+wisla-jawornik,Wisła Jawornik,49.66929,18.84739
+radom-polnocny,Radom Północny,51.41963,21.18647
+radom-golebiow,Radom Gołębiów,51.41227,21.18800
+biala-podlaska-wschodnia,Biała Podlaska Wschodnia,52.02067,23.16147
+wieliszew-centrum,Wieliszew Centrum,52.44338,20.99528
+olsztyn-redykajny,Olsztyn Redykajny,53.79654,20.43530
+miasteczko-slaskie-centrum,Miasteczko Śląskie Centrum,50.48695,18.91930
+pyrzowice-lotnisko,Pyrzowice Lotnisko,50.46806,19.07608
+mierzecice,Mierzęcice,50.46305,19.12856
+olsztyn-jezioro-ukiel,Olsztyn Jezioro Ukiel,53.78404,20.44945
+warka-miasto,Warka Miasto,51.78057,21.17779
+warszawa-grochow,Warszawa Grochów,52.25553,21.08411
+chabowka-stadion,Chabówka Stadion,49.58981,19.92032
+banska-nizna,Bańska Niżna,49.39820,20.01620
+poronin-misiagi,Poronin Misiagi,49.32960,19.99637
+nowy-sacz-dabrowka,Nowy Sącz Dąbrówka,49.59738,20.67910
+nowy-sacz-gorzkow,Nowy Sącz Gorzków,49.59903,20.72283
+dabrowka-jezioro-mucharskie,Dąbrówka Jezioro Mucharskie,49.81481,19.59968
+nowy-dwor-kolo-ornety,Nowy Dwór Koło Ornety,54.14637,20.14242
+otomino,Otomino,54.33063,18.37660
+czestochowa-gnaszyn,Częstochowa Gnaszyn,50.79171,19.02946
+blachownia,Blachownia,50.77339,18.96803
+swidnica-zawiszow,Świdnica Zawiszów,50.85987,16.47949
+torun-katarzynka,Toruń Katarzynka,53.05564,18.61806
+wietrzychowo,Wietrzychowo,53.41920,20.39993
+somonino-bernardyno,Somonino Bernardyno,54.28712,18.20193
+mirkow,Mirków,51.16559,17.16573
+koniecpol-centrum,Koniecpol Centrum,50.77746,19.67238
+dabrowka-zablotnia,Dąbrówka Zabłotnia,51.30939,21.04592
+kosow,Kosów,51.34657,21.06430
+tomaszowek,Tomaszówek,51.44987,20.12087
+groszowice-wrzosow,Groszowice Wrzosów,51.42960,21.30120
+olawa-zachodnia,Oława Zachodnia,50.94510,17.26853
+nikielkowo,Nikielkowo,53.80290,20.56530
+kolno,Kolno,53.99414,20.99159
+legnica-strefa,Legnica Strefa,51.16491,16.18529
+wolbrom-zachodni,Wolbrom Zachodni,50.37948,19.75424
+zator-park-rozrywki,Zator Park Rozrywki,50.00539,19.40555
+bialystok-zielone-wzgorza,Białystok Zielone Wzgórza,53.11550,23.10297
+radziszewo,Radziszewo,53.31817,14.53233
+pila-fabryczna,Piła Fabryczna,53.13919,16.77156
+szczecinek-bugno,Szczecinek Bugno,53.72333,16.68429
+swidwin-zamek,Świdwin Zamek,53.77237,15.76655
+kolobrzeg-ogrody,Kołobrzeg Ogrody,54.17663,15.59666
+kolobrzeg-amfiteatr,Kołobrzeg Amfiteatr,54.18106,15.59546
+kolobrzeg-radzikowo,Kołobrzeg Radzikowo,54.16223,15.54344
+koszalin-wschodni,Koszalin Wschodni,54.21154,16.18314
+koszalin-politechnika,Koszalin Politechnika,54.20281,16.17299
+jastrowie-miasto-2fab150c-ae6a-4b78-908b-0a8510b6730e,Jastrowie Miasto,53.42406,16.81099
+mielec-poludniowy,Mielec Południowy,50.26342,21.47925
+przemysl-wschodni,Przemyśl Wschodni,49.78467,22.80457
+wodzislaw-slaski-centrum,Wodzisław Śląski Centrum,49.99818,18.46313
+pawlowice-slaskie-centrum,Pawłowice Śląskie Centrum,49.96392,18.72487
+zarnowa,Żarnowa,49.87730,21.81869
+lutoryz,Lutoryż,49.96590,21.92263
+boguchwala-dolna,Boguchwała Dolna,49.99442,21.94361
+rzeszow-politechnika,Rzeszów Politechnika,50.02756,21.98397
+rzeszow-centrum,Rzeszów Centrum,50.04314,21.99813
+kolbuszowa-gorna,Kolbuszowa Górna,50.22257,21.80557
+rzeszow-staromiescie,Rzeszów Staromieście,50.06248,21.99244
+glogow-malopolski-niwa,Głogów Małopolski Niwa,50.13637,21.96483
+rzeszow-pobitno,Rzeszów Pobitno,50.05245,22.03035
+rzeszow-baranowka,Rzeszów Baranówka,50.06446,21.98903
+rzeszow-dworzysko,Rzeszów Dworzysko,50.07796,21.96841
+sedziszow-malopolski-wschodni,Sędziszów Małopolski Wschodni,50.06997,21.72854
+chorzelow-poludniowy,Chorzelów Południowy,50.33167,21.44442
+strzyzow-zachodni,Strzyżów Zachodni,49.86871,21.77167
+blonie-rokitno,Błonie Rokitno,52.18897,20.64007
+tuchola-rudzki-most,Tuchola Rudzki Most,53.57653,17.89183
+grudziadz-srodmiescie,Grudziądz Śródmieście,53.48239,18.74711
+grudziadz-tuszewo,Grudziądz Tuszewo,53.48641,18.81232
+gregorowce-poludniowe,Gregorowce Południowe,52.64797,23.25789
+jedlicze-kolo-zgierza,Jedlicze koło Zgierza,51.86936,19.32068
+zgierz-rudunki,Zgierz Rudunki,51.86125,19.43750
+pabianice-polnocne,Pabianice Północne,51.66989,19.34193
+wronki-zamosc,Wronki Zamość,52.71050,16.36052
+zurawnica,Żurawnica,50.64283,22.95972
+aleksandrow-f52efd5c-d265-45f2-9c7a-c195ab0bd2d1,Aleksandrów,51.90424,22.48227
+szczebrzeszyn,Szczebrzeszyn,50.67070,22.97260
+piekoszow-e193c0c4-ed3b-4aa8-89e7-58a8115a90b7,Piekoszów,50.87578,20.48342
+adamowo,Adamowo,52.10164,16.15111
+izabelow,Izabelów,51.61002,18.91267
+jasionka-lotnisko,Jasionka Lotnisko,50.11556,22.02144
+glogow-malopolski-poludniowy,Głogów Małopolski Południowy,50.11406,21.99753
+oblaczkowo,Obłaczkowo,52.29386,17.53397
+lagiewniki,Łagiewniki,51.30542,22.61704
+chorzow-uniwersytet,Chorzów Uniwersytet,50.29089,18.93956
+bytom-stroszek,Bytom Stroszek,50.38447,18.88422
+trzeciewnica,Trzeciewnica,53.15316,17.64099
+grudziadz-rzadz,Grudziądz Rządz,53.45076,18.73324
+rzepin-miasto,Rzepin Miasto,52.34628,14.82489
+zary-muzykow,Żary Muzyków,51.64125,15.11658
+podchojny,Podchojny,50.66461,20.32100
+jozefin,Józefin,52.22902,21.33334
+mnichow,Mnichów,50.70791,20.33359
+grabik,Grabik,51.65366,15.11652
+ustrzesz-d6943ec7-cb6d-4f5c-8cca-e815f453bdf2,Ustrzesz,51.80228,22.72952
+pisary,Pisary,50.12859,19.68407
+krakow-piastow,Kraków Piastów,50.10697,20.01411
+krakow-przylasek,Kraków Przylasek,50.04889,20.16197
+krakow-koscielniki,Kraków Kościelniki,50.09006,20.16897
+medyka,Medyka,49.80505,22.94700
+dabrowa-chelminska-centrum,Dąbrowa Chełmińska Centrum,53.18128,18.29391
+lodz-zarzew,Łódź Zarzew,51.75158,19.51323
+kunice,Kunice,51.21501,16.25446
+glowno-polnocne,Głowno Północne,51.97908,19.72202
+bezwola-0c041c95-5176-4503-a26a-1b88b732a6c7,Bezwola,51.77178,22.80435
+biala-szlachecka,Biała Szlachecka,51.17519,19.02503
+stary-broniszew,Stary Broniszew,50.98356,19.16072
+cykarzew-polnocny,Cykarzew Północny,50.96469,19.16336
+nowa-brzeznica,Nowa Brzeźnica,51.07528,19.14658
+sosnowiec-jezor-poludniowy,Sosnowiec Jęzor Południowy,50.22868,19.16535
+widzow-teklinow,Widzów Teklinów,50.98096,19.36715
+zabrze-maciejow,Zabrze Maciejów,50.30664,18.74792
+repczyce,Repczyce,52.54648,23.35566
+mielec-wolnosci,Mielec Wolności,50.27965,21.44638
+radom-wschodni-a5dad93e-b0f4-40a0-9238-bddc9a1de686,Radom Wschodni,51.40308,21.18103
+sniadowo-stara-stacja,Śniadowo - Stara Stacja,53.04494,22.02357
+konarzyce,Konarzyce,53.14467,22.04595
+padew-narodowa,Padew Narodowa,50.43238,21.50330
+tarnobrzeg-sobow,Tarnobrzeg Sobów,50.60152,21.74523
+tarnobrzeg-ocice,Tarnobrzeg Ocice,50.54403,21.68811
+tarnobrzeg-olszynka,Tarnobrzeg Olszynka,50.60170,21.75470
+kepie-zaleszanskie,Kępie Zaleszańskie,50.63320,21.90288
+lotnisko-modlin,Lotnisko Modlin,52.44556,20.65157
+grodzisk-mazowiecki-jordanowice,Grodzisk Mazowiecki Jordanowice,52.10313,20.63632
+borszyn-wielki,Borszyn Wielki,51.68094,16.63161
+borszyn-maly,Borszyn Mały,51.67925,16.59858

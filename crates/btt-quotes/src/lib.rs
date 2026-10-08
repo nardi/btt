@@ -10,6 +10,7 @@ pub mod ecb;
 pub mod eurostar;
 pub mod italo;
 mod js_literal;
+pub mod koleo;
 pub mod limiter;
 pub mod mav;
 pub mod ns;

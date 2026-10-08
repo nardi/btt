@@ -42,9 +42,6 @@ const DB_STATIONS_CSV: &str = include_str!("../../../data/fares/db_stations.csv"
 const TRENITALIA_STATIONS_CSV: &str = include_str!("../../../data/fares/trenitalia_stations.csv");
 /// The stations of the ÖBB shop with its station numbers, as they are compiled in.
 const OBB_STATIONS_CSV: &str = include_str!("../../../data/fares/obb_stations.csv");
-/// The stations of the PKP Intercity booking site with its station numbers, as they are compiled
-/// in.
-const PKP_STATIONS_CSV: &str = include_str!("../../../data/fares/pkp_stations.csv");
 /// The foreign stations with the UIC numbers that the SBB site takes, as they are compiled in.
 const SBB_ABROAD_STATIONS_CSV: &str = include_str!("../../../data/fares/sbb_abroad_stations.csv");
 /// The stations of the NS booking site with their UIC numbers, as they are compiled in.
@@ -61,6 +58,8 @@ const MAV_STATIONS_CSV: &str = include_str!("../../../data/fares/mav_stations.cs
 const RENFE_STATIONS_CSV: &str = include_str!("../../../data/fares/renfe_stations.csv");
 /// The train stations of RegioJet with its station ids, as they are compiled in.
 const REGIOJET_STATIONS_CSV: &str = include_str!("../../../data/fares/regiojet_stations.csv");
+/// The Polish stations of Koleo with the slugs its links take, as they are compiled in.
+const KOLEO_STATIONS_CSV: &str = include_str!("../../../data/fares/koleo_stations.csv");
 /// The stations of Eurostar with their UIC numbers, as they are compiled in.
 const EUROSTAR_STATIONS_CSV: &str = include_str!("../../../data/fares/eurostar_stations.csv");
 /// The booking windows, as they are compiled in.
@@ -115,8 +114,6 @@ pub struct FareData {
     pub trenitalia_stations: StationTable,
     /// The stations of the ÖBB shop with its station numbers.
     pub obb_stations: StationTable,
-    /// The stations of the PKP Intercity booking site with its station numbers.
-    pub pkp_stations: StationTable,
     /// The stations of the NS booking site with their UIC numbers.
     pub ns_stations: StationTable,
     /// The French, Italian and Austrian stations with the UIC numbers that the SBB site takes,
@@ -136,6 +133,8 @@ pub struct FareData {
     pub eurostar_stations: StationTable,
     /// The train stations of RegioJet with its station ids.
     pub regiojet_stations: StationTable,
+    /// The Polish stations of Koleo with the slugs its links take.
+    pub koleo_stations: StationTable,
     /// Fixed rates to euro, for when the ECB reference rates cannot be fetched.
     pub exchange_rates: ExchangeRates,
     /// How far ahead tickets can be bought, by country.
@@ -181,7 +180,6 @@ impl FareData {
             db_stations: StationTable::from_csv(DB_STATIONS_CSV),
             trenitalia_stations: StationTable::from_csv(TRENITALIA_STATIONS_CSV),
             obb_stations: StationTable::from_csv(OBB_STATIONS_CSV),
-            pkp_stations: StationTable::from_csv(PKP_STATIONS_CSV),
             ns_stations: StationTable::from_csv(NS_STATIONS_CSV),
             sbb_abroad_stations: StationTable::from_csv(SBB_ABROAD_STATIONS_CSV),
             dsb_stations: StationTable::from_csv(DSB_STATIONS_CSV),
@@ -191,6 +189,7 @@ impl FareData {
             renfe_stations: StationTable::from_csv(RENFE_STATIONS_CSV),
             eurostar_stations: StationTable::from_csv(EUROSTAR_STATIONS_CSV),
             regiojet_stations: StationTable::from_csv(REGIOJET_STATIONS_CSV),
+            koleo_stations: StationTable::from_csv(KOLEO_STATIONS_CSV),
             exchange_rates: tariff::exchange_rates(TARIFFS_TOML)?,
             booking_windows: tariff::windows_from_toml(BOOKING_WINDOWS_TOML)?,
             residence_journeys_each_way: rules.residence.outbound_journeys,

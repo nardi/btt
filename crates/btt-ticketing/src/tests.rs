@@ -535,11 +535,12 @@ fn each_country_goes_to_its_own_booking_site() {
         "{link}"
     );
     assert!(link.contains("outwardDateTime=2026-07-01T08:00"));
-    let (link, _) = single_ride_link("PL", "IC", (52.4020, 16.9109), (52.2289, 21.0032));
-    assert!(
-        link.contains("swyj=5100081&sprzy=5100065&time=08:00"),
-        "{link}"
+    let (link, live) = single_ride_link("PL", "IC", (52.4020, 16.9109), (52.2289, 21.0032));
+    assert_eq!(
+        link,
+        "https://koleo.pl/rozklad-pkp/poznan-glowny/warszawa-centralna/01-07-2026_08:00/all/all"
     );
+    assert!(live);
     let (link, _) = single_ride_link("NL", "IC", (52.3791, 4.9003), (51.8418, 5.8517));
     assert!(
         link.contains("travelDate=2026-07-01&fromUicCode=8400058&toUicCode=8400470"),

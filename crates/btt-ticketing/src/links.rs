@@ -319,27 +319,30 @@ pub fn obb_link(
     })
 }
 
-/// Returns a link to the PKP Intercity search for the stations of two rides, or `None` when a
-/// station is not in the table. The link asks for one traveller on the normal fare, code 1010.
-pub fn pkp_link(
+/// Returns a link to the Koleo search for the stations of two rides, with the search for the
+/// live price, or `None` when a station is not in the table. Koleo sells the trains of PKP
+/// Intercity and of most Polish regional operators, and its links take station slugs.
+pub fn koleo_link(
     stations: &StationTable,
     first: &RideInput,
     last: &RideInput,
-) -> Option<BookingLink> {
+) -> Option<(BookingLink, SiteSearch)> {
     let (origin, destination) = end_stations(stations, first, last)?;
     let url = format!(
-        "https://ebilet.intercity.pl/wyszukiwanie?dwyj={}&swyj={}&sprzy={}&time={}\
-         &ticket50=&ticket100=1010",
-        first.departure_date,
+        "https://koleo.pl/rozklad-pkp/{}/{}/{}_{}/all/all",
         origin.code,
         destination.code,
+        first.departure_date.format("%d-%m-%Y"),
         first.departure_clock.format("%H:%M"),
     );
-    Some(BookingLink {
-        label: "Search on intercity.pl".into(),
-        url: url.into(),
-        kind: BookingLinkKind::Search,
-    })
+    Some((
+        BookingLink {
+            label: "Search on koleo.pl".into(),
+            url: url.into(),
+            kind: BookingLinkKind::Search,
+        },
+        site_search(&origin.code, &destination.code, first),
+    ))
 }
 
 /// Returns a link to the NS order page for a single between the stations of two rides, or
@@ -568,7 +571,7 @@ mod tests {
         urls.push("https://int.bahn.de/en/buchung/fahrplan/suche".to_owned());
         urls.push("https://www.lefrecce.it/Channels.Website.WEB/".to_owned());
         urls.push("https://shop.oebbtickets.at/en/ticket".to_owned());
-        urls.push("https://ebilet.intercity.pl/wyszukiwanie".to_owned());
+        urls.push("https://koleo.pl/rozklad-pkp/a/b/01-07-2026_08:00/all/all".to_owned());
         urls.push("https://www.ns.nl/en/tickets".to_owned());
         urls.push(italo_search_url(
             "RMT",

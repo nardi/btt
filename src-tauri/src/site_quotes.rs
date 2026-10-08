@@ -7,6 +7,7 @@ use btt_model::{LiveQuoteRequest, TravelClass};
 use btt_quotes::dsb::Dsb;
 use btt_quotes::eurostar::Eurostar;
 use btt_quotes::italo::Italo;
+use btt_quotes::koleo::Koleo;
 use btt_quotes::mav::Mav;
 use btt_quotes::regiojet::Regiojet;
 use btt_quotes::renfe::Renfe;
@@ -34,6 +35,8 @@ pub struct SiteServices {
     regiojet: SiteService<Regiojet>,
     /// Eurostar.
     eurostar: SiteService<Eurostar>,
+    /// Koleo.
+    koleo: SiteService<Koleo>,
 }
 
 impl SiteServices {
@@ -52,6 +55,7 @@ impl SiteServices {
             renfe: SiteService::new(Renfe, Arc::clone(store))?,
             regiojet: SiteService::new(Regiojet, Arc::clone(store))?,
             eurostar: SiteService::new(Eurostar, Arc::clone(store))?,
+            koleo: SiteService::new(Koleo::default(), Arc::clone(store))?,
         })
     }
 
@@ -71,6 +75,7 @@ impl SiteServices {
             BookingSite::Renfe => self.renfe.connections(search).await,
             BookingSite::Regiojet => self.regiojet.connections(search).await,
             BookingSite::Eurostar => self.eurostar.connections(search).await,
+            BookingSite::Koleo => self.koleo.connections(search).await,
             _ => return None,
         })
     }

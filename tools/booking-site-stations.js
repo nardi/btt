@@ -59,13 +59,6 @@ write('obb_stations.csv', (row) => {
   return /^\d{7}$/.test(id) && !isBus(row) ? obbOverrides[id] || id : null;
 });
 
-// PKP Intercity takes the same numbers as DB for Polish stations. Numbers from 5196000 are towns
-// at the position of their main station, so they are left out.
-write('pkp_stations.csv', (row) => {
-  const id = row[column('db_id')];
-  return country(row) === 'PL' && /^51\d{5}$/.test(id) && !/^5196/.test(id) && !isBus(row) ? id : null;
-});
-
 // NS takes UIC numbers of Dutch stations.
 write('ns_stations.csv', (row) => {
   const uic = row[column('uic')];
@@ -274,5 +267,27 @@ writeRows(
         })),
     ),
   ),
+);
+});
+
+// Koleo sells the trains of PKP Intercity and of most Polish regional operators. Its links take
+// the slug of a station, such as `warszawa-centralna`, which is the code here. Groups of
+// stations and bus stops are left out.
+await keepOnFailure('koleo_stations.csv', async () => {
+const koleoStations = await (
+  await fetch('https://api.koleo.pl/v2/main/stations', {
+    headers: { accept: 'application/json', 'user-agent': userAgent, 'x-koleo-version': '2', 'x-koleo-client': 'Nuxt-1' },
+  })
+).json();
+writeRows(
+  'koleo_stations.csv',
+  koleoStations
+    .filter((station) => station.country === 'Polska' && station.transport_mode === 'rail' && !station.is_group)
+    .map((station) => ({
+      code: station.name_slug,
+      name: station.name,
+      latitude: station.latitude,
+      longitude: station.longitude,
+    })),
 );
 });
