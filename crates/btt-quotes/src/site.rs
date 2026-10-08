@@ -25,6 +25,9 @@ const MINIMUM_INTERVAL: Duration = Duration::from_secs(2);
 /// How long searches on a site stop after one fails.
 const FAILURE_PAUSE: Duration = Duration::from_mins(15);
 
+/// How long a search waits before it is tried again after a transient error.
+const RETRY_DELAY: Duration = Duration::from_secs(2);
+
 /// How long the connections of a search are kept. Prices change with demand, so the time is
 /// short.
 const QUOTE_LIFETIME: Duration = Duration::from_mins(30);
@@ -160,7 +163,13 @@ impl<S: ConnectionSource> SiteService<S> {
         if !self.limiter.wait_for_turn().await {
             return Err(QuoteError::Paused);
         }
-        let result = self.source.fetch(&self.client, search).await;
+        let mut result = self.source.fetch(&self.client, search).await;
+        // A server error or a dropped connection is often gone a moment later, as with the
+        // offer service of MÁV, so the search is tried once more before the site is paused.
+        if result.as_ref().is_err_and(QuoteError::is_transient) {
+            tokio::time::sleep(RETRY_DELAY).await;
+            result = self.source.fetch(&self.client, search).await;
+        }
         match &result {
             Ok(connections) => {
                 if let Ok(document) = serde_json::to_string(connections) {
@@ -213,6 +222,20 @@ mod tests {
         assert_eq!(local_time("2026-11-20T09:32:00+01:00"), Some(expected));
         assert_eq!(local_time("2026-11-20T09:32:00.000"), Some(expected));
         assert_eq!(local_time("09:32"), None);
+    }
+
+    #[test]
+    fn server_errors_are_tried_again_and_refusals_are_not() {
+        let refused = |status| QuoteError::Refused {
+            url: String::new(),
+            status,
+        };
+        assert!(refused(500).is_transient());
+        assert!(refused(503).is_transient());
+        assert!(!refused(400).is_transient());
+        assert!(!refused(403).is_transient());
+        assert!(!QuoteError::Paused.is_transient());
+        assert!(!QuoteError::Unexpected(String::new()).is_transient());
     }
 
     #[test]

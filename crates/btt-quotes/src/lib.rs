@@ -56,3 +56,15 @@ pub enum QuoteError {
     #[error("unexpected response: {0}")]
     Unexpected(String),
 }
+
+impl QuoteError {
+    /// Returns whether the error is likely gone a moment later: a server error or a request
+    /// that failed on the way. A refusal for the request itself, such as a 400 or a 403, is not.
+    pub fn is_transient(&self) -> bool {
+        match self {
+            Self::Refused { status, .. } => *status >= 500,
+            Self::Network(_) => true,
+            _ => false,
+        }
+    }
+}
