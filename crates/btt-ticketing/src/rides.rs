@@ -59,20 +59,22 @@ fn local_date(moment: UnixTimeMinutes, time_zone: &str) -> Option<NaiveDate> {
     local_moment(moment, time_zone).map(|(date, _)| date)
 }
 
-/// Returns the length of a ride along its line in kilometres, from the points of the line or
-/// else from the stops.
+/// Returns the length of a ride along its line in kilometres, from the boarding station through
+/// the points of the line, or else through the stops, to the alighting station.
 fn ride_distance_kilometres(ride: &TrainRide, stations: &[LegPlanStation]) -> f64 {
     let station = |index: btt_model::LegPlanStationIndex| stations.get(usize::from(index.0));
-    let points: Vec<_> = if ride.path_coordinates.len() >= 2 {
-        ride.path_coordinates.clone()
+    // The points of the line lie between the two stations and leave both out.
+    let between = if ride.path_coordinates.is_empty() {
+        &ride.intermediate_station_coordinates[..]
     } else {
-        station(ride.boarding_station)
-            .map(|station| station.coordinates)
-            .into_iter()
-            .chain(ride.intermediate_station_coordinates.iter().copied())
-            .chain(station(ride.alighting_station).map(|station| station.coordinates))
-            .collect()
+        &ride.path_coordinates[..]
     };
+    let points: Vec<_> = station(ride.boarding_station)
+        .map(|station| station.coordinates)
+        .into_iter()
+        .chain(between.iter().copied())
+        .chain(station(ride.alighting_station).map(|station| station.coordinates))
+        .collect();
     points
         .windows(2)
         .map(|pair| pair[0].haversine_distance_meters(pair[1]))
@@ -89,31 +91,38 @@ pub fn rides_of_journey(
 ) -> Vec<RideInput> {
     journey
         .rides()
-        .filter_map(|ride| {
-            let from = stations.get(usize::from(ride.boarding_station.0))?;
-            let to = stations.get(usize::from(ride.alighting_station.0))?;
-            let (departure_date, departure_clock) =
-                local_moment(ride.departure_time, &from.time_zone)?;
-            Some(RideInput {
-                leg_arrival_place_id,
-                train_label: ride.train_label.clone(),
-                from_name: from.name.clone(),
-                to_name: to.name.clone(),
-                from_coordinates: from.coordinates,
-                to_coordinates: to.coordinates,
-                departure_time: ride.departure_time,
-                arrival_time: ride.arrival_time,
-                time_zone: from.time_zone.clone(),
-                departure_date,
-                departure_clock,
-                arrival_date: local_date(ride.arrival_time, &to.time_zone)?,
-                from_country: country_of_time_zone(&from.time_zone).map(Into::into),
-                to_country: country_of_time_zone(&to.time_zone).map(Into::into),
-                distance_kilometres: ride_distance_kilometres(ride, stations),
-                offers_berths: ride.offers_berths,
-            })
-        })
+        .filter_map(|ride| ride_input(leg_arrival_place_id, ride, stations))
         .collect()
+}
+
+/// Builds the optimizer's view of one train ride, or returns `None` when the table does not
+/// hold its stations or its time zone is unknown.
+pub fn ride_input(
+    leg_arrival_place_id: TripPlaceId,
+    ride: &TrainRide,
+    stations: &[LegPlanStation],
+) -> Option<RideInput> {
+    let from = stations.get(usize::from(ride.boarding_station.0))?;
+    let to = stations.get(usize::from(ride.alighting_station.0))?;
+    let (departure_date, departure_clock) = local_moment(ride.departure_time, &from.time_zone)?;
+    Some(RideInput {
+        leg_arrival_place_id,
+        train_label: ride.train_label.clone(),
+        from_name: from.name.clone(),
+        to_name: to.name.clone(),
+        from_coordinates: from.coordinates,
+        to_coordinates: to.coordinates,
+        departure_time: ride.departure_time,
+        arrival_time: ride.arrival_time,
+        time_zone: from.time_zone.clone(),
+        departure_date,
+        departure_clock,
+        arrival_date: local_date(ride.arrival_time, &to.time_zone)?,
+        from_country: country_of_time_zone(&from.time_zone).map(Into::into),
+        to_country: country_of_time_zone(&to.time_zone).map(Into::into),
+        distance_kilometres: ride_distance_kilometres(ride, stations),
+        offers_berths: ride.offers_berths,
+    })
 }
 
 #[cfg(test)]
@@ -138,5 +147,36 @@ mod tests {
             Some(date(2026, 10, 10))
         );
         assert_eq!(local_date(moment, "Nowhere/Land"), None);
+    }
+
+    #[test]
+    fn the_distance_runs_from_station_to_station_through_the_line() {
+        let point = |longitude| GeoCoordinates::from_degrees(52.0, longitude).unwrap();
+        let station = |longitude| LegPlanStation {
+            name: "Station".into(),
+            coordinates: point(longitude),
+            time_zone: "Europe/Amsterdam".into(),
+        };
+        let stations = [station(5.0), station(5.4)];
+        let mut ride = TrainRide {
+            boarding_station: btt_model::LegPlanStationIndex(0),
+            departure_time: UnixTimeMinutes(0),
+            alighting_station: btt_model::LegPlanStationIndex(1),
+            arrival_time: UnixTimeMinutes(30),
+            train_label: TrainLabel {
+                category: "IC".into(),
+                number: "1".into(),
+                operator: "ns".into(),
+                agency: "NS".into(),
+            },
+            offers_berths: false,
+            intermediate_station_coordinates: std::iter::empty().collect(),
+            path_coordinates: vec![point(5.2), point(5.3)],
+        };
+        let whole = point(5.0).haversine_distance_meters(point(5.4)) / 1000.0;
+        // The line covers only the middle, and the ends still count.
+        assert!((ride_distance_kilometres(&ride, &stations) - whole).abs() < 0.01);
+        ride.path_coordinates.clear();
+        assert!((ride_distance_kilometres(&ride, &stations) - whole).abs() < 0.01);
     }
 }
