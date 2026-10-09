@@ -2,9 +2,9 @@
 //!
 //! The shop's own service answers plain requests with an anonymous token and a session that the
 //! token opens. A search then takes three requests in a row, as the shop's page makes them: an
-//! entry point for the two stations, which returns a travel action, the timetable of that travel
-//! action, and the prices of its connections. The token is kept and fetched again shortly before
-//! it runs out.
+//! entry point that resolves the two station numbers into the shop's station records, the
+//! timetable between those stations, and the prices of its connections. The token is kept and
+//! fetched again shortly before it runs out.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -131,6 +131,47 @@ pub fn parse_connections(timetable: &Value, prices: &Value) -> Result<Vec<Connec
         .collect())
 }
 
+/// Builds the timetable request of a search from the answer of the entry point. The shop takes
+/// the two stations of that answer, and a travel action too when the entry point returns one.
+///
+/// # Errors
+///
+/// Returns an error when the answer names neither the stations nor a travel action.
+pub fn timetable_request(entry: &Value, search: &Search) -> Result<Value, QuoteError> {
+    let mut request = json!({
+        "datetimeDeparture": search.departure.format("%Y-%m-%dT%H:%M:00.000").to_string(),
+        "filter": {
+            "regionaltrains": false, "direct": false, "wheelchair": false,
+            "bikes": false, "trains": false, "motorail": false, "connections": [],
+        },
+        "passengers": [{
+            "me": false, "remembered": false, "cards": [], "relations": [],
+            "challengedFlags": {
+                "hasHandicappedPass": false, "hasAssistanceDog": false,
+                "hasWheelchair": false, "hasAttendant": false,
+            },
+            "id": 1, "type": "ADULT",
+        }],
+        "count": 5,
+        "sortType": "DEPARTURE",
+    });
+    let stations = entry.get("from").zip(entry.get("to"));
+    let travel_action = entry.get("travelActionId").filter(|id| id.is_string());
+    if stations.is_none() && travel_action.is_none() {
+        return Err(QuoteError::Unexpected(
+            "the entry point names no stations".to_owned(),
+        ));
+    }
+    if let Some((from, to)) = stations {
+        request["from"] = from.clone();
+        request["to"] = to.clone();
+    }
+    if let Some(id) = travel_action {
+        request["travelActionId"] = id.clone();
+    }
+    Ok(request)
+}
+
 /// Returns the connection that leaves at the given local time with the given number of trains.
 pub fn find_connection(
     connections: &[Connection],
@@ -225,35 +266,21 @@ impl ObbService {
                 })),
             )
             .await?;
-        let travel_action = entry
-            .get("travelActionId")
-            .and_then(Value::as_str)
-            .ok_or_else(|| QuoteError::Unexpected("no travel action".to_owned()))?;
-        let timetable = self
+        let timetable = match self
             .send(
                 &token,
                 "POST",
                 "/api/hafas/v4/timetable",
-                Some(json!({
-                    "travelActionId": travel_action,
-                    "datetimeDeparture": search.departure.format("%Y-%m-%dT%H:%M:00.000").to_string(),
-                    "filter": {
-                        "regionaltrains": false, "direct": false, "wheelchair": false,
-                        "bikes": false, "trains": false, "motorail": false, "connections": [],
-                    },
-                    "passengers": [{
-                        "me": false, "remembered": false, "cards": [], "relations": [],
-                        "challengedFlags": {
-                            "hasHandicappedPass": false, "hasAssistanceDog": false,
-                            "hasWheelchair": false, "hasAttendant": false,
-                        },
-                        "id": 1, "type": "ADULT",
-                    }],
-                    "count": 5,
-                    "sortType": "DEPARTURE",
-                })),
+                Some(timetable_request(&entry, search)?),
             )
-            .await?;
+            .await
+        {
+            Ok(timetable) => timetable,
+            // The shop answers 422 for a search it cannot run, such as one between stations
+            // without a connection that day. That says nothing about the shop itself.
+            Err(QuoteError::Refused { status: 422, .. }) => return Ok(Vec::new()),
+            Err(error) => return Err(error),
+        };
         let query: Vec<String> = timetable
             .get("connections")
             .and_then(Value::as_array)
@@ -354,6 +381,33 @@ impl ObbService {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_timetable_takes_the_stations_of_the_entry_point() {
+        let search = Search {
+            origin: 8_100_002,
+            destination: 8_101_001,
+            departure: chrono::NaiveDate::from_ymd_opt(2026, 10, 20)
+                .unwrap()
+                .and_hms_opt(8, 0, 0)
+                .unwrap(),
+        };
+        let entry = json!({
+            "from": { "number": 8_100_002, "name": "Salzburg Hbf" },
+            "to": { "number": 1_270_504, "name": "Brixlegg Bahnhof" }
+        });
+        let request = timetable_request(&entry, &search).unwrap();
+        assert_eq!(request["from"]["name"], "Salzburg Hbf");
+        assert_eq!(request["to"]["number"], 1_270_504);
+        assert_eq!(request["datetimeDeparture"], "2026-10-20T08:00:00.000");
+        assert!(request.get("travelActionId").is_none());
+        let with_action = json!({ "travelActionId": "abc" });
+        assert_eq!(
+            timetable_request(&with_action, &search).unwrap()["travelActionId"],
+            "abc"
+        );
+        assert!(timetable_request(&json!({}), &search).is_err());
+    }
 
     #[test]
     fn connections_take_their_prices_by_id() {
