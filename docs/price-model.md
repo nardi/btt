@@ -176,6 +176,10 @@ The model predicts one fare per run, the lowest a site shows. Saver fares depend
 
 NS sells fixed fares, and the model treats them as lowest fares like the rest. For the Netherlands this is right, because the fixed fare is the lowest.
 
+### Night trains
+
+A Nightjet or a EuroNight does not follow the distance. Its cheapest seat costs 25 to 50 euro whether the route is 500 or 1200 kilometres long, and the general model, which prices a night train by its distance like a day train, was off by a median factor of 3.7. A run in which one of these trains is the longest ride is therefore priced from the offers of the ÖBB shop, and the accommodation of a night ride is priced from them as well. `docs/night-train-fares.md` describes the fit. Night trains that the shop does not sell, such as the Intercités de nuit, still use the general model.
+
 ### Runs with several operators
 
 A run takes the operator and category of its longest ride and the kind of its fastest. A ticket that covers a regional train of one operator and a long-distance train of another is priced as the long-distance operator's train over the whole distance. Through tickets mostly work that way, but a site that sells the two rides separately within one ticket can come out higher.
