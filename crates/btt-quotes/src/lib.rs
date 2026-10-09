@@ -63,23 +63,31 @@ pub enum QuoteError {
 }
 
 impl QuoteError {
-    /// Returns whether the error is likely gone a moment later: a server error or a request
-    /// that failed on the way. A refusal for the request itself, such as a 400 or a 403, is not.
+    /// Returns whether the error is likely gone a moment later: a server error, a request
+    /// that failed on the way, or a refusal for too many requests. A refusal for the request
+    /// itself, such as a 400 or a 403, is not.
     pub fn is_transient(&self) -> bool {
+        self.retry_delay().is_some()
+    }
+
+    /// Returns how long to wait before trying again after the error, or `None` when trying
+    /// again would not help. A site that refuses for too many requests (status 429) needs a
+    /// longer rest than one that failed by chance.
+    pub fn retry_delay(&self) -> Option<std::time::Duration> {
         match self {
-            Self::Refused { status, .. } => *status >= 500,
-            Self::Network(_) => true,
-            _ => false,
+            Self::Refused { status: 429, .. } => Some(std::time::Duration::from_secs(10)),
+            Self::Refused { status, .. } if *status >= 500 => {
+                Some(std::time::Duration::from_secs(2))
+            }
+            Self::Network(_) => Some(std::time::Duration::from_secs(2)),
+            _ => None,
         }
     }
 }
 
-/// How long a lookup waits before it is tried again after a transient error.
-const RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
-
-/// Runs a lookup, and runs it once more after a short wait when it fails with a transient
-/// error. A server error or a dropped connection is often gone a moment later, and a failure
-/// pauses the site for a quarter of an hour.
+/// Runs a lookup, and runs it once more after a wait when it fails with a transient error. A
+/// server error, a dropped connection or a refusal for too many requests is often gone a moment
+/// later, and a failure pauses the site for a quarter of an hour.
 pub(crate) async fn with_one_retry<T, Lookup>(
     mut lookup: impl FnMut() -> Lookup,
 ) -> Result<T, QuoteError>
@@ -87,8 +95,8 @@ where
     Lookup: std::future::Future<Output = Result<T, QuoteError>>,
 {
     let result = lookup().await;
-    if result.as_ref().is_err_and(QuoteError::is_transient) {
-        tokio::time::sleep(RETRY_DELAY).await;
+    if let Some(delay) = result.as_ref().err().and_then(QuoteError::retry_delay) {
+        tokio::time::sleep(delay).await;
         return lookup().await;
     }
     result

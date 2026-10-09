@@ -561,19 +561,36 @@ impl SbbService {
 
 /// Returns the quote of the trip that starts with a ride at the given departure, in seconds since
 /// the Unix epoch, and has the given number of rides.
+///
+/// SBB can count the rides of a trip differently from the timetable, such as a regional train
+/// that changes its number on the way and counts as two rides, or a change the plan makes that
+/// SBB rides through. When no trip has the planned number of rides, the only trip that leaves at
+/// the planned moment stands in for it, because it goes between the same stations at the same
+/// time.
 pub fn find_trip(
     quotes: &[Quote],
     first_departure_unix_seconds: i64,
     ride_count: usize,
 ) -> Option<&Quote> {
-    quotes.iter().find(|quote| {
-        quote.trip.rides.len() == ride_count
-            && quote
-                .trip
-                .rides
-                .first()
-                .is_some_and(|ride| ride.departure.timestamp() == first_departure_unix_seconds)
-    })
+    let leaves_then = |quote: &&Quote| {
+        quote
+            .trip
+            .rides
+            .first()
+            .is_some_and(|ride| ride.departure.timestamp() == first_departure_unix_seconds)
+    };
+    if let Some(exact) = quotes
+        .iter()
+        .filter(leaves_then)
+        .find(|quote| quote.trip.rides.len() == ride_count)
+    {
+        return Some(exact);
+    }
+    let mut leaving = quotes.iter().filter(leaves_then);
+    match (leaving.next(), leaving.next()) {
+        (Some(only), None) => Some(only),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -705,7 +722,10 @@ mod tests {
             .timestamp();
         let found = find_trip(&quotes, departure, 1).unwrap();
         assert_eq!(found.trip.rides[0].products, ["IC 6 959"]);
-        assert!(find_trip(&quotes, departure, 2).is_none());
+        // The only trip at 06:58 stands in for a plan that counts its rides differently.
+        let counted_differently = find_trip(&quotes, departure, 2).unwrap();
+        assert_eq!(counted_differently.trip.id, found.trip.id);
+        assert!(find_trip(&quotes, departure + 60, 1).is_none());
     }
 
     #[test]

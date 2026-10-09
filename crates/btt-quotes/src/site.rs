@@ -225,6 +225,9 @@ mod tests {
         };
         assert!(refused(500).is_transient());
         assert!(refused(503).is_transient());
+        // A refusal for too many requests is temporary too, and needs the longer rest.
+        assert!(refused(429).is_transient());
+        assert!(refused(429).retry_delay() > refused(500).retry_delay());
         assert!(!refused(400).is_transient());
         assert!(!refused(403).is_transient());
         assert!(!QuoteError::Paused.is_transient());
