@@ -163,15 +163,7 @@ async fn run_seed(app: AppHandle, path: std::ffi::OsString) {
         asked += 1;
         let (outcome, answer) = crate::ticket_report::look_up(&state, &request).await;
         tracing::info!(operator = %operator, ?outcome, "seed run: looked up");
-        if matches!(outcome, LiveQuoteOutcome::NoMatchingTrip) {
-            // The planned trip and what the site offered instead, to find why they differ.
-            tracing::info!(
-                search = ?request.site_search,
-                rides = request.ride_count,
-                answer = %answer.map(|answer| answer.to_string()).unwrap_or_default(),
-                "seed run: no matching trip"
-            );
-        }
+        log_missing_price(&request, &outcome, answer);
         let paused =
             matches!(&outcome, LiveQuoteOutcome::Failed { error } if error.contains("paused"));
         if paused && attempts < MAXIMUM_ATTEMPTS {
@@ -196,6 +188,26 @@ async fn run_seed(app: AppHandle, path: std::ffi::OsString) {
     }
     tracing::info!(asked, priced, "seed run: done");
     app.exit(0);
+}
+
+/// Logs the planned trip and what the site answered when a lookup ends without a price, to find
+/// why it gave none.
+fn log_missing_price(
+    request: &LiveQuoteRequest,
+    outcome: &LiveQuoteOutcome,
+    answer: Option<serde_json::Value>,
+) {
+    if matches!(
+        outcome,
+        LiveQuoteOutcome::NoMatchingTrip | LiveQuoteOutcome::Failed { .. }
+    ) {
+        tracing::info!(
+            search = ?request.site_search,
+            rides = request.ride_count,
+            answer = %answer.map(|answer| answer.to_string()).unwrap_or_default(),
+            "seed run: no price"
+        );
+    }
 }
 
 /// Returns the live price request of every ride a booking site can price, with the operator of
