@@ -798,3 +798,40 @@ fn a_regiojet_ticket_gets_a_search_on_regiojet() {
     assert_eq!(search.origin_code, "372825000");
     assert_eq!(search.destination_code, "3088864001");
 }
+
+#[test]
+fn a_night_ride_costs_the_accommodation_on_a_pass_and_the_extra_over_the_seat_without() {
+    let mut night = ride(0, ("AT", "CH"), "NJ", 770.0, true);
+    night.train_label.operator = "oebb".into();
+    let data = fare_data();
+    let book = PriceBook::from_data(data);
+    let preferences = TicketPreferences::default();
+    let settings = Settings {
+        class: TravelClass::Second,
+        age_group: btt_model::AgeGroup::Adult,
+        residence_country: None,
+        preferences: &preferences,
+        purchase_date: date(0),
+        today: date(0),
+        single_ticket_percent: 100,
+    };
+    let rides = [night];
+    let problem = Problem::new(&rides, data, &book, &settings);
+    let with_pass = problem.accommodation_price(0, true).unwrap();
+    let without_pass = problem.accommodation_price(0, false).unwrap();
+    assert_eq!(with_pass.source.name, "ÖBB night train offers");
+    assert_eq!(without_pass.source.name, "ÖBB night train offers");
+    assert!(with_pass.source.note.contains("reservation"));
+    assert!(without_pass.source.note.contains("on top of the ticket"));
+    // The ticket of the same ride is priced from the same offers, not from the distance.
+    let ticket = book.price_run(&[btt_fares::RideFacts {
+        from_country: Some("AT"),
+        to_country: Some("CH"),
+        operator: "oebb",
+        category: "NJ",
+        distance_kilometres: 770.0,
+        offers_berths: true,
+    }]);
+    assert_eq!(ticket.source.name, "ÖBB night train offers");
+    assert!(ticket.high.0 < 20_000, "{ticket:?}");
+}

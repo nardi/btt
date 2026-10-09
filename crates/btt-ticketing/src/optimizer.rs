@@ -9,7 +9,8 @@
 use std::ops::Range;
 
 use btt_fares::{
-    FareData, PassKind, PassType, PriceAgeGroup, PriceBook, ReservationRule, RideFacts, RuleScope,
+    FareData, NightFares, PassKind, PassType, PriceAgeGroup, PriceBook, ReservationRule, RideFacts,
+    RuleScope,
 };
 use btt_model::{
     AgeGroup, EuroCents, Price, PriceKind, PriceSource, PriceTotal, StrategyKind, TicketItem,
@@ -415,6 +416,25 @@ impl<'a> Problem<'a> {
             .filter(|rule| rule.scope == RuleScope::Night)
     }
 
+    /// Returns the price of the accommodation of a night ride, or `None` for a ride that needs
+    /// none. A pass holder pays the accommodation with its reservation and no ticket. Without a
+    /// pass, the ticket holds a seat, so the accommodation is the extra over the seat. A night
+    /// train that the offers of the shop do not cover has the fee of its rule for both.
+    pub(crate) fn accommodation_price(&self, index: usize, with_pass: bool) -> Option<Price> {
+        let rule = self.night_rule(index)?;
+        let ride = &self.rides[index];
+        let fitted = NightFares::sells(&ride.train_label.category)
+            .then(|| {
+                self.data.night_fares.accommodation_price(
+                    &ride.train_label.category,
+                    ride.distance_kilometres,
+                    with_pass,
+                )
+            })
+            .flatten();
+        Some(fitted.unwrap_or_else(|| fee_price(rule, self.settings.class)))
+    }
+
     /// Returns the rule for the seat reservation of a ride on a pass, if one is charged.
     fn seat_rule(&self, index: usize) -> Option<&ReservationRule> {
         if self.night_rule(index).is_some() {
@@ -499,8 +519,18 @@ impl<'a> Problem<'a> {
                 .map(|rule| fee_price(rule, self.settings.class).middle().0)
                 .map(u64::from)
                 .sum();
-            let cost_on_pass = remaining + reservations;
-            let singles = singles_by_day[day_index].middle;
+            // A night train costs the accommodation on a pass, and the extra over its seat on a
+            // single ticket, which holds the seat.
+            let night = |with_pass: &dyn Fn(usize) -> bool| -> u64 {
+                day.clone()
+                    .filter_map(|index| {
+                        self.accommodation_price(index, with_pass(index))
+                            .map(|price| u64::from(price.middle().0))
+                    })
+                    .sum()
+            };
+            let cost_on_pass = remaining + reservations + night(&on_pass);
+            let singles = singles_by_day[day_index].middle + night(&|_| false);
             worth.push((
                 i64::try_from(singles).unwrap_or(i64::MAX)
                     - i64::try_from(cost_on_pass).unwrap_or(i64::MAX),
@@ -590,10 +620,11 @@ impl<'a> Problem<'a> {
         strategies
     }
 
-    /// Adds the night accommodation of every ride that has a rule to a strategy.
-    fn add_accommodation(&self, builder: &mut StrategyBuilder) {
+    /// Adds the night accommodation of every ride that has a rule to a strategy. `on_pass` says
+    /// which rides the strategy covers with a pass.
+    fn add_accommodation(&self, builder: &mut StrategyBuilder, on_pass: impl Fn(usize) -> bool) {
         for index in 0..self.rides.len() {
-            if let Some(rule) = self.night_rule(index) {
+            if let Some(price) = self.accommodation_price(index, on_pass(index)) {
                 let ride = &self.rides[index];
                 builder.add(
                     TicketProduct::NightAccommodation,
@@ -608,7 +639,7 @@ impl<'a> Problem<'a> {
                         ride.departure_date.format("%-d %b %Y")
                     ),
                     &[index],
-                    fee_price(rule, self.settings.class),
+                    price,
                     Some(shop_link(ride.from_country.as_deref())),
                 );
             }
@@ -899,7 +930,7 @@ impl<'a> Problem<'a> {
         for cover in singles_by_day {
             self.add_single_tickets(&mut builder, &cover.runs);
         }
-        self.add_accommodation(&mut builder);
+        self.add_accommodation(&mut builder, |_| false);
         let mut notes = Vec::new();
         if self.settings.class == TravelClass::First {
             notes.push("Single ticket prices are estimates for second class.".into());
@@ -956,7 +987,7 @@ impl<'a> Problem<'a> {
                 self.add_single_tickets(&mut builder, &singles_by_day[day_index].runs);
             }
         }
-        self.add_accommodation(&mut builder);
+        self.add_accommodation(&mut builder, |index| pass_rides.contains(&index));
         let age_group = PriceAgeGroup::of(self.settings.age_group).unwrap_or(PriceAgeGroup::Adult);
         let title = format!(
             "Interrail Global Pass, {}, {}, {}",

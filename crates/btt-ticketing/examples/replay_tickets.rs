@@ -5,7 +5,7 @@
 //! `tickets.json` of an unpacked problem report.
 
 use btt_fares::{FareData, PriceBook};
-use btt_model::{StrategyKind, TicketLeg, TicketPreferences, TicketProduct, Traveller};
+use btt_model::{TicketLeg, TicketPreferences, TicketProduct, Traveller};
 use btt_ticketing::{TicketRequest, plan_tickets, rides_of_journey};
 use serde::Deserialize;
 
@@ -56,15 +56,31 @@ fn main() {
         &data,
         &book,
     );
-    let Some(singles) = plan
-        .strategies
-        .iter()
-        .find(|strategy| strategy.kind == StrategyKind::SingleTickets)
-    else {
-        println!("no single ticket strategy");
-        return;
-    };
-    for item in &singles.items {
+    for strategy in &plan.strategies {
+        println!(
+            "
+{}  {:.2}-{:.2} EUR",
+            strategy.title,
+            strategy.total.low.euro(),
+            strategy.total.high.euro()
+        );
+        print_items(&plan, strategy);
+    }
+}
+
+/// Prints the single tickets and the night accommodation of a strategy.
+fn print_items(plan: &btt_model::TicketPlan, strategy: &btt_model::TicketStrategy) {
+    for item in &strategy.items {
+        if item.product == TicketProduct::NightAccommodation {
+            println!(
+                "  night {:?}  {:.2}-{:.2} EUR  {}",
+                item.ride_indices,
+                item.price.low.euro(),
+                item.price.high.euro(),
+                item.price.source.name,
+            );
+            continue;
+        }
         if item.product != TicketProduct::SingleTicket {
             continue;
         }

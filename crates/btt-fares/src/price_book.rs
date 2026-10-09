@@ -96,6 +96,7 @@ impl PriceBook {
                 .iter()
                 .map(|tariff| Box::new(tariff.clone()) as Box<dyn TicketPriceSource>),
         );
+        sources.push(Box::new(crate::NightTrainTickets(data.night_fares.clone())));
         sources.push(Box::new(data.price_model.clone()));
         Self { sources }
     }
