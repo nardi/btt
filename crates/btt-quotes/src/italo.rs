@@ -186,15 +186,32 @@ impl ConnectionSource for Italo {
         client: &Client,
         search: &ConnectionSearch,
     ) -> Result<Vec<SiteConnection>, QuoteError> {
+        // A search whose planning failed often works when it is started anew in a new session.
+        match self.search_once(client, search).await {
+            Err(QuoteError::SearchFailed(_)) => self.search_once(client, search).await,
+            result => result,
+        }
+    }
+}
+
+/// Adds the session and the headers of the site's pages to a request of the booking service.
+fn authorized(request: reqwest::RequestBuilder, session: &Session) -> reqwest::RequestBuilder {
+    request
+        .bearer_auth(&session.token)
+        .header("accept", "application/json")
+        .header("x-big-working-session-id", &session.working_id)
+        .header("origin", ORIGIN)
+}
+
+impl Italo {
+    /// Starts a search and waits for its trips.
+    async fn search_once(
+        &self,
+        client: &Client,
+        search: &ConnectionSearch,
+    ) -> Result<Vec<SiteConnection>, QuoteError> {
         let session = self.session(client).await?;
-        let authorized = |request: reqwest::RequestBuilder| {
-            request
-                .bearer_auth(&session.token)
-                .header("accept", "application/json")
-                .header("x-big-working-session-id", &session.working_id)
-                .header("origin", ORIGIN)
-        };
-        let response = authorized(client.post(BOOKING_URL).json(&request(search)))
+        let response = authorized(client.post(BOOKING_URL).json(&request(search)), &session)
             .send()
             .await;
         let started: Value = match response {
@@ -217,10 +234,35 @@ impl ConnectionSource for Italo {
             .get("pollAfter")
             .and_then(Value::as_u64)
             .unwrap_or(1500);
+        self.poll_status(client, &session, operation, wait).await
+    }
+
+    /// Asks for the status of a started search until it holds the trips, and reads them.
+    async fn poll_status(
+        &self,
+        client: &Client,
+        session: &Session,
+        operation: &str,
+        wait: u64,
+    ) -> Result<Vec<SiteConnection>, QuoteError> {
         let status_url = format!("{BOOKING_URL}/status/{operation}");
         for _ in 0..MAXIMUM_POLLS {
             tokio::time::sleep(Duration::from_millis(wait)).await;
-            let response = authorized(client.get(&status_url)).send().await?;
+            let response = authorized(client.get(&status_url), session).send().await?;
+            // Italo's planner fails with 500 for some searches, such as Treviso Centrale to
+            // Pordenone on one day, while it plans the same pair on other days and answers
+            // other searches. The status of some searches answers 404 instead, as if the
+            // operation was lost. Both are failures of the search and not of the site. They end
+            // the session, so the next search logs in anew.
+            if matches!(
+                response.status(),
+                reqwest::StatusCode::INTERNAL_SERVER_ERROR | reqwest::StatusCode::NOT_FOUND
+            ) {
+                *self.session.lock().await = None;
+                return Err(QuoteError::SearchFailed(
+                    "Italo's planner failed for the search".to_owned(),
+                ));
+            }
             let status: Value = check_status(response, &status_url)?.json().await?;
             if status.get("trips").is_some() {
                 return parse_connections(&status);

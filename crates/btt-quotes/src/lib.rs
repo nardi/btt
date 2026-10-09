@@ -56,6 +56,10 @@ pub enum QuoteError {
     /// The service answered with something other than the expected data.
     #[error("unexpected response: {0}")]
     Unexpected(String),
+    /// The site could not answer this one search, while it answers others. The site is not
+    /// paused for it.
+    #[error("the site could not answer the search: {0}")]
+    SearchFailed(String),
 }
 
 impl QuoteError {

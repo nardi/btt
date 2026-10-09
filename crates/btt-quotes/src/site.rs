@@ -144,7 +144,8 @@ impl<S: ConnectionSource> SiteService<S> {
     /// # Errors
     ///
     /// Returns an error when searches are paused after a failure, a request fails or is
-    /// refused, or an answer has an unexpected shape. A failure pauses searches for 15 minutes.
+    /// refused, or an answer has an unexpected shape. A failure pauses searches for 15 minutes,
+    /// except a search that the site could not answer while it answers others.
     pub async fn connections(
         &self,
         search: &ConnectionSearch,
@@ -167,6 +168,7 @@ impl<S: ConnectionSource> SiteService<S> {
                     self.store.save(&key, &document);
                 }
             }
+            Err(QuoteError::SearchFailed(_)) => {}
             Err(_) => self.limiter.report_failure().await,
         }
         result
