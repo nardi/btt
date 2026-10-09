@@ -824,6 +824,8 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "proptest",
+ "serde",
+ "serde_json",
  "smol_str",
 ]
 

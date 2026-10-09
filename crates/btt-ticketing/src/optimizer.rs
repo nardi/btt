@@ -31,6 +31,15 @@ struct OwnTicketOperator {
     shop_url: &'static str,
 }
 
+/// The largest distance between the station a ride arrives at and the station the next ride
+/// leaves from, for one ticket to cover both. Two platforms of one station can lie a few
+/// hundred metres apart.
+const MAXIMUM_CHANGE_METERS: f64 = 1000.0;
+
+/// The longest wait between two rides, in minutes, for one ticket to cover both. A longer wait
+/// is a stay, and the booking sites sell the parts before and after it as journeys of their own.
+const MAXIMUM_CHANGE_MINUTES: u32 = 120;
+
 /// The operators that sell tickets for their own trains only. A ticket never joins one of their
 /// rides with a ride of another operator.
 const OWN_TICKET_OPERATORS: &[OwnTicketOperator] = &[
@@ -302,9 +311,27 @@ impl<'a> Problem<'a> {
     }
 
     /// Returns whether one ticket can cover rides `first` to `last`. It can't when a ride
-    /// of an operator that sells only its own trains shares the run with another operator.
+    /// of an operator that sells only its own trains shares the run with another operator, or
+    /// when the rides do not form one journey: each ride has to leave from where the one before
+    /// it arrived, within the time of a change. A day with a walk between two stations or a
+    /// stay of hours takes a ticket for each part, as the booking sites sell them.
     fn sold_together(&self, first: usize, last: usize) -> bool {
         let rides = &self.rides[first..=last];
+        let connected = rides.windows(2).all(|pair| {
+            let (arriving, leaving) = (&pair[0], &pair[1]);
+            arriving
+                .to_coordinates
+                .haversine_distance_meters(leaving.from_coordinates)
+                <= MAXIMUM_CHANGE_METERS
+                && leaving
+                    .departure_time
+                    .0
+                    .saturating_sub(arriving.arrival_time.0)
+                    <= MAXIMUM_CHANGE_MINUTES
+        });
+        if !connected {
+            return false;
+        }
         let operator = &rides[0].train_label.operator;
         let own_tickets_only = |operator: &str| {
             OWN_TICKET_OPERATORS

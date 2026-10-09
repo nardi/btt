@@ -15,6 +15,8 @@ chrono-tz.workspace = true
 smol_str.workspace = true
 
 [dev-dependencies]
+serde.workspace = true
+serde_json.workspace = true
 btt-quotes.workspace = true
 proptest.workspace = true
 

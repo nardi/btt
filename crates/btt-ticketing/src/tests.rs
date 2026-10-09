@@ -607,6 +607,40 @@ fn an_italo_ride_gets_a_ticket_of_its_own() {
     assert_eq!(runs, [&[0][..], &[1, 2][..]]);
 }
 
+/// Returns the rides that each single ticket of a plan's single ticket strategy covers.
+fn single_ticket_runs(plan: &TicketPlan) -> Vec<Vec<u16>> {
+    plan.strategies
+        .iter()
+        .find(|strategy| strategy.kind == StrategyKind::SingleTickets)
+        .unwrap()
+        .items
+        .iter()
+        .filter(|item| item.product == TicketProduct::SingleTicket)
+        .map(|item| item.ride_indices.clone())
+        .collect()
+}
+
+#[test]
+fn one_ticket_covers_only_rides_that_connect() {
+    let leg = |minute: u32, latitude: f64| {
+        let mut ride = ride(0, ("CH", "CH"), "IC", 80.0, false);
+        ride.departure_time = UnixTimeMinutes(minute);
+        ride.arrival_time = UnixTimeMinutes(minute + 60);
+        ride.from_coordinates = btt_model::GeoCoordinates::from_degrees(latitude, 8.0).unwrap();
+        ride.to_coordinates = btt_model::GeoCoordinates::from_degrees(46.0, 8.0).unwrap();
+        ride
+    };
+    // A change at the same station after 20 minutes joins the two rides.
+    let changing = plan(vec![leg(480, 47.0), leg(560, 46.0)], None);
+    assert_eq!(single_ticket_runs(&changing), [vec![0, 1]]);
+    // A stay of six hours splits them.
+    let staying = plan(vec![leg(480, 47.0), leg(900, 46.0)], None);
+    assert_eq!(single_ticket_runs(&staying), [vec![0], vec![1]]);
+    // So does a walk of several kilometres to another station.
+    let walking = plan(vec![leg(480, 47.0), leg(560, 46.05)], None);
+    assert_eq!(single_ticket_runs(&walking), [vec![0], vec![1]]);
+}
+
 /// Plans one ride between two countries and returns its booking link.
 fn border_ride_link(countries: (&str, &str), from: (f64, f64), to: (f64, f64)) -> String {
     let mut ride = ride(0, countries, "EC", 300.0, false);
