@@ -170,15 +170,26 @@ pub fn parse_connections(response: &Value) -> Result<Vec<Connection>, QuoteError
 
 /// Returns the connection that leaves at the given moment, in seconds since the Unix epoch, with
 /// the given number of trains.
+///
+/// DB can list one journey twice under different train names, such as a Nightjet as `NJ 403`
+/// without a price and its seats as `IC 60403` with one. Among the connections that match, the
+/// first with a price wins.
 pub fn find_connection(
     connections: &[Connection],
     departure_unix_seconds: i64,
     train_count: usize,
 ) -> Option<&Connection> {
-    connections.iter().find(|connection| {
+    let mut matching = connections.iter().filter(|connection| {
         connection.departure.timestamp() == departure_unix_seconds
             && connection.trains.len() == train_count
-    })
+    });
+    let first = matching.next()?;
+    if first.price.is_some() {
+        return Some(first);
+    }
+    matching
+        .find(|connection| connection.price.is_some())
+        .or(Some(first))
 }
 
 /// Fetches connections from the service of the DB app, keeps them for a while and spaces its
@@ -265,6 +276,25 @@ impl DbService {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_priced_listing_of_the_same_journey_wins() {
+        let departure = DateTime::parse_from_rfc3339("2026-10-22T20:24:00+02:00").unwrap();
+        let connection = |trains: [&str; 2], price: Option<f64>| Connection {
+            departure,
+            trains: trains.map(str::to_owned).to_vec(),
+            price,
+            partial_price: false,
+        };
+        let connections = [
+            connection(["RE 8468", "NJ 403"], None),
+            connection(["RE 8468", "IC 60403"], Some(52.99)),
+        ];
+        let found = find_connection(&connections, departure.timestamp(), 2).unwrap();
+        assert_eq!(found.price, Some(52.99));
+        assert!(find_connection(&connections[..1], departure.timestamp(), 2).is_some());
+        assert!(find_connection(&connections, departure.timestamp(), 1).is_none());
+    }
 
     #[test]
     fn connections_are_read_without_walks() {
