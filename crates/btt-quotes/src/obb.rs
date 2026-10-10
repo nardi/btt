@@ -467,8 +467,15 @@ impl ObbService {
         {
             return Ok(Some(offers));
         }
-        let result =
+        let mut result =
             crate::with_one_retry(|| self.fetch_night_offers(search, train, with_pass)).await;
+        // The shop has listed a train in one search and left it out of the next, so a search that
+        // finds no such train is made once more after a short wait.
+        if matches!(result, Ok(None)) {
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            result =
+                crate::with_one_retry(|| self.fetch_night_offers(search, train, with_pass)).await;
+        }
         match &result {
             Ok(Some(offers)) => {
                 if let Ok(document) = serde_json::to_string(offers) {
