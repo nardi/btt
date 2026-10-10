@@ -688,6 +688,11 @@ impl<'a> Problem<'a> {
                 accommodation: Some(btt_model::AccommodationRequest {
                     train: format!("{shop_category} {}", ride.train_label.number).into(),
                     with_pass,
+                    seat_estimate: self
+                        .data
+                        .night_fares
+                        .seat_price(category, ride.distance_kilometres)
+                        .map(EuroCents::from_euro),
                 }),
             });
         (link, request)

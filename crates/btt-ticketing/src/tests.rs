@@ -865,6 +865,9 @@ fn the_accommodation_of_a_night_train_asks_the_obb_shop_for_its_live_price() {
     assert_eq!(accommodation.train, "NJ 466");
     // Without a pass the ticket holds a seat, and the accommodation is the extra over it.
     assert!(!accommodation.with_pass);
+    // The request holds the usual price of a seat, for a train that sells no seats.
+    let seat = accommodation.seat_estimate.unwrap();
+    assert!((2_000..6_000).contains(&seat.0), "{seat:?}");
     // The request is for the accommodation, so the price model has no run to learn from.
     assert!(request.run.is_none());
     // A night train that the shop does not sell gets no request.

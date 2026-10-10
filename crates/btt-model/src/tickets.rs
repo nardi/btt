@@ -206,6 +206,11 @@ pub struct AccommodationRequest {
     /// Whether the traveller has a pass, who pays the accommodation with its reservation. Without
     /// one, the ticket holds a seat and the accommodation is the extra over it.
     pub with_pass: bool,
+    /// The estimated price of a seat on the train. A train that sells no seat sells its beds at the
+    /// price of the whole ticket, so the lookup subtracts this from a bed price to get the extra
+    /// over the seat that the ticket item already holds.
+    #[serde(default)]
+    pub seat_estimate: Option<EuroCents>,
 }
 
 /// The run of trains that one ticket covers, as the price model reads it.

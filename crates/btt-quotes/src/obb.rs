@@ -98,6 +98,19 @@ pub struct NightOffers {
 }
 
 impl NightOffers {
+    /// Returns whether the shop sells seats on the train. Some night trains sell beds only.
+    pub fn sells_seats(&self) -> bool {
+        self.accommodations
+            .iter()
+            .any(|accommodation| accommodation.kind == "SEAT")
+    }
+
+    /// Returns the lowest price in euro of a kind of accommodation over all tariffs. On a train
+    /// without seats this is the price of the whole ticket with the bed.
+    pub fn lowest_whole_price(&self, kind: &str) -> Option<f64> {
+        self.lowest_price(kind, true)
+    }
+
     /// Returns the lowest price in euro of a kind of accommodation, `SEAT`, `COUCHETTE` or
     /// `BERTH`.
     ///
@@ -739,6 +752,11 @@ mod tests {
         };
         assert_eq!(without_seats.lowest_price("COUCHETTE", false), None);
         assert!(without_seats.lowest_price("COUCHETTE", true).is_some());
+        // The beds of such a train sell at the price of the whole ticket.
+        assert!(offers.sells_seats());
+        assert!(!without_seats.sells_seats());
+        let whole = without_seats.lowest_whole_price("COUCHETTE").unwrap();
+        assert!((whole - 114.9).abs() < 1e-9, "{whole}");
     }
 
     #[test]

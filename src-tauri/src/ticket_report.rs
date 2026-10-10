@@ -448,7 +448,11 @@ async fn look_up_obb_accommodation(
         }
     };
     let answer = serde_json::to_value(&offers).ok();
-    let lowest = |kind| offers.lowest_price(kind, accommodation.with_pass);
+    let seat_estimate = accommodation
+        .seat_estimate
+        .map(|cents| f64::from(cents.0) / 100.0);
+    let seatless = !accommodation.with_pass && !offers.sells_seats();
+    let lowest = |kind| accommodation_extra(&offers, kind, accommodation.with_pass, seat_estimate);
     let (couchette, berth, seat) = (lowest("COUCHETTE"), lowest("BERTH"), lowest("SEAT"));
     let Some((low, high)) = night_range(couchette, berth, seat, accommodation.with_pass) else {
         return (LiveQuoteOutcome::NotSold, answer);
@@ -465,8 +469,15 @@ async fn look_up_obb_accommodation(
     .join(",");
     let holds = if accommodation.with_pass {
         "the accommodation with its reservation, for a holder of an Interrail Global Pass"
+            .to_owned()
+    } else if seatless {
+        format!(
+            "the accommodation on top of the ticket. This train sells no seats, so each price is \
+             the lowest price of the bed less {:.2} euro, the usual price of a seat",
+            seat_estimate.unwrap_or_default()
+        )
     } else {
-        "the accommodation on top of the ticket, which holds a seat"
+        "the accommodation on top of the ticket, which holds a seat".to_owned()
     };
     let note = format!(
         "The lowest price of each kind on {} in the ÖBB shop, in euro:{kinds}. This is {holds}. \n         The booking site shows the final price.",
@@ -485,6 +496,25 @@ async fn look_up_obb_accommodation(
         original: None,
     };
     (LiveQuoteOutcome::Quoted { price }, answer)
+}
+
+/// Returns the lowest price in euro that a traveller pays for a kind of accommodation on a night
+/// train.
+///
+/// A train without seats sells its beds at the price of the whole ticket, and its ticket item is
+/// already priced as a seat. So for a traveller without a pass the accommodation is the bed price
+/// less the estimated price of that seat, and it is unknown without an estimate.
+fn accommodation_extra(
+    offers: &btt_quotes::obb::NightOffers,
+    kind: &str,
+    with_pass: bool,
+    seat_estimate: Option<f64>,
+) -> Option<f64> {
+    if with_pass || offers.sells_seats() {
+        return offers.lowest_price(kind, with_pass);
+    }
+    let extra = offers.lowest_whole_price(kind)? - seat_estimate?;
+    (extra > 0.0).then_some(extra)
 }
 
 /// Returns the range of the price of an accommodation, from its lowest to its highest kind, as
@@ -758,6 +788,46 @@ mod tests {
             night_range(Some(150.0), Some(90.0), None, true),
             Some((90.0, 150.0))
         );
+    }
+
+    /// The offers of the Nightjet from Amsterdam to Basel, which sells beds and no seats.
+    fn seatless_offers() -> btt_quotes::obb::NightOffers {
+        let bed = |kind: &str, non_flex: f64, semi_flex: f64| btt_quotes::obb::Accommodation {
+            kind: kind.to_owned(),
+            name: "Compartment".to_owned(),
+            prices: [
+                ("NON-FLEX".to_owned(), non_flex),
+                ("SEMI-FLEX".to_owned(), semi_flex),
+            ]
+            .into(),
+        };
+        btt_quotes::obb::NightOffers {
+            train: "NJ 403".to_owned(),
+            accommodations: vec![
+                bed("COUCHETTE", 94.9, 114.9),
+                bed("COUCHETTE", 114.9, 134.9),
+                bed("BERTH", 134.9, 174.9),
+            ],
+        }
+    }
+
+    #[test]
+    fn the_accommodation_of_a_train_without_seats_is_the_bed_less_a_seat() {
+        let offers = seatless_offers();
+        let couchette = accommodation_extra(&offers, "COUCHETTE", false, Some(35.0)).unwrap();
+        assert!((couchette - 59.9).abs() < 1e-9, "{couchette}");
+        let berth = accommodation_extra(&offers, "BERTH", false, Some(35.0)).unwrap();
+        assert!((berth - 99.9).abs() < 1e-9, "{berth}");
+        // Without an estimate of the seat the extra is unknown.
+        assert_eq!(accommodation_extra(&offers, "BERTH", false, None), None);
+        // A bed cheaper than the seat estimate is no extra.
+        assert_eq!(
+            accommodation_extra(&offers, "COUCHETTE", false, Some(120.0)),
+            None
+        );
+        // A pass holder pays the listed reservation and needs no estimate.
+        let pass = accommodation_extra(&offers, "COUCHETTE", true, None).unwrap();
+        assert!((pass - 94.9).abs() < 1e-9, "{pass}");
     }
 
     #[test]

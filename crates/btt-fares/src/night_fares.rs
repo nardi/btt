@@ -459,6 +459,18 @@ impl NightFares {
         NIGHT_CATEGORIES.contains(&category.to_lowercase().as_str())
     }
 
+    /// Returns the estimated price in euro of the cheapest seat without a pass on a night train of
+    /// a category over a distance, or `None` when the offers hold too few trains for the fit.
+    pub fn seat_price(&self, category: &str, kilometres: f64) -> Option<f64> {
+        self.estimate(
+            Accommodation::Seat,
+            PriceBasis::WithoutPass,
+            kilometres,
+            Self::is_euronight(category),
+        )
+        .map(|estimate| estimate.median)
+    }
+
     /// Returns whether a category is a EuroNight.
     pub fn is_euronight(category: &str) -> bool {
         matches!(category.to_lowercase().as_str(), "en" | "euronight")
