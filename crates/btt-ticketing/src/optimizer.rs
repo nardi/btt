@@ -9,8 +9,8 @@
 use std::ops::Range;
 
 use btt_fares::{
-    FareData, NightFares, PassKind, PassType, PriceAgeGroup, PriceBook, ReservationRule, RideFacts,
-    RuleScope,
+    FareData, NightFares, NightOperator, PassKind, PassType, PriceAgeGroup, PriceBook,
+    ReservationRule, RideFacts, RuleScope,
 };
 use btt_model::{
     AgeGroup, EuroCents, Price, PriceKind, PriceSource, PriceTotal, StrategyKind, TicketItem,
@@ -423,15 +423,15 @@ impl<'a> Problem<'a> {
     pub(crate) fn accommodation_price(&self, index: usize, with_pass: bool) -> Option<Price> {
         let rule = self.night_rule(index)?;
         let ride = &self.rides[index];
-        let fitted = NightFares::sells(&ride.train_label.category)
-            .then(|| {
+        let fitted = NightOperator::of(&ride.train_label.operator, &ride.train_label.category)
+            .and_then(|operator| {
                 self.data.night_fares.accommodation_price(
+                    operator,
                     &ride.train_label.category,
                     ride.distance_kilometres,
                     with_pass,
                 )
-            })
-            .flatten();
+            });
         Some(fitted.unwrap_or_else(|| fee_price(rule, self.settings.class)))
     }
 
@@ -652,8 +652,9 @@ impl<'a> Problem<'a> {
     }
 
     /// Returns the link to buy the accommodation of a night ride, and the request for its live
-    /// price when the ÖBB shop sells the train. The shop lists the train between the stations of
-    /// the ride at its departure.
+    /// price when the booking site of the operator sells the train. The ÖBB shop lists a train
+    /// between the stations of the ride at its departure, and European Sleeper takes the codes
+    /// of its stations.
     fn accommodation_link(
         &self,
         ride: &RideInput,
@@ -661,17 +662,45 @@ impl<'a> Problem<'a> {
     ) -> (btt_model::BookingLink, Option<btt_model::LiveQuoteRequest>) {
         let shop = || shop_link(ride.from_country.as_deref());
         let category = ride.train_label.category.as_str();
-        if !NightFares::sells(category) {
-            return (shop(), None);
-        }
-        let Some(link) = crate::links::obb_link(&self.data.obb_stations, ride, ride) else {
+        let Some(operator) = NightOperator::of(&ride.train_label.operator, category) else {
             return (shop(), None);
         };
-        // The shop names the Nightjet `NJ` and the EuroNight `EN`.
-        let shop_category = if NightFares::is_euronight(category) {
-            "EN"
-        } else {
-            "NJ"
+        let number = &ride.train_label.number;
+        let (link, site_search, train, seat_estimate) = match operator {
+            NightOperator::Oebb => {
+                let Some(link) = crate::links::obb_link(&self.data.obb_stations, ride, ride) else {
+                    return (shop(), None);
+                };
+                // The shop names the Nightjet `NJ` and the EuroNight `EN`.
+                let shop_category = if NightFares::is_euronight(category) {
+                    "EN"
+                } else {
+                    "NJ"
+                };
+                let seat = self
+                    .data
+                    .night_fares
+                    .seat_price(operator, category, ride.distance_kilometres)
+                    .map(EuroCents::from_euro);
+                (link, None, format!("{shop_category} {number}"), seat)
+            }
+            // Snälltåget has a booking page and no live lookup of accommodation.
+            NightOperator::Snalltaget => {
+                let link =
+                    crate::links::snalltaget_link(&self.data.snalltaget_stations, ride, ride)
+                        .map_or_else(shop, |(link, _)| link);
+                return (link, None);
+            }
+            NightOperator::EuropeanSleeper => {
+                let Some((link, search)) = crate::links::european_sleeper_link(
+                    &self.data.european_sleeper_stations,
+                    ride,
+                    ride,
+                ) else {
+                    return (shop(), None);
+                };
+                (link, Some(search), format!("ES {number}"), None)
+            }
         };
         let departed = ride.departure_date < self.settings.today;
         let request = (self.settings.preferences.live_prices
@@ -682,17 +711,13 @@ impl<'a> Problem<'a> {
                 first_departure_time: ride.departure_time,
                 ride_count: 1,
                 travel_class: self.settings.class,
-                site_search: None,
+                site_search,
                 run: None,
                 refresh: false,
                 accommodation: Some(btt_model::AccommodationRequest {
-                    train: format!("{shop_category} {}", ride.train_label.number).into(),
+                    train: train.into(),
                     with_pass,
-                    seat_estimate: self
-                        .data
-                        .night_fares
-                        .seat_price(category, ride.distance_kilometres)
-                        .map(EuroCents::from_euro),
+                    seat_estimate,
                 }),
             });
         (link, request)
@@ -867,6 +892,11 @@ impl<'a> Problem<'a> {
             link.map(|(link, search)| (link, Some(search)))
         };
         match operator.id {
+            "european-sleeper" => with_search(crate::links::european_sleeper_link(
+                &data.european_sleeper_stations,
+                first,
+                last,
+            )),
             "snalltaget" => with_search(crate::links::snalltaget_link(
                 &data.snalltaget_stations,
                 first,

@@ -425,6 +425,30 @@ pub fn sj_link(
     start_page_link(stations, first, last, "Open sj.se", "https://www.sj.se/en")
 }
 
+/// Returns a link to the booking site of European Sleeper for a run of its trains, with the search
+/// for the live price, or `None` when a station is not in the table. The link opens the search of
+/// the day of the first ride.
+pub fn european_sleeper_link(
+    stations: &StationTable,
+    first: &RideInput,
+    last: &RideInput,
+) -> Option<(BookingLink, SiteSearch)> {
+    let (origin, destination) = end_stations(stations, first, last)?;
+    let url = format!(
+        "https://booking.europeansleeper.eu/en?departureStation={}&arrivalStation={}\
+         &departureDate={}&bicycleCount=0&petsCount=0&passengerTypes=72",
+        origin.code, destination.code, first.departure_date,
+    );
+    Some((
+        BookingLink {
+            label: "Search on europeansleeper.eu".into(),
+            url: url.into(),
+            kind: BookingLinkKind::Search,
+        },
+        site_search(&origin.code, &destination.code, first),
+    ))
+}
+
 /// Returns a link to snalltaget.se for a run of Snälltåget, with the search to run there.
 pub fn snalltaget_link(
     stations: &StationTable,

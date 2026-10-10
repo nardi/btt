@@ -882,3 +882,44 @@ fn the_accommodation_of_a_night_train_asks_the_obb_shop_for_its_live_price() {
             .all(|item| item.live_quote_request.is_none())
     );
 }
+
+#[test]
+fn a_european_sleeper_ride_asks_its_booking_service_for_the_ticket_and_the_accommodation() {
+    let mut night = ride(0, ("NL", "DE"), "ES", 650.0, true);
+    night.train_label.number = "453".into();
+    night.train_label.operator = "european-sleeper".into();
+    night.from_coordinates = btt_model::GeoCoordinates::from_degrees(52.37919, 4.89943).unwrap();
+    night.to_coordinates = btt_model::GeoCoordinates::from_degrees(52.52559, 13.36955).unwrap();
+    let plan = plan(vec![night], None);
+    let singles = plan
+        .strategies
+        .iter()
+        .find(|strategy| strategy.kind == StrategyKind::SingleTickets)
+        .unwrap();
+    let ticket = singles
+        .items
+        .iter()
+        .find(|item| item.product == TicketProduct::SingleTicket)
+        .unwrap();
+    let request = ticket.live_quote_request.as_ref().unwrap();
+    assert!(
+        request
+            .booking_link
+            .starts_with("https://booking.europeansleeper.eu/"),
+        "{request:?}"
+    );
+    let search = request.site_search.as_ref().unwrap();
+    assert_eq!(search.origin_code, "8400058");
+    assert_eq!(search.destination_code, "8010100");
+    // The ticket is priced from the offers of the operator, not from the distance.
+    assert_eq!(ticket.price.source.name, "European Sleeper offers");
+    let accommodation = singles
+        .items
+        .iter()
+        .find(|item| item.product == TicketProduct::NightAccommodation)
+        .unwrap();
+    let request = accommodation.live_quote_request.as_ref().unwrap();
+    assert_eq!(request.accommodation.as_ref().unwrap().train, "ES 453");
+    assert_eq!(request.site_search.as_ref().unwrap().origin_code, "8400058");
+    assert_eq!(accommodation.price.source.name, "European Sleeper offers");
+}
