@@ -98,6 +98,31 @@ fn days_terms(facts: &Facts) -> Vec<Term> {
     ]
 }
 
+/// The band of the days ahead that a ticket is bought in. Saver fares open and close at steps of
+/// days, so the bands let the price jump where a fare does.
+fn days_band(days: f64) -> &'static str {
+    match days {
+        d if d < 3.0 => "0-2",
+        d if d < 8.0 => "3-7",
+        d if d < 15.0 => "8-14",
+        d if d < 30.0 => "15-29",
+        _ => "30+",
+    }
+}
+
+/// The days ahead as bands, for all trains, for each operator and for each country.
+fn days_band_terms(facts: &Facts, per_operator: bool, per_country: bool) -> Vec<Term> {
+    let band = days_band(facts.days_ahead);
+    let mut terms = vec![(format!("days band {band}"), 1.0, 0.15)];
+    if per_operator {
+        terms.push((format!("days band {} {band}", facts.operator), 1.0, 0.15));
+    }
+    if per_country {
+        terms.push((format!("days band {} {band}", facts.country), 1.0, 0.15));
+    }
+    terms
+}
+
 /// The time of day and the weekend as terms.
 fn time_terms(facts: &Facts) -> Vec<Term> {
     let band = match facts.hour {
@@ -110,6 +135,50 @@ fn time_terms(facts: &Facts) -> Vec<Term> {
     vec![
         (format!("hour {band}"), 1.0, 0.2),
         ("weekend".into(), f64::from(u8::from(facts.weekend)), 0.2),
+    ]
+}
+
+/// The band of the day that a departure falls in.
+fn hour_band(hour: u32) -> &'static str {
+    match hour {
+        0..=5 => "night",
+        6..=8 => "morning peak",
+        9..=15 => "midday",
+        16..=18 => "evening peak",
+        _ => "evening",
+    }
+}
+
+/// The band of the day and the weekend as terms for each operator, so an operator with peak and
+/// off-peak fares can differ from the rest.
+fn operator_time_terms(facts: &Facts) -> Vec<Term> {
+    vec![
+        (
+            format!("hour {} {}", facts.operator, hour_band(facts.hour)),
+            1.0,
+            0.15,
+        ),
+        (
+            format!("weekend {}", facts.operator),
+            f64::from(u8::from(facts.weekend)),
+            0.15,
+        ),
+    ]
+}
+
+/// The band of the day and the weekend as terms for each kind of train.
+fn kind_time_terms(facts: &Facts) -> Vec<Term> {
+    vec![
+        (
+            format!("hour {} {}", facts.kind, hour_band(facts.hour)),
+            1.0,
+            0.15,
+        ),
+        (
+            format!("weekend {}", facts.kind),
+            f64::from(u8::from(facts.weekend)),
+            0.15,
+        ),
     ]
 }
 
@@ -227,6 +296,8 @@ fn operator_tariff_terms(facts: &Facts, short: bool, base: bool, curve: bool) ->
 }
 
 /// The feature sets the experiment compares.
+// The list reads best as one table.
+#[expect(clippy::too_many_lines)]
 fn experiments() -> Vec<(&'static str, TermBuilder)> {
     vec![
         ("shift 0 km", |facts| base_terms(facts, 0.0)),
@@ -316,6 +387,48 @@ fn experiments() -> Vec<(&'static str, TermBuilder)> {
             let mut terms = base_terms(facts, 10.0);
             terms.extend(region_terms(facts));
             terms.extend(hinge_terms(facts));
+            terms
+        }),
+        ("model + days bands", |facts| {
+            let mut terms = model_terms(facts);
+            terms.extend(days_band_terms(facts, false, false));
+            terms
+        }),
+        ("model + days bands per operator", |facts| {
+            let mut terms = model_terms(facts);
+            terms.extend(days_band_terms(facts, true, false));
+            terms
+        }),
+        ("model + days bands per country", |facts| {
+            let mut terms = model_terms(facts);
+            terms.extend(days_band_terms(facts, false, true));
+            terms
+        }),
+        ("model + days per operator, smooth", |facts| {
+            let mut terms = model_terms(facts);
+            terms.extend(days_terms(facts));
+            terms
+        }),
+        ("model + time", |facts| {
+            let mut terms = model_terms(facts);
+            terms.extend(time_terms(facts));
+            terms
+        }),
+        ("model + time per operator", |facts| {
+            let mut terms = model_terms(facts);
+            terms.extend(operator_time_terms(facts));
+            terms
+        }),
+        ("model + time per kind", |facts| {
+            let mut terms = model_terms(facts);
+            terms.extend(kind_time_terms(facts));
+            terms
+        }),
+        ("model + time, per operator and kind", |facts| {
+            let mut terms = model_terms(facts);
+            terms.extend(time_terms(facts));
+            terms.extend(operator_time_terms(facts));
+            terms.extend(kind_time_terms(facts));
             terms
         }),
         ("shift 10 km + all", |facts| {

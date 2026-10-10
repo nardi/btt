@@ -164,6 +164,30 @@ Italian regional fares are set by each region, such as about one euro for a shor
 
 In Switzerland, no extra term moves the error by more than the noise. The days ahead, the time of day, the weekend, a curve in the distance, a shift of 0, 5 or 20 km, hinges in the distance curve at 5, 15 and 40 km, and an offset per station or per region of about 25 km all land between 1.19 and 1.24, with mean errors of the log price between 0.238 and 0.262. A fit on all prices leaves a spread of about 0.3 on the log price within every group of distance, days ahead, hour, category and operator. The error therefore comes from what the model does not see. Short Swiss trips cost the fare of the zones of a local tariff network, which does not follow the distance, and a saver fare can halve the price of a train when the site has one left.
 
+The same experiments on all 1198 prices of the seed test the time of day. A band of the day and a weekend term for every train leave the median error at 1.146 against 1.138 without them. The same terms for each operator give 1.149, for each kind of train 1.143, and for both together 1.146. The mean error of the log price goes from 0.217 to between 0.219 and 0.223, so the terms add noise and no signal. The residuals of the regression have a mean between -0.07 and 0.06 in every band of three hours, against a spread of 0.21 to 0.33 within the band. Night trains all leave in the evening, so the time of day cannot separate them.
+
+The days ahead get the same test with bands of 0 to 2, 3 to 7, 8 to 14, 15 to 29 and 30 or more days, because a saver fare opens and closes at a step and not along a curve. The seed holds 30 different days ahead from 1 to 77, with at least 165 prices in every band. The bands for all trains give a mean error of 0.218 against 0.217 without them. The bands for each operator give 0.214 and a median error of 1.137 against 1.138, and a smooth term for each operator gives 0.215. The bands for each country give 0.217. The best of them lowers the mean error by 1.4 percent, which is within the noise of five folds. A day train therefore gets no use from the days ahead in this data.
+
+### Other kinds of model
+
+`cargo run --release -p btt-fares --example price_model_families -- <prices.jsonl>` compares the regression with learners that read more inputs than it does. It uses the 1198 prices of the seed in five folds by route. The regression is fitted in one batch with the terms of the model. The other models take its residuals, which come from an inner cross-validation so that they are as large as the residuals on unseen prices.
+
+| Model | Median error | Mean error of the log price |
+|---|---|---|
+| Regression of the model | 1.129 | 0.203 |
+| Regression and boosted trees of depth 2 | 1.124 | 0.198 |
+| Regression and boosted trees of depth 4 | 1.122 | 0.200 |
+| Regression and boosted trees of depth 6 | 1.128 | 0.205 |
+| Regression and a Gaussian process | 1.133 | 0.203 |
+| Regression and the average of the process and the trees | 1.121 | 0.198 |
+| Boosted trees alone | 1.129 | 0.218 |
+
+The trees read the distance, the country, the operator, the kind, the category, the days ahead, the hour, the weekday, the border and the estimate of the regression. The process reads the same numbers with the operator and the country as one-hot columns. None of them beats the regression by more than 2.5 percent on the mean error, and the trees alone are only 7 percent worse. With these inputs the regression leaves about as much error as any of the learners. A better model would need an input that the seed does not record, such as how many saver fares a train has left.
+
+The range is the low and the high price that the app shows for an estimate, and it aims to hold 80 percent of the live prices. The same example compares the shipped range with ranges from the residuals of the regression. The shipped range holds 85 percent of the prices at a mean width of 0.661 on the log scale. The 10th and the 90th percentile of the residuals, scaled by the spread of the operator, hold 80 percent at a width of 0.572. The spread of an operator is shrunk towards the spread of all prices by the number of prices that the operator has. The shipped range cut to 80 percent would be about 0.59 wide, so the gain is 3 percent.
+
+The ranges from residuals also fail for an operator without prices. With every operator in one fold only, the test part holds operators that the training part has no price of. The ranges from residuals then hold 50 percent of the prices, because they know no spread for the operator. The shipped range holds 88 percent at a width of 1.263. The posterior scaled by the quantiles of the standardized residuals holds 81 percent at a width of 1.136, which is no narrower than the shipped range cut to the same coverage. The shipped range stays. It holds 85 percent where it aims for 80, so its multiplier is a little high, and that is the cheapest thing to tune.
+
 ## Cost
 
 A prediction is a few hash lookups and about a hundred multiplications over the nonzero entries of the feature vector. An observation costs one rank-one update of the $d \times d$ covariance, and a day with observations one Cholesky factorization of $\Lambda$, which is $d^3/3$ multiplications. With a few hundred weights, the state is under a megabyte. In a release build, learning from 944 seed prices takes 64 ms, about 70 microseconds per observation, and a prediction takes about 3 microseconds. Learning from the seed and a year of the traveller's lookups at start therefore takes a fraction of a second. The price book shares the model with the code that feeds it, behind a read-write lock, so planning tickets and learning from a lookup do not wait on each other for long.

@@ -19,3 +19,7 @@ toml.workspace = true
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+friedrich = "0.6.0"
+gbdt = "0.1.3"
