@@ -190,6 +190,22 @@ pub struct LiveQuoteRequest {
     /// does not predict.
     #[serde(default)]
     pub run: Option<RunDescription>,
+    /// Ask the booking site again, whatever it answered to an earlier lookup of this ticket.
+    #[serde(default)]
+    pub refresh: bool,
+    /// Set when the request is for the accommodation of a night train and not for a ticket.
+    #[serde(default)]
+    pub accommodation: Option<AccommodationRequest>,
+}
+
+/// A request for the live price of the accommodation of a night train.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub struct AccommodationRequest {
+    /// The train as the shop names it, such as `NJ 466`.
+    pub train: SmolStr,
+    /// Whether the traveller has a pass, who pays the accommodation with its reservation. Without
+    /// one, the ticket holds a seat and the accommodation is the extra over it.
+    pub with_pass: bool,
 }
 
 /// The run of trains that one ticket covers, as the price model reads it.

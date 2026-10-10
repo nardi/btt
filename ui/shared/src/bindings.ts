@@ -117,6 +117,17 @@ export type AcceptedBerths =
 	preferred: BerthType | null,
 } }) & { Only?: never };
 
+/**  A request for the live price of the accommodation of a night train. */
+export type AccommodationRequest = {
+	/**  The train as the shop names it, such as `NJ 466`. */
+	train: string,
+	/**
+	 *  Whether the traveller has a pass, who pays the accommodation with its reservation. Without
+	 *  one, the ticket holds a seat and the accommodation is the extra over it.
+	 */
+	with_pass: boolean,
+};
+
 /**
  *  A walk or local transit trip from the last alighting station to another station near the
  *  arrival place, for when no train serves that station in time.
@@ -453,6 +464,10 @@ export type LiveQuoteRequest = {
 	 *  does not predict.
 	 */
 	run?: RunDescription | null,
+	/**  Ask the booking site again, whatever it answered to an earlier lookup of this ticket. */
+	refresh?: boolean,
+	/**  Set when the request is for the accommodation of a night train and not for a ticket. */
+	accommodation?: AccommodationRequest | null,
 };
 
 /**  A time of day on the local clock of a place, from 00:00 to 23:59. */

@@ -835,3 +835,47 @@ fn a_night_ride_costs_the_accommodation_on_a_pass_and_the_extra_over_the_seat_wi
     assert_eq!(ticket.source.name, "ÖBB night train offers");
     assert!(ticket.high.0 < 20_000, "{ticket:?}");
 }
+
+#[test]
+fn the_accommodation_of_a_night_train_asks_the_obb_shop_for_its_live_price() {
+    let mut night = ride(0, ("AT", "CH"), "NJ", 770.0, true);
+    night.train_label.number = "466".into();
+    night.train_label.operator = "oebb".into();
+    night.from_coordinates = btt_model::GeoCoordinates::from_degrees(48.18492, 16.37586).unwrap();
+    night.to_coordinates = btt_model::GeoCoordinates::from_degrees(47.37819, 8.53920).unwrap();
+    let plan = plan(vec![night], None);
+    let singles = plan
+        .strategies
+        .iter()
+        .find(|strategy| strategy.kind == StrategyKind::SingleTickets)
+        .unwrap();
+    let item = singles
+        .items
+        .iter()
+        .find(|item| item.product == TicketProduct::NightAccommodation)
+        .unwrap();
+    let link = item.booking_link.as_ref().unwrap();
+    assert!(
+        link.url.starts_with("https://shop.oebbtickets.at/"),
+        "{link:?}"
+    );
+    assert!(link.url.contains("stationOrigEva=1290401"), "{link:?}");
+    let request = item.live_quote_request.as_ref().unwrap();
+    let accommodation = request.accommodation.as_ref().unwrap();
+    assert_eq!(accommodation.train, "NJ 466");
+    // Without a pass the ticket holds a seat, and the accommodation is the extra over it.
+    assert!(!accommodation.with_pass);
+    // The request is for the accommodation, so the price model has no run to learn from.
+    assert!(request.run.is_none());
+    // A night train that the shop does not sell gets no request.
+    let mut other = ride(0, ("FR", "FR"), "INTERCITÉS de nuit", 700.0, true);
+    other.train_label.number = "5791".into();
+    let plan = self::plan(vec![other], None);
+    assert!(
+        plan.strategies
+            .iter()
+            .flat_map(|strategy| &strategy.items)
+            .filter(|item| item.product == TicketProduct::NightAccommodation)
+            .all(|item| item.live_quote_request.is_none())
+    );
+}

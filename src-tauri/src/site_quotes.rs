@@ -131,6 +131,8 @@ mod tests {
                 local_departure: "2026-11-20T09:32".into(),
             }),
             run: None,
+            refresh: false,
+            accommodation: None,
         };
         let search = connection_search(BookingSite::Dsb, &request).unwrap();
         assert_eq!(search.origin, "8600626");

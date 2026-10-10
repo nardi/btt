@@ -626,7 +626,8 @@ impl<'a> Problem<'a> {
         for index in 0..self.rides.len() {
             if let Some(price) = self.accommodation_price(index, on_pass(index)) {
                 let ride = &self.rides[index];
-                builder.add(
+                let (link, live_request) = self.accommodation_link(ride, on_pass(index));
+                let id = builder.add(
                     TicketProduct::NightAccommodation,
                     format!(
                         "Night train accommodation, {} {}",
@@ -640,10 +641,56 @@ impl<'a> Problem<'a> {
                     ),
                     &[index],
                     price,
-                    Some(shop_link(ride.from_country.as_deref())),
+                    Some(link),
                 );
+                builder.items[usize::from(id)]
+                    .as_mut()
+                    .expect("the accommodation was just added")
+                    .live_quote_request = live_request;
             }
         }
+    }
+
+    /// Returns the link to buy the accommodation of a night ride, and the request for its live
+    /// price when the ÖBB shop sells the train. The shop lists the train between the stations of
+    /// the ride at its departure.
+    fn accommodation_link(
+        &self,
+        ride: &RideInput,
+        with_pass: bool,
+    ) -> (btt_model::BookingLink, Option<btt_model::LiveQuoteRequest>) {
+        let shop = || shop_link(ride.from_country.as_deref());
+        let category = ride.train_label.category.as_str();
+        if !NightFares::sells(category) {
+            return (shop(), None);
+        }
+        let Some(link) = crate::links::obb_link(&self.data.obb_stations, ride, ride) else {
+            return (shop(), None);
+        };
+        // The shop names the Nightjet `NJ` and the EuroNight `EN`.
+        let shop_category = if NightFares::is_euronight(category) {
+            "EN"
+        } else {
+            "NJ"
+        };
+        let departed = ride.departure_date < self.settings.today;
+        let request = (self.settings.preferences.live_prices
+            && !departed
+            && self.settings.class == TravelClass::Second)
+            .then(|| btt_model::LiveQuoteRequest {
+                booking_link: link.url.clone(),
+                first_departure_time: ride.departure_time,
+                ride_count: 1,
+                travel_class: self.settings.class,
+                site_search: None,
+                run: None,
+                refresh: false,
+                accommodation: Some(btt_model::AccommodationRequest {
+                    train: format!("{shop_category} {}", ride.train_label.number).into(),
+                    with_pass,
+                }),
+            });
+        (link, request)
     }
 
     /// Says when sales open for a ride and whether they are open on the purchase date, or
@@ -748,6 +795,8 @@ impl<'a> Problem<'a> {
                 travel_class: self.settings.class,
                 site_search,
                 run: self.run_description(rides),
+                refresh: false,
+                accommodation: None,
             }
         });
         (link, request)

@@ -4,8 +4,8 @@
 //! booking link names.
 
 use btt_model::{
-    EuroCents, ForeignAmount, LiveQuoteRequest, Price, PriceKind, PriceSource, TicketLeg,
-    TicketPlan, TicketPreferences, TravelClass, Traveller,
+    AccommodationRequest, EuroCents, ForeignAmount, LiveQuoteRequest, Price, PriceKind,
+    PriceSource, TicketLeg, TicketPlan, TicketPreferences, TravelClass, Traveller,
 };
 use btt_quotes::sbb::{Quote, Search, find_trip};
 use serde::Serialize;
@@ -96,7 +96,10 @@ pub async fn look_up(
         Some(BookingSite::Trenitalia) => look_up_trenitalia(state, request).await,
         Some(BookingSite::Ns) => look_up_ns(state, request).await,
         Some(BookingSite::Db) => look_up_db(state, request).await,
-        Some(BookingSite::Obb) => look_up_obb(state, request).await,
+        Some(BookingSite::Obb) => match &request.accommodation {
+            Some(accommodation) => look_up_obb_accommodation(state, request, accommodation).await,
+            None => look_up_obb(state, request).await,
+        },
         Some(BookingSite::Pkp) => look_up_in_web_view(state, request, BookingSite::Pkp).await,
         Some(site) => look_up_on_site(state, request, site).await,
     }
@@ -396,6 +399,110 @@ async fn look_up_obb(
     )
 }
 
+/// Looks up the live price of the accommodation of a night train in the ÖBB shop. The price is
+/// the range from the lowest couchette to the lowest berth, and the lowest seat when the train
+/// has no beds. A traveller with a pass is priced with the Interrail card, who pays the
+/// accommodation with its reservation. Any other traveller pays the extra over a seat, because
+/// the ticket holds a seat.
+async fn look_up_obb_accommodation(
+    state: &AppState,
+    request: &LiveQuoteRequest,
+    accommodation: &AccommodationRequest,
+) -> (LiveQuoteOutcome, Option<serde_json::Value>) {
+    let Some(service) = &state.obb_service else {
+        return (LiveQuoteOutcome::NoService, None);
+    };
+    if request.travel_class == TravelClass::First {
+        return (LiveQuoteOutcome::NoPriceForClass, None);
+    }
+    let link = &request.booking_link;
+    let number = |name: &str| parameter(link, name).and_then(|value| value.parse().ok());
+    let departure = parameter(link, "outwardDateTime")
+        .and_then(|text| chrono::NaiveDateTime::parse_from_str(&text, "%Y-%m-%dT%H:%M").ok());
+    let (Some(origin), Some(destination), Some(departure)) = (
+        number("stationOrigEva"),
+        number("stationDestEva"),
+        departure,
+    ) else {
+        return (LiveQuoteOutcome::UnsupportedLink, None);
+    };
+    let search = btt_quotes::obb::Search {
+        origin,
+        destination,
+        departure,
+    };
+    let offers = match service
+        .night_offers(&search, &accommodation.train, accommodation.with_pass)
+        .await
+    {
+        Ok(Some(offers)) => offers,
+        Ok(None) => return (LiveQuoteOutcome::NoMatchingTrip, None),
+        Err(error) => {
+            tracing::info!(%error, "no live accommodation price from the ÖBB shop");
+            return (
+                LiveQuoteOutcome::Failed {
+                    error: error.to_string(),
+                },
+                None,
+            );
+        }
+    };
+    let answer = serde_json::to_value(&offers).ok();
+    let lowest = |kind| offers.lowest_price(kind, accommodation.with_pass);
+    let (couchette, berth, seat) = (lowest("COUCHETTE"), lowest("BERTH"), lowest("SEAT"));
+    let Some((low, high)) = night_range(couchette, berth, seat, accommodation.with_pass) else {
+        return (LiveQuoteOutcome::NotSold, answer);
+    };
+    let euro = |price: Option<f64>, name: &str| price.map(|price| format!(" {name} {price:.2}"));
+    let kinds: String = [
+        euro(seat, "seat"),
+        euro(couchette, "couchette"),
+        euro(berth, "berth"),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join(",");
+    let holds = if accommodation.with_pass {
+        "the accommodation with its reservation, for a holder of an Interrail Global Pass"
+    } else {
+        "the accommodation on top of the ticket, which holds a seat"
+    };
+    let note = format!(
+        "The lowest price of each kind on {} in the ÖBB shop, in euro:{kinds}. This is {holds}. \n         The booking site shows the final price.",
+        offers.train
+    );
+    let price = Price {
+        low: EuroCents::from_euro(low),
+        high: EuroCents::from_euro(high),
+        kind: PriceKind::Live,
+        source: PriceSource {
+            name: site_name(BookingSite::Obb).into(),
+            note: note.into(),
+            as_of: Some(crate::commands::today_utc()),
+            page: Some(request.booking_link.clone()),
+        },
+        original: None,
+    };
+    (LiveQuoteOutcome::Quoted { price }, answer)
+}
+
+/// Returns the range of the price of an accommodation, from its lowest to its highest kind, as
+/// couchette to berth. Without beds, the range is a seat, and a train without a seat and a
+/// traveller without a pass has no price, since the extra over a seat cannot be told.
+fn night_range(
+    couchette: Option<f64>,
+    berth: Option<f64>,
+    seat: Option<f64>,
+    with_pass: bool,
+) -> Option<(f64, f64)> {
+    match (couchette, berth) {
+        (Some(couchette), Some(berth)) => Some((couchette.min(berth), couchette.max(berth))),
+        (Some(price), None) | (None, Some(price)) => Some((price, price)),
+        (None, None) => seat.filter(|_| with_pass).map(|price| (price, price)),
+    }
+}
+
 /// Looks up the live price of a ticket on the Trenitalia site, from the stations, date, time and
 /// travellers of its handoff link.
 async fn look_up_trenitalia(
@@ -626,7 +733,31 @@ mod tests {
             travel_class: TravelClass::Second,
             site_search: None,
             run: None,
+            refresh: false,
+            accommodation: None,
         }
+    }
+
+    #[test]
+    fn the_range_of_an_accommodation_runs_from_the_couchette_to_the_berth() {
+        assert_eq!(
+            night_range(Some(60.0), Some(140.0), Some(5.0), true),
+            Some((60.0, 140.0))
+        );
+        // A train with one kind of bed has no range.
+        assert_eq!(
+            night_range(None, Some(140.0), None, false),
+            Some((140.0, 140.0))
+        );
+        // A pass holder on a train with seats only pays the reservation of a seat.
+        assert_eq!(night_range(None, None, Some(9.9), true), Some((9.9, 9.9)));
+        // Without a pass, the extra over a seat of a train without beds is nothing to show.
+        assert_eq!(night_range(None, None, Some(9.9), false), None);
+        // A range is never upside down.
+        assert_eq!(
+            night_range(Some(150.0), Some(90.0), None, true),
+            Some((90.0, 150.0))
+        );
     }
 
     #[test]

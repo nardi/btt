@@ -34,10 +34,10 @@ pub use plan::{
     WayToStationMode,
 };
 pub use tickets::{
-    BookingLink, BookingLinkKind, EuroCents, ForeignAmount, LiveQuote, LiveQuoteRequest, Price,
-    PriceKind, PriceObservation, PriceSource, PriceTotal, RideDescription, RunDescription,
-    SiteSearch, StrategyKind, TicketItem, TicketLeg, TicketPlan, TicketProduct, TicketRide,
-    TicketStrategy,
+    AccommodationRequest, BookingLink, BookingLinkKind, EuroCents, ForeignAmount, LiveQuote,
+    LiveQuoteRequest, Price, PriceKind, PriceObservation, PriceSource, PriceTotal, RideDescription,
+    RunDescription, SiteSearch, StrategyKind, TicketItem, TicketLeg, TicketPlan, TicketProduct,
+    TicketRide, TicketStrategy,
 };
 pub use time::{
     DailyTimeWindow, DailyWindowLength, DurationMinutes, LocalTimeOfDay, TravelDayWindows,

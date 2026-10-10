@@ -6,6 +6,7 @@
 //! timetable between those stations, and the prices of its connections. The token is kept and
 //! fetched again shortly before it runs out.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -76,6 +77,171 @@ pub struct Connection {
     pub note: Option<String>,
 }
 
+/// One kind of accommodation on a night train, with its price in each tariff.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Accommodation {
+    /// The kind: `SEAT`, `COUCHETTE` or `BERTH`.
+    pub kind: String,
+    /// The name of the compartment in English, such as `Mini Cabin`.
+    pub name: String,
+    /// The price in euro of each tariff, such as `NON-FLEX`, by the name of the tariff.
+    pub prices: BTreeMap<String, f64>,
+}
+
+/// The offers of the shop for the accommodation of one night train.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NightOffers {
+    /// The train, such as `NJ 466`.
+    pub train: String,
+    /// The accommodations with a price.
+    pub accommodations: Vec<Accommodation>,
+}
+
+impl NightOffers {
+    /// Returns the lowest price in euro of a kind of accommodation, `SEAT`, `COUCHETTE` or
+    /// `BERTH`.
+    ///
+    /// With a pass, the offers are those of a pass holder, and the price is the lowest of them.
+    /// Without one, the price is the extra over a seat: the lowest difference, over the tariffs,
+    /// between the kind and a seat of the same tariff. The ticket of a night train holds a seat,
+    /// so the accommodation is what the traveller adds to it. A train without seats has none.
+    pub fn lowest_price(&self, kind: &str, with_pass: bool) -> Option<f64> {
+        let lowest = |kind: &str, tariff: Option<&str>| {
+            self.accommodations
+                .iter()
+                .filter(|accommodation| accommodation.kind == kind)
+                .flat_map(|accommodation| {
+                    accommodation.prices.iter().filter(move |(name, _)| {
+                        tariff.is_none_or(|wanted| name.as_str() == wanted)
+                    })
+                })
+                .map(|(_, price)| *price)
+                .reduce(f64::min)
+        };
+        if with_pass || kind == "SEAT" {
+            return lowest(kind, None);
+        }
+        let tariffs: std::collections::BTreeSet<&str> = self
+            .accommodations
+            .iter()
+            .flat_map(|accommodation| accommodation.prices.keys().map(String::as_str))
+            .collect();
+        tariffs
+            .into_iter()
+            .filter_map(|tariff| {
+                let bed = lowest(kind, Some(tariff))?;
+                let seat = lowest("SEAT", Some(tariff))?;
+                (bed > seat).then_some(bed - seat)
+            })
+            .reduce(f64::min)
+    }
+}
+
+/// The card of the Interrail Global Pass in the list of cards of the shop.
+fn interrail_card() -> Value {
+    json!({
+        "cardId": 2391,
+        "name": "Interrail Globalpass",
+        "numberRequired": false,
+        "isValidated": true,
+        "isSelectable": true,
+        "isDiscountCard": false,
+    })
+}
+
+/// Returns the id of the connection of the timetable that is the single train at the given
+/// departure.
+pub fn night_connection_id(
+    timetable: &Value,
+    departure: NaiveDateTime,
+    train: &str,
+) -> Option<String> {
+    timetable
+        .get("connections")?
+        .as_array()?
+        .iter()
+        .find_map(|connection| {
+            let sections = connection.get("sections")?.as_array()?;
+            let [section] = sections.as_slice() else {
+                return None;
+            };
+            let category = section.get("category")?;
+            let name = format!(
+                "{} {}",
+                category.get("name")?.as_str()?,
+                category.get("number")?.as_str()?
+            );
+            let leaves = NaiveDateTime::parse_from_str(
+                connection.pointer("/from/departure")?.as_str()?.get(..19)?,
+                "%Y-%m-%dT%H:%M:%S",
+            )
+            .ok()?;
+            (name == train && leaves == departure)
+                .then(|| connection.get("id")?.as_str().map(str::to_owned))?
+        })
+}
+
+/// Reads the accommodations of a train and their prices from the offers answer of the shop. A
+/// compartment that the shop lists without a price is left out.
+pub fn parse_night_offers(offers: &Value) -> Vec<Accommodation> {
+    let Some(section) = offers.pointer("/offerSections/0") else {
+        return Vec::new();
+    };
+    let compartments: BTreeMap<u64, (String, String)> = section
+        .pointer("/media/compartments")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|compartment| {
+            Some((
+                compartment.get("id")?.as_u64()?,
+                (
+                    compartment.get("accommodationType")?.as_str()?.to_owned(),
+                    compartment.pointer("/name/en")?.as_str()?.trim().to_owned(),
+                ),
+            ))
+        })
+        .collect();
+    let mut found: BTreeMap<u64, Accommodation> = BTreeMap::new();
+    let tariffs = section
+        .pointer("/travelClasses/0/offers")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten();
+    for offer in tariffs {
+        let tariff = offer
+            .pointer("/flexibility/en")
+            .and_then(Value::as_str)
+            .unwrap_or("UNKNOWN");
+        let listed = offer
+            .pointer("/reservation/compartments")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten();
+        for compartment in listed {
+            let (Some(id), Some(price)) = (
+                compartment.get("id").and_then(Value::as_u64),
+                compartment.get("price").and_then(Value::as_f64),
+            ) else {
+                continue;
+            };
+            let Some((kind, name)) = compartments.get(&id) else {
+                continue;
+            };
+            found
+                .entry(id)
+                .or_insert_with(|| Accommodation {
+                    kind: kind.clone(),
+                    name: name.clone(),
+                    prices: BTreeMap::new(),
+                })
+                .prices
+                .insert(tariff.to_owned(), price);
+        }
+    }
+    found.into_values().collect()
+}
+
 /// Reads the connections from the timetable answer and the prices answer of the shop.
 ///
 /// # Errors
@@ -131,6 +297,31 @@ pub fn parse_connections(timetable: &Value, prices: &Value) -> Result<Vec<Connec
         .collect())
 }
 
+/// Returns the current time in UTC as the shop writes it, such as `2026-10-09T17:00:00`.
+fn now_text() -> String {
+    let seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| i64::try_from(elapsed.as_secs()).unwrap_or(0));
+    chrono::DateTime::from_timestamp(seconds, 0)
+        .unwrap_or_default()
+        .format("%Y-%m-%dT%H:%M:%S")
+        .to_string()
+}
+
+/// Returns the passengers of a request: one adult, with the Interrail card when `with_pass`.
+fn passengers(with_pass: bool) -> Value {
+    json!([{
+        "me": false, "remembered": false,
+        "cards": if with_pass { vec![interrail_card()] } else { Vec::new() },
+        "relations": [],
+        "challengedFlags": {
+            "hasHandicappedPass": false, "hasAssistanceDog": false,
+            "hasWheelchair": false, "hasAttendant": false,
+        },
+        "id": 1, "type": "ADULT",
+    }])
+}
+
 /// Builds the timetable request of a search from the answer of the entry point. The shop takes
 /// the two stations of that answer, and a travel action too when the entry point returns one.
 ///
@@ -144,14 +335,7 @@ pub fn timetable_request(entry: &Value, search: &Search) -> Result<Value, QuoteE
             "regionaltrains": false, "direct": false, "wheelchair": false,
             "bikes": false, "trains": false, "motorail": false, "connections": [],
         },
-        "passengers": [{
-            "me": false, "remembered": false, "cards": [], "relations": [],
-            "challengedFlags": {
-                "hasHandicappedPass": false, "hasAssistanceDog": false,
-                "hasWheelchair": false, "hasAttendant": false,
-            },
-            "id": 1, "type": "ADULT",
-        }],
+        "passengers": passengers(false),
         "count": 5,
         "sortType": "DEPARTURE",
     });
@@ -244,6 +428,107 @@ impl ObbService {
             }
         }
         result
+    }
+
+    /// Returns the accommodations of a night train and their prices, or `None` when the shop
+    /// lists no such train at the departure. With a pass, the prices are those of the holder of
+    /// the Interrail Global Pass, who pays the accommodation with its reservation and no ticket.
+    /// An answer is kept for half an hour.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when searches are paused after a failure, a request fails or is refused,
+    /// or an answer has an unexpected shape. A failure pauses searches for 15 minutes.
+    pub async fn night_offers(
+        &self,
+        search: &Search,
+        train: &str,
+        with_pass: bool,
+    ) -> Result<Option<NightOffers>, QuoteError> {
+        let key =
+            format!("{}:{train}:{with_pass}", search.cache_key()).replacen("obb:", "obb-night:", 1);
+        if let Some(offers) = self
+            .store
+            .load(&key, QUOTE_LIFETIME)
+            .and_then(|document| serde_json::from_str(&document).ok())
+        {
+            return Ok(Some(offers));
+        }
+        let result =
+            crate::with_one_retry(|| self.fetch_night_offers(search, train, with_pass)).await;
+        match &result {
+            Ok(Some(offers)) => {
+                if let Ok(document) = serde_json::to_string(offers) {
+                    self.store.save(&key, &document);
+                }
+            }
+            Ok(None) | Err(QuoteError::Paused) => {}
+            Err(_) => {
+                *self.token.lock().await = None;
+                self.limiter.report_failure().await;
+            }
+        }
+        result
+    }
+
+    /// Makes the requests for the offers of a night train.
+    async fn fetch_night_offers(
+        &self,
+        search: &Search,
+        train: &str,
+        with_pass: bool,
+    ) -> Result<Option<NightOffers>, QuoteError> {
+        if !self.limiter.wait_for_turn().await {
+            return Err(QuoteError::Paused);
+        }
+        let token = self.token().await?;
+        let entry = self
+            .send(
+                &token,
+                "POST",
+                "/api/hafas/v2/externalEntrypoint",
+                Some(json!({
+                    "cref": "oebb-startseite",
+                    "stations": {
+                        "from": { "number": search.origin },
+                        "to": { "number": search.destination },
+                    },
+                })),
+            )
+            .await?;
+        let timetable = match self
+            .send(
+                &token,
+                "POST",
+                "/api/hafas/v4/timetable",
+                Some(timetable_request(&entry, search)?),
+            )
+            .await
+        {
+            Ok(timetable) => timetable,
+            Err(QuoteError::Refused { status: 422, .. }) => return Ok(None),
+            Err(error) => return Err(error),
+        };
+        let Some(connection_id) = night_connection_id(&timetable, search.departure, train) else {
+            return Ok(None);
+        };
+        let offers = self
+            .send(
+                &token,
+                "POST",
+                "/api/offer/v6/offers",
+                Some(json!({
+                    "selection": { "connectionId": connection_id },
+                    "passengers": passengers(with_pass),
+                    "datetime": now_text(),
+                })),
+            )
+            .await?;
+        let accommodations = parse_night_offers(&offers);
+        Ok((!accommodations.is_empty()).then(|| NightOffers {
+            train: train.to_owned(),
+            accommodations,
+        }))
     }
 
     /// Makes the requests of one search.
@@ -381,6 +666,112 @@ impl ObbService {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A trimmed offers answer of the shop for a Nightjet, with a seat, a couchette and a berth.
+    fn offers_answer() -> Value {
+        let tariff = |name: &str, seat: f64, couchette: f64, berth: f64| {
+            json!({
+                "flexibility": { "en": name },
+                "reservation": { "compartments": [
+                    { "id": 5_000_120, "price": seat },
+                    { "id": 5_000_111, "price": couchette },
+                    { "id": 5_000_172, "price": berth },
+                    { "id": 5_000_999, "price": 1.0 }
+                ] }
+            })
+        };
+        json!({ "offerSections": [{
+            "media": { "compartments": [
+                { "id": 5_000_120, "accommodationType": "SEAT",
+                  "name": { "en": "Comfort seat 2nd class" } },
+                { "id": 5_000_111, "accommodationType": "COUCHETTE",
+                  "name": { "en": "Mini Cabin" } },
+                { "id": 5_000_172, "accommodationType": "BERTH",
+                  "name": { "en": "Comfort compartment for 2 passengers " } }
+            ] },
+            "travelClasses": [{ "offers": [
+                tariff("NON-FLEX", 34.9, 114.9, 179.9),
+                tariff("SEMI-FLEX", 69.9, 134.9, 209.9)
+            ] }]
+        }] })
+    }
+
+    #[test]
+    fn offers_list_each_accommodation_with_its_price_per_tariff() {
+        let found = parse_night_offers(&offers_answer());
+        let kinds: Vec<&str> = found
+            .iter()
+            .map(|accommodation| accommodation.kind.as_str())
+            .collect();
+        // The compartments come in the order of their ids, and the one that the media table
+        // does not describe is left out.
+        assert_eq!(kinds, ["COUCHETTE", "SEAT", "BERTH"]);
+        assert_eq!(found[0].name, "Mini Cabin");
+        assert!((found[0].prices["NON-FLEX"] - 114.9).abs() < 1e-9);
+        assert!((found[0].prices["SEMI-FLEX"] - 134.9).abs() < 1e-9);
+        assert_eq!(found[2].name, "Comfort compartment for 2 passengers");
+        assert!(parse_night_offers(&json!({})).is_empty());
+    }
+
+    #[test]
+    fn the_extra_over_a_seat_is_taken_within_one_tariff() {
+        let offers = NightOffers {
+            train: "NJ 466".to_owned(),
+            accommodations: parse_night_offers(&offers_answer()),
+        };
+        // Sparschiene: 114.90 - 34.90 and semi-flex: 134.90 - 69.90. The lower extra wins.
+        let couchette = offers.lowest_price("COUCHETTE", false).unwrap();
+        assert!((couchette - 65.0).abs() < 1e-9, "{couchette}");
+        let berth = offers.lowest_price("BERTH", false).unwrap();
+        assert!((berth - 140.0).abs() < 1e-9, "{berth}");
+        // A pass holder pays the lowest price listed, which holds the reservation.
+        let with_pass = offers.lowest_price("COUCHETTE", true).unwrap();
+        assert!((with_pass - 114.9).abs() < 1e-9, "{with_pass}");
+        // A train without seats has no extra over one.
+        let without_seats = NightOffers {
+            train: "NJ 402".to_owned(),
+            accommodations: offers
+                .accommodations
+                .iter()
+                .filter(|accommodation| accommodation.kind != "SEAT")
+                .cloned()
+                .collect(),
+        };
+        assert_eq!(without_seats.lowest_price("COUCHETTE", false), None);
+        assert!(without_seats.lowest_price("COUCHETTE", true).is_some());
+    }
+
+    #[test]
+    fn a_night_train_is_found_by_its_name_and_departure() {
+        let connection = |id: &str, name: &str, departure: &str, sections: usize| {
+            let section = json!({ "category": { "name": name, "number": "466" } });
+            json!({
+                "id": id,
+                "from": { "departure": departure },
+                "sections": vec![section; sections]
+            })
+        };
+        let timetable = json!({ "connections": [
+            connection("a", "NJ", "2026-10-20T21:39:00.000", 2),
+            connection("b", "NJ", "2026-10-20T23:00:00.000", 1),
+            connection("c", "NJ", "2026-10-20T21:39:00.000", 1),
+        ] });
+        let departure = chrono::NaiveDate::from_ymd_opt(2026, 10, 20)
+            .unwrap()
+            .and_hms_opt(21, 39, 0)
+            .unwrap();
+        assert_eq!(
+            night_connection_id(&timetable, departure, "NJ 466").as_deref(),
+            Some("c")
+        );
+        assert_eq!(night_connection_id(&timetable, departure, "NJ 467"), None);
+    }
+
+    #[test]
+    fn a_pass_holder_asks_with_the_interrail_card() {
+        assert_eq!(passengers(true)[0]["cards"][0]["cardId"], 2391);
+        assert!(passengers(false)[0]["cards"].as_array().unwrap().is_empty());
+    }
 
     #[test]
     fn the_timetable_takes_the_stations_of_the_entry_point() {
