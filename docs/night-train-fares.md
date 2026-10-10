@@ -65,6 +65,18 @@ The fits are made when the app starts, from the compiled-in data.
 - **The accommodation of a night ride.** `NightFares::accommodation_price` gives the range from the lowest couchette to the lowest berth. A ride on a pass gets the pass price. Any other ride gets the extra over the seat, because the price of its ticket holds a seat. A night train that the shop does not sell, such as the Intercités de nuit or a Trenitalia night train, has the fee of its rule in `interrail_reservations.toml` for both.
 - **The worth of a pass day.** A day with a night train on the pass saves the ticket and pays the pass price of the accommodation. The optimizer counts both when it picks the days of a pass.
 
+## Live accommodation prices
+
+The Tickets screen asks the ÖBB shop for the accommodation of each night ride that the shop sells, as it asks for the price of a ticket. The fit is the estimate until the answer arrives, and the answer replaces it.
+
+The optimizer attaches a request to the accommodation item of a Nightjet or EuroNight ride. The request names the train as the shop writes it, such as `NJ 466`, and whether the traveller has a pass. It carries the link to the shop search for the stations of the ride, which is also the booking link of the item. The request has no run, so the price model does not learn from an accommodation price.
+
+`ObbService::night_offers` runs the search of the shop as it does for a ticket, picks the connection that is the single train of that name at the planned departure, and asks for its offers as an adult. For a pass holder it names the Interrail Global Pass card in the passenger, so the shop lists the pass prices. The answer is kept for half an hour.
+
+The price shown is a range from the lowest couchette to the lowest berth, with the lowest price of each kind in its note. Without a pass, it is the extra over a seat, taken within one tariff and over the lowest tariff, as in the fit, because the ticket holds a seat. A train without seats has no such extra, and the estimate stays. With a pass, a train without beds shows the price of its seat reservation.
+
+A lookup that cannot find the train at the planned departure leaves the estimate, and a first class traveller gets no live price, because the offers are for second class.
+
 ## Accuracy
 
 `cargo run -p btt-fares --example night_fares_report` predicts every train from the trains of the other folds. A fold holds all days and both directions of a route, so a route is never in the fitting and the test parts at once. The error is the factor between the estimate and the price, and half the prices stay within the median error.
