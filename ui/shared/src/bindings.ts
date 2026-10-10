@@ -126,6 +126,12 @@ export type AccommodationRequest = {
 	 *  one, the ticket holds a seat and the accommodation is the extra over it.
 	 */
 	with_pass: boolean,
+	/**
+	 *  The estimated price of a seat on the train. A train that sells no seat sells its beds at the
+	 *  price of the whole ticket, so the lookup subtracts this from a bed price to get the extra
+	 *  over the seat that the ticket item already holds.
+	 */
+	seat_estimate?: EuroCents | null,
 };
 
 /**
