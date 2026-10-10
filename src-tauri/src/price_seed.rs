@@ -63,6 +63,7 @@ const DEFAULT_OPERATORS: &[&str] = &[
     "dsb",
     "sj",
     "snalltaget",
+    "european-sleeper",
     "mav",
     "renfe",
     "iryo",

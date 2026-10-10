@@ -121,6 +121,9 @@ pub struct AppState {
     pub db_service: Option<btt_quotes::db::DbService>,
     /// Looks up prices on the ÖBB shop. `None` when its HTTP client could not be built.
     pub obb_service: Option<btt_quotes::obb::ObbService>,
+    /// Looks up prices on the booking site of European Sleeper. `None` when its HTTP client could
+    /// not be built.
+    pub european_sleeper_service: Option<btt_quotes::european_sleeper::EuropeanSleeperService>,
     /// Looks up prices on the sites that answer a search with their connections. `None` when
     /// an HTTP client could not be built.
     pub site_services: Option<crate::site_quotes::SiteServices>,
@@ -202,6 +205,12 @@ impl AppState {
         let obb_service = btt_quotes::obb::ObbService::new(Arc::clone(&quote_store))
             .map_err(|error| tracing::warn!(%error, "live ÖBB prices are not available"))
             .ok();
+        let european_sleeper_service =
+            btt_quotes::european_sleeper::EuropeanSleeperService::new(Arc::clone(&quote_store))
+                .map_err(|error| {
+                    tracing::warn!(%error, "live European Sleeper prices are not available");
+                })
+                .ok();
         let site_services = crate::site_quotes::SiteServices::new(&quote_store)
             .map_err(
                 |error| tracing::warn!(%error, "live prices of several sites are not available"),
@@ -227,6 +236,7 @@ impl AppState {
             ns_service,
             db_service,
             obb_service,
+            european_sleeper_service,
             site_services,
             exchange_rate_service,
             storage,

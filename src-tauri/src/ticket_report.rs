@@ -100,6 +100,7 @@ pub async fn look_up(
             Some(accommodation) => look_up_obb_accommodation(state, request, accommodation).await,
             None => look_up_obb(state, request).await,
         },
+        Some(BookingSite::EuropeanSleeper) => look_up_european_sleeper(state, request).await,
         Some(BookingSite::Pkp) => look_up_in_web_view(state, request, BookingSite::Pkp).await,
         Some(site) => look_up_on_site(state, request, site).await,
     }
@@ -123,6 +124,7 @@ fn site_name(site: BookingSite) -> &'static str {
         BookingSite::Eurostar => "Eurostar booking site",
         BookingSite::Regiojet => "RegioJet booking site",
         BookingSite::Koleo => "Koleo booking site",
+        BookingSite::EuropeanSleeper => "European Sleeper booking site",
     }
 }
 
@@ -530,6 +532,172 @@ fn night_range(
         (Some(couchette), Some(berth)) => Some((couchette.min(berth), couchette.max(berth))),
         (Some(price), None) | (None, Some(price)) => Some((price, price)),
         (None, None) => seat.filter(|_| with_pass).map(|price| (price, price)),
+    }
+}
+
+/// Returns the search on the booking service of European Sleeper that a request names in its
+/// site search, or \`None\` when it names none or its departure cannot be read.
+fn sleeper_search(request: &LiveQuoteRequest) -> Option<btt_quotes::european_sleeper::Search> {
+    let search = request.site_search.as_ref()?;
+    Some(btt_quotes::european_sleeper::Search {
+        origin: search.origin_code.to_string(),
+        destination: search.destination_code.to_string(),
+        departure: chrono::NaiveDateTime::parse_from_str(&search.local_departure, "%Y-%m-%dT%H:%M")
+            .ok()?,
+    })
+}
+
+/// Looks up the live price of a ticket, or of the accommodation of a night ride when the request
+/// names one, on the booking service of European Sleeper. The service lists second class only.
+async fn look_up_european_sleeper(
+    state: &AppState,
+    request: &LiveQuoteRequest,
+) -> (LiveQuoteOutcome, Option<serde_json::Value>) {
+    let Some(service) = &state.european_sleeper_service else {
+        return (LiveQuoteOutcome::NoService, None);
+    };
+    if request.travel_class == TravelClass::First {
+        return (LiveQuoteOutcome::NoPriceForClass, None);
+    }
+    let Some(search) = sleeper_search(request) else {
+        return (LiveQuoteOutcome::UnsupportedLink, None);
+    };
+    let offers = match service.offers(&search).await {
+        Ok(Some(offers)) => offers,
+        Ok(None) => return (LiveQuoteOutcome::NoMatchingTrip, None),
+        Err(error) => {
+            tracing::info!(%error, "no live price from European Sleeper");
+            return (
+                LiveQuoteOutcome::Failed {
+                    error: error.to_string(),
+                },
+                None,
+            );
+        }
+    };
+    let answer = serde_json::to_value(&offers).ok();
+    if !offers.bookable {
+        return (LiveQuoteOutcome::NotSold, answer);
+    }
+    let outcome = match &request.accommodation {
+        Some(accommodation) => {
+            sleeper_accommodation_outcome(&offers, request, accommodation.with_pass)
+        }
+        None => sleeper_ticket_outcome(state, request, &offers).await,
+    };
+    (outcome, answer)
+}
+
+/// Returns the price of the cheapest ticket of a European Sleeper train for one adult, which is the
+/// cheapest place the train sells, with a note on what it holds.
+async fn sleeper_ticket_outcome(
+    state: &AppState,
+    request: &LiveQuoteRequest,
+    offers: &btt_quotes::european_sleeper::SleeperOffers,
+) -> LiveQuoteOutcome {
+    use btt_quotes::european_sleeper::PlaceKind;
+
+    let Some(amount) = offers.cheapest_ticket() else {
+        return LiveQuoteOutcome::NotSold;
+    };
+    let holds = if offers.last_minute == Some(amount) {
+        "It is the last minute fare, which holds a bed in a shared compartment of five."
+    } else if offers.adult.seat == Some(amount) {
+        "It is the price of a seat."
+    } else if offers.whole_price(PlaceKind::Couchette) == Some(amount) {
+        "The train sells no cheaper place than a bed in a shared compartment of five."
+    } else {
+        "The train sells no cheaper place than a bed in a small compartment."
+    };
+    let note = format!(
+        "The lowest price the booking site shows for {}, for one adult. {holds}",
+        offers.train
+    );
+    live_price(
+        state,
+        request,
+        BookingSite::EuropeanSleeper,
+        amount,
+        "EUR",
+        &note,
+    )
+    .await
+}
+
+/// Returns the price of the accommodation of a European Sleeper train, as a range from the lowest
+/// bed in a shared compartment to the lowest bed in a small one.
+///
+/// A pass holder pays the reservation of the place, or the price of the place with the ticket when
+/// that is lower, such as a last minute fare. Without a pass, the accommodation is what a place
+/// costs on top of the cheapest ticket, since that ticket is a separate item of the plan.
+fn sleeper_accommodation_outcome(
+    offers: &btt_quotes::european_sleeper::SleeperOffers,
+    request: &LiveQuoteRequest,
+    with_pass: bool,
+) -> LiveQuoteOutcome {
+    use btt_quotes::european_sleeper::PlaceKind;
+
+    let price = |kind| {
+        if with_pass {
+            offers.pass_price(kind)
+        } else {
+            offers.extra_over_ticket(kind)
+        }
+    };
+    let (seat, couchette, berth) = (
+        price(PlaceKind::Seat),
+        price(PlaceKind::Couchette),
+        price(PlaceKind::Berth),
+    );
+    let Some((low, high)) = night_range(couchette, berth, seat, with_pass) else {
+        return LiveQuoteOutcome::NotSold;
+    };
+    let euro = |price: Option<f64>, name: &str| price.map(|price| format!(" {name} {price:.2}"));
+    let kinds: String = [
+        euro(seat.filter(|_| with_pass), "seat"),
+        euro(couchette, "bed in a shared compartment"),
+        euro(berth, "bed in a small compartment"),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join(",");
+    let cheaper = [PlaceKind::Couchette, PlaceKind::Berth, PlaceKind::Seat]
+        .into_iter()
+        .any(|kind| with_pass && offers.is_cheaper_without_pass(kind));
+    let holds = if with_pass {
+        let mut text = "the reservation of the place, for a holder of an Interrail pass".to_owned();
+        if cheaper {
+            text.push_str(
+                ". A place with a regular ticket costs less than its reservation on some kinds, \
+                 such as a last minute fare, and those prices are that ticket",
+            );
+        }
+        text
+    } else {
+        let ticket = offers.cheapest_ticket().unwrap_or_default();
+        format!(
+            "the place on top of the cheapest ticket of {ticket:.2} euro, which is a separate item"
+        )
+    };
+    let note = format!(
+        "The lowest price of each kind of place on {} on the booking site of European Sleeper, in \
+         euro:{kinds}. This is {holds}. \n         The booking site shows the final price.",
+        offers.train
+    );
+    LiveQuoteOutcome::Quoted {
+        price: Price {
+            low: EuroCents::from_euro(low),
+            high: EuroCents::from_euro(high),
+            kind: PriceKind::Live,
+            source: PriceSource {
+                name: site_name(BookingSite::EuropeanSleeper).into(),
+                note: note.into(),
+                as_of: Some(crate::commands::today_utc()),
+                page: Some(request.booking_link.clone()),
+            },
+            original: None,
+        },
     }
 }
 

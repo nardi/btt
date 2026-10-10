@@ -33,6 +33,8 @@ pub enum BookingSite {
     Regiojet,
     /// koleo.pl, read with plain requests to the API of its web page.
     Koleo,
+    /// booking.europeansleeper.eu, read with plain requests to its booking service.
+    EuropeanSleeper,
 }
 
 impl BookingSite {
@@ -54,6 +56,7 @@ impl BookingSite {
             ("https://www.eurostar.com/", Self::Eurostar),
             ("https://regiojet.com/", Self::Regiojet),
             ("https://koleo.pl/", Self::Koleo),
+            ("https://booking.europeansleeper.eu/", Self::EuropeanSleeper),
         ];
         sites
             .into_iter()
