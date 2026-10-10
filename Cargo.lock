@@ -777,6 +777,7 @@ name = "btt-quotes"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",
