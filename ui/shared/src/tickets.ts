@@ -112,7 +112,9 @@ export function liveQuoteKey(item: TicketItem): string | null {
   }
   const search = request.site_search ?? null;
   const searchKey = search === null ? "" : `${search.origin_code}~${search.destination_code}~${search.local_departure}`;
-  return `${request.booking_link}|${request.first_departure_time}|${request.ride_count}|${request.travel_class}|${searchKey}`;
+  const accommodation = request.accommodation ?? null;
+  const accommodationKey = accommodation === null ? "" : `${accommodation.train}~${accommodation.with_pass}`;
+  return `${request.booking_link}|${request.first_departure_time}|${request.ride_count}|${request.travel_class}|${searchKey}|${accommodationKey}`;
 }
 
 /** Returns the live price of a ticket, or `null` when it has none yet. */
@@ -126,6 +128,12 @@ export function livePriceOf(item: TicketItem, live: LivePrices): Price | null {
 export function isLiveUnavailable(item: TicketItem, live: LivePrices): boolean {
   const key = liveQuoteKey(item);
   return key !== null && live.get(key) === "Unavailable";
+}
+
+/** Returns whether the lookup of a ticket's live price is over and found nothing, as when the site failed. */
+export function isLiveFailed(item: TicketItem, live: LivePrices): boolean {
+  const key = liveQuoteKey(item);
+  return key !== null && live.has(key) && live.get(key) === null;
 }
 
 /** Returns the price to show for a ticket: its live price if it has one, else its estimate. */

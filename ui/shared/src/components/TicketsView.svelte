@@ -1,6 +1,6 @@
 <script lang="ts">
   // The tickets screen: the trains of the trip on the left, the tickets to buy on the right.
-  import type { Price, TicketPlan, TicketStrategy } from "../bindings";
+  import type { Price, TicketItem, TicketPlan, TicketStrategy } from "../bindings";
   import { formatDate, formatTimeInZone } from "../format";
   import {
     adjustedTotal,
@@ -10,7 +10,9 @@
     formatTotal,
     hasPendingLivePrice,
     isLivePending,
+    isLiveFailed,
     isLiveUnavailable,
+    liveQuoteKey,
     livePriceOf,
     type LivePrices,
     priceKindDescription,
@@ -24,8 +26,10 @@
     loading,
     livePrices,
     liveLoading,
+    retrying,
     unplannedLegs,
     onOpenLink,
+    onRetryLivePrice,
   }: {
     /** The plan, or `null` before the first one arrives. */
     plan: TicketPlan | null;
@@ -34,10 +38,14 @@
     livePrices: LivePrices;
     /** Whether live prices are still being looked up. */
     liveLoading: boolean;
+    /** The keys of the tickets whose live price is being looked up again. */
+    retrying: ReadonlySet<string>;
     /** Legs without a journey, which the plan leaves out. */
     unplannedLegs: number;
     /** Opens a booking link. */
     onOpenLink: (url: string) => void;
+    /** Looks up the live price of a ticket again, whatever the site answered before. */
+    onRetryLivePrice: (item: TicketItem) => void;
   } = $props();
 
   /** The strategy the traveller looks at, by position. The cheapest comes first. */
@@ -45,6 +53,12 @@
   const strategies = $derived(plan?.strategies ?? []);
   const selected = $derived(strategies[Math.min(selectedIndex, strategies.length - 1)] ?? null);
   const groups = $derived(plan === null ? [] : ridesByDate(plan.rides));
+
+  /** Whether the live price of a ticket is being looked up again. */
+  function isRetrying(item: TicketItem): boolean {
+    const key = liveQuoteKey(item);
+    return key !== null && retrying.has(key);
+  }
 
   /** The total of a strategy, with live prices where there are some. */
   function totalOf(strategy: TicketStrategy) {
@@ -83,6 +97,27 @@
 
 {#snippet spinner(label: string)}
   <span class="spinner" role="status" aria-label={label} title={label}></span>
+{/snippet}
+
+{#snippet retryButton(item: TicketItem)}
+  <button
+    type="button"
+    class="retry"
+    aria-label="Look up the live price again"
+    title="Look up the live price again"
+    onclick={() => onRetryLivePrice(item)}
+  >
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
+      <path
+        d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </svg>
+  </button>
 {/snippet}
 
 <section class="tickets">
@@ -173,10 +208,14 @@
               <span class="item-title">{item.title}</span>
               <span class="item-price" title={sourceText(price)}>
                 {formatPrice(price)}
-                {#if isLivePending(item, livePrices, liveLoading)}
+                {#if isRetrying(item) || isLivePending(item, livePrices, liveLoading)}
                   {@render spinner("Looking up the live price")}
                 {:else if isLiveUnavailable(item, livePrices)}
                   <span class="badge unavailable" title="The booking site shows this trip but sells no ticket for it now, for example because the sale has not opened or it is sold out.">Unavailable</span>
+                  {@render retryButton(item)}
+                {:else if isLiveFailed(item, livePrices)}
+                  <span class="badge failed" title="The booking site gave no price, for example because it did not answer.">No live price</span>
+                  {@render retryButton(item)}
                 {:else}
                   <span class="badge kind-{price.kind}">{priceKindLabel(price.kind)}</span>
                 {/if}
@@ -381,6 +420,30 @@
   .badge.unavailable {
     border-color: var(--color-danger);
     color: var(--color-danger);
+  }
+
+  .badge.failed {
+    color: var(--color-text-muted);
+  }
+
+  .retry {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    margin-left: var(--space-1);
+    border: 1px solid var(--color-border);
+    border-radius: 50%;
+    background: none;
+    color: var(--color-text-muted);
+    vertical-align: middle;
+    cursor: pointer;
+  }
+
+  .retry:hover,
+  .retry:focus-visible {
+    color: var(--color-accent);
+    border-color: var(--color-accent);
   }
 
   .spinner {

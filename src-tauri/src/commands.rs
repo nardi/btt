@@ -290,7 +290,11 @@ pub async fn fetch_live_quote(
     state: State<'_, AppState>,
     request: LiveQuoteRequest,
 ) -> Result<Option<LiveQuote>, CommandError> {
-    let (outcome, site_answer) = crate::ticket_report::look_up(&state, &request).await;
+    let (outcome, site_answer) = crate::quote_refresh::with_refresh(
+        request.refresh,
+        crate::ticket_report::look_up(&state, &request),
+    )
+    .await;
     let model_estimate = crate::price_learning::learn_from_lookup(&state, &request, &outcome);
     let quote = match &outcome {
         crate::ticket_report::LiveQuoteOutcome::Quoted { price } => {

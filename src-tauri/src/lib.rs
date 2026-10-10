@@ -9,6 +9,7 @@ mod price_learning;
 mod price_seed;
 mod probe;
 mod problem_report;
+mod quote_refresh;
 mod site_quotes;
 mod state;
 mod ticket_report;

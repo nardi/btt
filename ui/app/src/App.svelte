@@ -6,6 +6,7 @@
     type Traveller,
     type TravellerId,
     type LiveQuote,
+    type TicketItem,
     type TicketLeg,
     type TicketPlan,
     type TripId,
@@ -48,6 +49,8 @@
   /** Live prices from booking sites by ticket, with `null` for a ticket the site gave none for. */
   let livePrices: Map<string, LiveQuote | null> = $state(new Map());
   let liveLoading = $state(false);
+  /** The keys of the tickets whose live price is being looked up again. */
+  let retrying: ReadonlySet<string> = $state(new Set());
   /** Numbers the pricing requests, so that a late answer to an old request is dropped. */
   let ticketRequestNumber = 0;
   /** Where the map of the open trip looks, for problem reports. */
@@ -240,6 +243,29 @@
     }
   }
 
+  /**
+   * Looks up the live price of one ticket again. The backend keeps a site's answer for half an
+   * hour, so the request asks it to ask the site anew.
+   */
+  async function retryLivePrice(item: TicketItem) {
+    const key = liveQuoteKey(item);
+    const request = item.live_quote_request;
+    if (key === null || request === null || retrying.has(key)) {
+      return;
+    }
+    retrying = new Set(retrying).add(key);
+    const requestNumber = ticketRequestNumber;
+    const result = await commands.fetchLiveQuote({ ...request, refresh: true });
+    if (requestNumber === ticketRequestNumber) {
+      const next = new Map(livePrices);
+      next.set(key, result.status === "ok" ? result.data : null);
+      livePrices = next;
+    }
+    const remaining = new Set(retrying);
+    remaining.delete(key);
+    retrying = remaining;
+  }
+
   /** Opens a booking link in the system browser. */
   async function openBookingLink(url: string) {
     try {
@@ -344,8 +370,10 @@
         loading={ticketsLoading}
         {livePrices}
         {liveLoading}
+        {retrying}
         {unplannedLegs}
         onOpenLink={openBookingLink}
+        onRetryLivePrice={retryLivePrice}
       />
     {:else}
     <div class="workspace">

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { TicketRide } from "./bindings";
+import type { TicketItem, TicketRide } from "./bindings";
 import {
   adjustedTotal,
   effectivePrice,
@@ -8,6 +8,7 @@ import {
   formatPriceRange,
   isLivePending,
   formatPrice,
+  isLiveFailed,
   isLiveUnavailable,
   liveQuoteKey,
   livePriceOf,
@@ -145,5 +146,25 @@ describe("pending live prices", () => {
     expect(isLiveUnavailable(ticket, live)).toBe(true);
     expect(livePriceOf(ticket, live)).toBeNull();
     expect(isLiveUnavailable(ticket, new Map())).toBe(false);
+  });
+
+  it("marks a lookup that found nothing as failed, but not one that is still to come", () => {
+    const ticket = item(true);
+    const key = liveQuoteKey(ticket)!;
+    expect(isLiveFailed(ticket, new Map([[key, null]]))).toBe(true);
+    expect(isLiveFailed(ticket, new Map())).toBe(false);
+    expect(isLiveFailed(ticket, new Map([[key, "Unavailable" as const]]))).toBe(false);
+    expect(isLiveFailed(item(false), new Map())).toBe(false);
+  });
+
+  it("keeps the live price of an accommodation apart from the ticket of the same train", () => {
+    const ticket = item(true);
+    const request = ticket.live_quote_request!;
+    const accommodation = (withPass: boolean): TicketItem => ({
+      ...ticket,
+      live_quote_request: { ...request, accommodation: { train: "NJ 466", with_pass: withPass } },
+    });
+    const keys = [ticket, accommodation(false), accommodation(true)].map((entry) => liveQuoteKey(entry));
+    expect(new Set(keys).size).toBe(3);
   });
 });

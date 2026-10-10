@@ -66,6 +66,9 @@ struct StorageQuoteStore(Arc<Storage>);
 
 impl QuoteStore for StorageQuoteStore {
     fn load(&self, key: &str, max_age: std::time::Duration) -> Option<String> {
+        if crate::quote_refresh::ignores(key) {
+            return None;
+        }
         let max_age_seconds = i64::try_from(max_age.as_secs()).unwrap_or(i64::MAX);
         self.0
             .cached_quote(key, max_age_seconds)
