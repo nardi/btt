@@ -1,6 +1,6 @@
 # Night train fares in BTT
 
-This document describes how BTT prices a night train and its accommodation. It says where the prices come from, how a ticket with a pass relates to a ticket without one, how the prices are fitted, and where the fit is weak.
+This document describes how BTT prices a night train and its accommodation. It says where the prices come from, how a ticket with a pass relates to a ticket without one, how the prices are fitted, and where the fit is weak. The ÖBB shop sells the Nightjet and the EuroNight. European Sleeper and Snälltåget have booking sites of their own, so each operator is fitted to its own offers.
 
 ## What a night train costs
 
@@ -61,9 +61,25 @@ The fits are made when the app starts, from the compiled-in data.
 
 ### Use in the optimizer
 
-- **The ticket of a run with a night train.** `NightTrainTickets` is a price source in front of the general price model. It prices a run in which a Nightjet or EuroNight with berths is the longest ride, with the fit of the seat without a pass at the total distance of the run. Other runs go on to the general model.
+- **The ticket of a run with a night train.** `NightTrainTickets` is a price source in front of the general price model. It prices a run in which a night train with berths is the longest ride, with the fit of the seat without a pass at the total distance of the run. `NightOperator` says whose offers the fit comes from. Other runs go on to the general model.
 - **The accommodation of a night ride.** `NightFares::accommodation_price` gives the range from the lowest couchette to the lowest berth. A ride on a pass gets the pass price. Any other ride gets the extra over the seat, because the price of its ticket holds a seat. A night train that the shop does not sell, such as the Intercités de nuit or a Trenitalia night train, has the fee of its rule in `interrail_reservations.toml` for both.
 - **The worth of a pass day.** A day with a night train on the pass saves the ticket and pays the pass price of the accommodation. The optimizer counts both when it picks the days of a pass.
+
+## Other operators
+
+`NightOperator` names the operators with their own fits. A train belongs to the ÖBB shop when its category is `NJ`, `Nightjet`, `EN` or `EuroNight`, whoever runs it. The trains of European Sleeper and Snälltåget belong to those operators by their id in `operators.toml`. Every operator has the same nine measures and the same features as above, fitted to its own file of offers. The EuroNight offset only applies to the ÖBB shop.
+
+### European Sleeper
+
+The booking service of European Sleeper answers plain requests without a login. A search for a day lists the trains between two stations, and the availability of a train lists the lowest price of every kind of place. A place is a seat, a bed in a shared compartment of five, or a bed in a compartment of two or three. The script leaves out a private compartment, because the service prices it for the whole compartment. The service has the Interrail reservation as a traveller type of its own, which gives the price of a pass holder.
+
+`tools/european-sleeper-fares.js` collects the offers for pairs of stations in both directions, on days spread over the next months. For each train it asks for the availability as an adult and as a pass holder. `data/fares/european_sleeper_fares.jsonl` holds the answers in the shape of `night_fares.jsonl`, with the three fare types of the service as tariffs. `data/fares/european_sleeper_stations.csv` holds the stations with the codes of the service and their positions.
+
+The prices of European Sleeper differ from those of the ÖBB shop in two ways. They follow the day more than the distance, because they are lower far ahead and higher near the departure or in the holidays. A seat between Amsterdam and Berlin costs 19.99 to 169.99 euro in the offers. The pass price of a place is the same on every train of a route. The fit has no feature of the day, so its range is wide.
+
+### Snälltåget
+
+The site of Snälltåget gives anyone a token, and its journey search lists the bundles of a route with their prices in krona. `tools/snalltaget-fares.js` keeps the routes that sell a berth, converts the prices at the rate of the ECB on the day, and writes `data/fares/snalltaget_fares.jsonl`. A seat is the `SP` family, a berth in a shared compartment the `NTB` family and a private compartment the `NTPC` family. The search holds no price for a pass holder, so the pass measures have no fit and a pass holder gets the fee of the rule.
 
 ## Live accommodation prices
 
@@ -75,7 +91,21 @@ The optimizer attaches a request to the accommodation item of a Nightjet or Euro
 
 The price shown is a range from the lowest couchette to the lowest berth, with the lowest price of each kind in its note. Without a pass, it is the extra over a seat, taken within one tariff and over the lowest tariff, as in the fit, because the ticket holds a seat. A train without seats has no such extra, and the estimate stays. With a pass, a train without beds shows the price of its seat reservation.
 
-A lookup that cannot find the train at the planned departure leaves the estimate, and a first class traveller gets no live price, because the offers are for second class.
+A lookup that cannot find the train at the planned departure leaves the estimate, and a first class traveller gets no live price, because the offers are for second class. The shop has listed a train in one search and left it out of the next, so a search that finds no such train is made once more after two seconds.
+
+### Trains without seats
+
+Some Nightjets sell beds only, such as the one from Amsterdam to Zürich. Without a pass the extra over a seat has nothing to start from. The shop prices a bed at the whole ticket, and the plan holds a ticket item priced as a seat. So the request carries the estimated price of a seat, and the lookup subtracts it from the lowest bed price.
+
+## European Sleeper live prices
+
+The ticket and the accommodation of a European Sleeper ride ask the booking service for the train that leaves within five minutes of the planned time. The answer holds the prices of an adult and of a pass holder for every kind of place, and it is kept for half an hour.
+
+- **The ticket.** The price is the cheapest place the train sells, which is usually a seat.
+- **The accommodation without a pass.** The price is a range from the lowest bed in a shared compartment to the lowest bed in a small compartment. Each is the price of the place less the cheapest ticket, because the ticket is a separate item of the plan.
+- **The accommodation with a pass.** The price is the same range of the reservation of the place. When the place with a regular ticket costs less than its reservation, the lower price counts and the note says so.
+- **Last minute fares.** The main site lists a fare for a bed in a shared compartment, with the ticket, for trains one to three weeks away. The pages read on 10 October 2026 listed 40 euro per traveller. A train within five weeks of today makes the lookup read the four pages of the site and look for a fare between its stations on its day. The fare counts as a place with its ticket, so it can be the cheapest ticket, and it can be lower than the reservation of a pass holder. Child discounts and the Interrail reservation do not apply to it. The pages also sell a private compartment for up to five travellers, which the lookup leaves out.
+
 
 ## Accuracy
 
@@ -96,10 +126,28 @@ The constant price is the median of the other folds, with no feature. The report
 
 For the Nightjet 403 from Amsterdam to Basel, the general model gave a range of 107 to 422 euro and DB showed 52.99 euro. The fit gives 26 to 45 euro.
 
+### Accuracy for the other operators
+
+The same report runs on the files of the other operators, with `cargo run -p btt-fares --example night_fares_report -- data/fares/european_sleeper_fares.jsonl`. The offers of European Sleeper hold 397 trains on 23 routes, collected on 10 October 2026 for departures 7 to 170 days ahead. The offers of Snälltåget hold 113 trains on 11 routes. Snälltåget has no pass prices.
+
+| Price | European Sleeper trains | Median error | Inside the range | Snälltåget trains | Median error | Inside the range |
+|---|---|---|---|---|---|---|
+| Seat, without a pass | 388 | 1.22 | 87 percent | 107 | 1.27 | 77 percent |
+| Seat, with a pass | 385 | 1.13 | 59 percent | none | | |
+| Couchette, without a pass | 339 | 1.28 | 80 percent | 47 | 1.10 | 83 percent |
+| Couchette, with a pass | 336 | 1.09 | 82 percent | none | | |
+| Couchette, extra over the seat | 317 | 1.47 | 81 percent | 43 | 1.22 | 77 percent |
+| Berth, without a pass | 331 | 1.12 | 81 percent | 101 | 1.27 | 72 percent |
+| Berth, with a pass | 328 | 1.07 | 95 percent | none | | |
+| Berth, extra over the seat | 327 | 1.16 | 80 percent | 98 | 1.32 | 69 percent |
+
+On the seats of European Sleeper the general price model is off by a median factor of 2.17, against 1.22 for the fit. A constant price comes close to the fit, 1.33 for the seat, because the day moves the price more than the distance does. The pass prices of European Sleeper vary little on a route, so the range of the fit is narrow and misses 41 percent of the pass seat prices.
+
 ## Limitations
 
 - **Demand.** A night train sells its cheapest seats first, and the prices of one route differ from day to day. The data hold the prices of one day of collection for three days of departure. Seats cost the same median 34.90 euro at every horizon, and couchettes cost 94.90 euro for a departure 10 days ahead and 78 euro for one 24 or 45 days ahead, from 46 to 55 trains per horizon. The fit uses no feature of the date, because the days ahead and the weekday added little in a test by cross-validation.
 - **Trains without seats.** Some night trains do not sell seats, such as the Nightjet from Amsterdam to Zürich. The estimate of the ticket then still follows the seats of the other trains.
-- **One shop.** The model covers the trains that the ÖBB shop sells. The distance from the straight line is an approximation that is off by a tenth for routes with a long detour.
+- **Three sources.** The model covers the trains that the ÖBB shop sells, those of European Sleeper and those of Snälltåget. Other night trains, such as the Intercités de nuit, the Trenitalia night trains and the Caledonian Sleeper, use the general model and the fee of their rule. The distance from the straight line is an approximation that is off by a tenth for routes with a long detour.
+- **The day.** The prices of European Sleeper and Snälltåget follow the days ahead and the season, and the fits ignore them. `tools/night-fares-day-features.js` adds the days ahead, the weekday and the weeks around Christmas to the fit by cross-validation. For European Sleeper the mean error of the log price falls from 0.272 to 0.197 for the couchette and from 0.288 to 0.251 for the seat. For Snälltåget it does not fall. All offers are from one day of collection, so the days ahead cannot be told apart from the date of the departure. The live price replaces the estimate when it arrives.
 - **One traveller.** The prices are for one adult. A compartment shared by several travellers is priced per person, and the model takes the cheapest.
 - **Second class.** A first class ticket gets the same estimate.

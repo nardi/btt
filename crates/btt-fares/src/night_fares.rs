@@ -25,9 +25,52 @@ const LINE_PER_STRAIGHT: f64 = 1.3;
 /// The distance in kilometres at which the fitted level holds.
 const REFERENCE_KILOMETRES: f64 = 600.0;
 
-/// The categories of the timetable that stand for the night trains that the shop sells, in
+/// The categories of the timetable that stand for the night trains that the ÖBB shop sells, in
 /// lower case.
 const NIGHT_CATEGORIES: &[&str] = &["nj", "nightjet", "en", "euronight"];
+
+/// The id in `operators.toml` of European Sleeper.
+const EUROPEAN_SLEEPER: &str = "european-sleeper";
+
+/// The id in `operators.toml` of Snälltåget.
+const SNALLTAGET: &str = "snalltaget";
+
+/// An operator of night trains, whose prices are fitted to the offers of its own booking site.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum NightOperator {
+    /// The Nightjet and the EuroNight trains that the ÖBB shop sells.
+    Oebb,
+    /// The trains of European Sleeper.
+    EuropeanSleeper,
+    /// The night trains of Snälltåget.
+    Snalltaget,
+}
+
+impl NightOperator {
+    /// Returns the night operator of a train from its operator and category, or `None` for a
+    /// train that has no fitted prices. The ÖBB shop sells the trains of its categories whoever
+    /// runs them.
+    pub fn of(operator: &str, category: &str) -> Option<Self> {
+        if NIGHT_CATEGORIES.contains(&category.to_lowercase().as_str()) {
+            Some(Self::Oebb)
+        } else if operator == EUROPEAN_SLEEPER {
+            Some(Self::EuropeanSleeper)
+        } else if operator == SNALLTAGET {
+            Some(Self::Snalltaget)
+        } else {
+            None
+        }
+    }
+
+    /// Returns the name of the offers that the prices are fitted to, for the note of a price.
+    fn offers_name(self) -> &'static str {
+        match self {
+            Self::Oebb => "ÖBB night train offers",
+            Self::EuropeanSleeper => "European Sleeper offers",
+            Self::Snalltaget => "Snälltåget offers",
+        }
+    }
+}
 
 /// The share of the prices that the range of an estimate holds, as a number of standard
 /// deviations of the log price: 1.28 holds 80 percent.
@@ -343,37 +386,52 @@ fn median_of(values: &mut [f64]) -> f64 {
     values[values.len() / 2]
 }
 
-/// The prices of night trains, fitted to the offers of the shop.
+/// The prices of night trains, fitted to the offers of the booking sites of their operators.
 #[derive(Debug, Clone)]
 pub struct NightFares {
-    /// The fit of each measure.
-    fits: HashMap<(Accommodation, PriceBasis), Fit>,
-    /// The day of the first and the last offers, for the note of a price.
-    observed: String,
+    /// The fit of each measure of each operator.
+    fits: HashMap<(NightOperator, Accommodation, PriceBasis), Fit>,
+    /// The day of the first and the last offers of each operator, for the note of a price.
+    observed: HashMap<NightOperator, String>,
 }
 
 impl NightFares {
-    /// Reads the offers from the text of `night_fares.jsonl` and fits every measure.
+    /// Reads the offers of the ÖBB shop from the text of `night_fares.jsonl` and fits every
+    /// measure.
     ///
     /// # Errors
     ///
     /// Returns an error for a line that is not a night train.
     pub fn from_jsonl(text: &str) -> Result<Self, FareDataError> {
-        let trains = parse_trains(text)?;
-        let mut days: Vec<&str> = trains
-            .iter()
-            .map(|train| train.collected_on.as_str())
-            .collect();
-        days.sort_unstable();
-        let observed = match (days.first(), days.last()) {
-            (Some(first), Some(last)) if first != last => format!("{first} to {last}"),
-            (Some(day), _) => (*day).to_owned(),
-            _ => String::new(),
-        };
+        Self::from_sources(&[(NightOperator::Oebb, text)])
+    }
+
+    /// Reads the offers of each operator from the text of its file of offers and fits every
+    /// measure of the operator.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a line that is not a night train.
+    pub fn from_sources(sources: &[(NightOperator, &str)]) -> Result<Self, FareDataError> {
         let mut fits = HashMap::new();
-        for (accommodation, basis) in MEASURES {
-            if let Some(fit) = Fit::new(&observations(&trains, accommodation, basis)) {
-                fits.insert((accommodation, basis), fit);
+        let mut observed = HashMap::new();
+        for &(operator, text) in sources {
+            let trains = parse_trains(text)?;
+            let mut days: Vec<&str> = trains
+                .iter()
+                .map(|train| train.collected_on.as_str())
+                .collect();
+            days.sort_unstable();
+            let range = match (days.first(), days.last()) {
+                (Some(first), Some(last)) if first != last => format!("{first} to {last}"),
+                (Some(day), _) => (*day).to_owned(),
+                _ => String::new(),
+            };
+            observed.insert(operator, range);
+            for (accommodation, basis) in MEASURES {
+                if let Some(fit) = Fit::new(&observations(&trains, accommodation, basis)) {
+                    fits.insert((operator, accommodation, basis), fit);
+                }
             }
         }
         Ok(Self { fits, observed })
@@ -435,16 +493,17 @@ impl NightFares {
         Ok(scores)
     }
 
-    /// Returns the estimate of a measure for a night train of a length in kilometres along its
-    /// line, or `None` when the offers hold none.
+    /// Returns the estimate of a measure for a night train of an operator and a length in
+    /// kilometres along its line, or `None` when the offers of the operator hold none.
     pub fn estimate(
         &self,
+        operator: NightOperator,
         accommodation: Accommodation,
         basis: PriceBasis,
         kilometres: f64,
         euronight: bool,
     ) -> Option<NightEstimate> {
-        let fit = self.fits.get(&(accommodation, basis))?;
+        let fit = self.fits.get(&(operator, accommodation, basis))?;
         let (median, low, high) = fit.range(kilometres.max(1.0), euronight);
         Some(NightEstimate {
             median,
@@ -454,15 +513,22 @@ impl NightFares {
         })
     }
 
-    /// Returns whether a category of the timetable is a night train that the shop sells.
+    /// Returns whether a category of the timetable is a night train that the ÖBB shop sells.
     pub fn sells(category: &str) -> bool {
         NIGHT_CATEGORIES.contains(&category.to_lowercase().as_str())
     }
 
     /// Returns the estimated price in euro of the cheapest seat without a pass on a night train of
-    /// a category over a distance, or `None` when the offers hold too few trains for the fit.
-    pub fn seat_price(&self, category: &str, kilometres: f64) -> Option<f64> {
+    /// an operator and a category over a distance, or `None` when the offers hold too few trains
+    /// for the fit.
+    pub fn seat_price(
+        &self,
+        operator: NightOperator,
+        category: &str,
+        kilometres: f64,
+    ) -> Option<f64> {
         self.estimate(
+            operator,
             Accommodation::Seat,
             PriceBasis::WithoutPass,
             kilometres,
@@ -483,6 +549,7 @@ impl NightFares {
     /// holds a seat, so the accommodation is the extra over the seat.
     pub fn accommodation_price(
         &self,
+        operator: NightOperator,
         category: &str,
         kilometres: f64,
         with_pass: bool,
@@ -493,8 +560,14 @@ impl NightFares {
             PriceBasis::ExtraOverSeat
         };
         let euronight = Self::is_euronight(category);
-        let couchette = self.estimate(Accommodation::Couchette, basis, kilometres, euronight)?;
-        let berth = self.estimate(Accommodation::Berth, basis, kilometres, euronight)?;
+        let couchette = self.estimate(
+            operator,
+            Accommodation::Couchette,
+            basis,
+            kilometres,
+            euronight,
+        )?;
+        let berth = self.estimate(operator, Accommodation::Berth, basis, kilometres, euronight)?;
         let (low, high) = (
             couchette.median.min(berth.median),
             berth.median.max(couchette.median),
@@ -509,13 +582,14 @@ impl NightFares {
             high: EuroCents::from_euro(high),
             kind: PriceKind::Range,
             source: PriceSource {
-                name: "ÖBB night train offers".into(),
+                name: operator.offers_name().into(),
                 note: format!(
                     "The price of {holds}, from the lowest couchette to the lowest berth, as \
-                     fitted to {} offers of the ÖBB shop for night trains of the days {}. Night \
-                     train prices follow demand, so a price can lie well outside the range.",
+                     fitted to {} of the offers of the booking site for night trains of the days \
+                     {}. Night train prices follow demand, so a price can lie well outside the \
+                     range.",
                     couchette.trains.min(berth.trains),
-                    self.observed,
+                    self.observed.get(&operator).map_or("", String::as_str),
                 )
                 .into(),
                 as_of: None,
@@ -526,16 +600,17 @@ impl NightFares {
     }
 }
 
-/// Prices the runs of night trains from the offers of the shop.
+/// Prices the runs of night trains from the offers of the booking sites.
 #[derive(Debug, Clone)]
 pub struct NightTrainTickets(pub NightFares);
 
 impl TicketPriceSource for NightTrainTickets {
     fn price_run(&self, run: &[RideFacts<'_>]) -> Option<Price> {
-        let night = run
+        let (night, operator) = run
             .iter()
-            .filter(|ride| ride.offers_berths && NightFares::sells(ride.category))
-            .max_by(|a, b| a.distance_kilometres.total_cmp(&b.distance_kilometres))?;
+            .filter(|ride| ride.offers_berths)
+            .filter_map(|ride| Some((ride, NightOperator::of(ride.operator, ride.category)?)))
+            .max_by(|a, b| a.0.distance_kilometres.total_cmp(&b.0.distance_kilometres))?;
         // A run that holds a night train and a short feeder, such as a train to the station, is
         // priced as the night train, which sets the price. A run with a long other train is not.
         let longest = run
@@ -547,6 +622,7 @@ impl TicketPriceSource for NightTrainTickets {
         }
         let kilometres: f64 = run.iter().map(|ride| ride.distance_kilometres).sum();
         let estimate = self.0.estimate(
+            operator,
             Accommodation::Seat,
             PriceBasis::WithoutPass,
             kilometres,
@@ -557,12 +633,13 @@ impl TicketPriceSource for NightTrainTickets {
             high: EuroCents::from_euro(estimate.high),
             kind: PriceKind::Range,
             source: PriceSource {
-                name: "ÖBB night train offers".into(),
+                name: operator.offers_name().into(),
                 note: format!(
                     "The lowest ticket for a night train, which holds a seat, as fitted to {} \
-                     offers of the ÖBB shop for night trains of the days {}. The price hardly \
-                     depends on the distance and follows demand.",
-                    estimate.trains, self.0.observed,
+                     offers of the booking site for night trains of the days {}. The price \
+                     hardly depends on the distance and follows demand.",
+                    estimate.trains,
+                    self.0.observed.get(&operator).map_or("", String::as_str),
                 )
                 .into(),
                 as_of: None,

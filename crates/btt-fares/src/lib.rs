@@ -18,7 +18,8 @@ use thiserror::Error;
 pub use country::country_of_time_zone;
 pub use italo::{ItaloStation, ItaloStations};
 pub use night_fares::{
-    Accommodation, MeasureScore, NightEstimate, NightFares, NightTrainTickets, PriceBasis,
+    Accommodation, MeasureScore, NightEstimate, NightFares, NightOperator, NightTrainTickets,
+    PriceBasis,
 };
 pub use passes::{PassCatalogue, PassKind, PassPrices, PassType, PriceAgeGroup, Validity};
 pub use price_book::{FreeTravel, PriceBook, RideFacts, TicketPriceSource};
@@ -77,6 +78,17 @@ const PRICE_SEED_JSONL: &str = include_str!("../../../data/fares/price_seed.json
 /// The offers of the ÖBB shop for night trains, as they are compiled in.
 const NIGHT_FARES_JSONL: &str = include_str!("../../../data/fares/night_fares.jsonl");
 
+/// The offers of European Sleeper trains, as they are compiled in.
+const EUROPEAN_SLEEPER_FARES_JSONL: &str =
+    include_str!("../../../data/fares/european_sleeper_fares.jsonl");
+
+/// The offers of Snälltåget night trains, as they are compiled in.
+const SNALLTAGET_FARES_JSONL: &str = include_str!("../../../data/fares/snalltaget_fares.jsonl");
+
+/// The stations of European Sleeper with the codes its booking site takes, as they are compiled in.
+const EUROPEAN_SLEEPER_STATIONS_CSV: &str =
+    include_str!("../../../data/fares/european_sleeper_stations.csv");
+
 /// A data file that does not match what the crate expects.
 #[derive(Debug, Error)]
 pub enum FareDataError {
@@ -111,6 +123,8 @@ pub struct FareData {
     /// The prices of night trains and of their accommodation, fitted to the offers of the ÖBB
     /// shop.
     pub night_fares: NightFares,
+    /// The stations of European Sleeper with the codes its booking site takes.
+    pub european_sleeper_stations: StationTable,
     /// Tariffs that price the domestic rides of one country.
     pub tariffs: Vec<DistanceTariff>,
     /// The stations of Italo with the codes of its booking site.
@@ -183,7 +197,12 @@ impl FareData {
             passes: PassCatalogue::from_toml(PASSES_TOML)?,
             reservations: ReservationRules::from_toml(RESERVATIONS_TOML, RULES_TOML)?,
             price_model: SharedPriceModel::new(PriceModel::bundled()?),
-            night_fares: NightFares::from_jsonl(NIGHT_FARES_JSONL)?,
+            night_fares: NightFares::from_sources(&[
+                (NightOperator::Oebb, NIGHT_FARES_JSONL),
+                (NightOperator::EuropeanSleeper, EUROPEAN_SLEEPER_FARES_JSONL),
+                (NightOperator::Snalltaget, SNALLTAGET_FARES_JSONL),
+            ])?,
+            european_sleeper_stations: StationTable::from_csv(EUROPEAN_SLEEPER_STATIONS_CSV),
             tariffs: tariff::tariffs_from_toml(TARIFFS_TOML)?,
             italo_stations: ItaloStations::from_csv(ITALO_STATIONS_CSV),
             sbb_stations: StationTable::from_csv(SBB_STATIONS_CSV),

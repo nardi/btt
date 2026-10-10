@@ -315,3 +315,12 @@ categories = ["EN"]
 mode = "mandatory"
 fee = { second = [30.0, 100.0], first = [60.0, 150.0] }
 notes = "Euro Night trains such as the Romanian and Hungarian ones."
+
+[[rule]]
+id = "night-european-sleeper"
+scope = "night"
+operator = "European Sleeper"
+categories = ["ES"]
+mode = "mandatory"
+fee = { second = [11.0, 229.0], first = [11.0, 229.0] }
+notes = "Sleeping accommodation, from the seat reservation to a bed in a compartment of two. The booking site sells it as the Interrail reservation, and its prices vary with the places that are left."
