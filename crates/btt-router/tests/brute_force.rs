@@ -10,8 +10,8 @@ use std::num::NonZeroU8;
 use btt_model::GeoCoordinates;
 use btt_router::{
     AllowEveryRide, CandidateStation, CostSearchBuffers, JourneyCostModel, MinutesSinceBundleStart,
-    ParetoJourneySet, RaptorLegQuery, RaptorSearchBuffers, SearchIndex, search_leg_journeys,
-    search_leg_journeys_by_cost,
+    ParetoJourneySet, PreviousRide, RaptorLegQuery, RaptorSearchBuffers, SearchIndex,
+    search_leg_journeys, search_leg_journeys_by_cost,
 };
 use btt_timetable::{
     BundleBuilder, BundleStationIndex, BundleTripIndex, LoadedTimetableBundle, RaptorRouteIndex,
@@ -273,11 +273,17 @@ impl JourneyCostModel for WindowCostModel {
         &self,
         _: RaptorRouteIndex,
         _: BundleTripIndex,
+        _: u16,
+        _: u16,
         _: MinutesSinceBundleStart,
         _: MinutesSinceBundleStart,
-        is_first_ride: bool,
+        previous: Option<PreviousRide>,
     ) -> i32 {
-        if is_first_ride { 0 } else { TRANSFER_PENALTY }
+        if previous.is_none() {
+            0
+        } else {
+            TRANSFER_PENALTY
+        }
     }
 
     fn egress_cost(
@@ -337,22 +343,27 @@ fn pareto_front(mut journeys: Vec<(u32, u32, usize, i32)>) -> Vec<(u32, u32, usi
 
 /// Lists every journey with at most `MAXIMUM_COSTED_RIDES` trains that leaves the place within
 /// the window, as departure, arrival, number of trains and cost, and keeps the Pareto front.
-fn brute_force_costs(
+/// Every ride asks the model, so prices that depend on the stops of the ride enter the cost.
+#[allow(clippy::too_many_lines)]
+fn brute_force_costs<M: JourneyCostModel>(
     trips: &[RandomTrip],
     footpaths: &[(u32, u32, u16)],
     origins: &[(u32, u16)],
     target: u32,
     window: (u32, u32),
-    model: &WindowCostModel,
+    model: &M,
+    routes_of_trips: &[RaptorRouteIndex],
 ) -> Vec<(u32, u32, usize, i32)> {
     /// The state of a journey on board a trip.
     struct OnBoard {
         trip: usize,
-        position: usize,
+        route: RaptorRouteIndex,
+        boarding_position: usize,
         departure: u32,
+        ride_departure: u32,
         cost_before_ride: i32,
         rides: usize,
-        is_first_ride: bool,
+        previous: Option<PreviousRide>,
     }
 
     let stops: Vec<Vec<(u32, u16, u16)>> = trips.iter().map(RandomTrip::stops).collect();
@@ -373,18 +384,24 @@ fn brute_force_costs(
                 if station == origin && leave >= window.0 && leave < window.1 {
                     stack.push(OnBoard {
                         trip,
-                        position,
+                        route: routes_of_trips[trip],
+                        boarding_position: position,
                         departure: leave,
+                        ride_departure: u32::from(departure),
                         cost_before_ride: model.access_cost(&departure_candidate),
                         rides: 1,
-                        is_first_ride: true,
+                        previous: None,
                     });
                 }
             }
         }
     }
-    let ride_cost = |is_first_ride| if is_first_ride { 0 } else { TRANSFER_PENALTY };
-    let boardings_after = |station: u32, ready: u32, state: &OnBoard, cost: i32| {
+    let boardings_after = |station: u32,
+                           ready: u32,
+                           state: &OnBoard,
+                           cost: i32,
+                           previous: PreviousRide|
+     -> Vec<OnBoard> {
         let mut next = Vec::new();
         if state.rides == MAXIMUM_COSTED_RIDES {
             return next;
@@ -394,11 +411,13 @@ fn brute_force_costs(
                 if stop_station == station && u32::from(departure) >= ready {
                     next.push(OnBoard {
                         trip,
-                        position,
+                        route: routes_of_trips[trip],
+                        boarding_position: position,
                         departure: state.departure,
+                        ride_departure: u32::from(departure),
                         cost_before_ride: cost,
                         rides: state.rides + 1,
-                        is_first_ride: false,
+                        previous: Some(previous),
                     });
                 }
             }
@@ -406,9 +425,27 @@ fn brute_force_costs(
         next
     };
     while let Some(state) = stack.pop() {
-        let cost = state.cost_before_ride + ride_cost(state.is_first_ride);
-        for &(station, arrival, _) in &stops[state.trip][state.position + 1..] {
+        for (offset, &(station, arrival, _)) in stops[state.trip][state.boarding_position + 1..]
+            .iter()
+            .enumerate()
+        {
+            let alighting_position = state.boarding_position + 1 + offset;
             let arrival = u32::from(arrival);
+            let ride_cost = model.ride_cost(
+                state.route,
+                BundleTripIndex(u32::try_from(state.trip).unwrap_or(u32::MAX)),
+                u16::try_from(state.boarding_position).unwrap_or(u16::MAX),
+                u16::try_from(alighting_position).unwrap_or(u16::MAX),
+                MinutesSinceBundleStart(state.ride_departure),
+                MinutesSinceBundleStart(arrival),
+                state.previous,
+            );
+            let cost = state.cost_before_ride + ride_cost;
+            let ride = PreviousRide {
+                raptor_route: state.route,
+                boarding_position: u16::try_from(state.boarding_position).unwrap_or(u16::MAX),
+                alighting_position: u16::try_from(alighting_position).unwrap_or(u16::MAX),
+            };
             let total = |arrival: u32, footpath: Option<u16>| {
                 model.elapsed_cost(
                     MinutesSinceBundleStart(state.departure),
@@ -420,7 +457,7 @@ fn brute_force_costs(
                 found.push((state.departure, arrival, state.rides, total(arrival, None)));
             }
             let ready = arrival + u32::from(MINIMUM_TRANSFER_MINUTES);
-            stack.extend(boardings_after(station, ready, &state, cost));
+            stack.extend(boardings_after(station, ready, &state, cost, ride));
             for &(from, to, minutes) in footpaths {
                 if from != station {
                     continue;
@@ -434,21 +471,154 @@ fn brute_force_costs(
                         total(walked, Some(minutes)),
                     ));
                 }
-                stack.extend(boardings_after(to, walked, &state, cost));
+                stack.extend(boardings_after(to, walked, &state, cost, ride));
             }
         }
     }
     pareto_front(found)
 }
 
+/// Returns the route of each trip, found by matching the trip's stops in the bundle. Trips of
+/// one stop pattern share a route, and the times tell the trips of one route apart.
+fn routes_of_trips(bundle: &LoadedTimetableBundle, trips: &[RandomTrip]) -> Vec<RaptorRouteIndex> {
+    trips
+        .iter()
+        .map(|trip| {
+            let wanted = trip.stops();
+            for route_index in 0..bundle.route_count() {
+                let route_index = RaptorRouteIndex(u32::try_from(route_index).unwrap_or(u32::MAX));
+                let route = bundle.route(route_index);
+                if usize::from(route.stop_count) != wanted.len() {
+                    continue;
+                }
+                for trip_offset in 0..route.trip_count {
+                    let matches = wanted.iter().enumerate().all(
+                        |(position, &(station, arrival, departure))| {
+                            let position = u16::try_from(position).unwrap_or(u16::MAX);
+                            let stop = bundle.pattern_stop(&route, position);
+                            let event = bundle.stop_event(&route, trip_offset, position);
+                            stop.station().0 == station
+                                && event.arrival.0 == arrival
+                                && event.departure.0 == departure
+                        },
+                    );
+                    if matches {
+                        return route_index;
+                    }
+                }
+            }
+            panic!("a trip of the test is missing from the bundle");
+        })
+        .collect()
+}
+
+/// A cost model whose rides cost a price that grows with the number of stops between boarding
+/// and alighting and falls per stop on longer rides, which is what makes boarding earlier cost
+/// more. One operator runs every route, so a ride after another continues its ticket run and
+/// pays the extra over the ride before, the way the planner's search prices a run.
+struct PricedCostModel {
+    window_start: u32,
+    window_end: u32,
+}
+
+impl PricedCostModel {
+    /// The price of a number of stops, in the model's cost units.
+    fn price(units: u16) -> i32 {
+        let kilometres = f64::from(units) * 15.0;
+        let distance = ((kilometres + 20.0) / 120.0).ln();
+        let euro = (1.2 + 0.7 * distance).exp();
+        // Prices stay in a small range, so the cast loses nothing.
+        #[expect(clippy::cast_possible_truncation)]
+        let cents = (euro * 100.0).round() as i32;
+        cents
+    }
+}
+
+impl JourneyCostModel for PricedCostModel {
+    fn access_cost(&self, candidate: &CandidateStation) -> i32 {
+        i32::from(candidate.time_to_place_minutes) / 2
+    }
+
+    fn ride_cost(
+        &self,
+        _: RaptorRouteIndex,
+        _: BundleTripIndex,
+        boarding_position: u16,
+        alighting_position: u16,
+        _: MinutesSinceBundleStart,
+        _: MinutesSinceBundleStart,
+        previous: Option<PreviousRide>,
+    ) -> i32 {
+        let change = if previous.is_some() {
+            TRANSFER_PENALTY
+        } else {
+            0
+        };
+        let units = alighting_position.saturating_sub(boarding_position);
+        // One operator runs everything, so every following ride continues the run.
+        let price = match previous {
+            Some(previous) => {
+                let previous_units = previous
+                    .alighting_position
+                    .saturating_sub(previous.boarding_position);
+                Self::price(previous_units + units) - Self::price(previous_units)
+            }
+            None => Self::price(units),
+        };
+        change + price
+    }
+
+    fn ride_price(
+        &self,
+        _: RaptorRouteIndex,
+        boarding_position: u16,
+        alighting_position: u16,
+    ) -> i32 {
+        Self::price(alighting_position.saturating_sub(boarding_position))
+    }
+
+    fn egress_cost(
+        &self,
+        candidate: &CandidateStation,
+        final_footpath_minutes: Option<u16>,
+    ) -> i32 {
+        i32::from(candidate.time_to_place_minutes) / 2
+            + final_footpath_minutes.map_or(0, |minutes| TRANSFER_PENALTY + i32::from(minutes) / 2)
+    }
+
+    fn elapsed_cost(
+        &self,
+        departure: MinutesSinceBundleStart,
+        arrival: MinutesSinceBundleStart,
+    ) -> i32 {
+        let arrival = arrival.0;
+        let waited_until = arrival.max(self.window_start);
+        let late = arrival.saturating_sub(self.window_end);
+        i32::try_from(waited_until - departure.0 + 2 * late).unwrap()
+    }
+
+    fn remaining_cost_lower_bound(
+        &self,
+        departure: MinutesSinceBundleStart,
+        _: MinutesSinceBundleStart,
+        earliest_arrival: MinutesSinceBundleStart,
+        _: Option<u32>,
+    ) -> i32 {
+        self.elapsed_cost(departure, earliest_arrival)
+    }
+    fn ride_cost_depends_on_time(&self, _: RaptorRouteIndex) -> bool {
+        false
+    }
+}
+
 /// Searches with the cost model and returns the Pareto front like `brute_force_costs`.
-fn cost_router(
+fn cost_router<M: JourneyCostModel>(
     trips: &[RandomTrip],
     footpaths: &[(u32, u32, u16)],
     origins: &[(u32, u16)],
     target: u32,
     window: (u32, u32),
-    model: &WindowCostModel,
+    model: &M,
 ) -> Vec<(u32, u32, usize, i32)> {
     let bundle = build_bundle(trips, footpaths);
     let (departure_candidates, arrival_candidates) = candidates(origins, target);
@@ -496,8 +666,9 @@ proptest! {
         let origins = [(0, first_access), (1, second_access)];
         let model = WindowCostModel { window_start, window_end: window_start + 60 };
         let target = STATION_COUNT - 1;
+        let routes = routes_of_trips(&build_bundle(&trips, &footpaths), &trips);
         let expected =
-            brute_force_costs(&trips, &footpaths, &origins, target, (start, 1440), &model);
+            brute_force_costs(&trips, &footpaths, &origins, target, (start, 1440), &model, &routes);
         let actual = cost_router(&trips, &footpaths, &origins, target, (start, 1440), &model);
         prop_assert_eq!(actual, expected);
     }
@@ -534,8 +705,32 @@ proptest! {
     ) {
         let origins = [(0, first_access), (1, second_access)];
         let model = WindowCostModel { window_start, window_end: window_start + 60 };
+        let routes = routes_of_trips(&build_bundle(&trips, &footpaths), &trips);
         let expected =
-            brute_force_costs(&trips, &footpaths, &origins, target, (start, 1440), &model);
+            brute_force_costs(&trips, &footpaths, &origins, target, (start, 1440), &model, &routes);
+        let actual = cost_router(&trips, &footpaths, &origins, target, (start, 1440), &model);
+        prop_assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn priced_cost_search_matches_brute_force(
+        trips in proptest::collection::vec(random_trip(), 1..10),
+        footpaths in proptest::collection::vec(random_footpath(), 0..4),
+        start in 0..300u32,
+        first_access in 0..30u16,
+        second_access in 0..30u16,
+        window_start in 0..500u32,
+    ) {
+        // With prices that grow with the distance and a discount for rides that continue a run,
+        // the shortcuts that let an earlier boarding stand for a later one have to count the
+        // price of the stops in between. A journey the search drops is one the brute force
+        // finds beaten, which is what the property asserts.
+        let origins = [(0, first_access), (1, second_access)];
+        let model = PricedCostModel { window_start, window_end: window_start + 60 };
+        let target = STATION_COUNT - 1;
+        let routes = routes_of_trips(&build_bundle(&trips, &footpaths), &trips);
+        let expected =
+            brute_force_costs(&trips, &footpaths, &origins, target, (start, 1440), &model, &routes);
         let actual = cost_router(&trips, &footpaths, &origins, target, (start, 1440), &model);
         prop_assert_eq!(actual, expected);
     }

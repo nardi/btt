@@ -2,9 +2,10 @@
 
 use std::ops::Range;
 
-use btt_router::{CandidateStation, JourneyCostModel, MinutesSinceBundleStart};
+use btt_router::{CandidateStation, JourneyCostModel, MinutesSinceBundleStart, PreviousRide};
 use btt_timetable::{BundleTripIndex, LoadedTimetableBundle, RaptorRouteIndex};
 
+use crate::pricing::RidePrices;
 use crate::scoring::ScoringWeights;
 
 /// Hundredths of a minute per minute. The model counts in hundredths so that the weights in
@@ -33,6 +34,12 @@ pub(crate) struct LegCostModel<'a> {
     pub(crate) cost_limit_factor: u32,
     /// Whether each route has a trip with berths.
     pub(crate) routes_with_berths: &'a [bool],
+    /// How many minutes of travel time one euro is worth, in hundredths of a minute. Zero
+    /// searches without prices.
+    pub(crate) price_weight_hundredths: u32,
+    /// The prices of rides, which the search adds to the cost. `None` when the weight is zero
+    /// or no price table was built.
+    pub(crate) prices: Option<&'a RidePrices>,
 }
 
 /// Converts a minute count or a percentage to the model's signed arithmetic.
@@ -41,6 +48,14 @@ fn signed(value: u32) -> i32 {
 }
 
 impl LegCostModel<'_> {
+    /// Returns what a price in whole euro cents costs, in hundredths of a minute.
+    fn price_cost(&self, cents: u32) -> i32 {
+        // The weight counts hundredths of a minute per euro, so a hundred cents take a hundredth
+        // of the weight each.
+        i32::try_from(u64::from(self.price_weight_hundredths) * u64::from(cents) / 100)
+            .unwrap_or(i32::MAX)
+    }
+
     /// Returns the minutes of the night that lie within a range of moments.
     fn night_minutes_within(&self, moments: Range<u32>) -> i32 {
         self.night.as_ref().map_or(0, |night| {
@@ -72,23 +87,50 @@ impl JourneyCostModel for LegCostModel<'_> {
 
     fn ride_cost(
         &self,
-        _: RaptorRouteIndex,
+        raptor_route: RaptorRouteIndex,
         trip: BundleTripIndex,
+        boarding_position: u16,
+        alighting_position: u16,
         departure: MinutesSinceBundleStart,
         arrival: MinutesSinceBundleStart,
-        is_first_ride: bool,
+        previous: Option<PreviousRide>,
     ) -> i32 {
-        let change = if is_first_ride {
-            0
-        } else {
+        let change = if previous.is_some() {
             signed(self.transfer_cost_minutes) * HUNDREDTHS
+        } else {
+            0
         };
         let sleep = if self.bundle.trip_offers_berths(trip) {
             self.night_minutes_within(departure.0..arrival.0) * self.sleep_per_minute()
         } else {
             0
         };
-        change - sleep
+        let price = self.prices.map_or(0, |prices| {
+            self.price_cost(prices.ride_price_cents(
+                raptor_route,
+                boarding_position,
+                alighting_position,
+                previous,
+            ))
+        });
+        change - sleep + price
+    }
+
+    /// Returns the price of riding a route between two stop positions, which the boarding
+    /// shortcuts compare against the cost before the ride.
+    fn ride_price(
+        &self,
+        raptor_route: RaptorRouteIndex,
+        boarding_position: u16,
+        alighting_position: u16,
+    ) -> i32 {
+        self.prices.map_or(0, |prices| {
+            self.price_cost(prices.full_price_cents(
+                raptor_route,
+                boarding_position,
+                alighting_position,
+            ))
+        })
     }
 
     fn egress_cost(
@@ -260,6 +302,8 @@ mod tests {
             night: Some(1320..1800),
             cost_limit_factor: 2,
             routes_with_berths: &[],
+            price_weight_hundredths: 0,
+            prices: None,
         };
         let (berth_trip, seated_trip) = if bundle.trip_offers_berths(BundleTripIndex(0)) {
             (BundleTripIndex(0), BundleTripIndex(1))
@@ -278,16 +322,24 @@ mod tests {
             model.ride_cost(
                 RaptorRouteIndex(0),
                 berth_trip,
+                0,
+                1,
                 minutes(1010),
                 minutes(1500),
-                true,
+                None,
             ),
             model.ride_cost(
                 RaptorRouteIndex(0),
                 seated_trip,
+                0,
+                1,
                 minutes(1510),
                 minutes(1600),
-                false,
+                Some(PreviousRide {
+                    raptor_route: RaptorRouteIndex(0),
+                    boarding_position: 0,
+                    alighting_position: 1,
+                }),
             ),
             model.egress_cost(&candidate(4), Some(6)),
             model.elapsed_cost(minutes(1000), minutes(1610)),

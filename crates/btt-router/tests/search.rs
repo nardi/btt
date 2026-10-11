@@ -383,16 +383,18 @@ impl JourneyCostModel for NightCostModel<'_> {
         &self,
         _: RaptorRouteIndex,
         trip: BundleTripIndex,
+        _: u16,
+        _: u16,
         departure: MinutesSinceBundleStart,
         arrival: MinutesSinceBundleStart,
-        is_first_ride: bool,
+        previous: Option<btt_router::PreviousRide>,
     ) -> i32 {
         let sleep = if self.bundle.trip_train_label(trip).1 == "night" {
             Self::night_minutes_until(arrival.0) - Self::night_minutes_until(departure.0)
         } else {
             0
         };
-        let change = if is_first_ride { 0 } else { 65 };
+        let change = if previous.is_none() { 0 } else { 65 };
         change - 4 * sleep
     }
 

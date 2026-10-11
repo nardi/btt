@@ -300,3 +300,78 @@ fn the_note_of_a_price_names_its_basis() {
     let note = model.price(&[ice]).unwrap().source.note;
     assert!(note.contains("1 live price of db-fernverkehr"), "{note}");
 }
+
+#[test]
+fn the_table_prices_single_rides_as_the_model_estimates_them() {
+    let model = PriceModel::bundled().unwrap();
+    // The classes the bundle prices, with countries the model knows and one it does not.
+    let classes = [
+        ("db-fernverkehr", "ICE", false, Some("DE")),
+        ("oebb", "RJX", false, Some("AT")),
+        ("oebb", "NJ", true, Some("AT")),
+        ("ns", "IC", false, Some("NL")),
+        ("cfl", "RE", false, Some("LU")),
+        ("renfe", "ALVIA", false, Some("ES")),
+        ("snalltaget", "NJ", true, Some("SE")),
+        ("db-fernverkehr", "ICE", false, None),
+    ];
+    let table = crate::price_table::PriceTable::from_model(
+        &model,
+        &classes
+            .iter()
+            .map(
+                |&(operator, category, offers_berths, country)| crate::price_table::RouteClass {
+                    operator: operator.into(),
+                    category: category.into(),
+                    offers_berths,
+                    country: country.map(Into::into),
+                },
+            )
+            .collect::<Vec<_>>(),
+    );
+    // A small deterministic generator of distances, from 5 km to 1500 km.
+    let mut state = 0x9E37_79B9_7F4A_7C15_u64;
+    let mut distance = || {
+        state = state
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1);
+        #[expect(clippy::cast_precision_loss)]
+        let share = (state >> 33) as f64 / f64::from(u32::MAX);
+        5.0 + share * 1495.0
+    };
+    for &(operator, category, offers_berths, country) in &classes {
+        let row = *table
+            .row(&crate::price_table::RouteClass {
+                operator: operator.into(),
+                category: category.into(),
+                offers_berths,
+                country: country.map(Into::into),
+            })
+            .unwrap();
+        for _ in 0..125 {
+            let kilometres = distance();
+            let facts = [RideFacts {
+                from_country: country,
+                to_country: country,
+                operator,
+                category,
+                distance_kilometres: kilometres,
+                offers_berths,
+            }];
+            let estimate = model.estimate(&facts).unwrap().median;
+            let shift = f64::from(row.shift);
+            let u = ((kilometres + shift) / (f64::from(table.reference_kilometres()) + shift)).ln();
+            let base = 10.0 / (kilometres + 5.0);
+            let tabled = (f64::from(row.constant)
+                + f64::from(row.distance) * u
+                + f64::from(row.curve) * u * u
+                + f64::from(row.base) * base)
+                .exp();
+            let share = (tabled - estimate) / estimate;
+            assert!(
+                share.abs() < 0.001,
+                "{operator} {category} at {kilometres:.0} km: table {tabled:.4}, estimate {estimate:.4}"
+            );
+        }
+    }
+}

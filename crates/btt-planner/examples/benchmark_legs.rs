@@ -49,6 +49,37 @@ impl JourneyPricer for TicketingPricer {
     fn journey_price(&self, journey: &Journey, stations: &[LegPlanStation]) -> Option<EuroRange> {
         btt_ticketing::journey_price(journey, stations, &self.data, &self.book)
     }
+
+    fn price_table(
+        &self,
+        classes: &[btt_planner::RidePriceClass],
+    ) -> Option<btt_planner::RidePriceTable> {
+        let model = self.data.price_model.read();
+        let classes: Vec<btt_fares::RouteClass> = classes
+            .iter()
+            .map(|class| btt_fares::RouteClass {
+                operator: class.operator.clone(),
+                category: class.category.clone(),
+                offers_berths: class.offers_berths,
+                country: btt_fares::country_of_time_zone(&class.time_zone).map(Into::into),
+            })
+            .collect();
+        let table = btt_fares::PriceTable::from_model(&model, &classes);
+        Some(btt_planner::RidePriceTable {
+            rows: table
+                .rows()
+                .iter()
+                .map(|row| btt_planner::RidePriceRow {
+                    constant: row.constant,
+                    distance: row.distance,
+                    curve: row.curve,
+                    base: row.base,
+                    shift: row.shift,
+                })
+                .collect(),
+            reference_kilometres: table.reference_kilometres(),
+        })
+    }
 }
 
 /// What a leg planned to.

@@ -99,6 +99,14 @@ Without forgetting, this is recursive least squares with a prior. A prediction f
 
 A weight only enters the matrices when an observation first involves it. Until then it is at its prior and uncorrelated with the rest, so a prediction adds its prior mean and variance directly. A new row and column of $\Lambda$ and $\Sigma$ hold only its prior, which is exact, because no observation has linked it to anything. The matrices therefore grow with the operators, countries and categories the app has seen, not with every category in the timetable. The linear algebra uses `nalgebra`.
 
+## The price table of the search
+
+The planner's search prices millions of rides, and running the model for each costs more than the search has. At the start of a plan the app therefore builds a `PriceTable` from the posterior mean of the model: one row per class of ride, a class being the operator, the category, whether the trains have berths and the country of the boarding station. A row holds the coefficients of the log price, `constant + distance·u + curve·u² + base·b`, with `u` the log distance and `b` the base term, both of a ride length in kilometres. The price of a ride is then a few multiplications and one exponential.
+
+The rows leave out the border surcharge, because the search prices a ride by the station it boards at. The ranking prices every journey the search returns with the exact cover, so the final order is right.
+
+The table is a snapshot of the model. Prices the model learns later change no plan that is under way, and the app builds a new table when it loads a bundle.
+
 ## Updates from live prices
 
 ### Observations

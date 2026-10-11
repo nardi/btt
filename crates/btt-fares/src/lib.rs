@@ -9,6 +9,7 @@ mod night_fares;
 mod passes;
 mod price_book;
 mod price_model;
+mod price_table;
 mod reservations;
 mod station_table;
 mod tariff;
@@ -24,6 +25,7 @@ pub use night_fares::{
 pub use passes::{PassCatalogue, PassKind, PassPrices, PassType, PriceAgeGroup, Validity};
 pub use price_book::{FreeTravel, PriceBook, RideFacts, TicketPriceSource};
 pub use price_model::{PriceEstimate, PriceModel, SharedPriceModel, TrainKind, seed_observations};
+pub use price_table::{PriceRow, PriceTable, RouteClass};
 pub use reservations::{ReservationMode, ReservationRule, ReservationRules, RuleScope, SeatFee};
 pub use station_table::{CodedStation, StationTable};
 pub use tariff::{BookingWindow, DistanceTariff, ExchangeRates};

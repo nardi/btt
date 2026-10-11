@@ -33,26 +33,55 @@ const NONE: u32 = u32::MAX;
 /// Marks a station from which no ride that lowers the cost can be reached.
 const NO_CREDIT: i32 = i32::MIN;
 
+/// The ride before the one whose cost the model returns, which lets the model charge a ride
+/// that continues a ticket run of the same operator as the extra over the ride before it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PreviousRide {
+    /// Route of the previous ride.
+    pub raptor_route: RaptorRouteIndex,
+    /// Position where the traveller boarded it.
+    pub boarding_position: u16,
+    /// Position where the traveller left it.
+    pub alighting_position: u16,
+}
+
 /// Costs that a search adds up along a journey, in a unit the model chooses.
 ///
 /// The search relies on three properties. `elapsed_cost` never falls when the arrival moves
-/// later or the departure moves earlier. `ride_cost` never rises when the traveller boards the
-/// same trip at an earlier stop. And `remaining_cost_lower_bound` never exceeds the cost still to
+/// later or the departure moves earlier. `ride_cost` of boarding the same trip at an earlier
+/// stop rises by no more than `ride_price` says for the stops between the boardings, which the
+/// boarding shortcuts compare. And `remaining_cost_lower_bound` never exceeds the cost still to
 /// come.
 pub trait JourneyCostModel {
     /// Returns the added cost of getting from the departure place to a station.
     fn access_cost(&self, candidate: &CandidateStation) -> i32;
 
-    /// Returns the added cost of a ride on a trip from its departure to its arrival.
-    /// `is_first_ride` is `false` when the traveller changes to it from another train.
+    /// Returns the added cost of a ride on a trip from its departure to its arrival. The
+    /// traveller boards at `boarding_position` and leaves at `alighting_position`, and
+    /// `previous` is the ride before this one, or `None` when this is the first.
+    #[allow(clippy::too_many_arguments)]
     fn ride_cost(
         &self,
         raptor_route: RaptorRouteIndex,
         trip: BundleTripIndex,
+        boarding_position: u16,
+        alighting_position: u16,
         departure: MinutesSinceBundleStart,
         arrival: MinutesSinceBundleStart,
-        is_first_ride: bool,
+        previous: Option<PreviousRide>,
     ) -> i32;
+
+    /// Returns the price of riding a route between two stop positions, which the boarding
+    /// shortcuts compare against the cost before the ride. The default is nothing.
+    fn ride_price(
+        &self,
+        raptor_route: RaptorRouteIndex,
+        boarding_position: u16,
+        alighting_position: u16,
+    ) -> i32 {
+        let _ = (raptor_route, boarding_position, alighting_position);
+        0
+    }
 
     /// Returns the added cost of getting from an arrival candidate station to the arrival
     /// place. `final_footpath_minutes` holds the walk between stations that brought the
@@ -197,10 +226,16 @@ enum CostLabelOrigin {
         candidate: u16,
     },
     /// The traveller rode a trip there.
-    TrainRide(RideOrigin),
+    TrainRide {
+        ride: RideOrigin,
+        /// Position where the traveller left the trip.
+        alighting_position: u16,
+    },
     /// The traveller rode a trip to another station and walked from there.
     TrainRideAndFootpath {
         ride: RideOrigin,
+        /// Position where the traveller left the trip.
+        alighting_position: u16,
         alighting_station: BundleStationIndex,
         footpath_minutes: u16,
     },
@@ -269,12 +304,16 @@ struct RouteLabel {
 impl RouteLabel {
     /// Returns whether riding this is at least as good as riding another at every later stop.
     ///
-    /// On the same trip, boarding earlier with no more cost is. On another trip, only when
+    /// On the same trip, boarding earlier is when the cost before the ride plus the price of
+    /// the stops between the boardings reaches no more than the other's cost before the ride,
+    /// because the earlier boarding pays for the extra distance. On another trip, only when
     /// the ride cost doesn't depend on the trip's times, and the trip runs earlier on the same
-    /// service day, so it reaches every later stop no later.
+    /// service day, so it reaches every later stop no later. `extension` is the price of the
+    /// stops between this boarding and the other's.
     #[inline]
-    fn covers(&self, other: &Self, ride_cost_depends_on_time: bool) -> bool {
-        let no_worse_start = self.cost_before_ride <= other.cost_before_ride
+    fn covers(&self, other: &Self, ride_cost_depends_on_time: bool, extension: i32) -> bool {
+        let no_worse_start = self.cost_before_ride.saturating_add(extension)
+            <= other.cost_before_ride
             && (self.is_first_ride || !other.is_first_ride);
         let same_trip =
             self.trip_offset == other.trip_offset && self.service_day == other.service_day;
@@ -358,10 +397,11 @@ struct BoardedBefore {
 
 impl BoardedBefore {
     /// Returns whether this boarding reaches everything that another one does, at no more cost
-    /// and no more rides.
-    fn covers(self, other: Self) -> bool {
+    /// and no more rides. `extension` is the price of the stops between this boarding and the
+    /// other's, which the earlier boarding pays for.
+    fn covers(self, other: Self, extension: i32) -> bool {
         self.position <= other.position
-            && self.cost <= other.cost
+            && self.cost.saturating_add(extension) <= other.cost
             && (self.is_first_ride || !other.is_first_ride)
             && self.round <= other.round
     }
@@ -375,6 +415,8 @@ struct RideArrival {
     cost: i32,
     parent: u32,
     ride: RideOrigin,
+    /// Position where the traveller left the trip.
+    alighting_position: u16,
 }
 
 /// Working memory of a cost-aware search. Reusing it across queries avoids most allocation
@@ -969,6 +1011,7 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
     /// from the later one can only produce labels they cover.
     fn repeats_boarding(
         &mut self,
+        raptor_route: RaptorRouteIndex,
         trip: BundleTripIndex,
         route_label: &RouteLabel,
         round: usize,
@@ -980,13 +1023,94 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
             round: u8::try_from(round).unwrap_or(u8::MAX),
         };
         let key = (u64::from(trip.0) << 16) | u64::from(route_label.service_day);
+        // The price extensions are read before the map entry is borrowed, so the model is
+        // called outside the borrow. Each earlier boarding has its own stops in between.
+        let earlier_extensions: SmallVec<[i32; 2]> =
+            self.buffers
+                .boarded_before
+                .get(&key)
+                .map_or(SmallVec::new(), |known| {
+                    known
+                        .iter()
+                        .map(|earlier| {
+                            self.board_extension_cost(
+                                raptor_route,
+                                earlier.position,
+                                boarding.position,
+                            )
+                        })
+                        .collect()
+                });
+        let later_extensions: SmallVec<[i32; 2]> =
+            self.buffers
+                .boarded_before
+                .get(&key)
+                .map_or(SmallVec::new(), |known| {
+                    known
+                        .iter()
+                        .map(|earlier| {
+                            self.board_extension_cost(
+                                raptor_route,
+                                boarding.position,
+                                earlier.position,
+                            )
+                        })
+                        .collect()
+                });
         let known = self.buffers.boarded_before.entry(key).or_default();
-        if known.iter().any(|earlier| earlier.covers(boarding)) {
+        if known
+            .iter()
+            .zip(&earlier_extensions)
+            .any(|(earlier, &extension)| earlier.covers(boarding, extension))
+        {
             return true;
         }
-        known.retain(|earlier| !boarding.covers(*earlier));
-        known.push(boarding);
+        let mut kept: SmallVec<[BoardedBefore; 2]> = SmallVec::new();
+        for (index, &earlier) in known.iter().enumerate() {
+            if !boarding.covers(earlier, later_extensions[index]) {
+                kept.push(earlier);
+            }
+        }
+        kept.push(boarding);
+        *known = kept;
         false
+    }
+
+    /// Returns the price of the stops between two boardings of a route, which the earlier
+    /// boarding pays on top of its cost before the ride. A boarding no earlier than the other
+    /// pays for no more distance, so it adds nothing.
+    fn board_extension_cost(
+        &self,
+        raptor_route: RaptorRouteIndex,
+        earlier: u16,
+        later: u16,
+    ) -> i32 {
+        if earlier >= later {
+            return 0;
+        }
+        self.model.ride_price(raptor_route, earlier, later)
+    }
+
+    /// Returns the ride before the one a route label boards, or `None` when it boards the
+    /// first ride of a journey.
+    fn previous_ride(&self, route_label: &RouteLabel) -> Option<PreviousRide> {
+        let parent = self.buffers.labels.get(route_label.parent as usize)?;
+        match parent.origin {
+            CostLabelOrigin::DepartureCandidate { .. } => None,
+            CostLabelOrigin::TrainRide {
+                ride,
+                alighting_position,
+            }
+            | CostLabelOrigin::TrainRideAndFootpath {
+                ride,
+                alighting_position,
+                ..
+            } => Some(PreviousRide {
+                raptor_route: ride.raptor_route,
+                boarding_position: ride.boarding_position,
+                alighting_position,
+            }),
+        }
     }
 
     /// Queues the routes of the trains that leave now, from the stop where each is boarded.
@@ -1065,9 +1189,11 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                     let ride_cost = self.model.ride_cost(
                         raptor_route,
                         BundleTripIndex(route.first_trip_index + route_label.trip_offset),
+                        route_label.boarding_position,
+                        position,
                         MinutesSinceBundleStart(route_label.departure),
                         MinutesSinceBundleStart(arrival),
-                        route_label.is_first_ride,
+                        self.previous_ride(route_label),
                     );
                     let cost = route_label.cost_before_ride.saturating_add(ride_cost);
                     let ride = RideOrigin {
@@ -1085,7 +1211,10 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                         parent: route_label.parent,
                         run: self.run,
                         round: u8::try_from(round).unwrap_or(u8::MAX),
-                        origin: CostLabelOrigin::TrainRide(ride),
+                        origin: CostLabelOrigin::TrainRide {
+                            ride,
+                            alighting_position: position,
+                        },
                     };
                     if !self.may_beat_targets(round, station, &label) {
                         continue;
@@ -1099,6 +1228,7 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                             cost,
                             parent: route_label.parent,
                             ride,
+                            alighting_position: position,
                         });
                     }
                     self.insert(round, label, None);
@@ -1177,16 +1307,33 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                 is_first_ride: matches!(label.origin, CostLabelOrigin::DepartureCandidate { .. }),
             };
             let trip_index = BundleTripIndex(route.first_trip_index + trip.trip_offset);
-            if self.repeats_boarding(trip_index, &route_label, round) {
+            if self.repeats_boarding(raptor_route, trip_index, &route_label, round) {
                 continue;
             }
-            if route_labels
-                .iter()
-                .any(|other| other.covers(&route_label, ride_cost_depends_on_time))
-            {
+            if route_labels.iter().any(|other| {
+                other.covers(
+                    &route_label,
+                    ride_cost_depends_on_time,
+                    self.board_extension_cost(
+                        raptor_route,
+                        other.boarding_position,
+                        route_label.boarding_position,
+                    ),
+                )
+            }) {
                 continue;
             }
-            route_labels.retain(|other| !route_label.covers(other, ride_cost_depends_on_time));
+            route_labels.retain(|other| {
+                !route_label.covers(
+                    other,
+                    ride_cost_depends_on_time,
+                    self.board_extension_cost(
+                        raptor_route,
+                        route_label.boarding_position,
+                        other.boarding_position,
+                    ),
+                )
+            });
             route_labels.push(route_label);
         }
     }
@@ -1232,6 +1379,7 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                     round: u8::try_from(round).unwrap_or(u8::MAX),
                     origin: CostLabelOrigin::TrainRideAndFootpath {
                         ride: ride_arrival.ride,
+                        alighting_position: ride_arrival.alighting_position,
                         alighting_station: ride_arrival.station,
                         footpath_minutes: footpath.duration_minutes,
                     },
@@ -1305,9 +1453,13 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                         arrival: MinutesSinceBundleStart(arrival),
                     });
                 }
-                CostLabelOrigin::TrainRide(ride) => (ride, label.station),
+                CostLabelOrigin::TrainRide {
+                    ride,
+                    alighting_position: _,
+                } => (ride, label.station),
                 CostLabelOrigin::TrainRideAndFootpath {
                     ride,
+                    alighting_position: _,
                     alighting_station,
                     ..
                 } => (ride, alighting_station),
@@ -1316,5 +1468,63 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
             current = label.parent;
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A boarding of a trip that leaves at 480 and was reached for 100 cost units.
+    fn route_label(boarding_position: u16, cost_before_ride: i32) -> RouteLabel {
+        RouteLabel {
+            trip_offset: 0,
+            service_day: 0,
+            boarding_position,
+            departure: 480,
+            parent: 0,
+            cost_before_ride,
+            is_first_ride: true,
+        }
+    }
+
+    #[test]
+    fn an_earlier_boarding_covers_only_what_its_price_pays_for() {
+        let earlier = route_label(0, 100);
+        let later = route_label(2, 100);
+        // Boarding two stops earlier costs the price of the two stops on top, so with the same
+        // cost before the ride the earlier boarding no longer covers the later one.
+        assert!(!earlier.covers(&later, false, 40));
+        // A cheaper boarding covers when its saving pays for the stops in between.
+        let cheaper = route_label(0, 60);
+        assert!(cheaper.covers(&later, false, 40));
+        // Without prices the old rule holds.
+        assert!(earlier.covers(&later, false, 0));
+    }
+
+    #[test]
+    fn a_boarding_remembered_from_earlier_covers_only_with_its_price() {
+        let earlier = BoardedBefore {
+            position: 1,
+            cost: 100,
+            is_first_ride: true,
+            round: 2,
+        };
+        let later = BoardedBefore {
+            position: 3,
+            cost: 100,
+            is_first_ride: true,
+            round: 2,
+        };
+        // Boarding the same trip two stops earlier costs the price of the stops in between.
+        assert!(!earlier.covers(later, 40));
+        assert!(earlier.covers(later, 0));
+        let cheaper = BoardedBefore {
+            position: 1,
+            cost: 60,
+            is_first_ride: true,
+            round: 2,
+        };
+        assert!(cheaper.covers(later, 40));
     }
 }

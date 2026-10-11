@@ -31,7 +31,7 @@ use crate::cost_model::LegCostModel;
 use crate::explanation::{CandidateExplanation, LegExplanation, RankedJourneyExplanation};
 use crate::input::{LegChainInput, LegEndpoint, LegPlanningInput, SameDayStop};
 use crate::operators::OperatorTable;
-use crate::pricing::{JourneyPricer, NoPrice};
+use crate::pricing::{JourneyPricer, NoPrice, RidePrices};
 use crate::ride_path::StationHopGraph;
 use crate::scoring::{
     JourneyCostInputs, ScoringWeights, journey_cost, journey_cost_parts, transfer_cost_minutes,
@@ -115,6 +115,9 @@ pub struct TimetableBundleRouter<P: JourneyPricer = NoPrice> {
     operators: OperatorTable,
     /// Prices a journey, which the plan shows next to the journey's time.
     pricer: P,
+    /// The prices of rides, which the search adds to the cost. `None` when the pricer knows
+    /// no price table.
+    ride_prices: Option<RidePrices>,
 }
 
 impl<P: JourneyPricer> TimetableBundleRouter<P> {
@@ -144,7 +147,7 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
         let station_index = StationIndex::new(&bundle);
         let search_index = SearchIndex::new(&bundle);
         let station_hop_graph = StationHopGraph::new(&bundle);
-        let routes_with_berths = (0..bundle.route_count())
+        let routes_with_berths: Vec<bool> = (0..bundle.route_count())
             .map(|route_index| {
                 let route = bundle.route(RaptorRouteIndex(
                     u32::try_from(route_index).unwrap_or(u32::MAX),
@@ -154,6 +157,10 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
                 })
             })
             .collect();
+        let operators = OperatorTable::bundled();
+        // The prices are a snapshot of the model at the moment the bundle loads. What the model
+        // learns later changes no plan that is under way.
+        let ride_prices = RidePrices::build(&bundle, &operators, &routes_with_berths, &pricer);
         let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap_or_default();
         let start_days = (bundle.validity_start() - epoch).num_days();
         let bundle_start_unix_minutes =
@@ -167,8 +174,9 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             bundle_start_unix_minutes,
             routes_with_berths,
             spare_search_buffers: Mutex::new(Vec::new()),
-            operators: OperatorTable::bundled(),
+            operators,
             pricer,
+            ride_prices,
         }
     }
 
@@ -481,7 +489,10 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
         }
         let night = self.night_in_bundle_minutes(input);
         // The search adds up the same cost the ranking uses, so no journey that would rank
-        // first is pruned for leaving earlier or arriving later than another.
+        // first is pruned for leaving earlier or arriving later than another. At a weight
+        // above zero the price of every ride enters it, and at weight zero the search skips
+        // every price step.
+        let price_weight_hundredths = u32::from(input.price_weight.hundredths_of_minute_per_euro());
         let model = LegCostModel {
             bundle: &self.bundle,
             weights: ScoringWeights::DEFAULT,
@@ -493,6 +504,12 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             night: night.clone(),
             cost_limit_factor: MAXIMUM_ALTERNATIVE_COST_FACTOR,
             routes_with_berths: &self.routes_with_berths,
+            price_weight_hundredths,
+            prices: if price_weight_hundredths > 0 {
+                self.ride_prices.as_ref()
+            } else {
+                None
+            },
         };
         let found = self.search_in_parallel(
             &departure_candidates,
@@ -1264,8 +1281,22 @@ mod tests {
 
     use super::*;
 
+    /// The price row of a flat price in euro cents: a constant log price.
+    fn flat_price_row(cents: EuroCents) -> crate::pricing::RidePriceRow {
+        #[expect(clippy::cast_possible_truncation)]
+        let constant = (f64::from(cents.0) / 100.0).ln() as f32;
+        crate::pricing::RidePriceRow {
+            constant,
+            distance: 0.0,
+            curve: 0.0,
+            base: 0.0,
+            shift: 0.0,
+        }
+    }
+
     /// A pricer that returns the same range for every journey, which shows that prices reach
-    /// the plan without touching the ranking.
+    /// the plan without touching the ranking. The search prices every ride at the middle of
+    /// the range.
     #[derive(Debug, Clone, Copy)]
     struct ConstantPricer(EuroRange);
 
@@ -1273,15 +1304,30 @@ mod tests {
         fn journey_price(&self, _: &Journey, _: &[LegPlanStation]) -> Option<EuroRange> {
             Some(self.0)
         }
+
+        fn price_table(
+            &self,
+            classes: &[crate::pricing::RidePriceClass],
+        ) -> Option<crate::pricing::RidePriceTable> {
+            Some(crate::pricing::RidePriceTable {
+                rows: classes
+                    .iter()
+                    .map(|_| flat_price_row(self.0.median()))
+                    .collect(),
+                reference_kilometres: 1.0,
+            })
+        }
     }
 
-    /// A bundle with one direct ICE and one direct regional train between two stations on one
-    /// day. The ICE leaves later and arrives later but takes less time, so the search keeps
-    /// both journeys.
-    fn bundle() -> LoadedTimetableBundle {
+    /// A bundle with one direct ICE and one regional train that stops on the way, between the
+    /// outer stations on one day. The ICE takes 25 minutes and the regional train 50, and the
+    /// regional train leaves `regional_departure` minutes into the day, so tests can make it
+    /// leave together with the ICE or later. The two stop patterns make the trains two routes,
+    /// without which the search would board only the first of them.
+    fn bundle(regional_departure: u16) -> LoadedTimetableBundle {
         let mut builder =
             BundleBuilder::new(NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(), 2, 1).unwrap();
-        for (name, latitude) in [("S0", 50.0), ("S1", 50.05)] {
+        for (name, latitude) in [("S0", 50.0), ("SM", 50.025), ("S1", 50.05)] {
             builder
                 .add_station(StationInput {
                     name: name.into(),
@@ -1293,34 +1339,71 @@ mod tests {
         }
         let mut day = ServiceDayBitset::default();
         day.insert(0);
-        for (category, departure, arrival) in [("ICE", 480, 505), ("RE", 470, 500)] {
-            let stop = |station, time| TripStopInput {
-                station: BundleStationIndex(station),
-                arrival: time,
-                departure: time,
+        let trip = |stops: &[(u32, u16)]| {
+            let stop = |(station, time): &(u32, u16)| TripStopInput {
+                station: BundleStationIndex(*station),
+                arrival: *time,
+                departure: *time,
                 boarding_allowed: true,
                 alighting_allowed: true,
             };
-            builder.add_trip(TripInput {
-                stops: vec![stop(0, departure), stop(1, arrival)],
+            TripInput {
+                stops: stops.iter().map(stop).collect(),
                 service_days: day,
                 train_label: TrainLabelInput {
-                    category: category.into(),
+                    category: "ICE".into(),
                     number: "1".into(),
                     agency: "DB Fernverkehr AG".into(),
                     offers_berths: false,
                 },
-            });
-        }
+            }
+        };
+        // The direct ICE from station 0 to station 2, leaving at 480.
+        builder.add_trip(trip(&[(0, 480), (2, 505)]));
+        // The regional train from station 0 over the middle station to station 2.
+        let middle = regional_departure + 25;
+        builder.add_trip(TripInput {
+            stops: vec![
+                TripStopInput {
+                    station: BundleStationIndex(0),
+                    arrival: regional_departure,
+                    departure: regional_departure,
+                    boarding_allowed: true,
+                    alighting_allowed: true,
+                },
+                TripStopInput {
+                    station: BundleStationIndex(1),
+                    arrival: middle,
+                    departure: middle,
+                    boarding_allowed: true,
+                    alighting_allowed: true,
+                },
+                TripStopInput {
+                    station: BundleStationIndex(2),
+                    arrival: regional_departure + 50,
+                    departure: regional_departure + 50,
+                    boarding_allowed: true,
+                    alighting_allowed: true,
+                },
+            ],
+            service_days: day,
+            train_label: TrainLabelInput {
+                category: "RE".into(),
+                number: "2".into(),
+                agency: "DB Fernverkehr AG".into(),
+                offers_berths: false,
+            },
+        });
         LoadedTimetableBundle::from_bundle(&builder.build().unwrap()).unwrap()
     }
 
-    /// The leg between the two stations of the bundle, inside wide windows.
+    /// The leg between the outer stations of the bundle, inside wide windows. The search
+    /// radius keeps the middle station of the regional train out of the places' candidates.
     fn leg_input(price_weight: PriceWeight) -> LegPlanningInput {
         let time = |hour| LocalTimeOfDay::from_hour_and_minute(hour, 0).unwrap();
         let endpoint = |latitude| crate::input::LegEndpoint {
             coordinates: GeoCoordinates::from_degrees(latitude, 8.0).unwrap(),
-            station_search_radius: StationSearchRadius::DEFAULT,
+            station_search_radius: StationSearchRadius::new(1_000).unwrap(),
             time_window: DailyTimeWindow::from_start_and_end(time(6), time(20)),
         };
         LegPlanningInput {
@@ -1336,12 +1419,14 @@ mod tests {
         }
     }
 
-    /// Returns the found plan of a leg planned with a pricer.
+    /// Returns the found plan of a leg planned with a pricer on a bundle whose regional train
+    /// leaves `regional_departure` minutes into the day.
     fn planned_leg<P: JourneyPricer>(
         pricer: P,
         price_weight: PriceWeight,
+        regional_departure: u16,
     ) -> Box<btt_model::LegPlan> {
-        let bundle = bundle();
+        let bundle = bundle(regional_departure);
         let router =
             TimetableBundleRouter::from_loaded(bundle, Arc::new(TimeZoneFinder::new()), pricer);
         let LegPlanningResult::Found(plan) = router.plan_leg(&leg_input(price_weight), || false)
@@ -1353,9 +1438,9 @@ mod tests {
 
     #[test]
     fn the_price_reaches_the_plan_without_changing_the_ranking() {
-        let unpriced = planned_leg(NoPrice, PriceWeight::TIME_FIRST);
+        let unpriced = planned_leg(NoPrice, PriceWeight::TIME_FIRST, 480);
         let range = EuroRange::new(EuroCents(3000), EuroCents(4000), EuroCents(6000)).unwrap();
-        let priced = planned_leg(ConstantPricer(range), PriceWeight::TIME_FIRST);
+        let priced = planned_leg(ConstantPricer(range), PriceWeight::TIME_FIRST, 480);
         // The chosen journey is the same one, at the same cost.
         assert_eq!(
             unpriced.chosen_journey.first_ride.departure_time,
@@ -1377,10 +1462,6 @@ mod tests {
         );
         assert_eq!(unpriced.chosen_journey.cost_parts.unwrap().price, None);
         assert_eq!(priced.chosen_journey.cost_parts.unwrap().price, Some(range));
-        // The regional train is the alternative, and it is priced too.
-        let alternative = &priced.alternative_journeys[0];
-        assert_eq!(alternative.first_ride.train_label.category, "RE");
-        assert_eq!(alternative.cost_parts.as_ref().unwrap().price, Some(range));
     }
 
     /// A pricer that charges each train by its category, which tells the fast expensive train
@@ -1402,6 +1483,26 @@ mod tests {
             };
             Some(EuroRange::new(cents, cents, cents).unwrap())
         }
+
+        fn price_table(
+            &self,
+            classes: &[crate::pricing::RidePriceClass],
+        ) -> Option<crate::pricing::RidePriceTable> {
+            Some(crate::pricing::RidePriceTable {
+                rows: classes
+                    .iter()
+                    .map(|class| {
+                        let cents = if class.category == "ICE" {
+                            self.ice
+                        } else {
+                            self.regional
+                        };
+                        flat_price_row(cents)
+                    })
+                    .collect(),
+                reference_kilometres: 1.0,
+            })
+        }
     }
 
     #[test]
@@ -1411,21 +1512,22 @@ mod tests {
             regional: EuroCents(3_500),
         };
         // Without a weight the fast train wins, and at three minutes per euro the cheap one
-        // saves more than the extra half hour it takes.
-        let by_time = planned_leg(pricer, PriceWeight::TIME_FIRST);
+        // saves more than the extra 35 minutes it takes.
+        let by_time = planned_leg(pricer, PriceWeight::TIME_FIRST, 480);
         assert_eq!(
             by_time.chosen_journey.first_ride.train_label.category,
             "ICE"
         );
-        let by_price = planned_leg(pricer, PriceWeight::FRUGAL);
+        let by_price = planned_leg(pricer, PriceWeight::FRUGAL, 480);
         assert_eq!(
             by_price.chosen_journey.first_ride.train_label.category,
             "RE"
         );
         let parts = by_price.chosen_journey.cost_parts.unwrap();
-        // Three minutes per euro and 35 euro of price count 105 minutes on top of the time.
+        // Three minutes per euro and 35 euro of price count 105 minutes on top of the 50 the
+        // train takes.
         assert_eq!(parts.price_cost, 10_500);
-        assert_eq!(parts.total_cost, 135);
+        assert_eq!(parts.total_cost, 155);
     }
 
     #[test]
@@ -1436,7 +1538,7 @@ mod tests {
             ice: EuroCents(3_700),
             regional: EuroCents(3_500),
         };
-        let within_band = planned_leg(pricer, PriceWeight::FRUGAL);
+        let within_band = planned_leg(pricer, PriceWeight::FRUGAL, 490);
         assert_eq!(
             within_band.chosen_journey.first_ride.train_label.category,
             "ICE"
@@ -1445,5 +1547,27 @@ mod tests {
         // Both count as the cheapest price, 35 euro at three minutes per euro.
         assert_eq!(parts.price_cost, 10_500);
         assert_eq!(parts.total_cost, 130);
+    }
+
+    #[test]
+    fn the_search_drops_the_cheap_train_only_without_a_weight() {
+        let pricer = CategoryPricer {
+            ice: EuroCents(6_000),
+            regional: EuroCents(3_500),
+        };
+        // By time alone the regional train is dominated: it leaves no earlier, arrives no
+        // earlier and takes longer. At a weight its lower price keeps it in the search, and
+        // the plan shows the fast train as the alternative.
+        let by_time = planned_leg(pricer, PriceWeight::TIME_FIRST, 480);
+        assert_eq!(by_time.alternative_journeys.len(), 0);
+        let by_price = planned_leg(pricer, PriceWeight::FRUGAL, 480);
+        assert_eq!(by_price.alternative_journeys.len(), 1);
+        assert_eq!(
+            by_price.alternative_journeys[0]
+                .first_ride
+                .train_label
+                .category,
+            "ICE"
+        );
     }
 }

@@ -13,6 +13,7 @@ chrono.workspace = true
 nalgebra.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+rustc-hash.workspace = true
 smol_str.workspace = true
 thiserror.workspace = true
 toml.workspace = true

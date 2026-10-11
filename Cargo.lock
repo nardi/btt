@@ -705,6 +705,7 @@ dependencies = [
  "friedrich",
  "gbdt",
  "nalgebra 0.35.0",
+ "rustc-hash",
  "serde",
  "serde_json",
  "smol_str",

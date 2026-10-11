@@ -613,5 +613,72 @@ impl TicketPriceSource for SharedPriceModel {
     }
 }
 
+impl PriceModel {
+    /// Returns the posterior mean weight of a term, at its prior when no observation has
+    /// involved it.
+    fn mean_of(&self, feature: &Feature) -> f64 {
+        self.feature_indices.get(feature).map_or_else(
+            || self.prior_of(feature).0,
+            |&index| self.posterior.moments(&[(index, 1.0)]).0,
+        )
+    }
+
+    /// Returns the log price of one class of rides from the posterior mean of the model.
+    ///
+    /// The constant gathers every offset of the class, the distance gathers every slope, and
+    /// the curve and the base hold the terms of an operator's own tariff. The border surcharge
+    /// is left out, because the search prices a ride by the station it boards at.
+    pub fn route_row(
+        &self,
+        operator: &str,
+        category: &str,
+        offers_berths: bool,
+        country: Option<&str>,
+    ) -> crate::price_table::PriceRow {
+        let kind = self.config.kind_of(operator, category, offers_berths);
+        let mut constant = self.mean_of(&Feature::Intercept) + self.mean_of(&Feature::Kind(kind));
+        let mut distance = self.mean_of(&Feature::Slope) + self.mean_of(&Feature::KindSlope(kind));
+        if let Some(code) = country {
+            constant += self.mean_of(&Feature::Country(code.into()))
+                + self.mean_of(&Feature::CountryKind(code.into(), kind));
+            distance += self.mean_of(&Feature::CountrySlope(code.into()));
+        }
+        // The model gives an operator without a name no terms of its own.
+        let (curve, base) = if operator.is_empty() {
+            (0.0, 0.0)
+        } else {
+            constant += self.mean_of(&Feature::Operator(operator.into()))
+                + self.mean_of(&Feature::Category(
+                    operator.into(),
+                    category.to_uppercase().into(),
+                ));
+            distance += self.mean_of(&Feature::OperatorSlope(operator.into()));
+            (
+                self.mean_of(&Feature::OperatorCurve(operator.into())),
+                self.mean_of(&Feature::OperatorBase(operator.into())),
+            )
+        };
+        crate::price_table::PriceRow {
+            constant: row_f32(constant),
+            distance: row_f32(distance),
+            curve: row_f32(curve),
+            base: row_f32(base),
+            shift: row_f32(self.config.shift_kilometres(country)),
+        }
+    }
+
+    /// Returns the distance the log price divides by, in kilometres.
+    pub fn reference_kilometres(&self) -> f32 {
+        row_f32(self.config.reference_kilometres)
+    }
+}
+
+/// Narrows a posterior weight to the `f32` the price rows hold. The narrowing loses no
+/// weight that matters, because the model's prices are estimates with a wide range.
+#[expect(clippy::cast_possible_truncation)]
+fn row_f32(value: f64) -> f32 {
+    value as f32
+}
+
 #[cfg(test)]
 mod tests;
