@@ -436,6 +436,18 @@ export type LegPlan = {
 	 */
 	best_journey_cost?: number,
 	/**
+	 *  A journey that costs much less than the chosen one and takes a little longer, which the
+	 *  planner found by searching at the cheapest weight. `None` when the traveller already
+	 *  searches for the cheapest, or when no journey is cheaper by enough.
+	 */
+	cheapest?: Journey | null,
+	/**
+	 *  A journey that is much faster than the chosen one and costs a little more, which the
+	 *  planner found by searching without a weight. `None` when the traveller already searches
+	 *  by time alone, or when no journey is faster by enough.
+	 */
+	fastest?: Journey | null,
+	/**
 	 *  The moments between which the planner let the traveller leave the departure place.
 	 *  `None` in plans stored without it.
 	 */

@@ -109,6 +109,8 @@ impl StubBackend {
             ],
             follows_traveller_choice: false,
             best_journey_cost: u32::from(ride_minutes),
+            cheapest: None,
+            fastest: None,
             departure_window: None,
         }))
     }

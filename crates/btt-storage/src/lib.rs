@@ -749,6 +749,8 @@ mod tests {
             station_table: smallvec::smallvec![station("Köln Hbf"), station("Frankfurt Hbf")],
             follows_traveller_choice: true,
             best_journey_cost: 300,
+            cheapest: None,
+            fastest: None,
             departure_window: None,
         }));
         // A key with the highest bit set checks the conversion to SQLite's signed integers.

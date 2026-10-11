@@ -220,6 +220,16 @@ pub struct LegPlan {
     /// to others by same-day stops, the best journey is the one on the best chain.
     #[serde(default)]
     pub best_journey_cost: u32,
+    /// A journey that costs much less than the chosen one and takes a little longer, which the
+    /// planner found by searching at the cheapest weight. `None` when the traveller already
+    /// searches for the cheapest, or when no journey is cheaper by enough.
+    #[serde(default)]
+    pub cheapest: Option<Journey>,
+    /// A journey that is much faster than the chosen one and costs a little more, which the
+    /// planner found by searching without a weight. `None` when the traveller already searches
+    /// by time alone, or when no journey is faster by enough.
+    #[serde(default)]
+    pub fastest: Option<Journey>,
     /// The moments between which the planner let the traveller leave the departure place.
     /// `None` in plans stored without it.
     #[serde(default)]

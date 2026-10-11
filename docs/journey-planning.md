@@ -102,6 +102,10 @@ The pairing across the chain is dynamic programming over the layered problem, in
 
 After the plan, the planner solves each chain again with every date moved a day earlier and a day later. When a leg's best journey on the other day costs at least 90 minutes and 15% less on its own, the planner mentions that day. This is a search over one more discrete choice, the date, which the traveller makes by hand because moving a leg changes the nights around it.
 
+### Cheaper and faster journeys
+
+A traveller who plans by time never sees what a journey costs, and one who weighs prices never sees how fast a journey could be. After the first search of a leg, the planner therefore runs up to two more: one at the cheapest weight, whose best journey shows as the cheaper option when it saves at least 15 percent or 10 euro of the chosen journey's price and takes at most 90 minutes longer, and one without a weight, whose best journey shows as the faster option when it saves at least 30 minutes and costs at most 25 percent more. A traveller at the cheapest weight sees no cheaper option, and one without a weight sees no faster one. The extra searches run after the first, so the chosen journey is decided before any more work happens, and a leg that stops early keeps the plan it has.
+
 ## Heuristics and limitations
 
 The planner is exact for part of the cost and a heuristic for the rest. This section lists where it departs from the stated problem.

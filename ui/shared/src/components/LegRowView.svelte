@@ -21,7 +21,7 @@
     formatTimeInZone,
     parseMinutesOfDay,
   } from "../format";
-  import { formatEuroRange } from "../tickets";
+  import { formatEuroRange, formatEuro } from "../tickets";
   import type { LegRow } from "../itinerary";
   import type { LegViewState } from "../trip-source";
   import JourneyExplanation from "./JourneyExplanation.svelte";
@@ -170,6 +170,31 @@
   function journeyPrice(journey: Journey): string | null {
     const price = journey.cost_parts?.price ?? null;
     return price === null ? null : formatEuroRange(price);
+  }
+
+  /** Returns the trains of a journey, such as "RE 2". */
+  function journeyTrains(journey: Journey): string {
+    return journeyRides(journey)
+      .map((ride) => `${ride.train_label.category} ${ride.train_label.number}`)
+      .join(", ");
+  }
+
+  /** Returns the euro cents a candidate journey saves against the chosen one, or `null`. */
+  function priceSaving(candidate: Journey, chosen: Journey): number | null {
+    const candidatePrice = candidate.cost_parts?.price?.median ?? null;
+    const chosenPrice = chosen.cost_parts?.price?.median ?? null;
+    if (candidatePrice === null || chosenPrice === null) {
+      return null;
+    }
+    return chosenPrice - candidatePrice;
+  }
+
+  /** Returns the minutes a candidate journey takes longer than the chosen one. */
+  function minutesLonger(candidate: Journey, chosen: Journey): number {
+    return (
+      (candidate.cost_parts?.door_to_door_minutes ?? 0) -
+      (chosen.cost_parts?.door_to_door_minutes ?? 0)
+    );
   }
 
   function stationName(legPlan: LegPlan, stationIndex: number): string {
@@ -357,6 +382,34 @@
             </li>
           {/each}
         </ol>
+      {/if}
+      {#if legPlan.cheapest !== null && legPlan.cheapest !== undefined}
+        <!-- A journey the planner found by searching for the cheapest, which saves a lot. -->
+        {@const cheapest = legPlan.cheapest}
+        <span class="nearby-day">
+          Cheaper: {journeyTrains(cheapest)}, saves
+          {formatEuro(priceSaving(cheapest, journey) ?? 0)} and takes
+          {formatDuration(minutesLonger(cheapest, journey))} longer.
+          {#if onEdit !== undefined}
+            <button type="button" class="link" onclick={() => chooseJourney(cheapest)}>
+              Take this one
+            </button>
+          {/if}
+        </span>
+      {/if}
+      {#if legPlan.fastest !== null && legPlan.fastest !== undefined}
+        <!-- A journey the planner found by searching by time alone, which is much faster. -->
+        {@const fastest = legPlan.fastest}
+        <span class="nearby-day">
+          Faster: {journeyTrains(fastest)},
+          {formatDuration(-minutesLonger(fastest, journey))} quicker for
+          {formatEuro(Math.max(-(priceSaving(fastest, journey) ?? 0), 0))} more.
+          {#if onEdit !== undefined}
+            <button type="button" class="link" onclick={() => chooseJourney(fastest)}>
+              Take this one
+            </button>
+          {/if}
+        </span>
       {/if}
     {/if}
     {#if nearbyDay !== null}
