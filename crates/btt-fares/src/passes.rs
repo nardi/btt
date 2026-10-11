@@ -183,7 +183,11 @@ struct RawClassPrices {
 
 impl PassCatalogue {
     /// Reads the catalogue from the text of `interrail_passes.toml`.
-    pub(crate) fn from_toml(text: &str) -> Result<Self, FareDataError> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the text does not parse or holds an impossible pass.
+    pub fn from_toml(text: &str) -> Result<Self, FareDataError> {
         let file: PassesFile =
             toml::from_str(text).map_err(|source| FareDataError::Invalid { file: FILE, source })?;
         let invalid = |message: String| FareDataError::InvalidValue {

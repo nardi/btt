@@ -6,6 +6,7 @@
 
 mod links;
 mod optimizer;
+mod pass_plan;
 mod rides;
 
 use btt_fares::{FareData, PriceBook};
@@ -19,6 +20,7 @@ pub use links::{
     INTERRAIL_PASS_PAGE, Passengers, italo_link, italo_search_url, pass_link, shop_link,
 };
 pub use optimizer::{Problem, Settings, total_of};
+pub use pass_plan::{LegOption, LegToPlan, TripScenario, TripToPlan, solve};
 pub use rides::{RideInput, pricing_rides_of_journey, ride_input, rides_of_journey};
 
 /// What the optimizer needs to know.

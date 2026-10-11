@@ -45,7 +45,7 @@ pub use time::{
 };
 pub use traveller::{AgeGroup, DiscountCard, OwnedInterrailPass, Traveller};
 pub use trip::{
-    CURRENT_TRIP_SCHEMA_VERSION, ChosenJourney, FareType, InterrailPassPolicy, PriceWeight,
-    StoredTrip, TicketPreferences, TransferAversion, TravelClass, TravellerId, Trip, TripId,
-    TripPreferences, TripSummary,
+    CURRENT_TRIP_SCHEMA_VERSION, ChosenJourney, FareType, InterrailPassPolicy, PassDays,
+    PriceWeight, StoredTrip, TicketPreferences, TransferAversion, TravelClass, TravellerId, Trip,
+    TripId, TripPreferences, TripSummary,
 };

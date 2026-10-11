@@ -1,6 +1,6 @@
 //! Trips, their preferences and their stored form.
 
-use std::num::NonZeroU32;
+use std::num::{NonZeroU8, NonZeroU32};
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -162,6 +162,81 @@ impl PriceWeight {
     pub fn euro_per_hour(self) -> Option<f64> {
         (self.hundredths_of_minute_per_euro > 0)
             .then(|| 6000.0 / f64::from(self.hundredths_of_minute_per_euro))
+    }
+}
+
+/// The number of travel days a journey uses on a pass, from 1 to 3. A journey over midnight
+/// uses the day it leaves on and the morning after, and a long one takes a third day.
+///
+/// The field stays private, so the only ways to build a value are `new` and `TryFrom`.
+/// Deserialization goes through `new` as well, so a bad file cannot bypass the range.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, specta::Type)]
+#[specta(type = u8)]
+pub struct PassDays {
+    days: NonZeroU8,
+}
+
+impl PassDays {
+    /// Smallest allowed number of days.
+    pub const MINIMUM: u8 = 1;
+    /// Largest allowed number of days.
+    pub const MAXIMUM: u8 = 3;
+
+    /// Checks the range and wraps the value.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the value is outside `MINIMUM..=MAXIMUM`.
+    #[allow(unused_comparisons, clippy::cast_lossless)]
+    pub const fn new(days: u8) -> Result<Self, ValueOutOfRangeError> {
+        if days < Self::MINIMUM || days > Self::MAXIMUM {
+            return Err(ValueOutOfRangeError {
+                type_name: "PassDays",
+                value: days as i64,
+                minimum: Self::MINIMUM as i64,
+                maximum: Self::MAXIMUM as i64,
+            });
+        }
+        // The range check above keeps `days` away from zero.
+        Ok(Self {
+            days: match NonZeroU8::new(days) {
+                Some(days) => days,
+                None => std::unreachable!(),
+            },
+        })
+    }
+
+    /// Returns the number of travel days.
+    #[must_use]
+    pub const fn days(self) -> u8 {
+        self.days.get()
+    }
+}
+
+impl TryFrom<u8> for PassDays {
+    type Error = ValueOutOfRangeError;
+
+    fn try_from(days: u8) -> Result<Self, Self::Error> {
+        Self::new(days)
+    }
+}
+
+impl From<PassDays> for u8 {
+    fn from(days: PassDays) -> Self {
+        days.days.get()
+    }
+}
+
+impl serde::Serialize for PassDays {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serde::Serialize::serialize(&self.days.get(), serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for PassDays {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let days = u8::deserialize(deserializer)?;
+        Self::new(days).map_err(serde::de::Error::custom)
     }
 }
 

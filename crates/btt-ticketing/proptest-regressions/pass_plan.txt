@@ -1,0 +1,9 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 52356c150dc80e4968e9a67538272bd0dbaea100963971d85bbd4cf6050bf743 # shrinks to legs = [LegToPlan { date: 2026-07-01, options: [Single { cost_minutes: 30, price_cents: EuroCents(500) }] }, LegToPlan { date: 2026-07-04, options: [Single { cost_minutes: 30, price_cents: EuroCents(500) }] }, LegToPlan { date: 2026-07-07, options: [Single { cost_minutes: 31, price_cents: EuroCents(8755) }] }], weight = 699
+cc 08b27c7ca681310f98be34a48bd730b183fd03344783cf35fe49ce786d019887 # shrinks to legs = [LegToPlan { date: 2026-07-26, options: [Single { cost_minutes: 194, price_cents: EuroCents(5364) }, Pass { cost_minutes: 45, price_cents: EuroCents(1355), days: PassDays { days: 3 }, first_date: 2026-07-26 }] }, LegToPlan { date: 2026-07-27, options: [Single { cost_minutes: 146, price_cents: EuroCents(7365) }] }, LegToPlan { date: 2026-07-07, options: [Single { cost_minutes: 306, price_cents: EuroCents(6387) }, Pass { cost_minutes: 212, price_cents: EuroCents(1686), days: PassDays { days: 3 }, first_date: 2026-07-07 }] }], weight = 215
+cc 25753279bac85c1f3fd59b2133c7bcc8d327bdbb8e29afeb87b0468701c38457 # shrinks to parts = [(Single { cost_minutes: 30, price_cents: EuroCents(500) }, None, 0), (Single { cost_minutes: 30, price_cents: EuroCents(500) }, None, 0), (Single { cost_minutes: 338, price_cents: EuroCents(500) }, Some((30, EuroCents(0), PassDays { days: 1 }, 0)), 0)], weight = 0
