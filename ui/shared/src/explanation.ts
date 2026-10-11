@@ -5,6 +5,7 @@
 
 import type { Journey, JourneyCostParts, LegPlan, NearbyDaySuggestion } from "./bindings";
 import { formatDuration, formatTimeInZone } from "./format";
+import { formatEuro } from "./tickets";
 
 /** The parts of a cost, as the planner adds them up. */
 export type CostPartName =
@@ -14,6 +15,7 @@ export type CostPartName =
   | "changes"
   | "arrivalWindow"
   | "nightAwake"
+  | "price"
   | "restOfChain";
 
 /** Parts in the order the details table lists them. */
@@ -24,6 +26,7 @@ export const COST_PART_NAMES: readonly CostPartName[] = [
   "changes",
   "arrivalWindow",
   "nightAwake",
+  "price",
   "restOfChain",
 ];
 
@@ -35,6 +38,7 @@ export const COST_PART_LABELS: Record<CostPartName, string> = {
   changes: "Changes",
   arrivalWindow: "Outside the arrival window",
   nightAwake: "Awake at night",
+  price: "Price",
   restOfChain: "Rest of the day",
 };
 
@@ -75,6 +79,7 @@ export function partCosts(parts: JourneyCostParts): Record<CostPartName, number>
     changes: parts.transfer_count * parts.transfer_cost_each,
     arrivalWindow: parts.arrival_window_cost,
     nightAwake: parts.night_awake_cost,
+    price: Math.floor((parts.price_cost ?? 0) / 100),
     restOfChain: parts.rest_of_chain_cost,
   };
 }
@@ -108,6 +113,15 @@ function partPhrase(part: CostPartName, own: JourneyCostParts, other: JourneyCos
     case "nightAwake": {
       const difference = own.night_minutes_awake - other.night_minutes_awake;
       return `${formatDuration(Math.abs(difference))} ${more(difference, "more", "less")} of the night awake`;
+    }
+    case "price": {
+      const ownPrice = own.price?.median ?? null;
+      const otherPrice = other.price?.median ?? null;
+      if (ownPrice === null || otherPrice === null) {
+        return "a price the planner cannot estimate";
+      }
+      const difference = ownPrice - otherPrice;
+      return `${formatEuro(Math.abs(difference))} ${more(difference, "more expensive", "cheaper")}`;
     }
     case "restOfChain": {
       const difference = own.rest_of_chain_cost - other.rest_of_chain_cost;

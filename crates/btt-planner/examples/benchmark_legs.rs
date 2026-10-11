@@ -5,7 +5,9 @@
 //! <queries.txt> <responses.txt> <results.tsv>` to write the chosen journey, its cost and the
 //! planning time of each leg. Run it again with `check` in place of `record` after a change to
 //! the planner. The check lists every leg whose chosen journey or cost differs from the file,
-//! and compares the planning times.
+//! and compares the planning times. Run it with `count` to plan every leg at the balanced and
+//! the frugal price weight, which reports how many legs get a different chosen journey when
+//! prices count.
 
 use std::fmt::Write as _;
 use std::sync::Arc;
@@ -13,10 +15,10 @@ use std::time::Instant;
 
 use btt_geo::TimeZoneFinder;
 use btt_model::{
-    DurationMinutes, GeoCoordinates, LegPlanningResult, LegTravelMode, OvernightLegOptions,
-    StationSearchRadius, TripPreferences,
+    DurationMinutes, EuroRange, GeoCoordinates, Journey, LegPlanStation, LegPlanningResult,
+    LegTravelMode, OvernightLegOptions, PriceWeight, StationSearchRadius, TripPreferences,
 };
-use btt_planner::{LegEndpoint, LegPlanningInput, NoPrice, TimetableBundleRouter};
+use btt_planner::{JourneyPricer, LegEndpoint, LegPlanningInput, TimetableBundleRouter};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
@@ -34,6 +36,21 @@ struct MotisPlace {
     lon: f64,
 }
 
+/// Prices journeys with the ticket optimizer, so the price weights of the `count` mode see the
+/// prices the app plans with.
+struct TicketingPricer {
+    /// The tariffs, reservation rules and price model.
+    data: btt_fares::FareData,
+    /// The sources that price single tickets.
+    book: btt_fares::PriceBook,
+}
+
+impl JourneyPricer for TicketingPricer {
+    fn journey_price(&self, journey: &Journey, stations: &[LegPlanStation]) -> Option<EuroRange> {
+        btt_ticketing::journey_price(journey, stations, &self.data, &self.book)
+    }
+}
+
 /// What a leg planned to.
 struct LegResult {
     /// The leg's description, with its travel mode.
@@ -46,25 +63,29 @@ struct LegResult {
 
 fn main() {
     let mut arguments = std::env::args().skip(1);
-    let mode = arguments.next().expect("pass record or check");
+    let mode = arguments.next().expect("pass record, check or count");
     let bundle_path = arguments.next().expect("pass the bundle");
     let queries_path = arguments.next().expect("pass queries.txt");
     let responses_path = arguments.next().expect("pass responses.txt");
-    let results_path = arguments.next().expect("pass the results file");
     let limit: usize = arguments
         .next()
         .and_then(|limit| limit.parse().ok())
         .unwrap_or(usize::MAX);
-
+    // The data files are compiled in and a test in `btt-fares` loads them, so this cannot fail.
+    let data = btt_fares::FareData::bundled().expect("the bundled fare data is valid");
+    let book = btt_fares::PriceBook::from_data(&data);
+    let pricer = TicketingPricer { data, book };
     let router = TimetableBundleRouter::open(
         bundle_path.as_ref(),
         Arc::new(TimeZoneFinder::new()),
-        NoPrice,
+        pricer,
     )
     .expect("bundle loads");
-    let results = plan_queries(&router, &queries_path, &responses_path, limit);
+    let legs = legs(&queries_path, &responses_path, limit);
     match mode.as_str() {
         "record" => {
+            let results_path = arguments.next().expect("pass the results file");
+            let results = plan_queries(&router, &legs);
             let mut text = String::new();
             for result in &results {
                 // Writing to a string never fails.
@@ -77,22 +98,21 @@ fn main() {
             std::fs::write(&results_path, text).expect("results write");
             print_times("recorded", &results);
         }
-        "check" => check(&results, &results_path),
+        "check" => {
+            let results_path = arguments.next().expect("pass the results file");
+            check(&plan_queries(&router, &legs), &results_path);
+        }
+        "count" => count_price_weights(&router, &legs),
         other => panic!("unknown mode {other}"),
     }
 }
 
-/// Plans every query as a daytime and as a night leg.
-fn plan_queries(
-    router: &TimetableBundleRouter,
-    queries_path: &str,
-    responses_path: &str,
-    limit: usize,
-) -> Vec<LegResult> {
+/// Builds the daytime and the night leg of every benchmark query, at the weight of no price.
+fn legs(queries_path: &str, responses_path: &str, limit: usize) -> Vec<(String, LegPlanningInput)> {
     let preferences = TripPreferences::default();
     let queries = std::fs::read_to_string(queries_path).expect("queries read");
     let responses = std::fs::read_to_string(responses_path).expect("responses read");
-    let mut results = Vec::new();
+    let mut legs = Vec::new();
     for (query, response) in queries.lines().zip(responses.lines()).take(limit) {
         let Some(time) = query
             .split(['?', '&'])
@@ -126,32 +146,72 @@ fn plan_queries(
                 LegTravelMode::Overnight(OvernightLegOptions::DEFAULT),
             ),
         ] {
-            let input = LegPlanningInput {
-                departure: endpoint(from_coordinates, preferences.default_windows.departure),
-                arrival: endpoint(to_coordinates, preferences.default_windows.arrival),
-                departure_date: time.date_naive(),
-                travel_mode,
-                minimum_transfer_time: DurationMinutes(10),
-                pass_policy: preferences.pass_policy,
-                transfer_aversion: preferences.transfer_aversion,
-                chosen_journey: None,
-            };
-            let started = Instant::now();
-            let result = router.plan_leg(&input, || false);
-            let milliseconds = started.elapsed().as_secs_f64() * 1000.0;
-            results.push(LegResult {
-                description: format!(
+            legs.push((
+                format!(
                     "{} to {} on {}, {name}",
                     from.name,
                     to.name,
                     time.date_naive()
                 ),
-                journey: describe(&result),
-                milliseconds,
-            });
+                LegPlanningInput {
+                    departure: endpoint(from_coordinates, preferences.default_windows.departure),
+                    arrival: endpoint(to_coordinates, preferences.default_windows.arrival),
+                    departure_date: time.date_naive(),
+                    travel_mode,
+                    minimum_transfer_time: DurationMinutes(10),
+                    pass_policy: preferences.pass_policy,
+                    transfer_aversion: preferences.transfer_aversion,
+                    price_weight: PriceWeight::TIME_FIRST,
+                    chosen_journey: None,
+                },
+            ));
         }
     }
-    results
+    legs
+}
+
+/// Plans every leg of the benchmark and times each plan.
+fn plan_queries(
+    router: &TimetableBundleRouter<TicketingPricer>,
+    legs: &[(String, LegPlanningInput)],
+) -> Vec<LegResult> {
+    legs.iter()
+        .map(|(description, input)| {
+            let started = Instant::now();
+            let result = router.plan_leg(input, || false);
+            let milliseconds = started.elapsed().as_secs_f64() * 1000.0;
+            LegResult {
+                description: description.clone(),
+                journey: describe(&result),
+                milliseconds,
+            }
+        })
+        .collect()
+}
+
+/// Plans every leg at the balanced and the frugal price weight, and prints how many legs get a
+/// journey the planner would not pick by time alone.
+fn count_price_weights(
+    router: &TimetableBundleRouter<TicketingPricer>,
+    legs: &[(String, LegPlanningInput)],
+) {
+    for weight in [PriceWeight::BALANCED, PriceWeight::FRUGAL] {
+        let mut different = 0;
+        for (_, input) in legs {
+            let mut weighted = input.clone();
+            weighted.price_weight = weight;
+            let by_time = describe(&router.plan_leg(input, || false));
+            let by_price = describe(&router.plan_leg(&weighted, || false));
+            if by_time != by_price {
+                different += 1;
+            }
+        }
+        let minutes_per_euro = weight.hundredths_of_minute_per_euro() / 100;
+        println!(
+            "{different} of {} legs pick a different journey at {minutes_per_euro} minutes per euro",
+            legs.len()
+        );
+    }
 }
 
 /// Describes the chosen journey of a result by the number, the departure and the arrival of

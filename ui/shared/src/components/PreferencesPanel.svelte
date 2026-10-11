@@ -40,6 +40,14 @@
   function optionalNumber(input: HTMLInputElement): number | null {
     return input.value === "" ? null : input.valueAsNumber;
   }
+
+  /** The presets the weight control offers, with the weight each stores. */
+  const PRICE_WEIGHTS: { label: string; weight: number }[] = [
+    { label: "Time first", weight: 0 },
+    { label: "Balanced, 1 min per €", weight: 100 },
+    { label: "Frugal, 3 min per €", weight: 300 },
+    { label: "Cheapest, 8 min per €", weight: 800 },
+  ];
 </script>
 
 <section class="preferences">
@@ -83,6 +91,18 @@
           update({ minimum_transfer_time: Math.max(0, event.currentTarget.valueAsNumber || 0) })}
       />
       minutes
+    </label>
+    <label>
+      <span class="label">Price</span>
+      <select
+        value={preferences.price_weight}
+        {disabled}
+        onchange={(event) => update({ price_weight: Number(event.currentTarget.value) })}
+      >
+        {#each PRICE_WEIGHTS as preset (preset.weight)}
+          <option value={preset.weight}>{preset.label}</option>
+        {/each}
+      </select>
     </label>
     <label>
       <span class="label">Same-day stops</span>

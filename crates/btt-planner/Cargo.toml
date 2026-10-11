@@ -34,7 +34,9 @@ xxhash-rust.workspace = true
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
 serde_json.workspace = true
+btt-fares.workspace = true
 btt-storage.workspace = true
+btt-ticketing.workspace = true
 sha2.workspace = true
 zip.workspace = true
 

@@ -751,10 +751,12 @@ dependencies = [
 name = "btt-planner"
 version = "0.1.0"
 dependencies = [
+ "btt-fares",
  "btt-geo",
  "btt-model",
  "btt-router",
  "btt-storage",
+ "btt-ticketing",
  "btt-timetable",
  "chrono",
  "chrono-tz",

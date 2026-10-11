@@ -2,8 +2,8 @@
 
 use btt_model::{
     DailyTimeWindow, DurationMinutes, GeoCoordinates, InterrailPassPolicy, JourneyChoice,
-    LegTravelMode, PlaceStay, PlaceWindowOverride, SameDayStayRange, StationSearchRadius,
-    TransferAversion, Trip, TripPlace, TripPlaceId,
+    LegTravelMode, PlaceStay, PlaceWindowOverride, PriceWeight, SameDayStayRange,
+    StationSearchRadius, TransferAversion, Trip, TripPlace, TripPlaceId,
 };
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -40,6 +40,10 @@ pub struct LegPlanningInput {
     pub pass_policy: InterrailPassPolicy,
     /// Trade-off between travel time and transfers when picking a journey.
     pub transfer_aversion: TransferAversion,
+    /// How many minutes of travel time one euro of the journey's price is worth, in hundredths
+    /// of a minute. Zero plans by time alone, and a plan at any weight ranks the journeys by
+    /// their cost and their price together.
+    pub price_weight: PriceWeight,
     /// The journey the traveller picked for this leg, which the planner shows when it can.
     pub chosen_journey: Option<JourneyChoice>,
 }
@@ -56,11 +60,31 @@ impl LegPlanningInput {
     /// results of different backends and timetable bundle versions.
     pub fn cache_key(&self, backend_namespace: u64) -> LegCacheKey {
         // Every field is a plain value that postcard encodes without failing.
-        let encoded = postcard::to_stdvec(self).unwrap_or_default();
         LegCacheKey(xxhash_rust::xxh3::xxh3_64_with_seed(
-            &encoded,
+            &self.key_bytes(),
             backend_namespace,
         ))
+    }
+
+    /// Returns the encoding of this input that the cache key hashes. It lists the fields one by
+    /// one, and the price weight only when it is above zero, so results planned without prices
+    /// keep the keys they always had.
+    fn key_bytes(&self) -> Vec<u8> {
+        let parts = (
+            &self.departure,
+            &self.arrival,
+            &self.departure_date,
+            &self.travel_mode,
+            &self.minimum_transfer_time,
+            &self.pass_policy,
+            &self.transfer_aversion,
+            &self.chosen_journey,
+        );
+        if self.price_weight.hundredths_of_minute_per_euro() > 0 {
+            postcard::to_stdvec(&(parts, self.price_weight)).unwrap_or_default()
+        } else {
+            postcard::to_stdvec(&parts).unwrap_or_default()
+        }
     }
 }
 
@@ -99,6 +123,7 @@ pub fn leg_planning_inputs(trip: &Trip) -> SmallVec<[IdentifiedLegInput; 16]> {
                 minimum_transfer_time: preferences.minimum_transfer_time,
                 pass_policy: preferences.pass_policy,
                 transfer_aversion: preferences.transfer_aversion,
+                price_weight: preferences.price_weight,
                 chosen_journey: trip
                     .chosen_journeys
                     .iter()
@@ -144,10 +169,16 @@ impl LegChainInput {
         if self.legs.len() == 1 {
             return self.legs[0].input.cache_key(backend_namespace);
         }
-        let inputs: SmallVec<[&LegPlanningInput; 4]> =
-            self.legs.iter().map(|leg| &leg.input).collect();
-        // Every field is a plain value that postcard encodes without failing.
-        let encoded = postcard::to_stdvec(&(inputs, &self.stops, leg_index)).unwrap_or_default();
+        // The legs are encoded with the length prefix a sequence encoding has, so a chain of
+        // legs without a price weight keeps the key it always had.
+        let mut encoded = postcard::to_stdvec(&self.legs.len()).unwrap_or_default();
+        for leg in &self.legs {
+            encoded.extend(leg.input.key_bytes());
+        }
+        encoded.extend(
+            // Every field is a plain value that postcard encodes without failing.
+            postcard::to_stdvec(&(&self.stops, leg_index)).unwrap_or_default(),
+        );
         LegCacheKey(xxhash_rust::xxh3::xxh3_64_with_seed(
             &encoded,
             backend_namespace,
@@ -303,5 +334,29 @@ pub(crate) mod tests {
         let trip = trip_with_places(&FOUR_CITIES);
         let input = &leg_planning_inputs(&trip)[0].input;
         assert_ne!(input.cache_key(1), input.cache_key(2));
+    }
+
+    #[test]
+    fn a_zero_price_weight_keeps_the_key_and_a_larger_one_changes_it() {
+        let mut trip = trip_with_places(&FOUR_CITIES);
+        let without_price = leg_planning_inputs(&trip)[0].input.clone();
+        trip.preferences.price_weight = btt_model::PriceWeight::FRUGAL;
+        let frugal = leg_planning_inputs(&trip)[0].input.clone();
+        // The encoding of an input without a weight is the encoding the input had before the
+        // weight existed, so cached results planned at weight zero survive.
+        let before_prices = postcard::to_stdvec(&(
+            &without_price.departure,
+            &without_price.arrival,
+            &without_price.departure_date,
+            &without_price.travel_mode,
+            &without_price.minimum_transfer_time,
+            &without_price.pass_policy,
+            &without_price.transfer_aversion,
+            &without_price.chosen_journey,
+        ))
+        .unwrap();
+        assert_eq!(without_price.key_bytes(), before_prices);
+        assert_ne!(frugal.key_bytes(), before_prices);
+        assert_ne!(without_price.cache_key(1), frugal.cache_key(1));
     }
 }

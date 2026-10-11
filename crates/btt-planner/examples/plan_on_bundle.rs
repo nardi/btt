@@ -13,8 +13,8 @@ use std::time::Instant;
 use btt_geo::TimeZoneFinder;
 use btt_model::{
     DailyTimeWindow, DurationMinutes, GeoCoordinates, InterrailPassPolicy, LegPlan,
-    LegPlanStationIndex, LegPlanningResult, LegTravelMode, LocalTimeOfDay, StationSearchRadius,
-    TransferAversion,
+    LegPlanStationIndex, LegPlanningResult, LegTravelMode, LocalTimeOfDay, PriceWeight,
+    StationSearchRadius, TransferAversion,
 };
 use btt_planner::{LegEndpoint, LegPlanningInput, NoPrice, TimetableBundleRouter};
 use chrono::NaiveDate;
@@ -110,6 +110,7 @@ fn main() {
             minimum_transfer_time: DurationMinutes(10),
             pass_policy: InterrailPassPolicy::PreferPass,
             transfer_aversion: TransferAversion::new(50).unwrap(),
+            price_weight: PriceWeight::TIME_FIRST,
             chosen_journey: None,
         };
         let started = Instant::now();

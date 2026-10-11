@@ -6,10 +6,10 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use btt_geo::{TimeZoneFinder, local_time_to_unix_minutes};
 use btt_model::{
-    ArrivalFootpath, DurationMinutes, Journey, JourneyChoice, JourneyCostParts, LegPlan,
+    ArrivalFootpath, DurationMinutes, EuroRange, Journey, JourneyChoice, JourneyCostParts, LegPlan,
     LegPlanStation, LegPlanStationIndex, LegPlanningResult, LegTravelMode, NoJourneyReason,
-    OvernightLegOptions, SearchedWindow, StationWay, TrainLabel, TrainRide, TransferAndRide,
-    UnixTimeMinutes, WayToStationMode,
+    OvernightLegOptions, PriceWeight, SearchedWindow, StationWay, TrainLabel, TrainRide,
+    TransferAndRide, UnixTimeMinutes, WayToStationMode,
 };
 use btt_router::{
     CandidateStation, CostParetoJourneySet, CostSearchBuffers, MinutesSinceBundleStart,
@@ -419,13 +419,11 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             .journeys
             .iter()
             .filter_map(|ranked| {
-                let journey =
-                    self.priced_journey(ranked, input, ranking.night.as_ref(), &mut stations)?;
                 Some(RankedJourneyExplanation {
-                    price: journey.cost_parts.as_ref().and_then(|parts| parts.price),
-                    journey,
+                    journey: self.journey(ranked, input, ranking.night.as_ref(), &mut stations)?,
                     cost: ranked.cost,
                     cost_inputs: ranked.cost_inputs,
+                    price: ranked.price,
                 })
             })
             .collect();
@@ -544,14 +542,16 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
         }
     }
 
-    /// Returns every journey of a search with its cost, in the order of the search.
+    /// Returns every journey of a search with its cost, in the order of the search. The cost
+    /// counts the price at the traveller's weight, so the ranking that orders these journeys
+    /// by cost picks the cheapest one when the weight says so.
     fn journey_costs<'search>(
         &self,
         search: &'search LegSearch,
         input: &LegPlanningInput,
     ) -> Vec<RankedJourney<'search>> {
         let arrival_window = self.ranking_arrival_window(input, search.night.as_ref());
-        search
+        let mut journeys: Vec<RankedJourney<'search>> = search
             .journeys
             .iter()
             .map(|journey| {
@@ -567,9 +567,27 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
                     cost_inputs,
                     cost,
                     own_cost: cost,
+                    price: self.journey_price(journey, input, search.night.as_ref()),
+                    price_cost: 0,
                 }
             })
-            .collect()
+            .collect();
+        add_price_costs(&mut journeys, input.price_weight);
+        journeys
+    }
+
+    /// Returns the estimated price of one journey of the search, or `None` when no price is
+    /// known for its trains. The price needs the journey as the plan shows it, so a model
+    /// journey is built with a throwaway station table.
+    fn journey_price(
+        &self,
+        journey: &RaptorJourney,
+        input: &LegPlanningInput,
+        night: Option<&std::ops::Range<u32>>,
+    ) -> Option<EuroRange> {
+        let mut stations = LegPlanStations::default();
+        let journey = self.model_journey(journey, input, night, &mut stations)?;
+        self.pricer.journey_price(&journey, &stations.table)
     }
 
     /// Returns the arrival window the cost uses, in bundle minutes. On an overnight leg,
@@ -598,7 +616,7 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
         };
         let mut stations = LegPlanStations::default();
         let Some(chosen_journey) =
-            self.priced_journey(chosen, input, ranking.night.as_ref(), &mut stations)
+            self.journey(chosen, input, ranking.night.as_ref(), &mut stations)
         else {
             return LegPlanningResult::NoJourneyFound(NoJourneyReason::NoConnectionInWindow);
         };
@@ -632,9 +650,7 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
                 is_new
             })
             .take(MAXIMUM_ALTERNATIVES)
-            .filter_map(|ranked| {
-                self.priced_journey(ranked, input, ranking.night.as_ref(), &mut stations)
-            })
+            .filter_map(|ranked| self.journey(ranked, input, ranking.night.as_ref(), &mut stations))
             .collect();
         LegPlanningResult::Found(Box::new(LegPlan {
             chosen_journey,
@@ -920,15 +936,15 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             .collect()
     }
 
-    /// Turns a router journey into a model journey, adding its stations to the table.
-    fn journey(
+    /// Builds the model journey of a router journey, without cost parts, adding its stations
+    /// to the table.
+    fn model_journey(
         &self,
-        ranked: &RankedJourney<'_>,
+        journey: &RaptorJourney,
         input: &LegPlanningInput,
         night: Option<&std::ops::Range<u32>>,
         stations: &mut LegPlanStations,
     ) -> Option<Journey> {
-        let journey = ranked.journey;
         let mut rides = journey.rides.iter();
         let first = rides.next()?;
         let first_ride = self.train_ride(first, stations)?;
@@ -978,25 +994,21 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
                     .then(|| u8::try_from(position).ok())
                     .flatten()
             }),
-            cost_parts: Some(cost_parts(ranked, input)),
+            cost_parts: None,
         })
     }
 
-    /// Turns a router journey into a model journey and adds the estimated price to its cost
-    /// parts, so the plan shows what the journey costs next to its time.
-    fn priced_journey(
+    /// Turns a router journey into a model journey with its cost parts, which hold the price
+    /// the ranking weighed and what it cost.
+    fn journey(
         &self,
         ranked: &RankedJourney<'_>,
         input: &LegPlanningInput,
         night: Option<&std::ops::Range<u32>>,
         stations: &mut LegPlanStations,
     ) -> Option<Journey> {
-        let mut journey = self.journey(ranked, input, night, stations)?;
-        // The pricer reads the finished journey, so it runs before the cost parts borrow it.
-        let price = self.pricer.journey_price(&journey, &stations.table);
-        if let Some(parts) = &mut journey.cost_parts {
-            parts.price = price;
-        }
+        let mut journey = self.model_journey(ranked.journey, input, night, stations)?;
+        journey.cost_parts = Some(cost_parts(ranked, input));
         Some(journey)
     }
 
@@ -1151,6 +1163,12 @@ struct RankedJourney<'search> {
     cost: u32,
     /// The cost of the journey on its own.
     own_cost: u32,
+    /// The estimated price of the journey's tickets and night accommodation, or `None` when no
+    /// price is known for its trains.
+    price: Option<EuroRange>,
+    /// What the price costs at the traveller's price weight, in hundredths of a minute of
+    /// train travel.
+    price_cost: u32,
 }
 
 /// The journeys of a search in the order the planner shows them.
@@ -1181,9 +1199,54 @@ fn cost_parts(ranked: &RankedJourney<'_>, input: &LegPlanningInput) -> JourneyCo
         ScoringWeights::DEFAULT,
     );
     let cost = i32::try_from(ranked.cost).unwrap_or(i32::MAX);
-    parts.rest_of_chain_cost = cost - parts.total_cost;
+    // The price counts in hundredths of a minute, and the cost keeps whole minutes, so the
+    // parts add up exactly.
+    let price_cost_minutes = i32::try_from(ranked.price_cost / 100).unwrap_or(i32::MAX);
+    parts.price = ranked.price;
+    parts.price_cost = ranked.price_cost;
+    parts.rest_of_chain_cost = cost - parts.total_cost - price_cost_minutes;
     parts.total_cost = cost;
     parts
+}
+
+/// Fills what the price of each ranked journey costs and adds it to the cost the ranking
+/// orders them by.
+///
+/// The cheapest price of the leg is the anchor of a dead band: a price within ten percent of
+/// it counts as the cheapest itself, because the model that estimates prices is off by more
+/// than that, so two journeys that close in price decide on their times. Without a weight the
+/// price changes no cost, and the ranking picks by time alone.
+fn add_price_costs(journeys: &mut [RankedJourney<'_>], weight: PriceWeight) {
+    let weight_hundredths = u32::from(weight.hundredths_of_minute_per_euro());
+    if weight_hundredths == 0 {
+        return;
+    }
+    let Some(cheapest) = journeys
+        .iter()
+        .filter_map(|ranked| ranked.price.map(|price| price.median().0))
+        .min()
+    else {
+        return;
+    };
+    let band = cheapest + cheapest / 10;
+    for ranked in journeys {
+        let price_cost = ranked
+            .price
+            .map(|price| {
+                let cents = if price.median().0 <= band {
+                    cheapest
+                } else {
+                    price.median().0
+                };
+                u64::from(weight_hundredths) * u64::from(cents) / 100
+            })
+            .map_or(0, |hundredths| {
+                u32::try_from(hundredths).unwrap_or(u32::MAX)
+            });
+        ranked.cost += price_cost / 100;
+        ranked.own_cost = ranked.cost;
+        ranked.price_cost = price_cost;
+    }
 }
 
 #[cfg(test)]
@@ -1253,7 +1316,7 @@ mod tests {
     }
 
     /// The leg between the two stations of the bundle, inside wide windows.
-    fn leg_input() -> LegPlanningInput {
+    fn leg_input(price_weight: PriceWeight) -> LegPlanningInput {
         let time = |hour| LocalTimeOfDay::from_hour_and_minute(hour, 0).unwrap();
         let endpoint = |latitude| crate::input::LegEndpoint {
             coordinates: GeoCoordinates::from_degrees(latitude, 8.0).unwrap(),
@@ -1268,16 +1331,21 @@ mod tests {
             minimum_transfer_time: DurationMinutes(10),
             pass_policy: InterrailPassPolicy::PreferPass,
             transfer_aversion: TransferAversion::new(50).unwrap(),
+            price_weight,
             chosen_journey: None,
         }
     }
 
     /// Returns the found plan of a leg planned with a pricer.
-    fn planned_leg<P: JourneyPricer>(pricer: P) -> Box<btt_model::LegPlan> {
+    fn planned_leg<P: JourneyPricer>(
+        pricer: P,
+        price_weight: PriceWeight,
+    ) -> Box<btt_model::LegPlan> {
         let bundle = bundle();
         let router =
             TimetableBundleRouter::from_loaded(bundle, Arc::new(TimeZoneFinder::new()), pricer);
-        let LegPlanningResult::Found(plan) = router.plan_leg(&leg_input(), || false) else {
+        let LegPlanningResult::Found(plan) = router.plan_leg(&leg_input(price_weight), || false)
+        else {
             panic!("the leg has a journey");
         };
         plan
@@ -1285,9 +1353,9 @@ mod tests {
 
     #[test]
     fn the_price_reaches_the_plan_without_changing_the_ranking() {
-        let unpriced = planned_leg(NoPrice);
+        let unpriced = planned_leg(NoPrice, PriceWeight::TIME_FIRST);
         let range = EuroRange::new(EuroCents(3000), EuroCents(4000), EuroCents(6000)).unwrap();
-        let priced = planned_leg(ConstantPricer(range));
+        let priced = planned_leg(ConstantPricer(range), PriceWeight::TIME_FIRST);
         // The chosen journey is the same one, at the same cost.
         assert_eq!(
             unpriced.chosen_journey.first_ride.departure_time,
@@ -1313,5 +1381,69 @@ mod tests {
         let alternative = &priced.alternative_journeys[0];
         assert_eq!(alternative.first_ride.train_label.category, "RE");
         assert_eq!(alternative.cost_parts.as_ref().unwrap().price, Some(range));
+    }
+
+    /// A pricer that charges each train by its category, which tells the fast expensive train
+    /// from the slow cheap one.
+    #[derive(Clone, Copy)]
+    struct CategoryPricer {
+        /// Price of the ICE, in euro cents.
+        ice: EuroCents,
+        /// Price of the regional train, in euro cents.
+        regional: EuroCents,
+    }
+
+    impl JourneyPricer for CategoryPricer {
+        fn journey_price(&self, journey: &Journey, _: &[LegPlanStation]) -> Option<EuroRange> {
+            let cents = if journey.first_ride.train_label.category == "ICE" {
+                self.ice
+            } else {
+                self.regional
+            };
+            Some(EuroRange::new(cents, cents, cents).unwrap())
+        }
+    }
+
+    #[test]
+    fn a_weight_lets_a_cheap_slow_train_win() {
+        let pricer = CategoryPricer {
+            ice: EuroCents(12_000),
+            regional: EuroCents(3_500),
+        };
+        // Without a weight the fast train wins, and at three minutes per euro the cheap one
+        // saves more than the extra half hour it takes.
+        let by_time = planned_leg(pricer, PriceWeight::TIME_FIRST);
+        assert_eq!(
+            by_time.chosen_journey.first_ride.train_label.category,
+            "ICE"
+        );
+        let by_price = planned_leg(pricer, PriceWeight::FRUGAL);
+        assert_eq!(
+            by_price.chosen_journey.first_ride.train_label.category,
+            "RE"
+        );
+        let parts = by_price.chosen_journey.cost_parts.unwrap();
+        // Three minutes per euro and 35 euro of price count 105 minutes on top of the time.
+        assert_eq!(parts.price_cost, 10_500);
+        assert_eq!(parts.total_cost, 135);
+    }
+
+    #[test]
+    fn prices_within_the_dead_band_decide_on_times() {
+        // The fast train is within ten percent of the cheap one, so the model cannot tell
+        // them apart and the ranking keeps the faster journey.
+        let pricer = CategoryPricer {
+            ice: EuroCents(3_700),
+            regional: EuroCents(3_500),
+        };
+        let within_band = planned_leg(pricer, PriceWeight::FRUGAL);
+        assert_eq!(
+            within_band.chosen_journey.first_ride.train_label.category,
+            "ICE"
+        );
+        let parts = within_band.chosen_journey.cost_parts.unwrap();
+        // Both count as the cheapest price, 35 euro at three minutes per euro.
+        assert_eq!(parts.price_cost, 10_500);
+        assert_eq!(parts.total_cost, 130);
     }
 }

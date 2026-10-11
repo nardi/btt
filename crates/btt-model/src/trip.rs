@@ -9,6 +9,7 @@ use smol_str::SmolStr;
 use specta::Type;
 use uuid::Uuid;
 
+use crate::bounded::ValueOutOfRangeError;
 use crate::bounded::bounded_integer;
 use crate::itinerary::{Itinerary, SameDayStayRange, TripPlaceId};
 use crate::plan::JourneyChoice;
@@ -106,6 +107,62 @@ impl Default for TicketPreferences {
 bounded_integer! {
     /// How many minutes of travel time one euro is worth in scoring, in hundredths of a minute.
     PriceWeight { hundredths_of_minute_per_euro: u16 } in 0, u16::MAX
+}
+
+impl PriceWeight {
+    /// Prices count for nothing, so the planner picks by time alone.
+    pub const TIME_FIRST: Self = Self {
+        hundredths_of_minute_per_euro: 0,
+    };
+    /// An hour of travel is worth 60 euro, the balanced weight.
+    pub const BALANCED: Self = Self {
+        hundredths_of_minute_per_euro: 100,
+    };
+    /// An hour of travel is worth 20 euro, the frugal weight.
+    pub const FRUGAL: Self = Self {
+        hundredths_of_minute_per_euro: 300,
+    };
+    /// An hour of travel is worth 7.50 euro, the cheapest weight.
+    pub const CHEAPEST: Self = Self {
+        hundredths_of_minute_per_euro: 800,
+    };
+
+    /// Returns the weight of a value of an hour in euro, which the preference stores as the
+    /// minutes per euro that follow from it. `TIME_FIRST` is the weight of no value at all,
+    /// because zero minutes per euro is not a number of euro.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `euro_per_hour` is negative, not a number, or so small that the
+    /// weight no longer fits its type.
+    pub fn of_euro_per_hour(euro_per_hour: f64) -> Result<Self, ValueOutOfRangeError> {
+        if !euro_per_hour.is_finite() || euro_per_hour < 0.0 {
+            return Err(ValueOutOfRangeError {
+                type_name: "PriceWeight",
+                value: 0,
+                minimum: i64::from(Self::MINIMUM),
+                maximum: i64::from(Self::MAXIMUM),
+            });
+        }
+        // One euro is worth sixty minutes divided by the value of an hour. A very small value
+        // saturates the cast, so the range check below rejects it.
+        #[expect(clippy::cast_possible_truncation)]
+        let hundredths = ((60.0 / euro_per_hour.max(f64::EPSILON)) * 100.0).round() as i64;
+        Self::new(u16::try_from(hundredths).map_err(|_| ValueOutOfRangeError {
+            type_name: "PriceWeight",
+            value: hundredths,
+            minimum: i64::from(Self::MINIMUM),
+            maximum: i64::from(Self::MAXIMUM),
+        })?)
+    }
+
+    /// Returns the value of an hour in euro the weight stands for, or `None` when prices
+    /// count for nothing.
+    #[must_use]
+    pub fn euro_per_hour(self) -> Option<f64> {
+        (self.hundredths_of_minute_per_euro > 0)
+            .then(|| 6000.0 / f64::from(self.hundredths_of_minute_per_euro))
+    }
 }
 
 /// Trip-wide planning preferences. Places and legs can override some of them.
@@ -229,4 +286,42 @@ pub struct TripSummary {
     pub start_date: NaiveDate,
     /// Number of places in the itinerary.
     pub place_count: u16,
+}
+
+#[cfg(test)]
+mod price_weight_tests {
+    use super::*;
+
+    #[test]
+    fn the_presets_hold_the_weight_of_an_hour() {
+        assert_eq!(PriceWeight::TIME_FIRST.hundredths_of_minute_per_euro(), 0);
+        assert_eq!(PriceWeight::BALANCED.hundredths_of_minute_per_euro(), 100);
+        assert_eq!(PriceWeight::FRUGAL.hundredths_of_minute_per_euro(), 300);
+        assert_eq!(PriceWeight::CHEAPEST.hundredths_of_minute_per_euro(), 800);
+    }
+
+    #[test]
+    fn the_weight_follows_the_value_of_an_hour() {
+        assert_eq!(
+            PriceWeight::of_euro_per_hour(60.0).unwrap(),
+            PriceWeight::BALANCED
+        );
+        assert_eq!(
+            PriceWeight::of_euro_per_hour(20.0).unwrap(),
+            PriceWeight::FRUGAL
+        );
+        assert_eq!(
+            PriceWeight::of_euro_per_hour(7.5).unwrap(),
+            PriceWeight::CHEAPEST
+        );
+        assert!(PriceWeight::of_euro_per_hour(-1.0).is_err());
+        assert!(PriceWeight::of_euro_per_hour(f64::NAN).is_err());
+        assert!(PriceWeight::of_euro_per_hour(0.001).is_err());
+        assert_eq!(
+            PriceWeight::BALANCED.euro_per_hour(),
+            Some(60.0),
+            "the value of an hour follows from the weight"
+        );
+        assert_eq!(PriceWeight::TIME_FIRST.euro_per_hour(), None);
+    }
 }
