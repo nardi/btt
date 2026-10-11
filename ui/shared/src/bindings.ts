@@ -239,6 +239,23 @@ export type DurationMinutes = number;
 /**  An amount of money in euro cents. */
 export type EuroCents = number;
 
+/**
+ *  An estimated price with its low end, its median and its high end. The median is the number
+ *  the planner decides with, and the ends go along for display.
+ * 
+ *  The fields stay private, so the only way to build a value is the constructor, which checks
+ *  that low is no more than median and median no more than high. Deserialization goes through
+ *  the constructor too, so a bad file cannot bypass the check.
+ */
+export type EuroRange = {
+	/**  The low end of the estimate. */
+	low: EuroCents,
+	/**  The median of the estimate. */
+	median: EuroCents,
+	/**  The high end of the estimate. */
+	high: EuroCents,
+};
+
 /**  The kind of single ticket the optimizer prices. */
 export type FareType = 
 /**  Full flexibility, valid on any train of the day. */
@@ -376,6 +393,16 @@ export type JourneyCostParts = {
 	night_minutes_awake: number,
 	/**  What those minutes cost. */
 	night_awake_cost: number,
+	/**
+	 *  The estimated price of the journey's tickets and night accommodation, which the leg view
+	 *  shows next to the time. `None` when no price is known for the journey's trains.
+	 */
+	price?: EuroRange | null,
+	/**
+	 *  What the price costs in hundredths of a minute of train travel: the price weight times
+	 *  the median price. The total cost counts it.
+	 */
+	price_cost?: number,
 	/**
 	 *  For a leg joined to others by same-day stops, what the best rest of the chain costs with
 	 *  this journey: the other legs and the stays between them. Zero for a leg on its own.

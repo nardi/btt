@@ -8,25 +8,26 @@ use tokio_util::sync::CancellationToken;
 use crate::bundle_router::TimetableBundleRouter;
 use crate::explanation::LegExplanation;
 use crate::input::{LegChainInput, LegPlanningInput};
+use crate::pricing::{JourneyPricer, NoPrice};
 #[cfg(feature = "stub")]
 use crate::stub::StubBackend;
 
 /// Revision of the planner's results. Cached results are `postcard` bytes, which don't
 /// survive a change to the layout of `LegPlanningResult`, and a change to the planning logic
 /// makes them stale. Either change raises this number, so the app drops the old results.
-const LEG_PLAN_REVISION: u64 = 14;
+const LEG_PLAN_REVISION: u64 = 15;
 
 /// Plans single legs. An enum instead of a trait object, because the set of backends is fixed
 /// at compile time.
-pub enum LegPlanningBackend {
+pub enum LegPlanningBackend<P: JourneyPricer = NoPrice> {
     /// Invents one direct train per leg from the straight-line distance.
     #[cfg(feature = "stub")]
     Stub(StubBackend),
     /// Searches journeys with RAPTOR on a timetable bundle.
-    TimetableBundle(Arc<TimetableBundleRouter>),
+    TimetableBundle(Arc<TimetableBundleRouter<P>>),
 }
 
-impl LegPlanningBackend {
+impl<P: JourneyPricer> LegPlanningBackend<P> {
     /// Returns a value that separates this backend's cached results from other backends'.
     ///
     /// The bundle backend includes the bundle version, so a new version never returns results

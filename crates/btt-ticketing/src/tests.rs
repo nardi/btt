@@ -5,11 +5,13 @@ use std::num::NonZeroU32;
 
 use btt_fares::{FareData, PassKind, PriceAgeGroup, PriceBook, RideFacts};
 use btt_model::{
-    EuroCents, StrategyKind, TicketPlan, TicketPreferences, TicketProduct, TicketStrategy,
-    TrainLabel, TravelClass, Traveller, TripPlaceId, UnixTimeMinutes,
+    DurationMinutes, EuroCents, Journey, LegPlanStation, LegPlanStationIndex, StrategyKind,
+    TicketPlan, TicketPreferences, TicketProduct, TicketStrategy, TrainLabel, TrainRide,
+    TransferAndRide, TravelClass, Traveller, TripPlaceId, UnixTimeMinutes,
 };
 use chrono::NaiveDate;
 use proptest::prelude::*;
+use smallvec::SmallVec;
 
 use crate::{Problem, RideInput, Settings, TicketRequest, plan_tickets};
 
@@ -922,4 +924,127 @@ fn a_european_sleeper_ride_asks_its_booking_service_for_the_ticket_and_the_accom
     assert_eq!(request.accommodation.as_ref().unwrap().train, "ES 453");
     assert_eq!(request.site_search.as_ref().unwrap().origin_code, "8400058");
     assert_eq!(accommodation.price.source.name, "European Sleeper offers");
+}
+
+/// Builds a journey of two connected rides of one day, with the stations it refers to.
+fn connected_journey(
+    operator: &str,
+    category: &str,
+    offers_berths: bool,
+) -> (Journey, Vec<LegPlanStation>) {
+    let station = |name: &str, longitude: f64| LegPlanStation {
+        name: name.into(),
+        coordinates: btt_model::GeoCoordinates::from_degrees(52.0, longitude).unwrap(),
+        time_zone: "Europe/Berlin".into(),
+    };
+    let stations = vec![
+        station("First", 13.0),
+        station("Middle", 13.4),
+        station("Last", 13.8),
+    ];
+    // The rides leave Berlin two hours after the UTC clock, in summer.
+    let departure_at = |hour: u32| {
+        let utc_minutes = u32::try_from(
+            date(0)
+                .and_hms_opt(hour, 0, 0)
+                .unwrap()
+                .and_utc()
+                .timestamp()
+                / 60,
+        )
+        .unwrap();
+        UnixTimeMinutes(utc_minutes - 120)
+    };
+    let ride = |from: u8, to: u8, hour: u32| TrainRide {
+        boarding_station: LegPlanStationIndex(from),
+        departure_time: departure_at(hour),
+        alighting_station: LegPlanStationIndex(to),
+        arrival_time: UnixTimeMinutes(departure_at(hour).0 + 60),
+        train_label: TrainLabel {
+            category: category.into(),
+            number: "100".into(),
+            operator: operator.into(),
+            agency: "DB Fernverkehr AG".into(),
+        },
+        offers_berths,
+        intermediate_station_coordinates: SmallVec::new(),
+        path_coordinates: vec![stations[usize::from(from)].coordinates],
+    };
+    let journey = Journey {
+        access: station_way(),
+        first_ride: ride(0, 1, 8),
+        later_rides: smallvec::smallvec![TransferAndRide {
+            transfer_duration: DurationMinutes(15),
+            ride: ride(1, 2, 10),
+        }],
+        arrival_footpath: None,
+        egress: station_way(),
+        sleeping_ride: None,
+        cost_parts: None,
+    };
+    (journey, stations)
+}
+
+/// A way between a place and a station of no length.
+fn station_way() -> btt_model::StationWay {
+    btt_model::StationWay {
+        duration: DurationMinutes(0),
+        distance_meters: 0,
+        mode: btt_model::WayToStationMode::Walk,
+    }
+}
+
+#[test]
+fn the_journey_price_is_what_the_tickets_cost() {
+    let (journey, stations) = connected_journey("db-fernverkehr", "ICE", false);
+    let data = fare_data();
+    let book = PriceBook::from_data(data);
+    let price = crate::journey_price(&journey, &stations, data, &book).unwrap();
+    let rides = crate::rides_of_journey(TripPlaceId(NonZeroU32::MIN), &journey, &stations);
+    let plan = plan(rides, None);
+    let singles = plan
+        .strategies
+        .iter()
+        .find(|strategy| strategy.kind == StrategyKind::SingleTickets)
+        .unwrap();
+    assert_eq!(price.low(), singles.total.low);
+    assert_eq!(price.high(), singles.total.high);
+    assert_eq!(
+        price.median().0,
+        u32::try_from(middle_total(singles)).unwrap()
+    );
+}
+
+#[test]
+fn the_journey_price_counts_the_night_accommodation() {
+    let (journey, stations) = connected_journey("oebb", "NJ", true);
+    let data = fare_data();
+    let book = PriceBook::from_data(data);
+    let price = crate::journey_price(&journey, &stations, data, &book).unwrap();
+    let rides = crate::rides_of_journey(TripPlaceId(NonZeroU32::MIN), &journey, &stations);
+    let plan = plan(rides, None);
+    let singles = plan
+        .strategies
+        .iter()
+        .find(|strategy| strategy.kind == StrategyKind::SingleTickets)
+        .unwrap();
+    assert!(
+        singles
+            .items
+            .iter()
+            .any(|item| item.product == TicketProduct::NightAccommodation),
+        "the night train has accommodation in the plan"
+    );
+    assert_eq!(
+        price.median().0,
+        u32::try_from(middle_total(singles)).unwrap()
+    );
+}
+
+#[test]
+fn a_journey_with_no_known_operator_gets_no_price() {
+    let (journey, stations) = connected_journey("", "ICE", false);
+    let data = fare_data();
+    let book = PriceBook::from_data(data);
+    assert!(crate::journey_price(&journey, &stations, data, &book).is_none());
 }

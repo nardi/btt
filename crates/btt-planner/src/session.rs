@@ -14,6 +14,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::backend::LegPlanningBackend;
 use crate::input::{LegCacheKey, LegChainInput, leg_chain_inputs};
+use crate::pricing::{JourneyPricer, NoPrice};
 
 /// Time a session waits after the last trip change before it starts planning, so a burst of
 /// edits leads to one run.
@@ -56,15 +57,19 @@ impl LegResultStore for NoLegResultStore {
 /// Each trip change cancels the running plan, waits for the debounce time and then replans the
 /// legs whose inputs differ from the ones the frontend has results for. Results stream to the
 /// event sink leg by leg.
-pub struct TripPlanningSession<S: PlanningEventSink, C: LegResultStore = NoLegResultStore> {
+pub struct TripPlanningSession<
+    S: PlanningEventSink,
+    C: LegResultStore = NoLegResultStore,
+    P: JourneyPricer = NoPrice,
+> {
     /// State shared with the running planning task.
-    shared: Arc<SessionShared<S, C>>,
+    shared: Arc<SessionShared<S, C, P>>,
 }
 
 /// Parts of a session that the planning task also uses.
-struct SessionShared<S, C> {
+struct SessionShared<S, C, P: JourneyPricer> {
     /// Plans single legs.
-    backend: Arc<LegPlanningBackend>,
+    backend: Arc<LegPlanningBackend<P>>,
     /// Receives the session's events.
     event_sink: S,
     /// Keeps leg results beyond the session, such as in the app database.
@@ -96,18 +101,18 @@ struct CurrentRun {
     task: JoinHandle<()>,
 }
 
-impl<S: PlanningEventSink> TripPlanningSession<S> {
+impl<S: PlanningEventSink, P: JourneyPricer> TripPlanningSession<S, NoLegResultStore, P> {
     /// Creates a session that plans with a backend and sends events to a sink, and keeps
     /// results in memory only.
-    pub fn new(backend: Arc<LegPlanningBackend>, event_sink: S, debounce: Duration) -> Self {
+    pub fn new(backend: Arc<LegPlanningBackend<P>>, event_sink: S, debounce: Duration) -> Self {
         Self::with_result_store(backend, event_sink, NoLegResultStore, debounce)
     }
 }
 
-impl<S: PlanningEventSink, C: LegResultStore> TripPlanningSession<S, C> {
+impl<S: PlanningEventSink, C: LegResultStore, P: JourneyPricer> TripPlanningSession<S, C, P> {
     /// Creates a session that also looks up and keeps leg results in a store.
     pub fn with_result_store(
-        backend: Arc<LegPlanningBackend>,
+        backend: Arc<LegPlanningBackend<P>>,
         event_sink: S,
         result_store: C,
         debounce: Duration,
@@ -146,7 +151,9 @@ impl<S: PlanningEventSink, C: LegResultStore> TripPlanningSession<S, C> {
     }
 }
 
-impl<S: PlanningEventSink, C: LegResultStore> Drop for TripPlanningSession<S, C> {
+impl<S: PlanningEventSink, C: LegResultStore, P: JourneyPricer> Drop
+    for TripPlanningSession<S, C, P>
+{
     fn drop(&mut self) {
         if let Some(run) = self.shared.lock_state().current_run.take() {
             run.cancellation.cancel();
@@ -155,7 +162,7 @@ impl<S: PlanningEventSink, C: LegResultStore> Drop for TripPlanningSession<S, C>
     }
 }
 
-impl<S: PlanningEventSink, C: LegResultStore> SessionShared<S, C> {
+impl<S: PlanningEventSink, C: LegResultStore, P: JourneyPricer> SessionShared<S, C, P> {
     /// Locks the state. A panic in another holder leaves the state consistent, because every
     /// section only replaces whole values, so a poisoned lock is used as is.
     fn lock_state(&self) -> MutexGuard<'_, SessionState> {

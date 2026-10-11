@@ -4,6 +4,7 @@ use chrono::{NaiveDate, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 use specta::Type;
+use thiserror::Error;
 
 use crate::itinerary::TripPlaceId;
 use crate::plan::TrainLabel;
@@ -108,6 +109,85 @@ pub struct PriceTotal {
     pub high: EuroCents,
     /// The lowest confidence of any part.
     pub kind: PriceKind,
+}
+
+/// An estimated price with its low end, its median and its high end. The median is the number
+/// the planner decides with, and the ends go along for display.
+///
+/// The fields stay private, so the only way to build a value is the constructor, which checks
+/// that low is no more than median and median no more than high. Deserialization goes through
+/// the constructor too, so a bad file cannot bypass the check.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Type)]
+pub struct EuroRange {
+    /// The low end of the estimate.
+    low: EuroCents,
+    /// The median of the estimate.
+    median: EuroCents,
+    /// The high end of the estimate.
+    high: EuroCents,
+}
+
+impl<'de> Deserialize<'de> for EuroRange {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        /// The three ends as they travel, in the order the constructor checks them.
+        #[derive(Deserialize)]
+        struct EuroRangeEnds {
+            low: EuroCents,
+            median: EuroCents,
+            high: EuroCents,
+        }
+        let ends = EuroRangeEnds::deserialize(deserializer)?;
+        Self::new(ends.low, ends.median, ends.high).map_err(serde::de::Error::custom)
+    }
+}
+
+/// Returned when the ends of a `EuroRange` are not in order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+#[error("the range must hold low <= median <= high, got {low}, {median}, {high} euro cents")]
+pub struct UnorderedEuroRangeError {
+    /// The low end that was rejected, in euro cents.
+    pub low: u32,
+    /// The median that was rejected, in euro cents.
+    pub median: u32,
+    /// The high end that was rejected, in euro cents.
+    pub high: u32,
+}
+
+impl EuroRange {
+    /// Checks the order of the ends and wraps them.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `low` is more than `median` or `median` is more than `high`.
+    pub fn new(
+        low: EuroCents,
+        median: EuroCents,
+        high: EuroCents,
+    ) -> Result<Self, UnorderedEuroRangeError> {
+        if low > median || median > high {
+            return Err(UnorderedEuroRangeError {
+                low: low.0,
+                median: median.0,
+                high: high.0,
+            });
+        }
+        Ok(Self { low, median, high })
+    }
+
+    /// Returns the low end of the estimate.
+    pub fn low(self) -> EuroCents {
+        self.low
+    }
+
+    /// Returns the median of the estimate.
+    pub fn median(self) -> EuroCents {
+        self.median
+    }
+
+    /// Returns the high end of the estimate.
+    pub fn high(self) -> EuroCents {
+        self.high
+    }
 }
 
 /// Where a link leads.

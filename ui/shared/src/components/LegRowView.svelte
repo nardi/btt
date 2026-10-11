@@ -21,6 +21,7 @@
     formatTimeInZone,
     parseMinutesOfDay,
   } from "../format";
+  import { formatEuroRange } from "../tickets";
   import type { LegRow } from "../itinerary";
   import type { LegViewState } from "../trip-source";
   import JourneyExplanation from "./JourneyExplanation.svelte";
@@ -165,6 +166,12 @@
     );
   }
 
+  /** Returns the estimated price of the journey's tickets, or `null` when none is known. */
+  function journeyPrice(journey: Journey): string | null {
+    const price = journey.cost_parts?.price ?? null;
+    return price === null ? null : formatEuroRange(price);
+  }
+
   function stationName(legPlan: LegPlan, stationIndex: number): string {
     return legPlan.station_table[stationIndex]?.name ?? "Unknown station";
   }
@@ -269,6 +276,9 @@
       </ol>
       <span class="summary">
         {formatDuration(journeyMinutes(journey))} · {transferSummary(journey)}
+        {#if journeyPrice(journey) !== null}
+          · {journeyPrice(journey)}
+        {/if}
         {#if legPlan.alternative_journeys.length > 0}
           ·
           <button

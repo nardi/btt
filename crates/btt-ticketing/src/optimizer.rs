@@ -13,8 +13,8 @@ use btt_fares::{
     ReservationRule, RideFacts, RuleScope,
 };
 use btt_model::{
-    AgeGroup, EuroCents, Price, PriceKind, PriceSource, PriceTotal, StrategyKind, TicketItem,
-    TicketPreferences, TicketProduct, TicketStrategy, TravelClass,
+    AgeGroup, EuroCents, EuroRange, Price, PriceKind, PriceSource, PriceTotal, StrategyKind,
+    TicketItem, TicketPreferences, TicketProduct, TicketStrategy, TravelClass,
 };
 use chrono::NaiveDate;
 use smol_str::SmolStr;
@@ -309,6 +309,41 @@ impl<'a> Problem<'a> {
     /// Returns the price of the single ticket that covers rides `first` to `last`.
     fn run_price(&self, first: usize, last: usize) -> &Price {
         &self.run_prices[first][last - first]
+    }
+
+    /// Returns the estimated price of the rides: the cheapest single tickets that cover them,
+    /// split into runs within each day the way `cover` splits them, plus the night
+    /// accommodation of the rides that have a rule. The median is the number the planner
+    /// decides with, and the ends go along for display. This is what the single-ticket
+    /// strategy of `strategies` costs, so a planned price and a ticket plan agree. Empty rides
+    /// have no price.
+    pub fn rides_price(&self) -> Option<EuroRange> {
+        if self.rides.is_empty() {
+            return None;
+        }
+        let mut low = 0_u64;
+        let mut middle = 0_u64;
+        let mut high = 0_u64;
+        for day in &self.days {
+            let cover = self.cover(day, |_| true);
+            for &(first, last) in &cover.runs {
+                let price = self.run_price(first, last);
+                low += u64::from(price.low.0);
+                middle += u64::from(price.middle().0);
+                high += u64::from(price.high.0);
+            }
+        }
+        for index in 0..self.rides.len() {
+            if let Some(price) = self.accommodation_price(index, false) {
+                low += u64::from(price.low.0);
+                middle += u64::from(price.middle().0);
+                high += u64::from(price.high.0);
+            }
+        }
+        // Every part holds low <= middle <= high, so the sums do too, and saturating each at
+        // the largest amount keeps that order.
+        let to_cents = |cents: u64| EuroCents(u32::try_from(cents).unwrap_or(u32::MAX));
+        EuroRange::new(to_cents(low), to_cents(middle), to_cents(high)).ok()
     }
 
     /// Returns whether one ticket can cover rides `first` to `last`. It can't when a ride

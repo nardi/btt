@@ -16,7 +16,7 @@ use btt_model::{
     LegPlanStationIndex, LegPlanningResult, LegTravelMode, LocalTimeOfDay, StationSearchRadius,
     TransferAversion,
 };
-use btt_planner::{LegEndpoint, LegPlanningInput, TimetableBundleRouter};
+use btt_planner::{LegEndpoint, LegPlanningInput, NoPrice, TimetableBundleRouter};
 use chrono::NaiveDate;
 
 /// Legs to plan, as names and coordinates of both ends.
@@ -87,7 +87,8 @@ fn main() {
 
     let started = Instant::now();
     let finder = Arc::new(TimeZoneFinder::new());
-    let router = TimetableBundleRouter::open(bundle_path.as_ref(), finder).expect("bundle loads");
+    let router =
+        TimetableBundleRouter::open(bundle_path.as_ref(), finder, NoPrice).expect("bundle loads");
     println!(
         "loaded bundle {} in {:?}",
         router.bundle_version(),

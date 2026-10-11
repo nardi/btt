@@ -14,6 +14,7 @@
     partCosts,
   } from "../explanation";
   import { formatDuration } from "../format";
+  import { formatEuroRange } from "../tickets";
 
   let {
     legPlan,
@@ -27,6 +28,12 @@
   /** Formats a part's cost, with a sign when it takes minutes off. */
   function formatCost(minutes: number): string {
     return minutes < 0 ? `−${formatDuration(-minutes)}` : formatDuration(minutes);
+  }
+
+  /** Returns a journey's estimated price, or `null` when none is known. */
+  function priceText(parts: JourneyCostParts | null | undefined): string | null {
+    const price = parts?.price ?? null;
+    return price === null ? null : formatEuroRange(price);
   }
 
   /** Returns the rows of the details table: each part of the chosen journey and another. */
@@ -73,6 +80,13 @@
                 {#each detailRows(alternative.cost_parts) as row (row.label)}
                   <tr><td>{row.label}</td><td>{row.chosen}</td><td>{row.other}</td></tr>
                 {/each}
+                {#if priceText(legPlan.chosen_journey.cost_parts) !== null || priceText(alternative.cost_parts) !== null}
+                  <tr>
+                    <td>Estimated price</td>
+                    <td>{priceText(legPlan.chosen_journey.cost_parts) ?? "none"}</td>
+                    <td>{priceText(alternative.cost_parts) ?? "none"}</td>
+                  </tr>
+                {/if}
                 <tr class="total">
                   <td>Total</td>
                   <td>{formatCost(legPlan.chosen_journey.cost_parts?.total_cost ?? 0)}</td>

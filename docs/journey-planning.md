@@ -80,6 +80,8 @@ Other algorithms solve the same search problem. The Connection Scan Algorithm (D
 
 The ranking computes each journey's cost from the table above and orders the journeys by it. The cheapest journey is the chosen one, unless the traveller picked another, and the alternatives are the next cheapest. An alternative that only repeats a shown journey at another time, with the same stations and train types, is left out, and so is one that costs more than twice the best.
 
+Every journey of the plan also carries the estimated price of its tickets and its night accommodation. The price is the cheapest split of the journey's rides into tickets, each priced the way the Tickets screen prices it, plus the extra a berth costs over a seat. It assumes one adult in second class, whose fare is the one the price model of `docs/price-model.md` estimates. A journey with no known operator carries no price, and the leg view shows none. The price changes no ranking.
+
 Because the cost is a sum of named terms, the difference between two journeys splits exactly into those terms. The planner gives every journey its cost broken into these parts, and for a leg of a chain one more part with everything the rest of the chain adds. From them, the traveller can see why a journey was chosen: the one or two parts that differ most from the best alternative, such as an earlier arrival that outweighs one more change, the same for each alternative and for the best journey on a nearby day, and which journeys the search left out.
 
 ### Night legs

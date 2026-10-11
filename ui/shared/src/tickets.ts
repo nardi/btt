@@ -2,6 +2,7 @@
 
 import type {
   EuroCents,
+  EuroRange,
   LiveQuote,
   Price,
   PriceKind,
@@ -20,6 +21,17 @@ export function formatEuro(cents: EuroCents): string {
 /** Formats a range, such as `€70 to €200`, or one amount when both ends are the same. */
 export function formatPriceRange(low: EuroCents, high: EuroCents): string {
   return low === high ? formatEuro(low) : `${formatEuro(low)} to ${formatEuro(high)}`;
+}
+
+/**
+ * Formats a planned journey's estimated price as its median with its range, such as
+ * `about €48 (€39 to €61)`, and one amount when both ends are the same.
+ */
+export function formatEuroRange(range: EuroRange): string {
+  if (range.low === range.high) {
+    return formatEuro(range.low);
+  }
+  return `about ${formatEuro(range.median)} (${formatEuro(range.low)} to ${formatEuro(range.high)})`;
 }
 
 /**

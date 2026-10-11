@@ -7,6 +7,7 @@ mod cost_model;
 pub mod explanation;
 pub mod input;
 mod operators;
+mod pricing;
 mod ride_path;
 pub mod scoring;
 pub mod session;
@@ -20,6 +21,7 @@ pub use input::{
     IdentifiedLegInput, LegCacheKey, LegChainInput, LegEndpoint, LegPlanningInput, SameDayStop,
     leg_chain_inputs, leg_planning_inputs,
 };
+pub use pricing::{JourneyPricer, NoPrice};
 pub use session::{
     DEFAULT_PLANNING_DEBOUNCE, LegResultStore, NoLegResultStore, PlanningEventSink,
     TripPlanningSession,

@@ -16,7 +16,7 @@ use btt_model::{
     DurationMinutes, GeoCoordinates, LegPlanningResult, LegTravelMode, OvernightLegOptions,
     StationSearchRadius, TripPreferences,
 };
-use btt_planner::{LegEndpoint, LegPlanningInput, TimetableBundleRouter};
+use btt_planner::{LegEndpoint, LegPlanningInput, NoPrice, TimetableBundleRouter};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
@@ -56,8 +56,12 @@ fn main() {
         .and_then(|limit| limit.parse().ok())
         .unwrap_or(usize::MAX);
 
-    let router = TimetableBundleRouter::open(bundle_path.as_ref(), Arc::new(TimeZoneFinder::new()))
-        .expect("bundle loads");
+    let router = TimetableBundleRouter::open(
+        bundle_path.as_ref(),
+        Arc::new(TimeZoneFinder::new()),
+        NoPrice,
+    )
+    .expect("bundle loads");
     let results = plan_queries(&router, &queries_path, &responses_path, limit);
     match mode.as_str() {
         "record" => {

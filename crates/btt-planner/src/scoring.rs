@@ -120,6 +120,8 @@ pub fn journey_cost_parts(
         sleeping_minutes,
         night_minutes_awake: inputs.night_minutes_awake,
         night_awake_cost,
+        price: None,
+        price_cost: 0,
         rest_of_chain_cost: 0,
         total_cost: i32::try_from(total).unwrap_or(i32::MAX),
     }

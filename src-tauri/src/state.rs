@@ -23,6 +23,7 @@ use tauri::ipc::Channel;
 use crate::commands::CommandError;
 use crate::log_buffer::RecentLogLines;
 use crate::place_naming::{has_provisional_name, provisional_place_name};
+use crate::pricing::PriceBookJourneyPricer;
 use crate::ticket_report::{LiveQuoteLogEntry, TicketPlanRecord};
 
 /// `User-Agent` for requests to public services, which ask clients to identify themselves.
@@ -90,7 +91,8 @@ pub struct OpenTrip {
     /// The current state of the trip, which every edit starts from.
     pub trip: Trip,
     /// Plans the trip and streams results to the frontend.
-    pub planning_session: TripPlanningSession<ChannelEventSink, StorageLegResultStore>,
+    pub planning_session:
+        TripPlanningSession<ChannelEventSink, StorageLegResultStore, PriceBookJourneyPricer>,
     /// Earlier and undone states of the trip, for undo and redo. Kept in memory only, so it
     /// ends when the trip closes.
     pub history: TripHistory,
@@ -101,13 +103,14 @@ pub struct AppState {
     /// The app's database, shared with the planning sessions.
     pub storage: Arc<Storage>,
     /// Plans single legs for every planning session.
-    pub planning_backend: Arc<LegPlanningBackend>,
+    pub planning_backend: Arc<LegPlanningBackend<PriceBookJourneyPricer>>,
     /// Searches places by name and position.
     pub photon: PhotonClient,
-    /// The pass list, reservation rules and price model for tickets.
-    pub fare_data: FareData,
-    /// The sources that price single tickets.
-    pub price_book: PriceBook,
+    /// The pass list, reservation rules and price model for tickets, shared with the planner's
+    /// pricer.
+    pub fare_data: Arc<FareData>,
+    /// The sources that price single tickets, shared with the planner's pricer.
+    pub price_book: Arc<PriceBook>,
     /// Looks up prices on the SBB booking site. `None` when its HTTP client could not be built.
     pub sbb_service: Option<SbbService>,
     /// Looks up prices on the booking sites that are read in a hidden window.
@@ -161,9 +164,15 @@ impl AppState {
         recent_log_lines: RecentLogLines,
     ) -> Result<Self, btt_geo::PhotonError> {
         let time_zone_finder = Arc::new(TimeZoneFinder::new());
+        // The fare data comes first, because the planner's pricer shares it.
+        // The data files are compiled in and a test in `btt-fares` loads them, so this cannot
+        // fail.
+        let fare_data = Arc::new(FareData::bundled().expect("the bundled fare data is valid"));
+        let price_book = Arc::new(PriceBook::from_data(&fare_data));
+        let pricer = PriceBookJourneyPricer::new(Arc::clone(&fare_data), Arc::clone(&price_book));
         let bundle_path = find_bundle(data_directory);
         let bundle_router = bundle_path.clone().and_then(|path| {
-            match TimetableBundleRouter::open(&path, Arc::clone(&time_zone_finder)) {
+            match TimetableBundleRouter::open(&path, Arc::clone(&time_zone_finder), pricer) {
                 Ok(router) => {
                     tracing::info!(path = %path.display(), version = router.bundle_version(), "planning with a timetable bundle");
                     Some(router)
@@ -188,8 +197,6 @@ impl AppState {
             Err(error) => tracing::warn!(%error, "could not clean up planned legs"),
         }
         // The data files are compiled in and a test in `btt-fares` loads them, so this cannot fail.
-        let fare_data = FareData::bundled().expect("the bundled fare data is valid");
-        let price_book = PriceBook::from_data(&fare_data);
         let storage = Arc::new(storage);
         let quote_store: Arc<dyn QuoteStore> = Arc::new(StorageQuoteStore(Arc::clone(&storage)));
         let trenitalia_service =

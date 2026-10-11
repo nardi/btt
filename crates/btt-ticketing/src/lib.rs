@@ -9,14 +9,17 @@ mod optimizer;
 mod rides;
 
 use btt_fares::{FareData, PriceBook};
-use btt_model::{AgeGroup, TicketPlan, TicketPreferences, TicketRide, TravelClass, Traveller};
+use btt_model::{
+    AgeGroup, EuroRange, Journey, LegPlanStation, TicketPlan, TicketPreferences, TicketRide,
+    TravelClass, Traveller,
+};
 use smol_str::SmolStr;
 
 pub use links::{
     INTERRAIL_PASS_PAGE, Passengers, italo_link, italo_search_url, pass_link, shop_link,
 };
 pub use optimizer::{Problem, Settings, total_of};
-pub use rides::{RideInput, ride_input, rides_of_journey};
+pub use rides::{RideInput, pricing_rides_of_journey, ride_input, rides_of_journey};
 
 /// What the optimizer needs to know.
 pub struct TicketRequest<'a> {
@@ -112,6 +115,41 @@ pub fn plan_tickets(request: &TicketRequest<'_>, data: &FareData, book: &PriceBo
         traveller_name: request.traveller.map(|traveller| traveller.name.clone()),
         notes,
     }
+}
+
+/// Returns the estimated price of the single tickets and the night accommodation of a
+/// journey, which the planner shows next to the journey's time. The price is what the
+/// single-ticket strategy of `plan_tickets` costs for the same rides: the cheapest tickets
+/// that cover them and the extra for a berth. It assumes one adult in second class, whose
+/// fare is the one the price model predicts. Returns `None` when a train of the journey has
+/// no known operator, or when the station table does not hold every station of the journey.
+pub fn journey_price(
+    journey: &Journey,
+    stations: &[LegPlanStation],
+    data: &FareData,
+    book: &PriceBook,
+) -> Option<EuroRange> {
+    let ride_count = journey.rides().count();
+    let rides = pricing_rides_of_journey(journey, stations);
+    if rides.len() != ride_count
+        || rides
+            .iter()
+            .any(|ride| ride.train_label.operator.is_empty())
+    {
+        return None;
+    }
+    let preferences = TicketPreferences::default();
+    let first_day = rides.first()?.departure_date;
+    let settings = Settings {
+        class: TravelClass::Second,
+        age_group: AgeGroup::Adult,
+        residence_country: None,
+        preferences: &preferences,
+        purchase_date: first_day,
+        today: first_day,
+        single_ticket_percent: 100,
+    };
+    Problem::new(&rides, data, book, &settings).rides_price()
 }
 
 #[cfg(test)]

@@ -8,6 +8,7 @@ use chrono::NaiveDate;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::{LegPlanStations, MINUTES_PER_DAY, TimetableBundleRouter};
+use crate::pricing::JourneyPricer;
 
 /// How many picks a sample may try per ride it asks for. Picks fail on days a trip does not
 /// run and on stops where boarding or alighting is not allowed.
@@ -44,7 +45,7 @@ impl SplitMixGenerator {
     }
 }
 
-impl TimetableBundleRouter {
+impl<P: JourneyPricer> TimetableBundleRouter<P> {
     /// Picks up to `per_operator` rides of each operator's trains, each on a random trip, from
     /// a random stop to a later one, on one of `days`. The rides span distances from one stop
     /// to the whole route. A day outside the validity of the bundle is never picked.

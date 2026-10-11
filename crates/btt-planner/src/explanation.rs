@@ -1,7 +1,7 @@
 //! What a leg plan came from, for problem reports: the candidate stations and every journey
 //! the search found, with its cost.
 
-use btt_model::{GeoCoordinates, Journey, LegPlanStation, LegPlanningResult};
+use btt_model::{EuroRange, GeoCoordinates, Journey, LegPlanStation, LegPlanningResult};
 use serde::Serialize;
 use smol_str::SmolStr;
 
@@ -60,4 +60,7 @@ pub struct RankedJourneyExplanation {
     pub cost: u32,
     /// What the cost came from.
     pub cost_inputs: JourneyCostInputs,
+    /// The estimated price of the journey's tickets and night accommodation, or `None` when
+    /// no price is known for its trains.
+    pub price: Option<EuroRange>,
 }

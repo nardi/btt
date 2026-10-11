@@ -829,6 +829,7 @@ dependencies = [
  "proptest",
  "serde",
  "serde_json",
+ "smallvec",
  "smol_str",
 ]
 

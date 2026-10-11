@@ -13,6 +13,7 @@ btt-model.workspace = true
 chrono.workspace = true
 chrono-tz.workspace = true
 smol_str.workspace = true
+smallvec.workspace = true
 
 [dev-dependencies]
 serde.workspace = true

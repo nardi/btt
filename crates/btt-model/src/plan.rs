@@ -8,6 +8,7 @@ use specta::Type;
 
 use crate::coordinates::GeoCoordinates;
 use crate::itinerary::TripPlaceId;
+use crate::tickets::EuroRange;
 use crate::time::{DurationMinutes, UnixTimeMinutes};
 use crate::trip::Trip;
 
@@ -177,6 +178,14 @@ pub struct JourneyCostParts {
     pub night_minutes_awake: u32,
     /// What those minutes cost.
     pub night_awake_cost: u32,
+    /// The estimated price of the journey's tickets and night accommodation, which the leg view
+    /// shows next to the time. `None` when no price is known for the journey's trains.
+    #[serde(default)]
+    pub price: Option<EuroRange>,
+    /// What the price costs in hundredths of a minute of train travel: the price weight times
+    /// the median price. The total cost counts it.
+    #[serde(default)]
+    pub price_cost: u32,
     /// For a leg joined to others by same-day stops, what the best rest of the chain costs with
     /// this journey: the other legs and the stays between them. Zero for a leg on its own.
     pub rest_of_chain_cost: i32,

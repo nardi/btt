@@ -95,6 +95,20 @@ pub fn rides_of_journey(
         .collect()
 }
 
+/// Builds the rides of a journey for pricing, which reads no leg attribution. A ride whose
+/// stations the table does not hold or whose time zone is unknown is left out, which the
+/// caller can tell from the length.
+pub fn pricing_rides_of_journey(journey: &Journey, stations: &[LegPlanStation]) -> Vec<RideInput> {
+    journey
+        .rides()
+        .filter_map(|ride| ride_input(UNGROUPED_PLACE, ride, stations))
+        .collect()
+}
+
+/// Attributes a ride to no leg, which only the pricing paths use because they never read the
+/// attribution.
+const UNGROUPED_PLACE: TripPlaceId = TripPlaceId(std::num::NonZeroU32::MIN);
+
 /// Builds the optimizer's view of one train ride, or returns `None` when the table does not
 /// hold its stations or its time zone is unknown.
 pub fn ride_input(

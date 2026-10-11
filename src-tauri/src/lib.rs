@@ -7,6 +7,7 @@ mod log_buffer;
 mod place_naming;
 mod price_learning;
 mod price_seed;
+mod pricing;
 mod probe;
 mod problem_report;
 mod quote_refresh;

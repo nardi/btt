@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use btt_geo::TimeZoneFinder;
 use btt_model::{Journey, LegPlan, LegPlanStationIndex, LegPlanningResult, UnixTimeMinutes};
-use btt_planner::{TimetableBundleRouter, leg_chain_inputs};
+use btt_planner::{NoPrice, TimetableBundleRouter, leg_chain_inputs};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
@@ -67,8 +67,12 @@ fn main() {
         None => println!("Bundle: the report was made without a bundle"),
     }
 
-    let router = TimetableBundleRouter::open(bundle_path.as_ref(), Arc::new(TimeZoneFinder::new()))
-        .expect("bundle loads");
+    let router = TimetableBundleRouter::open(
+        bundle_path.as_ref(),
+        Arc::new(TimeZoneFinder::new()),
+        NoPrice,
+    )
+    .expect("bundle loads");
     // Legs joined by same-day stops are planned together, as the app does. The chains come
     // from the report's trip, which older reports have too.
     let trip = btt_storage::trip_from_document(&read_entry(&mut archive, "trip.json"))

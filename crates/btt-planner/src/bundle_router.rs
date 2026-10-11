@@ -31,6 +31,7 @@ use crate::cost_model::LegCostModel;
 use crate::explanation::{CandidateExplanation, LegExplanation, RankedJourneyExplanation};
 use crate::input::{LegChainInput, LegEndpoint, LegPlanningInput, SameDayStop};
 use crate::operators::OperatorTable;
+use crate::pricing::{JourneyPricer, NoPrice};
 use crate::ride_path::StationHopGraph;
 use crate::scoring::{
     JourneyCostInputs, ScoringWeights, journey_cost, journey_cost_parts, transfer_cost_minutes,
@@ -93,7 +94,7 @@ fn window_slices(
 }
 
 /// Plans legs on a loaded bundle.
-pub struct TimetableBundleRouter {
+pub struct TimetableBundleRouter<P: JourneyPricer = NoPrice> {
     /// The loaded bundle.
     bundle: LoadedTimetableBundle,
     /// Finds stations near a place.
@@ -112,9 +113,11 @@ pub struct TimetableBundleRouter {
     spare_search_buffers: Mutex<Vec<CostSearchBuffers>>,
     /// Tells the operator of a train from its agency and category.
     operators: OperatorTable,
+    /// Prices a journey, which the plan shows next to the journey's time.
+    pricer: P,
 }
 
-impl TimetableBundleRouter {
+impl<P: JourneyPricer> TimetableBundleRouter<P> {
     /// Maps a bundle file and builds its station index and lower bound graph.
     ///
     /// # Errors
@@ -123,10 +126,12 @@ impl TimetableBundleRouter {
     pub fn open(
         path: &Path,
         time_zone_finder: Arc<TimeZoneFinder>,
+        pricer: P,
     ) -> Result<Self, BundleLoadError> {
         Ok(Self::from_loaded(
             LoadedTimetableBundle::open(path)?,
             time_zone_finder,
+            pricer,
         ))
     }
 
@@ -134,6 +139,7 @@ impl TimetableBundleRouter {
     pub fn from_loaded(
         bundle: LoadedTimetableBundle,
         time_zone_finder: Arc<TimeZoneFinder>,
+        pricer: P,
     ) -> Self {
         let station_index = StationIndex::new(&bundle);
         let search_index = SearchIndex::new(&bundle);
@@ -162,6 +168,7 @@ impl TimetableBundleRouter {
             routes_with_berths,
             spare_search_buffers: Mutex::new(Vec::new()),
             operators: OperatorTable::bundled(),
+            pricer,
         }
     }
 
@@ -412,8 +419,11 @@ impl TimetableBundleRouter {
             .journeys
             .iter()
             .filter_map(|ranked| {
+                let journey =
+                    self.priced_journey(ranked, input, ranking.night.as_ref(), &mut stations)?;
                 Some(RankedJourneyExplanation {
-                    journey: self.journey(ranked, input, ranking.night.as_ref(), &mut stations)?,
+                    price: journey.cost_parts.as_ref().and_then(|parts| parts.price),
+                    journey,
                     cost: ranked.cost,
                     cost_inputs: ranked.cost_inputs,
                 })
@@ -588,7 +598,7 @@ impl TimetableBundleRouter {
         };
         let mut stations = LegPlanStations::default();
         let Some(chosen_journey) =
-            self.journey(chosen, input, ranking.night.as_ref(), &mut stations)
+            self.priced_journey(chosen, input, ranking.night.as_ref(), &mut stations)
         else {
             return LegPlanningResult::NoJourneyFound(NoJourneyReason::NoConnectionInWindow);
         };
@@ -622,7 +632,9 @@ impl TimetableBundleRouter {
                 is_new
             })
             .take(MAXIMUM_ALTERNATIVES)
-            .filter_map(|ranked| self.journey(ranked, input, ranking.night.as_ref(), &mut stations))
+            .filter_map(|ranked| {
+                self.priced_journey(ranked, input, ranking.night.as_ref(), &mut stations)
+            })
             .collect();
         LegPlanningResult::Found(Box::new(LegPlan {
             chosen_journey,
@@ -970,6 +982,24 @@ impl TimetableBundleRouter {
         })
     }
 
+    /// Turns a router journey into a model journey and adds the estimated price to its cost
+    /// parts, so the plan shows what the journey costs next to its time.
+    fn priced_journey(
+        &self,
+        ranked: &RankedJourney<'_>,
+        input: &LegPlanningInput,
+        night: Option<&std::ops::Range<u32>>,
+        stations: &mut LegPlanStations,
+    ) -> Option<Journey> {
+        let mut journey = self.journey(ranked, input, night, stations)?;
+        // The pricer reads the finished journey, so it runs before the cost parts borrow it.
+        let price = self.pricer.journey_price(&journey, &stations.table);
+        if let Some(parts) = &mut journey.cost_parts {
+            parts.price = price;
+        }
+        Some(journey)
+    }
+
     /// Turns a router ride into a model ride.
     fn train_ride(
         &self,
@@ -1154,4 +1184,134 @@ fn cost_parts(ranked: &RankedJourney<'_>, input: &LegPlanningInput) -> JourneyCo
     parts.rest_of_chain_cost = cost - parts.total_cost;
     parts.total_cost = cost;
     parts
+}
+
+#[cfg(test)]
+mod tests {
+    use btt_geo::TimeZoneFinder;
+    use btt_model::{
+        DailyTimeWindow, DurationMinutes, EuroCents, EuroRange, GeoCoordinates,
+        InterrailPassPolicy, LegTravelMode, LocalTimeOfDay, StationSearchRadius, TransferAversion,
+    };
+    use btt_timetable::{
+        BundleBuilder, BundleStationIndex, ServiceDayBitset, StationInput, TrainLabelInput,
+        TripInput, TripStopInput,
+    };
+    use chrono::NaiveDate;
+
+    use super::*;
+
+    /// A pricer that returns the same range for every journey, which shows that prices reach
+    /// the plan without touching the ranking.
+    #[derive(Debug, Clone, Copy)]
+    struct ConstantPricer(EuroRange);
+
+    impl JourneyPricer for ConstantPricer {
+        fn journey_price(&self, _: &Journey, _: &[LegPlanStation]) -> Option<EuroRange> {
+            Some(self.0)
+        }
+    }
+
+    /// A bundle with one direct ICE and one direct regional train between two stations on one
+    /// day. The ICE leaves later and arrives later but takes less time, so the search keeps
+    /// both journeys.
+    fn bundle() -> LoadedTimetableBundle {
+        let mut builder =
+            BundleBuilder::new(NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(), 2, 1).unwrap();
+        for (name, latitude) in [("S0", 50.0), ("S1", 50.05)] {
+            builder
+                .add_station(StationInput {
+                    name: name.into(),
+                    coordinates: GeoCoordinates::from_degrees(latitude, 8.0).unwrap(),
+                    time_zone: "Europe/Berlin".into(),
+                    trainline_station_id: None,
+                })
+                .unwrap();
+        }
+        let mut day = ServiceDayBitset::default();
+        day.insert(0);
+        for (category, departure, arrival) in [("ICE", 480, 505), ("RE", 470, 500)] {
+            let stop = |station, time| TripStopInput {
+                station: BundleStationIndex(station),
+                arrival: time,
+                departure: time,
+                boarding_allowed: true,
+                alighting_allowed: true,
+            };
+            builder.add_trip(TripInput {
+                stops: vec![stop(0, departure), stop(1, arrival)],
+                service_days: day,
+                train_label: TrainLabelInput {
+                    category: category.into(),
+                    number: "1".into(),
+                    agency: "DB Fernverkehr AG".into(),
+                    offers_berths: false,
+                },
+            });
+        }
+        LoadedTimetableBundle::from_bundle(&builder.build().unwrap()).unwrap()
+    }
+
+    /// The leg between the two stations of the bundle, inside wide windows.
+    fn leg_input() -> LegPlanningInput {
+        let time = |hour| LocalTimeOfDay::from_hour_and_minute(hour, 0).unwrap();
+        let endpoint = |latitude| crate::input::LegEndpoint {
+            coordinates: GeoCoordinates::from_degrees(latitude, 8.0).unwrap(),
+            station_search_radius: StationSearchRadius::DEFAULT,
+            time_window: DailyTimeWindow::from_start_and_end(time(6), time(20)),
+        };
+        LegPlanningInput {
+            departure: endpoint(50.0),
+            arrival: endpoint(50.05),
+            departure_date: NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(),
+            travel_mode: LegTravelMode::Daytime,
+            minimum_transfer_time: DurationMinutes(10),
+            pass_policy: InterrailPassPolicy::PreferPass,
+            transfer_aversion: TransferAversion::new(50).unwrap(),
+            chosen_journey: None,
+        }
+    }
+
+    /// Returns the found plan of a leg planned with a pricer.
+    fn planned_leg<P: JourneyPricer>(pricer: P) -> Box<btt_model::LegPlan> {
+        let bundle = bundle();
+        let router =
+            TimetableBundleRouter::from_loaded(bundle, Arc::new(TimeZoneFinder::new()), pricer);
+        let LegPlanningResult::Found(plan) = router.plan_leg(&leg_input(), || false) else {
+            panic!("the leg has a journey");
+        };
+        plan
+    }
+
+    #[test]
+    fn the_price_reaches_the_plan_without_changing_the_ranking() {
+        let unpriced = planned_leg(NoPrice);
+        let range = EuroRange::new(EuroCents(3000), EuroCents(4000), EuroCents(6000)).unwrap();
+        let priced = planned_leg(ConstantPricer(range));
+        // The chosen journey is the same one, at the same cost.
+        assert_eq!(
+            unpriced.chosen_journey.first_ride.departure_time,
+            priced.chosen_journey.first_ride.departure_time
+        );
+        assert_eq!(
+            unpriced
+                .chosen_journey
+                .cost_parts
+                .as_ref()
+                .unwrap()
+                .total_cost,
+            priced
+                .chosen_journey
+                .cost_parts
+                .as_ref()
+                .unwrap()
+                .total_cost
+        );
+        assert_eq!(unpriced.chosen_journey.cost_parts.unwrap().price, None);
+        assert_eq!(priced.chosen_journey.cost_parts.unwrap().price, Some(range));
+        // The regional train is the alternative, and it is priced too.
+        let alternative = &priced.alternative_journeys[0];
+        assert_eq!(alternative.first_ride.train_label.category, "RE");
+        assert_eq!(alternative.cost_parts.as_ref().unwrap().price, Some(range));
+    }
 }
