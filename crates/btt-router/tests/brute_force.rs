@@ -610,13 +610,8 @@ impl JourneyCostModel for PricedCostModel {
         change + price
     }
 
-    fn ride_price(
-        &self,
-        _: RaptorRouteIndex,
-        boarding_position: u16,
-        alighting_position: u16,
-    ) -> i32 {
-        Self::price(alighting_position.saturating_sub(boarding_position))
+    fn boarding_extension(&self, _: RaptorRouteIndex, earlier: u16, later: u16) -> i32 {
+        Self::price(later.saturating_sub(earlier))
     }
 
     fn egress_cost(
@@ -648,6 +643,104 @@ impl JourneyCostModel for PricedCostModel {
     ) -> i32 {
         self.elapsed_cost(departure, earliest_arrival)
     }
+    fn ride_cost_depends_on_time(&self, _: RaptorRouteIndex) -> bool {
+        false
+    }
+}
+
+/// How many times as much a ride that boards before `BORDER_POSITION` costs as one that boards
+/// from it, the way a route that crosses a border changes the class of its rides. The factor is
+/// steep enough that a bound by the price of the stops in between fails the property below.
+const BEFORE_BORDER_FACTOR: i32 = 12;
+
+/// The first stop position of the country after the border.
+const BORDER_POSITION: u16 = 2;
+
+/// A cost model with the prices of `PricedCostModel`, where the class of the stop that a ride
+/// boards at sets its price. Rides before the border cost twelve times as much as rides after
+/// it, so riding on from before the border costs more than the stops in between. The model
+/// then bounds the extension only between stops of one class.
+struct BorderPricedCostModel {
+    priced: PricedCostModel,
+}
+
+impl BorderPricedCostModel {
+    /// Returns the factor of the class a ride from a position is priced in.
+    fn factor(boarding_position: u16) -> i32 {
+        if boarding_position < BORDER_POSITION {
+            BEFORE_BORDER_FACTOR
+        } else {
+            1
+        }
+    }
+}
+
+impl JourneyCostModel for BorderPricedCostModel {
+    fn access_cost(&self, candidate: &CandidateStation) -> i32 {
+        self.priced.access_cost(candidate)
+    }
+
+    fn ride_cost(
+        &self,
+        _: RaptorRouteIndex,
+        _: BundleTripIndex,
+        boarding_position: u16,
+        alighting_position: u16,
+        _: MinutesSinceBundleStart,
+        _: MinutesSinceBundleStart,
+        previous: Option<PreviousRide>,
+    ) -> i32 {
+        let change = if previous.is_some() {
+            TRANSFER_PENALTY
+        } else {
+            0
+        };
+        let units = alighting_position.saturating_sub(boarding_position);
+        change + Self::factor(boarding_position) * PricedCostModel::price(units)
+    }
+
+    fn boarding_extension(&self, _: RaptorRouteIndex, earlier: u16, later: u16) -> i32 {
+        let units = later.saturating_sub(earlier);
+        // Across the border the price of the stops in between does not bound the extra, because
+        // the ride from before the border pays its rate for the whole distance.
+        if Self::factor(earlier) == Self::factor(later) {
+            Self::factor(earlier) * PricedCostModel::price(units)
+        } else {
+            i32::MAX
+        }
+    }
+
+    fn egress_cost(
+        &self,
+        candidate: &CandidateStation,
+        final_footpath_minutes: Option<u16>,
+    ) -> i32 {
+        self.priced.egress_cost(candidate, final_footpath_minutes)
+    }
+
+    fn elapsed_cost(
+        &self,
+        departure: MinutesSinceBundleStart,
+        arrival: MinutesSinceBundleStart,
+    ) -> i32 {
+        self.priced.elapsed_cost(departure, arrival)
+    }
+
+    fn remaining_cost_lower_bound(
+        &self,
+        departure: MinutesSinceBundleStart,
+        moment: MinutesSinceBundleStart,
+        earliest_arrival: MinutesSinceBundleStart,
+        credit_minutes_cap: Option<u32>,
+    ) -> i32 {
+        self.priced.remaining_cost_lower_bound(
+            departure,
+            moment,
+            earliest_arrival,
+            credit_minutes_cap,
+        )
+    }
+
     fn ride_cost_depends_on_time(&self, _: RaptorRouteIndex) -> bool {
         false
     }
@@ -701,16 +794,11 @@ impl JourneyCostModel for PassCostModel {
         }
     }
 
-    fn ride_price(
-        &self,
-        raptor_route: RaptorRouteIndex,
-        boarding_position: u16,
-        alighting_position: u16,
-    ) -> i32 {
+    fn boarding_extension(&self, raptor_route: RaptorRouteIndex, earlier: u16, later: u16) -> i32 {
         if Self::takes(raptor_route) {
             0
         } else {
-            PricedCostModel::price(alighting_position.saturating_sub(boarding_position))
+            PricedCostModel::price(later.saturating_sub(earlier))
         }
     }
 
@@ -899,6 +987,30 @@ proptest! {
         // it. The brute force counts the distinct days by listing them.
         let origins = [(0, first_access), (1, second_access)];
         let model = PassCostModel {
+            priced: PricedCostModel { window_start, window_end: window_start + 60 },
+        };
+        let target = STATION_COUNT - 1;
+        let routes = routes_of_trips(&build_bundle(&trips, &footpaths), &trips);
+        let expected =
+            brute_force_costs(&trips, &footpaths, &origins, target, (start, 1440), &model, &routes);
+        let actual = cost_router(&trips, &footpaths, &origins, target, (start, 1440), &model);
+        prop_assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn cost_search_across_a_price_border_matches_brute_force(
+        trips in proptest::collection::vec(random_trip(), 1..10),
+        footpaths in proptest::collection::vec(random_footpath(), 0..4),
+        start in 0..300u32,
+        first_access in 0..30u16,
+        second_access in 0..30u16,
+        window_start in 0..500u32,
+    ) {
+        // Rides are priced by the class of the stop they board at, so boarding earlier can
+        // cost more than the price of the stops in between. The shortcuts must not drop a
+        // boarding on that bound, which the brute force finds out.
+        let origins = [(0, first_access), (1, second_access)];
+        let model = BorderPricedCostModel {
             priced: PricedCostModel { window_start, window_end: window_start + 60 },
         };
         let target = STATION_COUNT - 1;

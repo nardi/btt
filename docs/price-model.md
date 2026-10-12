@@ -105,6 +105,8 @@ The planner's search prices millions of rides, and running the model for each co
 
 The rows leave out the border surcharge, because the search prices a ride by the station it boards at. The ranking prices every journey the search returns with the exact cover, so the final order is right.
 
+The formula costs a logarithm and an exponential, and the search asks for about ten million prices per leg. Each row therefore also holds its price at every whole kilometre, up to twice the longest route that uses the row, and the search interpolates between two kilometres. The result differs from the formula by at most a cent for a ride of 5 km or more. A distance past the curve takes the formula.
+
 The table is a snapshot of the model. Prices the model learns later change no plan that is under way, and the app builds a new table when it loads a bundle.
 
 Each class also gets a pass row for the searches on pass days. It says whether a pass takes the class, by the reservation rules of the ticket optimizer, and what a ride costs on top in whole cents. That is the middle of the seat reservation fee, or of the night accommodation fee for a class with berths. A seat reservation that is optional and not wanted costs nothing. The rule of the boarding station's country stands in for the whole ride, and the ranking prices each pass option with the exact rules of the optimizer.

@@ -61,9 +61,8 @@ pub struct PreviousRide {
 ///
 /// The search relies on three properties. `elapsed_cost` never falls when the arrival moves
 /// later or the departure moves earlier. `ride_cost` of boarding the same trip at an earlier
-/// stop rises by no more than `ride_price` says for the stops between the boardings, which the
-/// boarding shortcuts compare. And `remaining_cost_lower_bound` never exceeds the cost still to
-/// come.
+/// stop rises by no more than `boarding_extension` says, which the boarding shortcuts compare.
+/// And `remaining_cost_lower_bound` never exceeds the cost still to come.
 pub trait JourneyCostModel {
     /// Returns the added cost of getting from the departure place to a station.
     fn access_cost(&self, candidate: &CandidateStation) -> i32;
@@ -83,15 +82,13 @@ pub trait JourneyCostModel {
         previous: Option<PreviousRide>,
     ) -> i32;
 
-    /// Returns the price of riding a route between two stop positions, which the boarding
-    /// shortcuts compare against the cost before the ride. The default is nothing.
-    fn ride_price(
-        &self,
-        raptor_route: RaptorRouteIndex,
-        boarding_position: u16,
-        alighting_position: u16,
-    ) -> i32 {
-        let _ = (raptor_route, boarding_position, alighting_position);
+    /// Returns the most that riding a route from the stop at `earlier` can cost on top of riding
+    /// it from the stop at `later`, whichever stop after both the traveller leaves at, so the
+    /// boarding shortcuts know what boarding earlier has to pay for. Returns `i32::MAX` when
+    /// the model knows no such bound, which turns the shortcuts off for the pair. The default
+    /// is nothing, for a model whose ride cost does not depend on where the ride begins.
+    fn boarding_extension(&self, raptor_route: RaptorRouteIndex, earlier: u16, later: u16) -> i32 {
+        let _ = (raptor_route, earlier, later);
         0
     }
 
@@ -391,24 +388,33 @@ impl RouteLabel {
     /// the stops between the boardings reaches no more than the other's cost before the ride,
     /// because the earlier boarding pays for the extra distance. On another trip, only when
     /// the ride cost doesn't depend on the trip's times, and the trip runs earlier on the same
-    /// service day, so it reaches every later stop no later. `extension` is the price of the
-    /// stops between this boarding and the other's. Either way the ride must use no more
-    /// travel days.
+    /// service day, so it reaches every later stop no later. `extension` gives the price of the
+    /// stops between this boarding and the other's. It is never negative, and the model prices
+    /// it with a logarithm and an exponential, so it is only called once every cheaper
+    /// condition holds. Either way the ride must use no more travel days.
     #[inline]
-    fn covers(&self, other: &Self, ride_cost_depends_on_time: bool, extension: i32) -> bool {
-        let no_worse_start = self.cost_before_ride.saturating_add(extension)
-            <= other.cost_before_ride
-            && (self.is_first_ride || !other.is_first_ride)
-            && self.days.covers(other.days);
+    fn covers(
+        &self,
+        other: &Self,
+        ride_cost_depends_on_time: bool,
+        extension: impl FnOnce() -> i32,
+    ) -> bool {
+        if self.cost_before_ride > other.cost_before_ride
+            || (!self.is_first_ride && other.is_first_ride)
+            || !self.days.covers(other.days)
+        {
+            return false;
+        }
         let same_trip =
             self.trip_offset == other.trip_offset && self.service_day == other.service_day;
-        if same_trip {
-            return no_worse_start && self.departure <= other.departure;
-        }
-        !ride_cost_depends_on_time
-            && no_worse_start
-            && self.service_day == other.service_day
-            && self.trip_offset < other.trip_offset
+        let timing_covers = if same_trip {
+            self.departure <= other.departure
+        } else {
+            !ride_cost_depends_on_time
+                && self.service_day == other.service_day
+                && self.trip_offset < other.trip_offset
+        };
+        timing_covers && self.cost_before_ride.saturating_add(extension()) <= other.cost_before_ride
     }
 }
 
@@ -484,14 +490,16 @@ struct BoardedBefore {
 
 impl BoardedBefore {
     /// Returns whether this boarding reaches everything that another one does, at no more cost,
-    /// no more rides and no more travel days. `extension` is the price of the stops between
-    /// this boarding and the other's, which the earlier boarding pays for.
-    fn covers(self, other: Self, extension: i32) -> bool {
+    /// no more rides and no more travel days. `extension` gives the price of the stops between
+    /// this boarding and the other's, which the earlier boarding pays for. It is never
+    /// negative, and only called once every cheaper condition holds.
+    fn covers(self, other: Self, extension: impl FnOnce() -> i32) -> bool {
         self.position <= other.position
-            && self.cost.saturating_add(extension) <= other.cost
+            && self.cost <= other.cost
             && (self.is_first_ride || !other.is_first_ride)
             && self.round <= other.round
             && self.days.covers(other.days)
+            && self.cost.saturating_add(extension()) <= other.cost
     }
 }
 
@@ -1130,62 +1138,38 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
             days: route_label.days,
         };
         let key = (u64::from(trip.0) << 16) | u64::from(route_label.service_day);
-        // The price extensions are read before the map entry is borrowed, so the model is
-        // called outside the borrow. Each earlier boarding has its own stops in between.
-        let earlier_extensions: SmallVec<[i32; 2]> =
-            self.buffers
-                .boarded_before
-                .get(&key)
-                .map_or(SmallVec::new(), |known| {
-                    known
-                        .iter()
-                        .map(|earlier| {
-                            self.board_extension_cost(
-                                raptor_route,
-                                earlier.position,
-                                boarding.position,
-                            )
-                        })
-                        .collect()
-                });
-        let later_extensions: SmallVec<[i32; 2]> =
-            self.buffers
-                .boarded_before
-                .get(&key)
-                .map_or(SmallVec::new(), |known| {
-                    known
-                        .iter()
-                        .map(|earlier| {
-                            self.board_extension_cost(
-                                raptor_route,
-                                boarding.position,
-                                earlier.position,
-                            )
-                        })
-                        .collect()
-                });
-        let known = self.buffers.boarded_before.entry(key).or_default();
-        if known
-            .iter()
-            .zip(&earlier_extensions)
-            .any(|(earlier, &extension)| earlier.covers(boarding, extension))
-        {
+        // The boardings are copied out of the map, so the model can be asked for the price of
+        // the stops between two of them while the map is not borrowed. Each earlier boarding
+        // has its own stops in between.
+        let known: SmallVec<[BoardedBefore; 2]> = self
+            .buffers
+            .boarded_before
+            .get(&key)
+            .cloned()
+            .unwrap_or_default();
+        if known.iter().any(|earlier| {
+            earlier.covers(boarding, || {
+                self.board_extension_cost(raptor_route, earlier.position, boarding.position)
+            })
+        }) {
             return true;
         }
-        let mut kept: SmallVec<[BoardedBefore; 2]> = SmallVec::new();
-        for (index, &earlier) in known.iter().enumerate() {
-            if !boarding.covers(earlier, later_extensions[index]) {
-                kept.push(earlier);
-            }
-        }
+        let mut kept: SmallVec<[BoardedBefore; 2]> = known
+            .into_iter()
+            .filter(|earlier| {
+                !boarding.covers(*earlier, || {
+                    self.board_extension_cost(raptor_route, boarding.position, earlier.position)
+                })
+            })
+            .collect();
         kept.push(boarding);
-        *known = kept;
+        self.buffers.boarded_before.insert(key, kept);
         false
     }
 
-    /// Returns the price of the stops between two boardings of a route, which the earlier
-    /// boarding pays on top of its cost before the ride. A boarding no earlier than the other
-    /// pays for no more distance, so it adds nothing.
+    /// Returns what the earlier of two boardings of a route pays on top of its cost before the
+    /// ride, as the model bounds it. A boarding no earlier than the other pays for no more
+    /// distance, so it adds nothing.
     fn board_extension_cost(
         &self,
         raptor_route: RaptorRouteIndex,
@@ -1195,7 +1179,7 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
         if earlier >= later {
             return 0;
         }
-        self.model.ride_price(raptor_route, earlier, later)
+        self.model.boarding_extension(raptor_route, earlier, later)
     }
 
     /// Returns the ride before the one a route label boards, or `None` when it boards the
@@ -1433,28 +1417,24 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                 continue;
             }
             if route_labels.iter().any(|other| {
-                other.covers(
-                    &route_label,
-                    ride_cost_depends_on_time,
+                other.covers(&route_label, ride_cost_depends_on_time, || {
                     self.board_extension_cost(
                         raptor_route,
                         other.boarding_position,
                         route_label.boarding_position,
-                    ),
-                )
+                    )
+                })
             }) {
                 continue;
             }
             route_labels.retain(|other| {
-                !route_label.covers(
-                    other,
-                    ride_cost_depends_on_time,
+                !route_label.covers(other, ride_cost_depends_on_time, || {
                     self.board_extension_cost(
                         raptor_route,
                         route_label.boarding_position,
                         other.boarding_position,
-                    ),
-                )
+                    )
+                })
             });
             route_labels.push(route_label);
         }
@@ -1628,12 +1608,12 @@ mod tests {
         let later = route_label(2, 100);
         // Boarding two stops earlier costs the price of the two stops on top, so with the same
         // cost before the ride the earlier boarding no longer covers the later one.
-        assert!(!earlier.covers(&later, false, 40));
+        assert!(!earlier.covers(&later, false, || 40));
         // A cheaper boarding covers when its saving pays for the stops in between.
         let cheaper = route_label(0, 60);
-        assert!(cheaper.covers(&later, false, 40));
+        assert!(cheaper.covers(&later, false, || 40));
         // Without prices the old rule holds.
-        assert!(earlier.covers(&later, false, 0));
+        assert!(earlier.covers(&later, false, || 0));
     }
 
     #[test]
@@ -1653,8 +1633,8 @@ mod tests {
             days: TravelDays::NONE,
         };
         // Boarding the same trip two stops earlier costs the price of the stops in between.
-        assert!(!earlier.covers(later, 40));
-        assert!(earlier.covers(later, 0));
+        assert!(!earlier.covers(later, || 40));
+        assert!(earlier.covers(later, || 0));
         let cheaper = BoardedBefore {
             position: 1,
             cost: 60,
@@ -1662,7 +1642,7 @@ mod tests {
             round: 2,
             days: TravelDays::NONE,
         };
-        assert!(cheaper.covers(later, 40));
+        assert!(cheaper.covers(later, || 40));
     }
 
     #[test]
@@ -1690,8 +1670,8 @@ mod tests {
         more_days.days = fewer_days.days.after_ride(Some(2));
         // The same trip from the same stop at the same cost, but one journey already used
         // another travel day.
-        assert!(fewer_days.covers(&more_days, false, 0));
-        assert!(!more_days.covers(&fewer_days, false, 0));
+        assert!(fewer_days.covers(&more_days, false, || 0));
+        assert!(!more_days.covers(&fewer_days, false, || 0));
         let earlier = BoardedBefore {
             position: 0,
             cost: 100,
@@ -1703,7 +1683,7 @@ mod tests {
             days: fewer_days.days,
             ..earlier
         };
-        assert!(!earlier.covers(later, 0));
-        assert!(later.covers(earlier, 0));
+        assert!(!earlier.covers(later, || 0));
+        assert!(later.covers(earlier, || 0));
     }
 }

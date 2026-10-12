@@ -119,21 +119,14 @@ impl JourneyCostModel for LegCostModel<'_> {
         change - sleep + price
     }
 
-    /// Returns the price of riding a route between two stop positions, which the boarding
-    /// shortcuts compare against the cost before the ride.
-    fn ride_price(
-        &self,
-        raptor_route: RaptorRouteIndex,
-        boarding_position: u16,
-        alighting_position: u16,
-    ) -> i32 {
+    /// Returns what boarding a route at an earlier stop costs at most on top of boarding it at a
+    /// later one, which the boarding shortcuts compare against the cost before the ride.
+    /// Returns `i32::MAX` when the two stops are priced by different classes of ride.
+    fn boarding_extension(&self, raptor_route: RaptorRouteIndex, earlier: u16, later: u16) -> i32 {
         self.prices.map_or(0, |prices| {
-            self.price_cost(prices.boarding_extension_cents(
-                raptor_route,
-                boarding_position,
-                alighting_position,
-                self.price_mode,
-            ))
+            prices
+                .boarding_extension_cents(raptor_route, earlier, later, self.price_mode)
+                .map_or(i32::MAX, |cents| self.price_cost(cents))
         })
     }
 

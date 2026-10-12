@@ -154,10 +154,92 @@ pub struct RidePrices {
     validity_days: u16,
     /// The distance the log price divides by, in kilometres.
     reference_kilometres: f32,
+    /// Where the prices of each row start in `curve_cents`, with one more entry for the end.
+    curve_start: Vec<u32>,
+    /// The price of a ride of a whole number of kilometres in euro cents, for each row from
+    /// zero kilometres on. A row covers twice its longest route, which holds a ride that
+    /// continues a run. The search looks prices up here, because the formula costs a logarithm
+    /// and an exponential and the search asks for millions of prices.
+    curve_cents: Vec<u32>,
 }
+
+/// The most a price in a curve can be, in euro cents. It keeps the interpolation in `u32`.
+const MAXIMUM_CURVE_CENTS: u32 = 100_000_000;
 
 /// The row of rides with no price, which count nothing.
 const NO_ROW: u16 = u16::MAX;
+
+/// Returns what rides of the classes cost on the days of a pass. A pricer without pass prices
+/// gives rows that no pass takes, which leaves the search in `Single` mode.
+fn pass_rows_of(pricer: &impl JourneyPricer, classes: &[RidePriceClass]) -> Vec<RidePassRow> {
+    pricer.pass_price_table(classes).map_or_else(
+        || {
+            vec![
+                RidePassRow {
+                    takes: false,
+                    cents: 0,
+                };
+                classes.len()
+            ]
+        },
+        |table| table.rows,
+    )
+}
+
+/// Returns the position of a time zone in a list of them, adding it when it is new. Returns
+/// `None` when the list outgrows the index type.
+fn zone_index(zones: &mut Vec<SmolStr>, time_zone: &SmolStr) -> Option<u16> {
+    let position = zones.iter().position(|zone| zone == time_zone);
+    let position = position.unwrap_or_else(|| {
+        zones.push(time_zone.clone());
+        zones.len() - 1
+    });
+    u16::try_from(position).ok()
+}
+
+/// Returns the price of a ride of a distance in whole euro cents, from the formula.
+fn exact_cents(row: RidePriceRow, reference_kilometres: f32, kilometres: f64) -> u32 {
+    // Prices stay far below the range of `u32` cents, and a price that is not a number counts
+    // as nothing.
+    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let cents = unrounded_cents(row, reference_kilometres, kilometres).round() as u32;
+    cents.min(MAXIMUM_CURVE_CENTS)
+}
+
+/// Returns the curves of the rows, as where each row's prices start and the prices. A row's
+/// curve reaches twice its longest route, in whole kilometres and one more, so that a price
+/// between two kilometres always has both of them.
+fn price_curves(
+    rows: &[RidePriceRow],
+    reference_kilometres: f32,
+    longest_units_of_row: &[u32],
+) -> (Vec<u32>, Vec<u32>) {
+    let mut starts = Vec::with_capacity(rows.len() + 1);
+    let mut cents = Vec::new();
+    for (index, &row) in rows.iter().enumerate() {
+        starts.push(u32::try_from(cents.len()).unwrap_or(u32::MAX));
+        let longest_units = longest_units_of_row.get(index).copied().unwrap_or(0);
+        let kilometres = (2 * longest_units).div_ceil(10) + 1;
+        cents.extend(
+            (0..=kilometres)
+                .map(|kilometre| exact_cents(row, reference_kilometres, f64::from(kilometre))),
+        );
+    }
+    starts.push(u32::try_from(cents.len()).unwrap_or(u32::MAX));
+    (starts, cents)
+}
+
+/// Returns the price of a ride of a distance in euro cents, before it is rounded.
+fn unrounded_cents(row: RidePriceRow, reference_kilometres: f32, kilometres: f64) -> f64 {
+    let shift = f64::from(row.shift);
+    let distance = ((kilometres + shift) / (f64::from(reference_kilometres) + shift)).ln();
+    let base = 10.0 / (kilometres + 5.0);
+    let log_price = f64::from(row.constant)
+        + f64::from(row.distance) * distance
+        + f64::from(row.curve) * distance * distance
+        + f64::from(row.base) * base;
+    log_price.exp() * 100.0
+}
 
 impl RidePrices {
     /// Builds the prices of all rides of a bundle: the classes of its routes' boarding
@@ -183,6 +265,7 @@ impl RidePrices {
             rustc_hash::FxHashMap::default();
         let mut zones: Vec<SmolStr> = Vec::new();
         let mut zone_of_row: Vec<u16> = Vec::new();
+        let mut longest_units_of_row: Vec<u32> = Vec::new();
         for route_index in 0..bundle.route_count() {
             let index = RaptorRouteIndex(u32::try_from(route_index).unwrap_or(u32::MAX));
             let route = bundle.route(index);
@@ -202,7 +285,8 @@ impl RidePrices {
                 next
             };
             operator_of_route.push(operator_index);
-            route_offsets.push(u32::try_from(stop_distances.len()).unwrap_or(u32::MAX));
+            let route_start = stop_distances.len();
+            route_offsets.push(u32::try_from(route_start).unwrap_or(u32::MAX));
             let mut units: u32 = 0;
             let mut previous_station = None;
             for position in 0..route.stop_count {
@@ -231,14 +315,7 @@ impl RidePrices {
                         known
                     } else {
                         let next = u16::try_from(classes.len()).ok()?;
-                        let zone = zones
-                            .iter()
-                            .position(|zone| *zone == class.time_zone)
-                            .unwrap_or_else(|| {
-                                zones.push(class.time_zone.clone());
-                                zones.len() - 1
-                            });
-                        zone_of_row.push(u16::try_from(zone).ok()?);
+                        zone_of_row.push(zone_index(&mut zones, &class.time_zone)?);
                         classes.push(class.clone());
                         classes_seen.insert(class, next);
                         next
@@ -246,20 +323,24 @@ impl RidePrices {
                 };
                 row_of_boarding.push(row);
             }
+            // A ride on the route is no longer than the route, so the rows it uses need prices
+            // up to its length.
+            longest_units_of_row.resize(classes.len(), 0);
+            for &row in row_of_boarding[route_start..]
+                .iter()
+                .filter(|&&row| row != NO_ROW)
+            {
+                let longest = &mut longest_units_of_row[usize::from(row)];
+                *longest = (*longest).max(units);
+            }
         }
         let table = pricer.price_table(&classes)?;
-        // The pass rows follow the classes. A pricer without them leaves the search in
-        // `Single` mode.
-        let pass_rows = pricer.pass_price_table(&classes).map_or(
-            vec![
-                RidePassRow {
-                    takes: false,
-                    cents: 0
-                };
-                classes.len()
-            ],
-            |table| table.rows,
+        let (curve_start, curve_cents) = price_curves(
+            &table.rows,
+            table.reference_kilometres,
+            &longest_units_of_row,
         );
+        let pass_rows = pass_rows_of(pricer, &classes);
         let validity_days = bundle.validity_days();
         Some(Self {
             route_offsets,
@@ -272,6 +353,8 @@ impl RidePrices {
             utc_offset_minutes: utc_offsets(&zones, bundle.validity_start(), validity_days),
             validity_days,
             reference_kilometres: table.reference_kilometres,
+            curve_start,
+            curve_cents,
         })
     }
 
@@ -328,20 +411,24 @@ impl RidePrices {
     }
 
     /// Returns the price of a distance in whole euro cents, rounded the way the plan shows
-    /// prices.
-    fn price_cents(&self, row: RidePriceRow, distance_units: u32) -> u32 {
-        let kilometres = f64::from(distance_units) / 10.0;
-        let shift = f64::from(row.shift);
-        let distance = ((kilometres + shift) / (f64::from(self.reference_kilometres) + shift)).ln();
-        let base = 10.0 / (kilometres + 5.0);
-        let log_price = f64::from(row.constant)
-            + f64::from(row.distance) * distance
-            + f64::from(row.curve) * distance * distance
-            + f64::from(row.base) * base;
-        // Prices stay far below the range of `u32` cents.
-        #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let cents = (log_price.exp() * 100.0).round() as u32;
-        cents
+    /// prices. The curve of the row gives it between two whole kilometres, which differs from
+    /// the formula by less than a cent for any ride long enough to matter, and a distance past
+    /// the curve takes the formula.
+    fn price_cents(&self, row_index: usize, distance_units: u32) -> u32 {
+        let start = self.curve_start[row_index] as usize;
+        let end = self.curve_start[row_index + 1] as usize;
+        let whole_kilometres = (distance_units / 10) as usize;
+        if start + whole_kilometres + 1 < end {
+            let low = self.curve_cents[start + whole_kilometres];
+            let high = self.curve_cents[start + whole_kilometres + 1];
+            let tenths = distance_units % 10;
+            return (low * (10 - tenths) + high * tenths + 5) / 10;
+        }
+        exact_cents(
+            self.rows[row_index],
+            self.reference_kilometres,
+            f64::from(distance_units) / 10.0,
+        )
     }
 
     /// Returns the price of a ride in whole euro cents, charged as the extra over the ride
@@ -358,7 +445,6 @@ impl RidePrices {
         let Some(row_index) = self.row_of(raptor_route, boarding_position) else {
             return 0;
         };
-        let row = self.rows[row_index];
         let distance = self.distance_units(raptor_route, boarding_position, alighting_position);
         // On the days of a pass a covered ride costs what the pass charges on top, and a ride
         // the pass does not take costs its fare, as one ticket on its own.
@@ -367,7 +453,7 @@ impl RidePrices {
             return if pass_row.takes {
                 pass_row.cents
             } else {
-                self.price_cents(row, distance)
+                self.price_cents(row_index, distance)
             };
         }
         match previous {
@@ -382,40 +468,54 @@ impl RidePrices {
                     previous.boarding_position,
                     previous.alighting_position,
                 );
-                self.price_cents(row, previous_distance + distance)
-                    .saturating_sub(self.price_cents(row, previous_distance))
+                self.price_cents(row_index, previous_distance + distance)
+                    .saturating_sub(self.price_cents(row_index, previous_distance))
             }
-            _ => self.price_cents(row, distance),
+            _ => self.price_cents(row_index, distance),
         }
     }
 
     /// Returns what boarding a route at an earlier position costs at most on top of boarding
-    /// it at a later one, for any stop after both, in whole euro cents.
+    /// it at a later one, for any stop after both, in whole euro cents. Returns `None` when no
+    /// such bound is known.
     ///
     /// On single tickets that is the price of the stops in between, without the discount of a
-    /// run. On the days of a pass a covered ride costs the same from any stop, so an earlier
-    /// boarding that the pass takes for no more than the later one costs nothing on top, and
-    /// otherwise its whole charge bounds the extra.
+    /// run. It holds only when both boardings are priced by the same class of ride, because a
+    /// ride is priced by the class of the station it boards at, and a route that crosses a
+    /// border changes class. A ride from the earlier class can cost more over the same
+    /// distance than one from the later class, by more than the stops in between cost. On the
+    /// days of a pass a covered ride costs the same from any stop, so an earlier boarding that
+    /// the pass takes for no more than the later one costs nothing on top, and otherwise its
+    /// whole charge bounds the extra.
     pub(crate) fn boarding_extension_cents(
         &self,
         raptor_route: RaptorRouteIndex,
         earlier: u16,
         later: u16,
         mode: PriceMode,
-    ) -> u32 {
-        if mode == PriceMode::Pass
-            && let (Some(earlier_row), Some(later_row)) = (
-                self.row_of(raptor_route, earlier),
-                self.row_of(raptor_route, later),
-            )
-        {
+    ) -> Option<u32> {
+        let (earlier_row, later_row) = match (
+            self.row_of(raptor_route, earlier),
+            self.row_of(raptor_route, later),
+        ) {
+            // A ride that has no price costs nothing from either stop.
+            (None, _) => return Some(0),
+            (Some(_), None) => return None,
+            (Some(earlier_row), Some(later_row)) => (earlier_row, later_row),
+        };
+        if mode == PriceMode::Pass {
             let (earlier_pass, later_pass) =
                 (self.pass_rows[earlier_row], self.pass_rows[later_row]);
-            if earlier_pass.takes && later_pass.takes && earlier_pass.cents <= later_pass.cents {
-                return 0;
+            if earlier_pass.takes && later_pass.takes {
+                return Some(if earlier_pass.cents <= later_pass.cents {
+                    0
+                } else {
+                    earlier_pass.cents
+                });
             }
         }
-        self.ride_price_cents(raptor_route, earlier, later, None, mode)
+        (earlier_row == later_row)
+            .then(|| self.ride_price_cents(raptor_route, earlier, later, None, mode))
     }
 }
 
@@ -451,4 +551,124 @@ fn utc_offsets(
         }
     }
     offsets
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Returns the row of a ride whose price grows with the distance, at a price of
+    /// `e^constant` euro for a ride of the reference distance.
+    fn row(constant: f32) -> RidePriceRow {
+        RidePriceRow {
+            constant,
+            distance: 0.7,
+            curve: 0.0,
+            base: 0.0,
+            shift: 10.0,
+        }
+    }
+
+    /// The prices of one route of four stops, 50 kilometres apart. The first two stops are in
+    /// an expensive class and the last two in a cheap one, like a route that crosses a border.
+    fn border_prices() -> RidePrices {
+        let rows = vec![row(3.0), row(1.0)];
+        // The route is 150 kilometres long, which is 1500 units of 100 metres.
+        let (curve_start, curve_cents) = price_curves(&rows, 100.0, &[1500, 1500]);
+        RidePrices {
+            route_offsets: vec![0],
+            row_of_boarding: vec![0, 0, 1, 1],
+            stop_distances: vec![0, 500, 1000, 1500],
+            operator_of_route: vec![0],
+            rows,
+            pass_rows: vec![
+                RidePassRow {
+                    takes: true,
+                    cents: 700,
+                },
+                RidePassRow {
+                    takes: true,
+                    cents: 900,
+                },
+            ],
+            zone_of_row: vec![0, 0],
+            utc_offset_minutes: vec![0],
+            validity_days: 1,
+            reference_kilometres: 100.0,
+            curve_start,
+            curve_cents,
+        }
+    }
+
+    const ROUTE: RaptorRouteIndex = RaptorRouteIndex(0);
+
+    #[test]
+    fn the_extension_within_a_class_is_the_price_of_the_stops_between() {
+        let prices = border_prices();
+        let extension = prices.boarding_extension_cents(ROUTE, 0, 1, PriceMode::Single);
+        assert_eq!(extension, Some(prices.price_cents(0, 500)));
+        // The same holds in the cheap class.
+        assert_eq!(
+            prices.boarding_extension_cents(ROUTE, 2, 3, PriceMode::Single),
+            Some(prices.price_cents(1, 500))
+        );
+    }
+
+    #[test]
+    fn no_extension_is_known_across_a_change_of_class() {
+        let prices = border_prices();
+        assert_eq!(
+            prices.boarding_extension_cents(ROUTE, 1, 2, PriceMode::Single),
+            None
+        );
+        assert_eq!(
+            prices.boarding_extension_cents(ROUTE, 0, 3, PriceMode::Single),
+            None
+        );
+        // The price of the stops in between would not bound the extra here. Riding from the
+        // second stop to the last in the expensive class costs more over the extra 50
+        // kilometres than the 50 kilometres between the second and third stop cost alone.
+        let from_earlier = prices.price_cents(0, 1000);
+        let from_later = prices.price_cents(1, 500);
+        let between = prices.price_cents(0, 500);
+        assert!(from_earlier - from_later > between);
+    }
+
+    #[test]
+    fn on_pass_days_a_covered_ride_costs_the_same_from_any_stop() {
+        let prices = border_prices();
+        // The earlier class charges 7 euro and the later 9 euro, so boarding earlier costs
+        // nothing on top.
+        assert_eq!(
+            prices.boarding_extension_cents(ROUTE, 1, 2, PriceMode::Pass),
+            Some(0)
+        );
+    }
+
+    #[test]
+    fn the_curve_agrees_with_the_formula_to_a_cent() {
+        let prices = border_prices();
+        for row_index in 0..2 {
+            for units in (50..=3000).step_by(7) {
+                let row = prices.rows[row_index];
+                let exact = exact_cents(row, 100.0, f64::from(units) / 10.0);
+                let looked_up = prices.price_cents(row_index, units);
+                assert!(
+                    looked_up.abs_diff(exact) <= 1,
+                    "row {row_index} at {units} units: {looked_up} against {exact}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_distance_past_the_curve_takes_the_formula() {
+        let prices = border_prices();
+        // The curve reaches twice the longest route, which is 300 kilometres.
+        let units = 5000;
+        assert_eq!(
+            prices.price_cents(0, units),
+            exact_cents(prices.rows[0], 100.0, 500.0)
+        );
+    }
 }
