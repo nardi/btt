@@ -3,7 +3,9 @@
 import { commands } from "@btt/shared/bindings";
 import type {
   CommandError,
+  EuroRange,
   GeoCoordinates,
+  LegPlan,
   NearbyDaySuggestion,
   PassScenarioLeg,
   PlaceSearchResult,
@@ -15,9 +17,11 @@ import type {
   TripEditOutcome,
   TripHistoryState,
   TripId,
+  TicketLeg,
   TripPlaceId,
 } from "@btt/shared/bindings";
 import { itineraryRows, plannedArrivalDate, tripPlaces } from "@btt/shared/itinerary";
+import { journeyKey, liveCandidates } from "@btt/shared/live-ranking";
 import {
   scenarioLeg,
   selectedScenario,
@@ -55,10 +59,19 @@ export class TauriTripSource implements TripViewState {
   /** What undo and redo would do. A newly opened trip has no history. */
   history: TripHistoryState = $state({ undo_description: null, redo_description: null });
   passScenarios: PassScenarioState | null = $state(null);
+  readonly livePricesByJourney = new SvelteMap<string, EuroRange>();
   /** Latest planning run. Events of older runs are stale and get dropped. */
   private latestRunId: PlanningRunId = -1;
   /** Counts requests for pass scenarios, so an answer to an older one gets dropped. */
   private scenarioRequestNumber = 0;
+  /** Journeys waiting for a live price lookup, in the order the legs were planned. */
+  private liveQueue: { key: string; leg: TicketLeg }[] = [];
+  /** Keys of the journeys whose live price was looked up or is queued, so none repeats. */
+  private readonly liveKeysSeen = new Set<string>();
+  /** Whether a loop works through `liveQueue`. */
+  private liveLookupRunning = false;
+  /** Set when the trip closes, which stops the live lookups. */
+  private closed = false;
 
   private constructor(trip: Trip) {
     this.trip = trip;
@@ -94,6 +107,7 @@ export class TauriTripSource implements TripViewState {
 
   /** Stops planning. The source must not be used afterwards. */
   async close(): Promise<void> {
+    this.closed = true;
     await commands.closeTrip(this.trip.id);
   }
 
@@ -182,6 +196,9 @@ export class TauriTripSource implements TripViewState {
           ? { status: "found", legPlan: result.Found }
           : { status: "none", reason: result.NoJourneyFound },
       );
+      if (result.Found !== undefined) {
+        this.queueLiveLookups(arrival_place_id, result.Found);
+      }
     } else if (event.NearbyDaySuggested !== undefined) {
       const { run_id, arrival_place_id, suggestion } = event.NearbyDaySuggested;
       if (run_id !== this.latestRunId) {
@@ -192,6 +209,47 @@ export class TauriTripSource implements TripViewState {
       if (event.PlanningFinished.run_id === this.latestRunId) {
         void this.refreshPassScenarios();
       }
+    }
+  }
+
+  /**
+   * Queues live price lookups for the candidates of a leg, when the traveller weighs prices and
+   * allows live prices. The lookups run one after the other in the background, because each
+   * takes seconds and the booking sites space their requests.
+   */
+  private queueLiveLookups(arrivalPlaceId: TripPlaceId, legPlan: LegPlan): void {
+    const preferences = this.trip.preferences;
+    if (preferences.price_weight === 0 || !preferences.ticket_preferences.live_prices) {
+      return;
+    }
+    for (const journey of liveCandidates(legPlan)) {
+      const key = journeyKey(journey);
+      if (this.liveKeysSeen.has(key)) {
+        continue;
+      }
+      this.liveKeysSeen.add(key);
+      this.liveQueue.push({
+        key,
+        leg: { arrival_place_id: arrivalPlaceId, journey, stations: legPlan.station_table },
+      });
+    }
+    if (!this.liveLookupRunning) {
+      void this.runLiveLookups();
+    }
+  }
+
+  /** Looks up the queued journeys until the queue is empty or the trip closes. */
+  private async runLiveLookups(): Promise<void> {
+    this.liveLookupRunning = true;
+    try {
+      for (let next = this.liveQueue.shift(); next !== undefined && !this.closed; next = this.liveQueue.shift()) {
+        const result = await commands.liveJourneyPrice(this.trip.id, next.leg);
+        if (result.status === "ok" && result.data !== null) {
+          this.livePricesByJourney.set(next.key, result.data);
+        }
+      }
+    } finally {
+      this.liveLookupRunning = false;
     }
   }
 

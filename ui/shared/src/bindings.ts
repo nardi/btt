@@ -86,6 +86,24 @@ export const commands = {
 	 */
 	planPassScenarios: (tripId: TripId, legs: PassScenarioLeg[]) => typedError<PassScenario[], CommandError>(__TAURI_INVOKE("plan_pass_scenarios", { tripId, legs })),
 	/**
+	 *  Returns the price of a journey's single tickets with the live prices of the booking sites in
+	 *  place of the estimates, for the planner to rank the journey by. The tickets are the ones
+	 *  the planner's estimate holds: one adult in second class on the cheapest single tickets and
+	 *  the night accommodation. Returns `None` when the trip turns live prices off or no site gave a
+	 *  price, in which case the estimate stands.
+	 * 
+	 *  Every ticket is one lookup, spaced out and paused like those of `fetch_live_quote`, so this
+	 *  takes seconds.
+	 */
+	liveJourneyPrice: (tripId: TripId, leg: TicketLeg) => typedError<{
+	/**  The low end of the estimate. */
+	low: EuroCents,
+	/**  The median of the estimate. */
+	median: EuroCents,
+	/**  The high end of the estimate. */
+	high: EuroCents,
+} | null, CommandError>(__TAURI_INVOKE("live_journey_price", { tripId, leg })),
+	/**
 	 *  Asks the booking site named in a ticket's booking link for the live price of the ticket.
 	 * 
 	 *  Returns `LiveQuote::Unavailable` when the site shows the trip and sells no ticket for it.

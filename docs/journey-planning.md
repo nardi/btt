@@ -118,6 +118,12 @@ When a run finishes, the app hands the solve each planned leg: its date, the jou
 
 The scenarios leave out two rules of the ticket optimizer. A pass covers a ride in the country of residence only at the ends of the trip, which the pass prices of the planner ignore. And two legs with a short stop between them can share one ticket, while the solve adds their prices. The Tickets screen applies both rules, so its total can differ from the scenario's.
 
+### Live prices of the candidates
+
+A live price from a booking site takes two seconds, so the search and the ranking never ask for one. After a leg is planned at a price weight above zero, the app looks up the live prices of the chosen journey and the next two, one journey after the other in the background, when the trip allows live prices. A journey's live price is its single tickets for one adult in second class, the same tickets the estimate prices, with the site's price in place of each estimate it has one for. The lookups go through the booking sites already wired in, keep to their pauses, and teach the price model like any other lookup.
+
+The leg view then puts the live prices into the costs of those journeys and ranks them again. When a live price moves another journey ahead of the chosen one, the leg shows that journey first and says which one the estimates had put first. Live prices skip the dead band of ten percent, because they carry no noise of the model. A journey the traveller picked stays chosen and only gets its live price, and a leg on a pass day keeps its pass journey, whose price no site gives.
+
 ## Heuristics and limitations
 
 The planner is exact for part of the cost and a heuristic for the rest. This section lists where it departs from the stated problem.

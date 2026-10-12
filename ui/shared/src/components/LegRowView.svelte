@@ -411,6 +411,13 @@
           {/if}
         </span>
       {/if}
+      {#if legState.liveOvertaken !== null && legState.liveOvertaken !== undefined}
+        <!-- The booking sites' prices put another journey ahead of the planner's estimates. -->
+        <span class="nearby-day">
+          With the live prices, {journeyTrains(journey)} at {journeyPrice(journey) ?? "an unknown price"}
+          now comes before {journeyTrains(legState.liveOvertaken)}, which the estimates put first.
+        </span>
+      {/if}
     {/if}
     {#if nearbyDay !== null}
       <!-- The traveller decides how to reach the other day, such as by adding a night. -->

@@ -4,7 +4,9 @@
 // read-only variant from a snapshot. Components never import Tauri APIs themselves.
 
 import type {
+  EuroRange,
   GeoCoordinates,
+  Journey,
   LegPlan,
   NearbyDaySuggestion,
   NoJourneyReason,
@@ -15,12 +17,18 @@ import type {
   TripHistoryState,
   TripPlaceId,
 } from "./bindings";
+import { legPlanWithLivePrices } from "./live-ranking";
 import { legPlanOnPass, passOptionOfLeg, type PassScenarioState } from "./scenarios";
 
 /** What the frontend knows about the plan of one leg. */
 export type LegViewState =
   | { status: "pending" }
-  | { status: "found"; legPlan: LegPlan }
+  | {
+      status: "found";
+      legPlan: LegPlan;
+      /** The journey the estimates put first, when a live price moved another ahead of it. */
+      liveOvertaken?: Journey | null;
+    }
   | { status: "none"; reason: NoJourneyReason };
 
 /** The trip and everything the views show about it. */
@@ -36,6 +44,8 @@ export interface TripViewState {
   readonly errorMessage: string | null;
   /** Single tickets and the best passes for the trip, or `null` when no pass is worth a look. */
   readonly passScenarios: PassScenarioState | null;
+  /** Live prices of journeys from the booking sites, by `journeyKey`. */
+  readonly livePricesByJourney: ReadonlyMap<string, EuroRange>;
 }
 
 /** A source of a trip. Only the editable variant has functions that change it. */
@@ -63,13 +73,25 @@ export type TripSource =
 
 /**
  * Returns the plan state of a leg, which is pending until the planner reports. A leg that rides
- * on a pass day in the picked scenario shows the journey of its pass option.
+ * on a pass day in the picked scenario shows the journey of its pass option. Otherwise the live
+ * prices the app knows replace the estimates of its journeys, which can change the first one.
  */
 export function legViewState(viewState: TripViewState, arrivalPlaceId: TripPlaceId): LegViewState {
   const state = viewState.legStatesByArrivalPlace.get(arrivalPlaceId) ?? { status: "pending" };
-  const option = passOptionOfLeg(viewState.passScenarios, arrivalPlaceId);
-  if (state.status !== "found" || option === null) {
+  if (state.status !== "found") {
     return state;
   }
-  return { status: "found", legPlan: legPlanOnPass(state.legPlan, option) };
+  const option = passOptionOfLeg(viewState.passScenarios, arrivalPlaceId);
+  if (option !== null) {
+    return { status: "found", legPlan: legPlanOnPass(state.legPlan, option) };
+  }
+  if (viewState.livePricesByJourney.size === 0) {
+    return state;
+  }
+  const live = legPlanWithLivePrices(
+    state.legPlan,
+    viewState.livePricesByJourney,
+    viewState.trip.preferences.price_weight,
+  );
+  return { status: "found", legPlan: live.legPlan, liveOvertaken: live.overtaken };
 }

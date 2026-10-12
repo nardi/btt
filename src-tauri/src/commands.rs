@@ -5,10 +5,10 @@
 
 use btt_model::edit::NewTripPlace;
 use btt_model::{
-    GeoCoordinates, LiveQuote, LiveQuoteRequest, PassScenario, PassScenarioLeg,
-    PlaceInsertionPoint, PlaceSearchResult, PlanningSessionEvent, StationSearchRadius, TicketLeg,
-    TicketPlan, Traveller, TravellerId, Trip, TripEdit, TripEditError, TripEditOutcome, TripId,
-    TripSummary,
+    EuroCents, EuroRange, GeoCoordinates, LiveQuote, LiveQuoteRequest, PassScenario,
+    PassScenarioLeg, PlaceInsertionPoint, PlaceSearchResult, PlanningSessionEvent,
+    StationSearchRadius, StrategyKind, TicketLeg, TicketPlan, TicketPreferences, Traveller,
+    TravellerId, Trip, TripEdit, TripEditError, TripEditOutcome, TripId, TripSummary,
 };
 use chrono::NaiveDate;
 use serde::Serialize;
@@ -320,12 +320,18 @@ pub async fn fetch_live_quote(
     state: State<'_, AppState>,
     request: LiveQuoteRequest,
 ) -> Result<Option<LiveQuote>, CommandError> {
+    Ok(quote_ticket(&state, &request).await)
+}
+
+/// Looks up the live price of a ticket the way `fetch_live_quote` describes, teaches the price
+/// model from it and logs the lookup.
+async fn quote_ticket(state: &AppState, request: &LiveQuoteRequest) -> Option<LiveQuote> {
     let (outcome, site_answer) = crate::quote_refresh::with_refresh(
         request.refresh,
-        crate::ticket_report::look_up(&state, &request),
+        crate::ticket_report::look_up(state, request),
     )
     .await;
-    let model_estimate = crate::price_learning::learn_from_lookup(&state, &request, &outcome);
+    let model_estimate = crate::price_learning::learn_from_lookup(state, request, &outcome);
     let quote = match &outcome {
         crate::ticket_report::LiveQuoteOutcome::Quoted { price } => {
             Some(LiveQuote::Priced(price.clone()))
@@ -337,8 +343,74 @@ pub async fn fetch_live_quote(
         .live_quote_log
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    crate::ticket_report::log_lookup(&mut log, &request, outcome, site_answer, model_estimate);
-    Ok(quote)
+    crate::ticket_report::log_lookup(&mut log, request, outcome, site_answer, model_estimate);
+    quote
+}
+
+/// Returns the price of a journey's single tickets with the live prices of the booking sites in
+/// place of the estimates, for the planner to rank the journey by. The tickets are the ones
+/// the planner's estimate holds: one adult in second class on the cheapest single tickets and
+/// the night accommodation. Returns `None` when the trip turns live prices off or no site gave a
+/// price, in which case the estimate stands.
+///
+/// Every ticket is one lookup, spaced out and paused like those of `fetch_live_quote`, so this
+/// takes seconds.
+#[tauri::command]
+#[specta::specta]
+pub async fn live_journey_price(
+    state: State<'_, AppState>,
+    trip_id: TripId,
+    leg: TicketLeg,
+) -> Result<Option<EuroRange>, CommandError> {
+    let live_prices = state
+        .open_trips()
+        .get(&trip_id)
+        .map(|open_trip| open_trip.trip.preferences.ticket_preferences.live_prices)
+        .ok_or(CommandError::TripNotOpen(trip_id))?;
+    if !live_prices {
+        return Ok(None);
+    }
+    let preferences = TicketPreferences::default();
+    let plan = btt_ticketing::plan_tickets(
+        &btt_ticketing::TicketRequest {
+            rides: btt_ticketing::rides_of_journey(
+                leg.arrival_place_id,
+                &leg.journey,
+                &leg.stations,
+            ),
+            traveller: None,
+            preferences: &preferences,
+            today: today_utc(),
+        },
+        &state.fare_data,
+        &state.price_book,
+    );
+    let Some(strategy) = plan
+        .strategies
+        .iter()
+        .find(|strategy| strategy.kind == StrategyKind::SingleTickets)
+    else {
+        return Ok(None);
+    };
+    let (mut low, mut middle, mut high) = (0_u64, 0_u64, 0_u64);
+    let mut any_live = false;
+    for item in &strategy.items {
+        let mut price = item.price.clone();
+        if let Some(request) = &item.live_quote_request
+            && let Some(LiveQuote::Priced(live)) = quote_ticket(&state, request).await
+        {
+            price = live;
+            any_live = true;
+        }
+        low += u64::from(price.low.0);
+        middle += u64::from(price.middle().0);
+        high += u64::from(price.high.0);
+    }
+    if !any_live {
+        return Ok(None);
+    }
+    let to_cents = |cents: u64| EuroCents(u32::try_from(cents).unwrap_or(u32::MAX));
+    Ok(EuroRange::new(to_cents(low), to_cents(middle), to_cents(high)).ok())
 }
 
 /// Searches settlements and railway stations by name. Answers repeated searches from the

@@ -20,6 +20,7 @@ function viewState(legStates: [number, LegViewState][]): TripViewState {
     notices: [],
     errorMessage: null,
     passScenarios: null,
+    livePricesByJourney: new Map(),
   };
 }
 
