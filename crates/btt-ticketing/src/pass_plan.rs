@@ -560,12 +560,12 @@ mod tests {
     #[test]
     fn a_day_the_pass_shares_between_legs_counts_once() {
         // Legs of a chain on the same date share the pass day, so the flexi pass of four days
-        // covers all six, and the leg without a pass option takes single tickets.
+        // covers all six, and the last leg, which has no pass option, takes single tickets.
         let legs: Vec<LegToPlan> = [0, 0, 1, 1, 2, 2]
             .iter()
             .map(|day| ice_leg(*day))
             .chain(std::iter::once(LegToPlan {
-                date: date(0),
+                date: date(2),
                 options: smallvec::smallvec![LegOption::Single {
                     cost_minutes: 400,
                     price_cents: EuroCents(9_000),
