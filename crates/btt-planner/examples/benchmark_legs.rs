@@ -7,7 +7,9 @@
 //! the planner. The check lists every leg whose chosen journey or cost differs from the file,
 //! and compares the planning times. Run it with `count` to plan every leg at the balanced and
 //! the frugal price weight, which reports how many legs get a different chosen journey when
-//! prices count.
+//! prices count. Run it with `times` and a limit, then the weights in hundredths of a minute
+//! per euro, such as `times <bundle> <queries.txt> <responses.txt> 500 0 100 300 800`, to time
+//! every leg at each weight.
 
 use std::fmt::Write as _;
 use std::sync::Arc;
@@ -48,6 +50,43 @@ struct TicketingPricer {
 impl JourneyPricer for TicketingPricer {
     fn journey_price(&self, journey: &Journey, stations: &[LegPlanStation]) -> Option<EuroRange> {
         btt_ticketing::journey_price(journey, stations, &self.data, &self.book)
+    }
+
+    fn journey_price_with_pass(
+        &self,
+        journey: &Journey,
+        stations: &[LegPlanStation],
+    ) -> Option<EuroRange> {
+        btt_ticketing::journey_price_on_pass(journey, stations, &self.data, &self.book)
+    }
+
+    fn pass_price_table(
+        &self,
+        classes: &[btt_planner::RidePriceClass],
+    ) -> Option<btt_planner::RidePassTable> {
+        if self.data.passes.passes.is_empty() {
+            return None;
+        }
+        let rows = classes
+            .iter()
+            .map(|class| {
+                let country = btt_fares::country_of_time_zone(&class.time_zone);
+                btt_planner::RidePassRow {
+                    takes: self
+                        .data
+                        .reservations
+                        .pass_accepted(&class.category, &class.operator),
+                    cents: btt_ticketing::pass_cents_for_class(
+                        &class.category,
+                        &class.operator,
+                        country,
+                        class.offers_berths,
+                        &self.data,
+                    ),
+                }
+            })
+            .collect();
+        Some(btt_planner::RidePassTable { rows })
     }
 
     fn price_table(
@@ -134,6 +173,10 @@ fn main() {
             check(&plan_queries(&router, &legs), &results_path);
         }
         "count" => count_price_weights(&router, &legs),
+        "times" => {
+            let weights: Vec<u16> = arguments.filter_map(|weight| weight.parse().ok()).collect();
+            time_price_weights(&router, &legs, &weights);
+        }
         other => panic!("unknown mode {other}"),
     }
 }
@@ -242,6 +285,43 @@ fn count_price_weights(
             "{different} of {} legs pick a different journey at {minutes_per_euro} minutes per euro",
             legs.len()
         );
+    }
+}
+
+/// Plans every leg at each of the given weights, after one untimed pass that warms the caches
+/// of the router, and prints the planning times and how many legs hold pass options.
+fn time_price_weights(
+    router: &TimetableBundleRouter<TicketingPricer>,
+    legs: &[(String, LegPlanningInput)],
+    weights: &[u16],
+) {
+    for (_, input) in legs.iter().take(20) {
+        router.plan_leg(input, || false);
+    }
+    for &weight in weights {
+        let mut results = Vec::new();
+        let mut with_pass_options = 0;
+        let mut with_cheapest = 0;
+        for (description, input) in legs {
+            let mut weighted = input.clone();
+            weighted.price_weight = PriceWeight::new(weight).expect("every u16 is a weight");
+            let started = Instant::now();
+            let result = router.plan_leg(&weighted, || false);
+            let milliseconds = started.elapsed().as_secs_f64() * 1000.0;
+            if let LegPlanningResult::Found(plan) = &result {
+                with_pass_options += usize::from(!plan.pass_options.is_empty());
+                with_cheapest += usize::from(plan.cheapest.is_some());
+            }
+            results.push(LegResult {
+                description: description.clone(),
+                journey: describe(&result),
+                milliseconds,
+            });
+        }
+        println!(
+            "weight {weight}: {with_pass_options} legs with pass options, {with_cheapest} with a cheaper journey"
+        );
+        print_times("now", &results);
     }
 }
 
