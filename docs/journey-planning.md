@@ -114,6 +114,10 @@ At a price weight above zero, when some pass takes a train of the bundle, the pl
 
 From that search the leg keeps its pass options. For each number of travel days from one to three and each first date, the option is the journey with the lowest cost plus weighted pass price. The solve of `btt-ticketing` then picks one option per leg, a pass and a window of validity, so that the total is lowest. A leg joined to others by same-day stops gets no pass options, because its departure window follows the leg before it.
 
+When a run finishes, the app hands the solve each planned leg: its date, the journey it takes on single tickets and its pass options. The solve returns scenarios, which are single tickets everywhere and the best one or two passes, sorted by their weighted total. The itinerary lists them above the legs and picks the lowest total. A leg that rides on a pass day in the picked scenario shows the journey of its pass option, and the map and the Tickets screen follow. A child or an infant gets single tickets only, because the scenarios do not model a child that travels free with an adult.
+
+The scenarios leave out two rules of the ticket optimizer. A pass covers a ride in the country of residence only at the ends of the trip, which the pass prices of the planner ignore. And two legs with a short stop between them can share one ticket, while the solve adds their prices. The Tickets screen applies both rules, so its total can differ from the scenario's.
+
 ## Heuristics and limitations
 
 The planner is exact for part of the cost and a heuristic for the rest. This section lists where it departs from the stated problem.

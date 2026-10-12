@@ -11,6 +11,7 @@
   import { itineraryRows, plannedArrivalDate, storedJourneyChoice, tripPlaces } from "../itinerary";
   import { legViewState, type TripSource } from "../trip-source";
   import LegRowView from "./LegRowView.svelte";
+  import PassScenarioPicker from "./PassScenarioPicker.svelte";
   import PlaceRowView from "./PlaceRowView.svelte";
   import PlaceSearch from "./PlaceSearch.svelte";
 
@@ -35,11 +36,13 @@
 
   const viewState = $derived(source.viewState);
   const trip = $derived(viewState.trip);
+  // The journeys of the picked pass scenario decide the dates, like they decide the legs.
   const plannedArrivalDates = $derived(
     new Map(
-      [...viewState.legStatesByArrivalPlace].flatMap(([placeId, legState]) =>
-        legState.status === "found" ? [[placeId, plannedArrivalDate(legState.legPlan)] as const] : [],
-      ),
+      [...viewState.legStatesByArrivalPlace.keys()].flatMap((placeId) => {
+        const legState = legViewState(viewState, placeId);
+        return legState.status === "found" ? [[placeId, plannedArrivalDate(legState.legPlan)] as const] : [];
+      }),
     ),
   );
   const rows = $derived(itineraryRows(trip, plannedArrivalDates));
@@ -98,6 +101,13 @@
   {#each viewState.notices as notice, noticeIndex (noticeIndex)}
     <p class="notice" role="status">{noticeMessage(notice)}</p>
   {/each}
+
+  {#if viewState.passScenarios !== null && viewState.passScenarios.scenarios.length > 1}
+    <PassScenarioPicker
+      scenarioState={viewState.passScenarios}
+      onSelect={editable === null ? undefined : (index) => editable.selectScenario(index)}
+    />
+  {/if}
 
   <ol class="rows">
     {#each rows.places as row, index (row.place.id)}

@@ -79,6 +79,13 @@ export const commands = {
 	 */
 	planTickets: (tripId: TripId, legs: TicketLeg[]) => typedError<TicketPlan, CommandError>(__TAURI_INVOKE("plan_tickets", { tripId, legs })),
 	/**
+	 *  Chooses how to cover a trip's legs: single tickets everywhere, and the best one or two
+	 *  passes with the legs that ride on their travel days. The legs come in travel order, and
+	 *  the scenarios come sorted, the lowest weighted total first. The first traveller of the trip
+	 *  prices the passes.
+	 */
+	planPassScenarios: (tripId: TripId, legs: PassScenarioLeg[]) => typedError<PassScenario[], CommandError>(__TAURI_INVOKE("plan_pass_scenarios", { tripId, legs })),
+	/**
 	 *  Asks the booking site named in a ticket's booking link for the live price of the ticket.
 	 * 
 	 *  Returns `LiveQuote::Unavailable` when the site shows the trip and sells no ticket for it.
@@ -618,6 +625,60 @@ export type PassJourneyOption = {
 	first_date: string,
 };
 
+/**
+ *  What a pass option of a leg costs, as the choice of a pass sees it. It mirrors
+ *  `PassJourneyOption` without the journey.
+ */
+export type PassOptionSummary = {
+	/**  The journey's cost in minutes of train travel, without the price. */
+	cost_minutes: number,
+	/**  What the pass does not cover, in euro cents. */
+	price_cents: EuroCents,
+	/**  How many travel days the journey uses. */
+	days: PassDays,
+	/**  The first travel day it uses. */
+	first_date: string,
+};
+
+/**
+ *  One way of covering the whole trip: single tickets everywhere, or a pass with the legs that
+ *  ride on its travel days.
+ */
+export type PassScenario = {
+	/**  The pass, or `None` when every leg takes single tickets. */
+	pass: ScenarioPass | null,
+	/**
+	 *  For each leg in the order the request gave them, the pass option it takes as an index
+	 *  into its pass options, or `None` when it takes single tickets.
+	 */
+	pass_option_of_leg: (number | null)[],
+	/**  The total cost of the journeys in minutes of train travel. */
+	minutes: number,
+	/**  The total price of the tickets, the pass included. The median of the estimates. */
+	price: EuroCents,
+};
+
+/**
+ *  One leg of a trip as the choice of a pass sees it: the journey it takes on single tickets
+ *  and its best journeys on the travel days of a pass.
+ */
+export type PassScenarioLeg = {
+	/**  The leg's departure date. */
+	date: string,
+	/**
+	 *  The cost of the journey the leg takes on single tickets, in minutes of train travel,
+	 *  without the price.
+	 */
+	single_cost_minutes: number,
+	/**
+	 *  The median price of that journey's tickets. `None` when no price is known, which the
+	 *  choice counts as nothing.
+	 */
+	single_price: EuroCents | null,
+	/**  The leg's pass options, in the order of `LegPlan::pass_options`. */
+	pass_options: PassOptionSummary[],
+};
+
 /**  Where a new place goes in the itinerary. */
 export type PlaceInsertionPoint = 
 /**  Before the place at this index, or at the end when the index equals the place count. */
@@ -803,6 +864,18 @@ export type SameDayStayRange = {
 	minimum: DurationMinutes,
 	/**  How much longer than `minimum` the stay may be. `None` means no upper bound. */
 	maximum_beyond_minimum: DurationMinutes | null,
+};
+
+/**  The pass of a scenario and its window of validity. */
+export type ScenarioPass = {
+	/**  The pass's name, such as "Interrail Global Pass, 4 days in 1 month". */
+	name: string,
+	/**  The first day of validity. */
+	first_valid_date: string,
+	/**  The last day of validity. */
+	last_valid_date: string,
+	/**  The price of the pass for the traveller. */
+	price: EuroCents,
 };
 
 /**  A span of time the planner searched in, such as a departure window. */

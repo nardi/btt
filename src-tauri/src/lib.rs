@@ -46,6 +46,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::save_traveller,
         commands::delete_traveller,
         commands::plan_tickets,
+        commands::plan_pass_scenarios,
         commands::fetch_live_quote,
         problem_report::export_problem_report,
     ])

@@ -755,13 +755,14 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             };
             let cost_inputs =
                 self.journey_cost_inputs(journey, &arrival_window, search.night.as_ref());
-            let cost_minutes = journey_cost(
+            let mut parts = journey_cost_parts(
                 cost_inputs,
                 input.transfer_aversion,
                 ScoringWeights::DEFAULT,
             );
+            let cost_minutes = u32::try_from(parts.total_cost).unwrap_or(0);
             let mut stations = LegPlanStations::default();
-            let Some(model) =
+            let Some(mut model) =
                 self.model_journey(journey, input, search.night.as_ref(), &mut stations)
             else {
                 continue;
@@ -770,8 +771,16 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
                 continue;
             };
             let price_cents = price.median();
-            let weighted =
-                u64::from(cost_minutes) * 100 + u64::from(weight) * u64::from(price_cents.0) / 100;
+            let price_cost = u64::from(weight) * u64::from(price_cents.0) / 100;
+            let weighted = u64::from(cost_minutes) * 100 + price_cost;
+            // The journey carries the pass price and its weight in its cost parts, so the leg
+            // view shows and explains it like a journey on single tickets.
+            parts.price = Some(price);
+            parts.price_cost = u32::try_from(price_cost).unwrap_or(u32::MAX);
+            parts.total_cost = parts
+                .total_cost
+                .saturating_add(i32::try_from(price_cost / 100).unwrap_or(i32::MAX));
+            model.cost_parts = Some(parts);
             let option = PassJourneyOption {
                 journey: model,
                 cost_minutes,
@@ -2003,6 +2012,10 @@ mod tests {
         );
         // The option costs the fast train's 25 minutes, not the fare.
         assert_eq!(option.cost_minutes, 25);
+        // Its journey shows the reservation as its price, weighted at three minutes per euro.
+        let parts = option.journey.cost_parts.as_ref().unwrap();
+        assert_eq!(parts.price.unwrap().median(), EuroCents(1_000));
+        assert_eq!(parts.total_cost, 25 + 30);
     }
 
     #[test]

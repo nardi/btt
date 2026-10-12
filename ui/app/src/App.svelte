@@ -18,6 +18,7 @@
   import TripMap from "@btt/shared/components/TripMap.svelte";
   import { itineraryRows } from "@btt/shared/itinerary";
   import { liveQuoteKey } from "@btt/shared/tickets";
+  import { legViewState } from "@btt/shared/trip-source";
   import type { PlaceFocusRequest } from "@btt/shared/map-features";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { onMount } from "svelte";
@@ -182,7 +183,8 @@
     const legs: TicketLeg[] = [];
     let missing = 0;
     for (const leg of itineraryRows(source.trip).legs) {
-      const state = source.legStatesByArrivalPlace.get(leg.arrivalPlace.id);
+      // A leg on a pass day of the picked scenario is priced with its pass journey.
+      const state = legViewState(source, leg.arrivalPlace.id);
       if (state?.status === "found") {
         legs.push({
           arrival_place_id: leg.arrivalPlace.id,

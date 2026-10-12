@@ -5,6 +5,7 @@ import type {
   CommandError,
   GeoCoordinates,
   NearbyDaySuggestion,
+  PassScenarioLeg,
   PlaceSearchResult,
   PlanningRunId,
   PlanningSessionEvent,
@@ -16,7 +17,12 @@ import type {
   TripId,
   TripPlaceId,
 } from "@btt/shared/bindings";
-import { tripPlaces } from "@btt/shared/itinerary";
+import { itineraryRows, plannedArrivalDate, tripPlaces } from "@btt/shared/itinerary";
+import {
+  scenarioLeg,
+  selectedScenario,
+  type PassScenarioState,
+} from "@btt/shared/scenarios";
 import type { LegViewState, TripViewState } from "@btt/shared/trip-source";
 import { Channel } from "@tauri-apps/api/core";
 import { SvelteMap } from "svelte/reactivity";
@@ -48,8 +54,11 @@ export class TauriTripSource implements TripViewState {
   errorMessage: string | null = $state(null);
   /** What undo and redo would do. A newly opened trip has no history. */
   history: TripHistoryState = $state({ undo_description: null, redo_description: null });
+  passScenarios: PassScenarioState | null = $state(null);
   /** Latest planning run. Events of older runs are stale and get dropped. */
   private latestRunId: PlanningRunId = -1;
+  /** Counts requests for pass scenarios, so an answer to an older one gets dropped. */
+  private scenarioRequestNumber = 0;
 
   private constructor(trip: Trip) {
     this.trip = trip;
@@ -133,6 +142,12 @@ export class TauriTripSource implements TripViewState {
     this.forgetRemovedLegs();
   }
 
+  selectScenario(index: number): void {
+    if (this.passScenarios !== null) {
+      this.passScenarios = { ...this.passScenarios, selectedIndex: index };
+    }
+  }
+
   async searchPlaces(query: string): Promise<PlaceSearchResult[]> {
     const result = await commands.searchPlaces(query);
     if (result.status === "error") {
@@ -173,7 +188,59 @@ export class TauriTripSource implements TripViewState {
         return;
       }
       this.nearbyDaysByArrivalPlace.set(arrival_place_id, suggestion);
+    } else if (event.PlanningFinished !== undefined) {
+      if (event.PlanningFinished.run_id === this.latestRunId) {
+        void this.refreshPassScenarios();
+      }
     }
+  }
+
+  /**
+   * Asks the backend for the pass scenarios of the planned legs. Without a price weight a pass
+   * saves nothing that counts, and without pass options there is nothing to choose, so the
+   * trip then has none. The pick survives when a scenario with the same pass comes back.
+   */
+  private async refreshPassScenarios(): Promise<void> {
+    this.scenarioRequestNumber += 1;
+    const requestNumber = this.scenarioRequestNumber;
+    const plannedArrivalDates = new Map<TripPlaceId, string>();
+    for (const [placeId, state] of this.legStatesByArrivalPlace) {
+      if (state.status === "found") {
+        plannedArrivalDates.set(placeId, plannedArrivalDate(state.legPlan));
+      }
+    }
+    const legs: PassScenarioLeg[] = [];
+    const arrivalPlaceIds: TripPlaceId[] = [];
+    for (const leg of itineraryRows(this.trip, plannedArrivalDates).legs) {
+      const state = this.legStatesByArrivalPlace.get(leg.arrivalPlace.id);
+      if (state?.status === "found") {
+        legs.push(scenarioLeg(state.legPlan, leg.departureDate));
+        arrivalPlaceIds.push(leg.arrivalPlace.id);
+      }
+    }
+    if (this.trip.preferences.price_weight === 0 || !legs.some((leg) => leg.pass_options.length > 0)) {
+      this.passScenarios = null;
+      return;
+    }
+    const result = await commands.planPassScenarios(this.trip.id, legs);
+    if (requestNumber !== this.scenarioRequestNumber) {
+      return;
+    }
+    if (result.status === "error") {
+      this.errorMessage = commandErrorMessage(result.error);
+      return;
+    }
+    // Without an earlier pick the lowest total, which comes first, is the default.
+    const picked = selectedScenario(this.passScenarios);
+    const kept =
+      picked === null
+        ? 0
+        : result.data.findIndex((scenario) => (scenario.pass?.name ?? null) === (picked.pass?.name ?? null));
+    this.passScenarios = {
+      scenarios: result.data,
+      arrivalPlaceIds,
+      selectedIndex: Math.max(kept, 0),
+    };
   }
 
   /** Drops leg states of places the trip no longer has. */

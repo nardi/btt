@@ -19,6 +19,7 @@ function viewState(legStates: [number, LegViewState][]): TripViewState {
     nearbyDaysByArrivalPlace: new Map(),
     notices: [],
     errorMessage: null,
+    passScenarios: null,
   };
 }
 

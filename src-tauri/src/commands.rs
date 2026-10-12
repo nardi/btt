@@ -5,9 +5,10 @@
 
 use btt_model::edit::NewTripPlace;
 use btt_model::{
-    GeoCoordinates, LiveQuote, LiveQuoteRequest, PlaceInsertionPoint, PlaceSearchResult,
-    PlanningSessionEvent, StationSearchRadius, TicketLeg, TicketPlan, Traveller, TravellerId, Trip,
-    TripEdit, TripEditError, TripEditOutcome, TripId, TripSummary,
+    GeoCoordinates, LiveQuote, LiveQuoteRequest, PassScenario, PassScenarioLeg,
+    PlaceInsertionPoint, PlaceSearchResult, PlanningSessionEvent, StationSearchRadius, TicketLeg,
+    TicketPlan, Traveller, TravellerId, Trip, TripEdit, TripEditError, TripEditOutcome, TripId,
+    TripSummary,
 };
 use chrono::NaiveDate;
 use serde::Serialize;
@@ -275,6 +276,35 @@ pub fn plan_tickets(
             },
         );
     Ok(plan)
+}
+
+/// Chooses how to cover a trip's legs: single tickets everywhere, and the best one or two
+/// passes with the legs that ride on their travel days. The legs come in travel order, and
+/// the scenarios come sorted, the lowest weighted total first. The first traveller of the trip
+/// prices the passes.
+#[tauri::command]
+#[specta::specta]
+pub fn plan_pass_scenarios(
+    state: State<'_, AppState>,
+    trip_id: TripId,
+    legs: Vec<PassScenarioLeg>,
+) -> Result<Vec<PassScenario>, CommandError> {
+    let preferences = state
+        .open_trips()
+        .get(&trip_id)
+        .map(|open_trip| open_trip.trip.preferences.clone())
+        .ok_or(CommandError::TripNotOpen(trip_id))?;
+    let travellers = state.storage.list_travellers()?;
+    let traveller = preferences
+        .traveller_ids
+        .iter()
+        .find_map(|id| travellers.iter().find(|traveller| traveller.id == *id));
+    Ok(btt_ticketing::pass_scenarios(
+        &legs,
+        &state.fare_data.passes,
+        traveller,
+        preferences.price_weight,
+    ))
 }
 
 /// Asks the booking site named in a ticket's booking link for the live price of the ticket.

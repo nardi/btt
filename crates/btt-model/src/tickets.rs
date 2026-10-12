@@ -9,7 +9,7 @@ use thiserror::Error;
 use crate::itinerary::TripPlaceId;
 use crate::plan::TrainLabel;
 use crate::time::UnixTimeMinutes;
-use crate::trip::TravelClass;
+use crate::trip::{PassDays, TravelClass};
 
 /// An amount of money in euro cents.
 #[derive(
@@ -428,4 +428,62 @@ pub struct TicketLeg {
     pub journey: crate::plan::Journey,
     /// The stations the journey's rides refer to.
     pub stations: Vec<crate::plan::LegPlanStation>,
+}
+
+/// What a pass option of a leg costs, as the choice of a pass sees it. It mirrors
+/// `PassJourneyOption` without the journey.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub struct PassOptionSummary {
+    /// The journey's cost in minutes of train travel, without the price.
+    pub cost_minutes: u32,
+    /// What the pass does not cover, in euro cents.
+    pub price_cents: EuroCents,
+    /// How many travel days the journey uses.
+    pub days: PassDays,
+    /// The first travel day it uses.
+    pub first_date: NaiveDate,
+}
+
+/// One leg of a trip as the choice of a pass sees it: the journey it takes on single tickets
+/// and its best journeys on the travel days of a pass.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub struct PassScenarioLeg {
+    /// The leg's departure date.
+    pub date: NaiveDate,
+    /// The cost of the journey the leg takes on single tickets, in minutes of train travel,
+    /// without the price.
+    pub single_cost_minutes: u32,
+    /// The median price of that journey's tickets. `None` when no price is known, which the
+    /// choice counts as nothing.
+    pub single_price: Option<EuroCents>,
+    /// The leg's pass options, in the order of `LegPlan::pass_options`.
+    pub pass_options: Vec<PassOptionSummary>,
+}
+
+/// The pass of a scenario and its window of validity.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub struct ScenarioPass {
+    /// The pass's name, such as "Interrail Global Pass, 4 days in 1 month".
+    pub name: SmolStr,
+    /// The first day of validity.
+    pub first_valid_date: NaiveDate,
+    /// The last day of validity.
+    pub last_valid_date: NaiveDate,
+    /// The price of the pass for the traveller.
+    pub price: EuroCents,
+}
+
+/// One way of covering the whole trip: single tickets everywhere, or a pass with the legs that
+/// ride on its travel days.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub struct PassScenario {
+    /// The pass, or `None` when every leg takes single tickets.
+    pub pass: Option<ScenarioPass>,
+    /// For each leg in the order the request gave them, the pass option it takes as an index
+    /// into its pass options, or `None` when it takes single tickets.
+    pub pass_option_of_leg: Vec<Option<u8>>,
+    /// The total cost of the journeys in minutes of train travel.
+    pub minutes: u32,
+    /// The total price of the tickets, the pass included. The median of the estimates.
+    pub price: EuroCents,
 }

@@ -8,7 +8,10 @@
 //! fifteen of them and a trip has tens of legs.
 
 use btt_fares::{PassCatalogue, PassKind, PassType, PriceAgeGroup};
-use btt_model::{EuroCents, PassDays, TravelClass};
+use btt_model::{
+    AgeGroup, EuroCents, PassDays, PassScenario, PassScenarioLeg, PriceWeight, ScenarioPass,
+    TravelClass, Traveller,
+};
 use chrono::{Days, NaiveDate};
 use smallvec::SmallVec;
 
@@ -367,11 +370,90 @@ fn state_after(
     (state.days_used <= day_budget).then_some(state)
 }
 
-/// Returns what an option adds to the weighted cost, in hundredths of a minute.
+/// Returns the scenarios of a trip: single tickets on every leg, and the best one or two
+/// passes. The legs come in travel order, each with the journey it takes on single tickets and
+/// its pass options. The scenarios come sorted, the lowest weighted total first.
+///
+/// The traveller's age on the first leg's date and class price the passes. A child or infant
+/// travels free on a pass with an adult, which the scenarios do not model, so they get only
+/// single tickets, and so does a trip without a weight.
+pub fn pass_scenarios(
+    legs: &[PassScenarioLeg],
+    passes: &PassCatalogue,
+    traveller: Option<&Traveller>,
+    price_weight: PriceWeight,
+) -> Vec<PassScenario> {
+    let to_plan: Vec<LegToPlan> = legs
+        .iter()
+        .map(|leg| LegToPlan {
+            date: leg.date,
+            // The single tickets come first, so option `index` is pass option `index - 1`.
+            options: std::iter::once(LegOption::Single {
+                cost_minutes: leg.single_cost_minutes,
+                price_cents: leg.single_price.unwrap_or_default(),
+            })
+            .chain(leg.pass_options.iter().map(|option| LegOption::Pass {
+                cost_minutes: option.cost_minutes,
+                price_cents: option.price_cents,
+                days: option.days,
+                first_date: option.first_date,
+            }))
+            .collect(),
+        })
+        .collect();
+    let first_date = legs.first().map_or(NaiveDate::MIN, |leg| leg.date);
+    let age_group = traveller.map_or(AgeGroup::Adult, |traveller| {
+        traveller.age_group_on(first_date)
+    });
+    let class = traveller.map_or(TravelClass::Second, |traveller| traveller.travel_class);
+    let price_weight_hundredths = match PriceAgeGroup::of(age_group) {
+        Some(_) => u32::from(price_weight.hundredths_of_minute_per_euro()),
+        None => 0,
+    };
+    let request = TripToPlan {
+        legs: &to_plan,
+        passes,
+        age_group: PriceAgeGroup::of(age_group).unwrap_or(PriceAgeGroup::Adult),
+        class,
+        price_weight_hundredths,
+    };
+    solve(&request)
+        .into_iter()
+        .map(|scenario| {
+            let pass = scenario
+                .pass
+                .zip(scenario.pass_start)
+                .and_then(|(index, start)| {
+                    let pass = passes.passes.get(index)?;
+                    Some(ScenarioPass {
+                        name: format!("Interrail Global Pass, {}", pass.title()).into(),
+                        first_valid_date: start,
+                        last_valid_date: pass.last_valid_date(start),
+                        price: pass.price(request.age_group, class)?,
+                    })
+                });
+            PassScenario {
+                pass,
+                pass_option_of_leg: scenario
+                    .choices
+                    .iter()
+                    .map(|&choice| {
+                        choice
+                            .checked_sub(1)
+                            .and_then(|option| u8::try_from(option).ok())
+                    })
+                    .collect(),
+                minutes: u32::try_from(scenario.minutes).unwrap_or(u32::MAX),
+                price: EuroCents(u32::try_from(scenario.price_cents).unwrap_or(u32::MAX)),
+            }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use btt_model::AgeGroup;
+    use btt_model::PassOptionSummary;
     use proptest::prelude::*;
 
     /// A small catalogue: one flexi pass of 4 days in a month for 200 euro, one continuous
@@ -496,6 +578,50 @@ mod tests {
         assert_eq!(best.pass, Some(0));
         assert!(best.choices[..6].iter().all(|&choice| choice == 1));
         assert_eq!(best.choices[6], 0, "the leg without a pass option");
+    }
+
+    /// The leg of `ice_leg` as the app sends it, with the journey on single tickets apart from
+    /// the pass options.
+    fn scenario_leg(day: u32) -> PassScenarioLeg {
+        PassScenarioLeg {
+            date: date(day),
+            single_cost_minutes: 300,
+            single_price: Some(EuroCents(3_500)),
+            pass_options: vec![PassOptionSummary {
+                cost_minutes: 120,
+                price_cents: EuroCents(0),
+                days: PassDays::new(1).unwrap(),
+                first_date: date(day),
+            }],
+        }
+    }
+
+    #[test]
+    fn a_scenario_names_its_pass_and_the_pass_option_of_each_leg() {
+        let legs: Vec<PassScenarioLeg> = (0..4).map(scenario_leg).collect();
+        let scenarios = pass_scenarios(&legs, &catalogue(), None, PriceWeight::FRUGAL);
+        let best = &scenarios[0];
+        let pass = best.pass.as_ref().unwrap();
+        assert!(pass.name.starts_with("Interrail Global Pass, "));
+        assert_eq!(pass.first_valid_date, date(0));
+        assert_eq!(pass.last_valid_date, date(30));
+        assert_eq!(pass.price, EuroCents(20_000));
+        // Every leg takes its first pass option, and the price holds the pass.
+        assert_eq!(best.pass_option_of_leg, vec![Some(0); 4]);
+        assert_eq!(best.minutes, 480);
+        assert_eq!(best.price, EuroCents(20_000));
+        let singles = &scenarios[1];
+        assert_eq!(singles.pass, None);
+        assert_eq!(singles.pass_option_of_leg, vec![None; 4]);
+    }
+
+    #[test]
+    fn a_child_gets_single_tickets_only() {
+        let legs: Vec<PassScenarioLeg> = (0..4).map(scenario_leg).collect();
+        let child = Traveller::new("Kim".into(), date(0) - Days::new(8 * 366), "NL".into());
+        let scenarios = pass_scenarios(&legs, &catalogue(), Some(&child), PriceWeight::FRUGAL);
+        assert_eq!(scenarios.len(), 1);
+        assert_eq!(scenarios[0].pass, None);
     }
 
     #[test]
