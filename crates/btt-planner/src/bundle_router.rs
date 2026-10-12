@@ -6,10 +6,10 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use btt_geo::{TimeZoneFinder, local_time_to_unix_minutes};
 use btt_model::{
-    ArrivalFootpath, DurationMinutes, EuroRange, Journey, JourneyChoice, JourneyCostParts, LegPlan,
-    LegPlanStation, LegPlanStationIndex, LegPlanningResult, LegTravelMode, NoJourneyReason,
-    OvernightLegOptions, PassDays, PassJourneyOption, PriceWeight, SearchedWindow, StationWay,
-    TrainLabel, TrainRide, TransferAndRide, UnixTimeMinutes, WayToStationMode,
+    ArrivalFootpath, DurationMinutes, EuroRange, Journey, JourneyChoice, JourneyCostParts,
+    LegExtras, LegPlan, LegPlanStation, LegPlanStationIndex, LegPlanningResult, LegTravelMode,
+    NoJourneyReason, OvernightLegOptions, PassDays, PassJourneyOption, PriceWeight, SearchedWindow,
+    StationWay, TrainLabel, TrainRide, TransferAndRide, UnixTimeMinutes, WayToStationMode,
 };
 use btt_router::{
     CandidateStation, CostParetoJourneySet, CostSearchBuffers, MinutesSinceBundleStart,
@@ -200,7 +200,8 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
         self.bundle.bundle_version()
     }
 
-    /// Plans one leg. `should_stop` lets a newer planning run cancel the search.
+    /// Plans one leg, without the searches of `plan_extras`, so the result arrives as soon as
+    /// the leg's own search is done. `should_stop` lets a newer planning run cancel the search.
     pub fn plan_leg(
         &self,
         input: &LegPlanningInput,
@@ -210,11 +211,60 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             Err(reason) => LegPlanningResult::NoJourneyFound(reason),
             Ok(search) => {
                 let ranking = self.rank_journeys(&search, input);
-                let mut result = self.complete_leg_plan(&ranking, input, &should_stop);
-                self.add_pass_options(&mut result, input, &should_stop);
-                result
+                self.leg_plan(&ranking, input)
             }
         }
+    }
+
+    /// Plans one leg and then runs the searches of `plan_extras` for it, the way the app does
+    /// in two steps. For a caller that has no use for the main plan on its own.
+    pub fn plan_leg_with_extras(
+        &self,
+        input: &LegPlanningInput,
+        should_stop: impl Fn() -> bool + Sync,
+    ) -> LegPlanningResult {
+        let mut result = self.plan_leg(input, &should_stop);
+        if let LegPlanningResult::Found(plan) = &mut result {
+            let extras = self.plan_extras(input, plan, true, &should_stop);
+            plan.apply_extras(extras);
+        }
+        result
+    }
+
+    /// Runs the searches that follow the main plan of a leg. One at the cheapest weight finds
+    /// the cheaper journey, one without a weight finds the faster journey, and one on the
+    /// travel days of a pass finds the journeys that the solve of the whole trip picks among.
+    /// Each takes about as long as the main plan or longer, so the main plan is delivered first.
+    ///
+    /// `with_pass_options` is false for a leg joined to others by same-day stops, because its
+    /// departure window follows the leg before it and a pass would have to cover the chain.
+    /// `should_stop` lets a newer planning run cancel the searches, and the result of a
+    /// cancelled run is dropped by the caller.
+    pub fn plan_extras(
+        &self,
+        input: &LegPlanningInput,
+        plan: &LegPlan,
+        with_pass_options: bool,
+        should_stop: impl Fn() -> bool + Sync,
+    ) -> LegExtras {
+        let mut extras = LegExtras::default();
+        let weight = input.price_weight.hundredths_of_minute_per_euro();
+        // A traveller below the cheapest weight never sees a cheap journey otherwise, and one
+        // above zero never sees a fast one.
+        if weight < PriceWeight::CHEAPEST.hundredths_of_minute_per_euro() {
+            extras.cheapest = self
+                .best_journey_at(input, PriceWeight::CHEAPEST, &should_stop)
+                .filter(|cheapest| cheaper_by_enough(cheapest, &plan.chosen_journey));
+        }
+        if weight > PriceWeight::TIME_FIRST.hundredths_of_minute_per_euro() {
+            extras.fastest = self
+                .best_journey_at(input, PriceWeight::TIME_FIRST, &should_stop)
+                .filter(|fastest| faster_by_enough(fastest, &plan.chosen_journey));
+        }
+        if with_pass_options {
+            extras.pass_options = self.pass_options(input, &should_stop);
+        }
+        extras
     }
 
     /// Plans the legs of a chain joined by same-day stops, one result per leg in order.
@@ -265,7 +315,7 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
                     .collect();
                 let stays = &chain.stops[segment.start..segment.end - 1];
                 for (offset, result) in self
-                    .plan_segment(&segment_searches, &segment_inputs, stays, &should_stop)
+                    .plan_segment(&segment_searches, &segment_inputs, stays)
                     .into_iter()
                     .enumerate()
                 {
@@ -294,7 +344,6 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
         searches: &[&LegSearch],
         inputs: &[&LegPlanningInput],
         stops: &[SameDayStop],
-        should_stop: &(impl Fn() -> bool + Sync),
     ) -> Vec<LegPlanningResult> {
         let costed: Vec<Vec<RankedJourney<'_>>> = searches
             .iter()
@@ -375,7 +424,7 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
                     night: searches[leg].night.clone(),
                     departure_window: searches[leg].departure_window.clone(),
                 };
-                self.complete_leg_plan(&ranking, inputs[leg], should_stop)
+                self.leg_plan(&ranking, inputs[leg])
             })
             .collect()
     }
@@ -660,37 +709,6 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
         arrival_window
     }
 
-    /// Turns ranked journeys into a leg plan and adds the cheaper and the faster journey that
-    /// other weights would pick, when they are better by enough to show.
-    ///
-    /// The extra searches run after the first, so the chosen journey is decided before any
-    /// more work happens, and a leg that stops early keeps the plan it has.
-    fn complete_leg_plan(
-        &self,
-        ranking: &JourneyRanking<'_>,
-        input: &LegPlanningInput,
-        should_stop: &(impl Fn() -> bool + Sync),
-    ) -> LegPlanningResult {
-        let mut result = self.leg_plan(ranking, input);
-        let LegPlanningResult::Found(plan) = &mut result else {
-            return result;
-        };
-        let weight = input.price_weight.hundredths_of_minute_per_euro();
-        // A traveller below the cheapest weight never sees a cheap journey otherwise, and one
-        // above zero never sees a fast one.
-        if weight < PriceWeight::CHEAPEST.hundredths_of_minute_per_euro() {
-            plan.cheapest = self
-                .best_journey_at(input, PriceWeight::CHEAPEST, should_stop)
-                .filter(|cheapest| cheaper_by_enough(cheapest, &plan.chosen_journey));
-        }
-        if weight > PriceWeight::TIME_FIRST.hundredths_of_minute_per_euro() {
-            plan.fastest = self
-                .best_journey_at(input, PriceWeight::TIME_FIRST, should_stop)
-                .filter(|fastest| faster_by_enough(fastest, &plan.chosen_journey));
-        }
-        result
-    }
-
     /// Returns the best journey of a leg searched at another price weight, or `None` when the
     /// search finds nothing. The traveller's pick does not hold, because the plan shows the
     /// other weight's own best.
@@ -710,34 +728,27 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
         self.journey(ranked, &weighted, ranking.night.as_ref(), &mut stations)
     }
 
-    /// Adds the best journeys of the leg on the travel days of a pass, one for each number of
-    /// days the journey uses, which the solve of the whole trip picks among. The search runs
-    /// after the plan is complete, so the chosen journey is decided first, and a leg that
-    /// stops early keeps the plan it has.
-    ///
-    /// A leg joined to others by same-day stops gets no pass options, because its departure
-    /// window follows the leg before it and the pass would have to cover the whole chain.
-    fn add_pass_options(
+    /// Returns the best journeys of the leg on the travel days of a pass, one for each number of
+    /// days the journey uses and each first date, which the solve of the whole trip picks
+    /// among. The result is empty when the traveller searches by time alone or no pass takes a
+    /// train of the bundle.
+    fn pass_options(
         &self,
-        result: &mut LegPlanningResult,
         input: &LegPlanningInput,
         should_stop: &(impl Fn() -> bool + Sync),
-    ) {
-        let LegPlanningResult::Found(plan) = result else {
-            return;
-        };
+    ) -> SmallVec<[PassJourneyOption; 3]> {
         let weight = u32::from(input.price_weight.hundredths_of_minute_per_euro());
         if weight == 0 {
-            return;
+            return SmallVec::new();
         }
         let Some(prices) = self.ride_prices.as_ref() else {
-            return;
+            return SmallVec::new();
         };
         if !prices.any_pass_takes() {
-            return;
+            return SmallVec::new();
         }
         let Ok(search) = self.search_leg_in_mode(input, PriceMode::Pass, should_stop) else {
-            return;
+            return SmallVec::new();
         };
         // The best journey for a number of days and a first date is the one the solve would
         // pick: the lowest weighted total of its cost in minutes and what the pass does not
@@ -798,8 +809,7 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             }
         }
         best.sort_by_key(|(_, option)| (option.days, option.first_date));
-        plan.pass_options
-            .extend(best.into_iter().map(|(_, option)| option));
+        best.into_iter().map(|(_, option)| option).collect()
     }
 
     /// Returns the travel day of the first ride a pass takes, as local days since the bundle
@@ -1697,11 +1707,45 @@ mod tests {
     ) -> Box<btt_model::LegPlan> {
         let router =
             TimetableBundleRouter::from_loaded(bundle, Arc::new(TimeZoneFinder::new()), pricer);
-        let LegPlanningResult::Found(plan) = router.plan_leg(&leg_input(price_weight), || false)
+        let LegPlanningResult::Found(plan) =
+            router.plan_leg_with_extras(&leg_input(price_weight), || false)
         else {
             panic!("the leg has a journey");
         };
         plan
+    }
+
+    #[test]
+    fn the_main_plan_comes_without_the_extra_searches() {
+        let pricer = PassCategoryPricer {
+            ice: EuroCents(12_000),
+            regional: EuroCents(3_500),
+            ice_reservation: EuroCents(1_000),
+        };
+        let router = TimetableBundleRouter::from_loaded(
+            bundle(480),
+            Arc::new(TimeZoneFinder::new()),
+            pricer,
+        );
+        let input = leg_input(PriceWeight::FRUGAL);
+        let LegPlanningResult::Found(mut plan) = router.plan_leg(&input, || false) else {
+            panic!("the leg has a journey");
+        };
+        // The main plan has the chosen journey and none of what the extra searches find.
+        assert_eq!(plan.chosen_journey.first_ride.train_label.category, "RE");
+        assert!(plan.cheapest.is_none());
+        assert!(plan.fastest.is_none());
+        assert!(plan.pass_options.is_empty());
+        // The extras follow from the plan, and applying them gives the complete plan.
+        let extras = router.plan_extras(&input, &plan, true, || false);
+        assert_eq!(extras.pass_options.len(), 1);
+        plan.apply_extras(extras);
+        assert_eq!(plan.pass_options.len(), 1);
+        // A leg joined to others has no pass options.
+        let joined = router.plan_extras(&input, &plan, false, || false);
+        assert!(joined.pass_options.is_empty());
+        assert_eq!(joined.fastest, plan.fastest);
+        assert_eq!(LegExtras::default().cheapest, None);
     }
 
     #[test]

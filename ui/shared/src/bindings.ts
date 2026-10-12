@@ -444,6 +444,26 @@ export type JourneyCostParts = {
  */
 export type Latitude = number;
 
+/**
+ *  What the planner finds about a leg after its main plan, with searches at other weights and
+ *  on the days of a pass. The planner delivers the main plan first, because these searches
+ *  take longer than the plan itself.
+ */
+export type LegExtras = {
+	/**
+	 *  A journey that costs much less than the chosen one and takes a little longer. See
+	 *  `LegPlan::cheapest`.
+	 */
+	cheapest: Journey | null,
+	/**
+	 *  A journey that is much faster than the chosen one and costs a little more. See
+	 *  `LegPlan::fastest`.
+	 */
+	fastest: Journey | null,
+	/**  The best journeys of the leg on the travel days of a pass. See `LegPlan::pass_options`. */
+	pass_options: PassJourneyOption[],
+};
+
 /**  The planned journey for one leg and its alternatives. */
 export type LegPlan = {
 	/**  The journey the planner picked. */
@@ -747,15 +767,15 @@ export type PlanningRunId = number;
 /**  Messages from a planning session to the frontend. */
 export type PlanningSessionEvent = 
 /**  The trip changed outside the frontend, for example when reverse geocoding named a place. */
-({ TripChanged: Trip }) & { LegPlanned?: never; NearbyDaySuggested?: never; PlanningFinished?: never; PlanningStarted?: never } | 
+({ TripChanged: Trip }) & { LegExtrasPlanned?: never; LegPlanned?: never; NearbyDaySuggested?: never; PlanningFinished?: never; PlanningStarted?: never } | 
 /**  A run started. Legs it replans are pending until their `LegPlanned` event. */
 ({ PlanningStarted: {
 	/**  Identifies the run. */
 	run_id: PlanningRunId,
 	/**  Places whose arriving legs this run replans. */
 	replanned_arrival_place_ids: TripPlaceId[],
-} }) & { LegPlanned?: never; NearbyDaySuggested?: never; PlanningFinished?: never; TripChanged?: never } | 
-/**  One leg of a run finished. */
+} }) & { LegExtrasPlanned?: never; LegPlanned?: never; NearbyDaySuggested?: never; PlanningFinished?: never; TripChanged?: never } | 
+/**  One leg of a run finished its main plan. */
 ({ LegPlanned: {
 	/**  Identifies the run. */
 	run_id: PlanningRunId,
@@ -763,15 +783,35 @@ export type PlanningSessionEvent =
 	arrival_place_id: TripPlaceId,
 	/**  The planned journeys, or why there are none. */
 	result: LegPlanningResult,
-} }) & { NearbyDaySuggested?: never; PlanningFinished?: never; PlanningStarted?: never; TripChanged?: never } | 
-/**  Every leg of a run finished. */
+	/**
+	 *  Whether a `LegExtrasPlanned` event for the leg is still to come, so the plan has no
+	 *  cheaper or faster journey and no pass options yet.
+	 */
+	extras_pending?: boolean,
+} }) & { LegExtrasPlanned?: never; NearbyDaySuggested?: never; PlanningFinished?: never; PlanningStarted?: never; TripChanged?: never } | 
+/**
+ *  Every leg of a run finished its main plan. The searches for the extras of the legs
+ *  follow.
+ */
 ({ PlanningFinished: {
 	/**  Identifies the run. */
 	run_id: PlanningRunId,
-} }) & { LegPlanned?: never; NearbyDaySuggested?: never; PlanningStarted?: never; TripChanged?: never } | 
+} }) & { LegExtrasPlanned?: never; LegPlanned?: never; NearbyDaySuggested?: never; PlanningStarted?: never; TripChanged?: never } | 
 /**
- *  A day before or after a leg's date is much better for the leg. Sent after
- *  `PlanningFinished`, and a leg that is planned again loses its suggestion.
+ *  The searches after the main plan of a leg finished. Sent for a leg whose `LegPlanned`
+ *  event said they were pending, or whose plan from an earlier run still waited for them.
+ */
+({ LegExtrasPlanned: {
+	/**  Identifies the run. */
+	run_id: PlanningRunId,
+	/**  Place at which the leg arrives. */
+	arrival_place_id: TripPlaceId,
+	/**  What the searches found. */
+	extras: LegExtras,
+} }) & { LegPlanned?: never; NearbyDaySuggested?: never; PlanningFinished?: never; PlanningStarted?: never; TripChanged?: never } | 
+/**
+ *  A day before or after a leg's date is much better for the leg. Sent after the extras
+ *  of the legs, and a leg that is planned again loses its suggestion.
  */
 ({ NearbyDaySuggested: {
 	/**  Identifies the run. */
@@ -780,7 +820,7 @@ export type PlanningSessionEvent =
 	arrival_place_id: TripPlaceId,
 	/**  The better day. */
 	suggestion: NearbyDaySuggestion,
-} }) & { LegPlanned?: never; PlanningFinished?: never; PlanningStarted?: never; TripChanged?: never };
+} }) & { LegExtrasPlanned?: never; LegPlanned?: never; PlanningFinished?: never; PlanningStarted?: never; TripChanged?: never };
 
 /**  A price with the confidence in it and its source. */
 export type Price = {

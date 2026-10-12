@@ -12,6 +12,7 @@
   import { legViewState, type TripSource } from "../trip-source";
   import LegRowView from "./LegRowView.svelte";
   import PassScenarioPicker from "./PassScenarioPicker.svelte";
+  import Spinner from "./Spinner.svelte";
   import PlaceRowView from "./PlaceRowView.svelte";
   import PlaceSearch from "./PlaceSearch.svelte";
 
@@ -102,6 +103,12 @@
     <p class="notice" role="status">{noticeMessage(notice)}</p>
   {/each}
 
+  {#if viewState.passScenarios === null && viewState.extrasPendingArrivalPlaces.size > 0 && trip.preferences.price_weight > 0}
+    <p class="empty">
+      <Spinner label="Looking for passes" />
+      Looking for passes that cover the trip.
+    </p>
+  {/if}
   {#if viewState.passScenarios !== null && viewState.passScenarios.scenarios.length > 1}
     <PassScenarioPicker
       scenarioState={viewState.passScenarios}

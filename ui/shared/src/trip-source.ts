@@ -28,6 +28,11 @@ export type LegViewState =
       legPlan: LegPlan;
       /** The journey the estimates put first, when a live price moved another ahead of it. */
       liveOvertaken?: Journey | null;
+      /**
+       * Whether the planner is still searching for the cheaper and faster journey and the pass
+       * options of the leg, which the plan lacks until it finishes.
+       */
+      extrasPending?: boolean;
     }
   | { status: "none"; reason: NoJourneyReason };
 
@@ -46,6 +51,8 @@ export interface TripViewState {
   readonly passScenarios: PassScenarioState | null;
   /** Live prices of journeys from the booking sites, by `journeyKey`. */
   readonly livePricesByJourney: ReadonlyMap<string, EuroRange>;
+  /** Legs, by arrival place, whose plan still waits for the searches after the main plan. */
+  readonly extrasPendingArrivalPlaces: ReadonlySet<TripPlaceId>;
 }
 
 /** A source of a trip. Only the editable variant has functions that change it. */
@@ -81,17 +88,18 @@ export function legViewState(viewState: TripViewState, arrivalPlaceId: TripPlace
   if (state.status !== "found") {
     return state;
   }
+  const extrasPending = viewState.extrasPendingArrivalPlaces.has(arrivalPlaceId);
   const option = passOptionOfLeg(viewState.passScenarios, arrivalPlaceId);
   if (option !== null) {
-    return { status: "found", legPlan: legPlanOnPass(state.legPlan, option) };
+    return { status: "found", legPlan: legPlanOnPass(state.legPlan, option), extrasPending };
   }
   if (viewState.livePricesByJourney.size === 0) {
-    return state;
+    return { ...state, extrasPending };
   }
   const live = legPlanWithLivePrices(
     state.legPlan,
     viewState.livePricesByJourney,
     viewState.trip.preferences.price_weight,
   );
-  return { status: "found", legPlan: live.legPlan, liveOvertaken: live.overtaken };
+  return { status: "found", legPlan: live.legPlan, liveOvertaken: live.overtaken, extrasPending };
 }

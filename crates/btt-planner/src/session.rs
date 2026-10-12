@@ -80,6 +80,24 @@ struct SessionShared<S, C, P: JourneyPricer> {
     state: Mutex<SessionState>,
 }
 
+/// A leg result in the memory of a session.
+#[derive(Clone)]
+struct CachedLeg {
+    /// The result.
+    result: LegPlanningResult,
+    /// Whether the searches after the main plan have run for it. A result without journeys has
+    /// no such searches, and a result from the result store always has them, because the
+    /// session stores a result only once they have run.
+    extras_planned: bool,
+}
+
+impl CachedLeg {
+    /// Returns whether the leg still waits for its extra searches.
+    fn extras_pending(&self) -> bool {
+        !self.extras_planned && matches!(self.result, LegPlanningResult::Found(_))
+    }
+}
+
 /// Mutable state of a session.
 #[derive(Default)]
 struct SessionState {
@@ -88,7 +106,7 @@ struct SessionState {
     /// Cache key of the result the frontend holds for each leg, keyed by arrival place.
     delivered_leg_keys: SmallVec<[(TripPlaceId, LegCacheKey); 16]>,
     /// Results of earlier runs, so undoing an edit needs no replanning.
-    cached_results: FxHashMap<LegCacheKey, LegPlanningResult>,
+    cached_results: FxHashMap<LegCacheKey, CachedLeg>,
     /// The run that is waiting or planning, if any.
     current_run: Option<CurrentRun>,
 }
@@ -204,12 +222,18 @@ impl<S: PlanningEventSink, C: LegResultStore, P: JourneyPricer> SessionShared<S,
             for (index, (leg, result)) in chain.legs.iter().zip(results).enumerate() {
                 tracing::info!(run = run_id.0, arrival_place = ?leg.arrival_place_id, "planned leg");
                 let key = chain.leg_cache_key(namespace, index);
-                if state.cached_results.len() >= MAXIMUM_CACHED_LEG_RESULTS {
-                    state.cached_results.clear();
+                let cached = CachedLeg {
+                    extras_planned: !matches!(result, LegPlanningResult::Found(_)),
+                    result,
+                };
+                // A result that still waits for its extra searches stays in memory. It goes
+                // to the result store when they are done, so the store never holds a leg
+                // without them.
+                if !cached.extras_pending() {
+                    self.result_store.store(key, namespace, &cached.result);
                 }
-                state.cached_results.insert(key, result.clone());
-                self.result_store.store(key, namespace, &result);
-                self.deliver(&mut state, run_id, leg.arrival_place_id, key, result);
+                Self::remember(&mut state, key, cached.clone());
+                self.deliver(&mut state, run_id, leg.arrival_place_id, key, &cached);
             }
         }
 
@@ -222,6 +246,8 @@ impl<S: PlanningEventSink, C: LegResultStore, P: JourneyPricer> SessionShared<S,
                 .send_event(PlanningSessionEvent::PlanningFinished { run_id });
             drop(state);
         }
+        self.plan_extras(run_id, &legs_to_plan.all, namespace, &cancellation)
+            .await;
         self.suggest_nearby_days(run_id, &legs_to_plan.replanned, namespace, &cancellation)
             .await;
         let mut state = self.lock_state();
@@ -230,9 +256,75 @@ impl<S: PlanningEventSink, C: LegResultStore, P: JourneyPricer> SessionShared<S,
         }
     }
 
+    /// Runs the searches after the main plan for every leg that still waits for them, and sends
+    /// each leg's extras as they finish. This covers legs from earlier runs too, because a
+    /// newer run can replace one before its extras are done, and the frontend still shows the
+    /// leg as waiting. The result goes to the result store with the extras.
+    async fn plan_extras(
+        &self,
+        run_id: PlanningRunId,
+        chains: &[LegChainInput],
+        namespace: u64,
+        cancellation: &CancellationToken,
+    ) {
+        let mut tasks = JoinSet::new();
+        {
+            let state = self.lock_state();
+            for chain in chains {
+                // A leg joined to others by same-day stops has no pass options.
+                let with_pass_options = chain.legs.len() == 1;
+                for (index, leg) in chain.legs.iter().enumerate() {
+                    let key = chain.leg_cache_key(namespace, index);
+                    let Some(cached) = state.cached_results.get(&key) else {
+                        continue;
+                    };
+                    let LegPlanningResult::Found(plan) = &cached.result else {
+                        continue;
+                    };
+                    if cached.extras_planned {
+                        continue;
+                    }
+                    let backend = Arc::clone(&self.backend);
+                    let cancellation = cancellation.clone();
+                    let (input, plan, arrival_place_id) =
+                        (leg.input.clone(), plan.clone(), leg.arrival_place_id);
+                    tasks.spawn(async move {
+                        let extras = backend
+                            .plan_extras(&input, &plan, with_pass_options, &cancellation)
+                            .await;
+                        (arrival_place_id, key, extras)
+                    });
+                }
+            }
+        }
+        while let Some(joined) = tasks.join_next().await {
+            let Ok((arrival_place_id, key, extras)) = joined else {
+                continue;
+            };
+            let mut state = self.lock_state();
+            if cancellation.is_cancelled() {
+                return;
+            }
+            if let Some(cached) = state.cached_results.get_mut(&key) {
+                if let LegPlanningResult::Found(plan) = &mut cached.result {
+                    plan.apply_extras(extras.clone());
+                }
+                cached.extras_planned = true;
+                self.result_store.store(key, namespace, &cached.result);
+            }
+            self.event_sink
+                .send_event(PlanningSessionEvent::LegExtrasPlanned {
+                    run_id,
+                    arrival_place_id,
+                    extras: Box::new(extras),
+                });
+        }
+    }
+
     /// Plans every replanned chain a day earlier and a day later, and suggests the other day
-    /// for a leg that is much better there. This runs after `PlanningFinished`, so the plan
-    /// itself doesn't wait for it.
+    /// for a leg that is much better there. This runs after `PlanningFinished` and after the
+    /// extras, so neither waits for it. The plans of the other days have no extras, which
+    /// would double the work for plans that are mostly never shown.
     async fn suggest_nearby_days(
         &self,
         run_id: PlanningRunId,
@@ -252,7 +344,10 @@ impl<S: PlanningEventSink, C: LegResultStore, P: JourneyPricer> SessionShared<S,
                 let cached: Option<Vec<LegPlanningResult>> = {
                     let mut state = self.lock_state();
                     keys.iter()
-                        .map(|key| self.cached_result(&mut state, *key))
+                        .map(|key| {
+                            self.cached_result(&mut state, *key)
+                                .map(|cached| cached.result)
+                        })
                         .collect()
                 };
                 let current_keys: SmallVec<[LegCacheKey; 4]> = (0..chain.legs.len())
@@ -281,13 +376,25 @@ impl<S: PlanningEventSink, C: LegResultStore, P: JourneyPricer> SessionShared<S,
             }
             for (index, (leg, result)) in shifted.legs.iter().zip(results).enumerate() {
                 if planned {
-                    state.cached_results.insert(keys[index], result.clone());
-                    self.result_store.store(keys[index], namespace, &result);
+                    // The plan of another day has no extras, so it stays in memory. The
+                    // store takes only a leg without journeys, which has none to wait for.
+                    let found = matches!(result, LegPlanningResult::Found(_));
+                    if !found {
+                        self.result_store.store(keys[index], namespace, &result);
+                    }
+                    let cached = CachedLeg {
+                        result: result.clone(),
+                        extras_planned: !found,
+                    };
+                    Self::remember(&mut state, keys[index], cached);
                 }
                 let LegPlanningResult::Found(plan) = result else {
                     continue;
                 };
-                let current = state.cached_results.get(&current_keys[index]);
+                let current = state
+                    .cached_results
+                    .get(&current_keys[index])
+                    .map(|cached| &cached.result);
                 if !is_much_better(current, &plan) {
                     continue;
                 }
@@ -326,16 +433,23 @@ impl<S: PlanningEventSink, C: LegResultStore, P: JourneyPricer> SessionShared<S,
     }
 
     /// Returns a result from memory or else from the result store, keeping it in memory.
-    fn cached_result(
-        &self,
-        state: &mut SessionState,
-        key: LegCacheKey,
-    ) -> Option<LegPlanningResult> {
+    fn cached_result(&self, state: &mut SessionState, key: LegCacheKey) -> Option<CachedLeg> {
         state.cached_results.get(&key).cloned().or_else(|| {
-            let stored = self.result_store.load(key)?;
-            state.cached_results.insert(key, stored.clone());
-            Some(stored)
+            let cached = CachedLeg {
+                result: self.result_store.load(key)?,
+                extras_planned: true,
+            };
+            Self::remember(state, key, cached.clone());
+            Some(cached)
         })
+    }
+
+    /// Keeps a result in memory, clearing the memory first when it is full.
+    fn remember(state: &mut SessionState, key: LegCacheKey, cached: CachedLeg) {
+        if state.cached_results.len() >= MAXIMUM_CACHED_LEG_RESULTS {
+            state.cached_results.clear();
+        }
+        state.cached_results.insert(key, cached);
     }
 
     /// Starts a run. Announces the legs it replans, delivers the ones it finds in the cache
@@ -348,6 +462,7 @@ impl<S: PlanningEventSink, C: LegResultStore, P: JourneyPricer> SessionShared<S,
         state.next_run_id = state.next_run_id.wrapping_add(1);
 
         let chains = leg_chain_inputs(trip);
+        let all = chains.iter().cloned().collect();
         // Legs of removed places no longer exist, so their delivered keys go.
         state.delivered_leg_keys.retain(|(place_id, _)| {
             chains
@@ -385,14 +500,14 @@ impl<S: PlanningEventSink, C: LegResultStore, P: JourneyPricer> SessionShared<S,
         let mut replanned = SmallVec::new();
         for (chain, keys) in changed_chains {
             replanned.push(chain.clone());
-            let cached: Option<Vec<LegPlanningResult>> = keys
+            let cached: Option<Vec<CachedLeg>> = keys
                 .iter()
                 .map(|key| self.cached_result(state, *key))
                 .collect();
             match cached {
                 Some(results) => {
-                    for ((leg, key), result) in chain.legs.iter().zip(keys).zip(results) {
-                        self.deliver(state, run_id, leg.arrival_place_id, key, result);
+                    for ((leg, key), cached) in chain.legs.iter().zip(keys).zip(&results) {
+                        self.deliver(state, run_id, leg.arrival_place_id, key, cached);
                     }
                 }
                 None => uncached.push(chain),
@@ -402,6 +517,7 @@ impl<S: PlanningEventSink, C: LegResultStore, P: JourneyPricer> SessionShared<S,
             run_id,
             uncached,
             replanned,
+            all,
         }
     }
 
@@ -412,7 +528,7 @@ impl<S: PlanningEventSink, C: LegResultStore, P: JourneyPricer> SessionShared<S,
         run_id: PlanningRunId,
         arrival_place_id: TripPlaceId,
         key: LegCacheKey,
-        result: LegPlanningResult,
+        cached: &CachedLeg,
     ) {
         match state
             .delivered_leg_keys
@@ -426,7 +542,8 @@ impl<S: PlanningEventSink, C: LegResultStore, P: JourneyPricer> SessionShared<S,
             .send_event(PlanningSessionEvent::LegPlanned {
                 run_id,
                 arrival_place_id,
-                result,
+                result: cached.result.clone(),
+                extras_pending: cached.extras_pending(),
             });
     }
 }
@@ -439,6 +556,8 @@ struct StartedRun {
     uncached: SmallVec<[LegChainInput; 8]>,
     /// Every changed chain, with or without a cached result.
     replanned: SmallVec<[LegChainInput; 8]>,
+    /// Every chain of the trip, changed or not, for the legs that still wait for their extras.
+    all: SmallVec<[LegChainInput; 8]>,
 }
 
 /// Smallest gain in cost, in minutes of train travel, for which another day is suggested.
@@ -524,15 +643,28 @@ mod tests {
         (session, receiver)
     }
 
-    /// Collects the events of one run up to its `PlanningFinished`.
+    /// Collects the events of one run up to its `PlanningFinished` and the extras of the legs
+    /// that were delivered waiting for them.
     async fn events_of_next_run(
         receiver: &mut mpsc::UnboundedReceiver<PlanningSessionEvent>,
     ) -> Vec<PlanningSessionEvent> {
         let mut events = Vec::new();
+        let mut finished = false;
+        let mut waiting_for_extras = 0_usize;
         while let Some(event) = receiver.recv().await {
-            let finished = matches!(event, PlanningSessionEvent::PlanningFinished { .. });
+            match &event {
+                PlanningSessionEvent::PlanningFinished { .. } => finished = true,
+                PlanningSessionEvent::LegPlanned {
+                    extras_pending: true,
+                    ..
+                } => waiting_for_extras += 1,
+                PlanningSessionEvent::LegExtrasPlanned { .. } => {
+                    waiting_for_extras = waiting_for_extras.saturating_sub(1);
+                }
+                _ => {}
+            }
             events.push(event);
-            if finished {
+            if finished && waiting_for_extras == 0 {
                 return events;
             }
         }
@@ -572,6 +704,88 @@ mod tests {
         let expected: Vec<_> = (1..4).map(|index| place_id(&trip, index)).collect();
         assert_eq!(replanned_places(&events), expected);
         assert_eq!(planned_places(&events), expected);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn the_main_results_come_before_the_extras() {
+        let (session, mut receiver) = session();
+        let trip = trip_with_places(&FOUR_CITIES);
+        session.trip_changed(trip.clone());
+        let events = events_of_next_run(&mut receiver).await;
+        let position = |matches: fn(&PlanningSessionEvent) -> bool| -> Vec<usize> {
+            events
+                .iter()
+                .enumerate()
+                .filter(|(_, event)| matches(event))
+                .map(|(index, _)| index)
+                .collect()
+        };
+        let planned = position(|event| {
+            matches!(
+                event,
+                PlanningSessionEvent::LegPlanned {
+                    extras_pending: true,
+                    ..
+                }
+            )
+        });
+        let finished =
+            position(|event| matches!(event, PlanningSessionEvent::PlanningFinished { .. }));
+        let extras =
+            position(|event| matches!(event, PlanningSessionEvent::LegExtrasPlanned { .. }));
+        // Every leg is delivered as waiting for its extras, the run finishes, and only then do
+        // the extras of the three legs arrive, one event for each.
+        assert_eq!(planned.len(), 3);
+        assert_eq!(extras.len(), 3);
+        assert!(planned.iter().all(|&index| index < finished[0]));
+        assert!(extras.iter().all(|&index| index > finished[0]));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_leg_that_still_waits_for_its_extras_gets_them_in_the_next_run() {
+        let (session, mut receiver) = session();
+        let trip = trip_with_places(&FOUR_CITIES);
+        session.trip_changed(trip.clone());
+        events_of_next_run(&mut receiver).await;
+
+        // A newer run replaced the run of this leg before its extras were done, which leaves its
+        // result in memory without them.
+        let vienna = place_id(&trip, 2);
+        {
+            let namespace = stub_backend().cache_namespace();
+            let mut state = session.shared.lock_state();
+            for chain in crate::input::leg_chain_inputs(&trip) {
+                for (index, leg) in chain.legs.iter().enumerate() {
+                    if leg.arrival_place_id == vienna {
+                        let key = chain.leg_cache_key(namespace, index);
+                        state.cached_results.get_mut(&key).unwrap().extras_planned = false;
+                    }
+                }
+            }
+        }
+        // The trip is the same, so no leg is planned again, and only the extras of the leg
+        // are.
+        session.trip_changed(trip.clone());
+        let mut events = Vec::new();
+        while let Some(event) = receiver.recv().await {
+            let is_extras = matches!(event, PlanningSessionEvent::LegExtrasPlanned { .. });
+            events.push(event);
+            if is_extras {
+                break;
+            }
+        }
+        assert!(replanned_places(&events).is_empty());
+        assert!(planned_places(&events).is_empty());
+        let extras: Vec<_> = events
+            .iter()
+            .filter_map(|event| match event {
+                PlanningSessionEvent::LegExtrasPlanned {
+                    arrival_place_id, ..
+                } => Some(*arrival_place_id),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(extras, [vienna]);
     }
 
     #[tokio::test(start_paused = true)]

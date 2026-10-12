@@ -25,6 +25,7 @@
   import type { LegRow } from "../itinerary";
   import type { LegViewState } from "../trip-source";
   import JourneyExplanation from "./JourneyExplanation.svelte";
+  import Spinner from "./Spinner.svelte";
 
   let {
     leg,
@@ -382,6 +383,13 @@
             </li>
           {/each}
         </ol>
+      {/if}
+      {#if legState.extrasPending === true}
+        <!-- The searches after the main plan take longer than the plan itself. -->
+        <span class="nearby-day">
+          <Spinner label="Searching for cheaper and faster journeys and pass options" />
+          Looking for cheaper and faster journeys.
+        </span>
       {/if}
       {#if legPlan.cheapest !== null && legPlan.cheapest !== undefined}
         <!-- A journey the planner found by searching for the cheapest, which saves a lot. -->

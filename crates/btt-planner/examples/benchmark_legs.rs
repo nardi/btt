@@ -127,8 +127,11 @@ struct LegResult {
     description: String,
     /// The chosen journey as the trains and times of its rides, and its cost.
     journey: String,
-    /// Milliseconds spent planning.
+    /// Milliseconds spent on the main plan, which is when the traveller sees the leg.
     milliseconds: f64,
+    /// Milliseconds spent on the searches after it, for the cheaper and faster journey and the
+    /// pass days. Zero in the modes that plan the main plan alone.
+    extras_milliseconds: f64,
 }
 
 fn main() {
@@ -258,6 +261,7 @@ fn plan_queries(
                 description: description.clone(),
                 journey: describe(&result),
                 milliseconds,
+                extras_milliseconds: 0.0,
             }
         })
         .collect()
@@ -306,16 +310,21 @@ fn time_price_weights(
             let mut weighted = input.clone();
             weighted.price_weight = PriceWeight::new(weight).expect("every u16 is a weight");
             let started = Instant::now();
-            let result = router.plan_leg(&weighted, || false);
+            let mut result = router.plan_leg(&weighted, || false);
             let milliseconds = started.elapsed().as_secs_f64() * 1000.0;
-            if let LegPlanningResult::Found(plan) = &result {
+            let started = Instant::now();
+            if let LegPlanningResult::Found(plan) = &mut result {
+                let extras = router.plan_extras(&weighted, plan, true, || false);
+                plan.apply_extras(extras);
                 with_pass_options += usize::from(!plan.pass_options.is_empty());
                 with_cheapest += usize::from(plan.cheapest.is_some());
             }
+            let extras_milliseconds = started.elapsed().as_secs_f64() * 1000.0;
             results.push(LegResult {
                 description: description.clone(),
                 journey: describe(&result),
                 milliseconds,
+                extras_milliseconds,
             });
         }
         println!(
@@ -369,6 +378,7 @@ fn check(results: &[LegResult], results_path: &str) {
             description: line[0].to_owned(),
             journey: line[1].to_owned(),
             milliseconds: line[2].parse().unwrap_or(0.0),
+            extras_milliseconds: 0.0,
         });
     }
     println!("{differences} of {} legs differ", results.len());
@@ -377,31 +387,46 @@ fn check(results: &[LegResult], results_path: &str) {
 }
 
 /// Prints the median, the 90th percentile and the largest planning time, and the total, for
-/// the daytime and the night legs.
+/// the daytime and the night legs. The main plan comes first, and the searches after it follow
+/// in the modes that run them.
 fn print_times(name: &str, results: &[LegResult]) {
     for mode in ["day", "night"] {
-        let mut times: Vec<f64> = results
-            .iter()
-            .filter(|result| result.description.ends_with(mode))
-            .map(|result| result.milliseconds)
-            .collect();
-        times.sort_by(f64::total_cmp);
-        let at = |fraction: f64| {
-            // Rounding to an index of a short list stays well within `usize`.
-            #[allow(
-                clippy::cast_possible_truncation,
-                clippy::cast_sign_loss,
-                clippy::cast_precision_loss
-            )]
-            let position = (times.len().saturating_sub(1) as f64 * fraction).round() as usize;
-            times.get(position).copied().unwrap_or_default()
+        let of_mode = || {
+            results
+                .iter()
+                .filter(move |result| result.description.ends_with(mode))
         };
-        println!(
-            "  {name} {mode}: median {:.1} ms, 90th percentile {:.1} ms, largest {:.1} ms, total {:.1} s",
-            at(0.5),
-            at(0.9),
-            at(1.0),
-            times.iter().sum::<f64>() / 1000.0
+        print_summary(
+            &format!("{name} {mode}"),
+            of_mode().map(|result| result.milliseconds).collect(),
         );
+        if of_mode().any(|result| result.extras_milliseconds > 0.0) {
+            print_summary(
+                &format!("{name} {mode} extras"),
+                of_mode().map(|result| result.extras_milliseconds).collect(),
+            );
+        }
     }
+}
+
+/// Prints the median, the 90th percentile and the largest of some times and their total.
+fn print_summary(label: &str, mut times: Vec<f64>) {
+    times.sort_by(f64::total_cmp);
+    let at = |fraction: f64| {
+        // Rounding to an index of a short list stays well within `usize`.
+        #[allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            clippy::cast_precision_loss
+        )]
+        let position = (times.len().saturating_sub(1) as f64 * fraction).round() as usize;
+        times.get(position).copied().unwrap_or_default()
+    };
+    println!(
+        "  {label}: median {:.1} ms, 90th percentile {:.1} ms, largest {:.1} ms, total {:.1} s",
+        at(0.5),
+        at(0.9),
+        at(1.0),
+        times.iter().sum::<f64>() / 1000.0
+    );
 }

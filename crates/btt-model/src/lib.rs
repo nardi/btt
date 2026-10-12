@@ -28,7 +28,7 @@ pub use itinerary::{
 };
 pub use place_search::PlaceSearchResult;
 pub use plan::{
-    ArrivalFootpath, Journey, JourneyChoice, JourneyCostParts, LegPlan, LegPlanStation,
+    ArrivalFootpath, Journey, JourneyChoice, JourneyCostParts, LegExtras, LegPlan, LegPlanStation,
     LegPlanStationIndex, LegPlanningResult, NearbyDaySuggestion, NoJourneyReason,
     PassJourneyOption, PlanningRunId, PlanningSessionEvent, SearchedWindow, StationWay, TrainLabel,
     TrainRide, TransferAndRide, WayToStationMode,

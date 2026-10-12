@@ -21,6 +21,7 @@ function viewState(legStates: [number, LegViewState][]): TripViewState {
     errorMessage: null,
     passScenarios: null,
     livePricesByJourney: new Map(),
+    extrasPendingArrivalPlaces: new Set(),
   };
 }
 

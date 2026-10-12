@@ -29,7 +29,7 @@ import {
 } from "@btt/shared/scenarios";
 import type { LegViewState, TripViewState } from "@btt/shared/trip-source";
 import { Channel } from "@tauri-apps/api/core";
-import { SvelteMap } from "svelte/reactivity";
+import { SvelteMap, SvelteSet } from "svelte/reactivity";
 
 /** Turns a command error into a message for the user. */
 export function commandErrorMessage(error: CommandError): string {
@@ -54,6 +54,7 @@ export class TauriTripSource implements TripViewState {
   trip: Trip = $state()!;
   readonly legStatesByArrivalPlace = new SvelteMap<TripPlaceId, LegViewState>();
   readonly nearbyDaysByArrivalPlace = new SvelteMap<TripPlaceId, NearbyDaySuggestion>();
+  readonly extrasPendingArrivalPlaces = new SvelteSet<TripPlaceId>();
   notices: TripEditNotice[] = $state([]);
   errorMessage: string | null = $state(null);
   /** What undo and redo would do. A newly opened trip has no history. */
@@ -184,9 +185,14 @@ export class TauriTripSource implements TripViewState {
       for (const placeId of event.PlanningStarted.replanned_arrival_place_ids) {
         this.legStatesByArrivalPlace.set(placeId, { status: "pending" });
         this.nearbyDaysByArrivalPlace.delete(placeId);
+        this.extrasPendingArrivalPlaces.delete(placeId);
+      }
+      // A replanned leg changes what the pass scenarios are built from.
+      if (event.PlanningStarted.replanned_arrival_place_ids.length > 0) {
+        this.passScenarios = null;
       }
     } else if (event.LegPlanned !== undefined) {
-      const { run_id, arrival_place_id, result } = event.LegPlanned;
+      const { run_id, arrival_place_id, result, extras_pending } = event.LegPlanned;
       if (run_id !== this.latestRunId) {
         return;
       }
@@ -196,9 +202,35 @@ export class TauriTripSource implements TripViewState {
           ? { status: "found", legPlan: result.Found }
           : { status: "none", reason: result.NoJourneyFound },
       );
+      if (result.Found !== undefined && extras_pending === true) {
+        this.extrasPendingArrivalPlaces.add(arrival_place_id);
+      } else {
+        this.extrasPendingArrivalPlaces.delete(arrival_place_id);
+      }
       if (result.Found !== undefined) {
         this.queueLiveLookups(arrival_place_id, result.Found);
       }
+    } else if (event.LegExtrasPlanned !== undefined) {
+      const { run_id, arrival_place_id, extras } = event.LegExtrasPlanned;
+      if (run_id !== this.latestRunId) {
+        return;
+      }
+      const state = this.legStatesByArrivalPlace.get(arrival_place_id);
+      if (state?.status === "found") {
+        this.legStatesByArrivalPlace.set(arrival_place_id, {
+          status: "found",
+          legPlan: {
+            ...state.legPlan,
+            cheapest: extras.cheapest,
+            fastest: extras.fastest,
+            pass_options: extras.pass_options,
+          },
+        });
+      }
+      this.extrasPendingArrivalPlaces.delete(arrival_place_id);
+      // The pass options changed, so the scenarios built from the old ones are stale.
+      this.passScenarios = null;
+      this.refreshPassScenariosWhenExtrasAreDone();
     } else if (event.NearbyDaySuggested !== undefined) {
       const { run_id, arrival_place_id, suggestion } = event.NearbyDaySuggested;
       if (run_id !== this.latestRunId) {
@@ -207,8 +239,18 @@ export class TauriTripSource implements TripViewState {
       this.nearbyDaysByArrivalPlace.set(arrival_place_id, suggestion);
     } else if (event.PlanningFinished !== undefined) {
       if (event.PlanningFinished.run_id === this.latestRunId) {
-        void this.refreshPassScenarios();
+        this.refreshPassScenariosWhenExtrasAreDone();
       }
+    }
+  }
+
+  /**
+   * Builds the pass scenarios once no leg waits for its extras, because the pass options are
+   * among them. The last extras to arrive call this again.
+   */
+  private refreshPassScenariosWhenExtrasAreDone(): void {
+    if (this.extrasPendingArrivalPlaces.size === 0) {
+      void this.refreshPassScenarios();
     }
   }
 
@@ -308,6 +350,7 @@ export class TauriTripSource implements TripViewState {
       if (!placeIds.has(placeId)) {
         this.legStatesByArrivalPlace.delete(placeId);
         this.nearbyDaysByArrivalPlace.delete(placeId);
+        this.extrasPendingArrivalPlaces.delete(placeId);
       }
     }
   }

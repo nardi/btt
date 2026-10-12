@@ -104,11 +104,11 @@ After the plan, the planner solves each chain again with every date moved a day 
 
 ### Cheaper and faster journeys
 
-A traveller who plans by time never sees what a journey costs, and one who weighs prices never sees how fast a journey could be. After the first search of a leg, the planner therefore runs up to two more: one at the cheapest weight, whose best journey shows as the cheaper option when it saves at least 15 percent or 10 euro of the chosen journey's price and takes at most 90 minutes longer, and one without a weight, whose best journey shows as the faster option when it saves at least 30 minutes and costs at most 25 percent more. A traveller at the cheapest weight sees no cheaper option, and one without a weight sees no faster one. The extra searches run after the first, so the chosen journey is decided before any more work happens, and a leg that stops early keeps the plan it has.
+A traveller who plans by time never sees what a journey costs, and one who weighs prices never sees how fast a journey could be. After the first search of a leg, the planner therefore runs up to two more: one at the cheapest weight, whose best journey shows as the cheaper option when it saves at least 15 percent or 10 euro of the chosen journey's price and takes at most 90 minutes longer, and one without a weight, whose best journey shows as the faster option when it saves at least 30 minutes and costs at most 25 percent more. A traveller at the cheapest weight sees no cheaper option, and one without a weight sees no faster one. The extra searches take longer than the plan itself, so the planner delivers the plan of a leg first and the extra journeys later. A leg's plan arrives in a `LegPlanned` event that says whether its extras are pending, and the extras follow in a `LegExtrasPlanned` event once every leg has its plan. The leg row shows a spinner until they arrive. A run that a newer run replaces keeps the plan it has, and the next run finds the legs that still wait for their extras and searches for them. The result store gets a leg only with its extras, and the plans of nearby days stay in memory without them.
 
 ### Pass days
 
-A pass changes which journey of a leg is best. On a day the pass covers, an ICE costs its reservation and not its fare, so a fast train that loses on single tickets can win. Which days the pass covers is a choice of the whole trip, so the planner can't pick the journeys first and add a pass afterwards.
+The pass options come with the other extras, after the plan of the leg. A pass changes which journey of a leg is best. On a day the pass covers, an ICE costs its reservation and not its fare, so a fast train that loses on single tickets can win. Which days the pass covers is a choice of the whole trip, so the planner can't pick the journeys first and add a pass afterwards.
 
 At a price weight above zero, when some pass takes a train of the bundle, the planner searches each leg a second time with the prices of a pass day. A ride the pass takes costs what the pass charges on top, which is the seat reservation or the pass price of a night accommodation. A ride the pass does not take costs its fare, as a ticket of its own. This search also counts the travel days a journey uses. The ticket optimizer counts a ride on the local date it leaves on, so a journey uses as many days as it has distinct local departure dates among the rides the pass takes.
 
@@ -147,17 +147,19 @@ The search counts cost in hundredths of a minute, while the ranking rounds the e
 
 Searching with the cost as a criterion takes longer than the plain search on arrival and trains, because each station holds more labels and the cost bound prunes less. On the MOTIS benchmark queries planned as legs, on a bundle of 1.2 million trips, the median planning time is 33 milliseconds for daytime legs and 207 milliseconds for night legs, and the slowest leg takes 1.6 seconds. The dense city networks gain most from the shortcuts above, with Stockholm to Uppsala going from 0.87 to 0.12 seconds. In return, 187 of the 500 night legs and 21 of the 500 daytime legs get a cheaper journey, and none gets a costlier one. Most of the night gains come from night trains that a seated train arriving earlier had pushed out of the plain search's results.
 
-Prices make the search slower still, because each station keeps more labels. Journeys that a search by time drops for being slow now survive when they are cheap. On the first 40 benchmark queries, which are 80 legs, a search at a weight of 3 minutes per euro makes 3.7 times as many labels as a search without a weight and takes about 3 times as long. A plan at a weight above zero runs four searches: the leg at its weight, the cheaper journey at the cheapest weight, the faster journey without a weight, and the journeys on pass days. A plan without a weight still runs the search for the cheaper journey. The table shows the planning time of those 80 legs in milliseconds, with the planner before prices for comparison.
+Prices make the search slower still, because each station keeps more labels. Journeys that a search by time drops for being slow now survive when they are cheap. On the first 40 benchmark queries, which are 80 legs, a search at a weight of 3 minutes per euro makes 3.7 times as many labels as a search without a weight and takes about 3 times as long.
 
-| Weight | Daytime median | Daytime 90th percentile | Night median | Night 90th percentile |
+The searches of a plan do not all block the leg. The plan of the leg at its weight comes first, and the searches for the cheaper journey, the faster journey and the journeys on pass days follow as the extras of the leg. The table shows both in milliseconds as the median and the 90th percentile of those 80 legs, with the planner before prices for comparison.
+
+| Weight | Plan, daytime | Plan, night | Extras, daytime | Extras, night |
 |---|---|---|---|---|
-| Before prices | 22 | 170 | 232 | 434 |
-| None | 100 | 1,424 | 728 | 2,728 |
-| 1 minute per euro | 193 | 2,428 | 1,808 | 5,445 |
-| 3 minutes per euro | 215 | 2,550 | 1,765 | 5,443 |
-| 8 minutes per euro | 132 | 1,636 | 968 | 3,173 |
+| Before prices | 22 / 170 | 232 / 434 | none | none |
+| None | 28 / 208 | 263 / 535 | 73 / 1,284 | 377 / 2,328 |
+| 1 minute per euro | 83 / 725 | 658 / 1,744 | 132 / 1,703 | 951 / 3,205 |
+| 3 minutes per euro | 70 / 1,054 | 586 / 2,049 | 133 / 1,765 | 1,020 / 3,407 |
+| 8 minutes per euro | 69 / 1,104 | 400 / 2,207 | 56 / 488 | 514 / 1,012 |
 
-Without a weight, the chosen journey and its cost are the same as before prices for all 1000 legs of the benchmark.
+On all 1000 legs of the benchmark, the plan without a weight takes a median of 36 ms for a daytime leg and 256 ms for a night leg, against 31 and 232 ms before prices. The chosen journey and its cost are the same as before for all 1000 legs.
 
 Two changes made the priced search faster. The boarding shortcuts ask the model for the price of the stops between two boardings only after every cheaper condition has held, which saves most of those calls. And the search reads prices from a curve per class and not from the formula. Together they cut the median planning time by about a third and the 90th percentile by up to half. What remains comes from the number of labels. A lower bound that adds the price of the distance still to cover, at the lowest price per kilometre of any class, would prune more, but it does nothing here. The fitted price of 10 of the 1471 classes in the benchmark bundle is flat over some distance beyond 20 km, so the lowest rate is zero and the bound adds nothing.
 

@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use btt_model::{LegPlanningResult, NoJourneyReason};
+use btt_model::{LegExtras, LegPlan, LegPlanningResult, NoJourneyReason};
 use tokio_util::sync::CancellationToken;
 
 use crate::bundle_router::TimetableBundleRouter;
@@ -68,6 +68,41 @@ impl<P: JourneyPricer> LegPlanningBackend<P> {
                 search.await.unwrap_or(LegPlanningResult::NoJourneyFound(
                     NoJourneyReason::BackendUnavailable,
                 ))
+            }
+        }
+    }
+
+    /// Runs the searches that follow the main plan of a leg, which find its cheaper and faster
+    /// journey and its journeys on pass days. They take longer than the main plan, so the
+    /// caller delivers the main plan first. The stub finds nothing, and a search that fails
+    /// finds nothing either.
+    ///
+    /// `with_pass_options` is false for a leg joined to others by same-day stops.
+    pub async fn plan_extras(
+        &self,
+        input: &LegPlanningInput,
+        plan: &LegPlan,
+        with_pass_options: bool,
+        cancellation: &CancellationToken,
+    ) -> LegExtras {
+        match self {
+            #[cfg(feature = "stub")]
+            Self::Stub(_) => {
+                let _ = (input, plan, with_pass_options, cancellation);
+                LegExtras::default()
+            }
+            Self::TimetableBundle(router) => {
+                let router = Arc::clone(router);
+                let input = input.clone();
+                let plan = plan.clone();
+                let cancellation = cancellation.clone();
+                tokio::task::spawn_blocking(move || {
+                    router.plan_extras(&input, &plan, with_pass_options, || {
+                        cancellation.is_cancelled()
+                    })
+                })
+                .await
+                .unwrap_or_default()
             }
         }
     }

@@ -220,6 +220,22 @@ pub struct PassJourneyOption {
     pub first_date: NaiveDate,
 }
 
+/// What the planner finds about a leg after its main plan, with searches at other weights and
+/// on the days of a pass. The planner delivers the main plan first, because these searches
+/// take longer than the plan itself.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub struct LegExtras {
+    /// A journey that costs much less than the chosen one and takes a little longer. See
+    /// `LegPlan::cheapest`.
+    pub cheapest: Option<Journey>,
+    /// A journey that is much faster than the chosen one and costs a little more. See
+    /// `LegPlan::fastest`.
+    pub fastest: Option<Journey>,
+    /// The best journeys of the leg on the travel days of a pass. See `LegPlan::pass_options`.
+    #[specta(type = Vec<PassJourneyOption>)]
+    pub pass_options: SmallVec<[PassJourneyOption; 3]>,
+}
+
 /// The planned journey for one leg and its alternatives.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
 pub struct LegPlan {
@@ -322,6 +338,15 @@ pub enum LegPlanningResult {
     NoJourneyFound(NoJourneyReason),
 }
 
+impl LegPlan {
+    /// Adds what the searches after the main plan found.
+    pub fn apply_extras(&mut self, extras: LegExtras) {
+        self.cheapest = extras.cheapest;
+        self.fastest = extras.fastest;
+        self.pass_options = extras.pass_options;
+    }
+}
+
 /// Counts planning runs within one session. A newer run replaces the results of older ones.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Type,
@@ -341,7 +366,7 @@ pub enum PlanningSessionEvent {
         /// Places whose arriving legs this run replans.
         replanned_arrival_place_ids: Vec<TripPlaceId>,
     },
-    /// One leg of a run finished.
+    /// One leg of a run finished its main plan.
     LegPlanned {
         /// Identifies the run.
         run_id: PlanningRunId,
@@ -349,14 +374,29 @@ pub enum PlanningSessionEvent {
         arrival_place_id: TripPlaceId,
         /// The planned journeys, or why there are none.
         result: LegPlanningResult,
+        /// Whether a `LegExtrasPlanned` event for the leg is still to come, so the plan has no
+        /// cheaper or faster journey and no pass options yet.
+        #[serde(default)]
+        extras_pending: bool,
     },
-    /// Every leg of a run finished.
+    /// Every leg of a run finished its main plan. The searches for the extras of the legs
+    /// follow.
     PlanningFinished {
         /// Identifies the run.
         run_id: PlanningRunId,
     },
-    /// A day before or after a leg's date is much better for the leg. Sent after
-    /// `PlanningFinished`, and a leg that is planned again loses its suggestion.
+    /// The searches after the main plan of a leg finished. Sent for a leg whose `LegPlanned`
+    /// event said they were pending, or whose plan from an earlier run still waited for them.
+    LegExtrasPlanned {
+        /// Identifies the run.
+        run_id: PlanningRunId,
+        /// Place at which the leg arrives.
+        arrival_place_id: TripPlaceId,
+        /// What the searches found.
+        extras: Box<LegExtras>,
+    },
+    /// A day before or after a leg's date is much better for the leg. Sent after the extras
+    /// of the legs, and a leg that is planned again loses its suggestion.
     NearbyDaySuggested {
         /// Identifies the run.
         run_id: PlanningRunId,
