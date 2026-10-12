@@ -50,12 +50,10 @@ function journey(category: string, totalCost: number, priceCost: number, restOfC
 function legPlan(): LegPlan {
   return {
     chosen_journey: journey("RE", 300 + 105 + 20, 10_500, 20),
-    alternative_journeys: [],
+    alternative_journeys: [journey("RB", 500, 0)],
     station_table: [],
     follows_traveller_choice: false,
     best_journey_cost: 425,
-    cheapest: journey("RB", 500, 0),
-    fastest: null,
     pass_options: [
       {
         journey: journey("ICE", 150, 3_000),
@@ -105,10 +103,10 @@ describe("passOptionOfLeg", () => {
 });
 
 describe("legPlanOnPass", () => {
-  it("shows the pass journey and drops the comparisons with single tickets", () => {
+  it("shows the pass journey and drops the alternatives, which are priced as single tickets", () => {
     const plan = legPlanOnPass(legPlan(), 0);
     expect(plan.chosen_journey.first_ride.train_label.category).toBe("ICE");
-    expect(plan.cheapest).toBeNull();
+    expect(plan.alternative_journeys).toEqual([]);
     expect(legPlanOnPass(legPlan(), 3).chosen_journey.first_ride.train_label.category).toBe("RE");
   });
 });

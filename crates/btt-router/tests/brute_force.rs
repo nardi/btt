@@ -848,6 +848,83 @@ impl JourneyCostModel for PassCostModel {
     }
 }
 
+/// A cost model that knows a journey of a given cost, so the search may drop everything that
+/// costs more.
+struct KnownCost {
+    inner: PricedCostModel,
+    limit: i32,
+}
+
+impl JourneyCostModel for KnownCost {
+    fn access_cost(&self, candidate: &CandidateStation) -> i32 {
+        self.inner.access_cost(candidate)
+    }
+
+    fn ride_cost(
+        &self,
+        raptor_route: RaptorRouteIndex,
+        trip: BundleTripIndex,
+        boarding_position: u16,
+        alighting_position: u16,
+        departure: MinutesSinceBundleStart,
+        arrival: MinutesSinceBundleStart,
+        previous: Option<PreviousRide>,
+    ) -> i32 {
+        self.inner.ride_cost(
+            raptor_route,
+            trip,
+            boarding_position,
+            alighting_position,
+            departure,
+            arrival,
+            previous,
+        )
+    }
+
+    fn boarding_extension(&self, raptor_route: RaptorRouteIndex, earlier: u16, later: u16) -> i32 {
+        self.inner.boarding_extension(raptor_route, earlier, later)
+    }
+
+    fn egress_cost(
+        &self,
+        candidate: &CandidateStation,
+        final_footpath_minutes: Option<u16>,
+    ) -> i32 {
+        self.inner.egress_cost(candidate, final_footpath_minutes)
+    }
+
+    fn elapsed_cost(
+        &self,
+        departure: MinutesSinceBundleStart,
+        arrival: MinutesSinceBundleStart,
+    ) -> i32 {
+        self.inner.elapsed_cost(departure, arrival)
+    }
+
+    fn remaining_cost_lower_bound(
+        &self,
+        departure: MinutesSinceBundleStart,
+        moment: MinutesSinceBundleStart,
+        earliest_arrival: MinutesSinceBundleStart,
+        credit_minutes_cap: Option<u32>,
+    ) -> i32 {
+        self.inner.remaining_cost_lower_bound(
+            departure,
+            moment,
+            earliest_arrival,
+            credit_minutes_cap,
+        )
+    }
+
+    fn ride_cost_depends_on_time(&self, _: RaptorRouteIndex) -> bool {
+        false
+    }
+
+    fn initial_cost_limit(&self) -> i32 {
+        self.limit
+    }
+}
+
 /// Searches with the cost model and returns the Pareto front like `brute_force_costs`.
 fn cost_router<M: JourneyCostModel>(
     trips: &[RandomTrip],
@@ -1019,6 +1096,41 @@ proptest! {
             brute_force_costs(&trips, &footpaths, &origins, target, (start, 1440), &model, &routes);
         let actual = cost_router(&trips, &footpaths, &origins, target, (start, 1440), &model);
         prop_assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn cost_search_with_a_known_cost_finds_what_costs_no_more(
+        trips in proptest::collection::vec(random_trip(), 1..10),
+        footpaths in proptest::collection::vec(random_footpath(), 0..4),
+        start in 0..300u32,
+        first_access in 0..30u16,
+        second_access in 0..30u16,
+        window_start in 0..500u32,
+        slack in 0..400i32,
+    ) {
+        // A caller that knows a journey of some cost needs no journey that costs more, and the
+        // search then drops what can't lead to one. It may still return a journey above the
+        // limit, whose egress it only adds at the end, but the journeys that cost no more must
+        // all stay.
+        let origins = [(0, first_access), (1, second_access)];
+        let model = |limit| KnownCost {
+            inner: PricedCostModel { window_start, window_end: window_start + 60 },
+            limit,
+        };
+        let target = STATION_COUNT - 1;
+        let routes = routes_of_trips(&build_bundle(&trips, &footpaths), &trips);
+        let all = brute_force_costs(
+            &trips, &footpaths, &origins, target, (start, 1440), &model(i32::MAX), &routes,
+        );
+        let Some(cheapest) = all.iter().map(|journey| journey.4).min() else {
+            return Ok(());
+        };
+        let limit = cheapest + slack;
+        let expected: Vec<_> = all.into_iter().filter(|journey| journey.4 <= limit).collect();
+        let actual = cost_router(&trips, &footpaths, &origins, target, (start, 1440), &model(limit));
+        for journey in &expected {
+            prop_assert!(actual.contains(journey), "{journey:?} is missing from {actual:?}");
+        }
     }
 
     #[test]

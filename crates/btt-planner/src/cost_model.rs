@@ -42,6 +42,12 @@ pub(crate) struct LegCostModel<'a> {
     pub(crate) prices: Option<&'a RidePrices>,
     /// Which tickets the rides are priced as: single tickets, or the days of a pass.
     pub(crate) price_mode: PriceMode,
+    /// The longest door-to-door time of a journey the search is for, in minutes. `None` for no
+    /// limit.
+    pub(crate) maximum_duration_minutes: Option<u32>,
+    /// The cost of a journey the caller knows, in hundredths of a minute, which no journey the
+    /// search is for may exceed. `i32::MAX` when the caller knows none.
+    pub(crate) initial_cost_limit: i32,
 }
 
 /// Converts a minute count or a percentage to the model's signed arithmetic.
@@ -208,6 +214,14 @@ impl JourneyCostModel for LegCostModel<'_> {
         elapsed - sleep_before * self.sleep_per_minute() - sleep_after * later_arrival_saving
     }
 
+    fn maximum_duration_minutes(&self) -> Option<u32> {
+        self.maximum_duration_minutes
+    }
+
+    fn initial_cost_limit(&self) -> i32 {
+        self.initial_cost_limit
+    }
+
     fn credit_window(&self) -> Option<Range<u32>> {
         self.night.clone()
     }
@@ -318,6 +332,8 @@ mod tests {
             price_weight_hundredths: 0,
             prices: None,
             price_mode: PriceMode::Single,
+            maximum_duration_minutes: None,
+            initial_cost_limit: i32::MAX,
         };
         let (berth_trip, seated_trip) = if bundle.trip_offers_berths(BundleTripIndex(0)) {
             (BundleTripIndex(0), BundleTripIndex(1))

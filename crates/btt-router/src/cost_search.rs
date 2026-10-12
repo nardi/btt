@@ -135,6 +135,20 @@ pub trait JourneyCostModel {
         credit_minutes_cap: Option<u32>,
     ) -> i32;
 
+    /// Returns the longest door-to-door time in minutes that a journey may take, or `None` for
+    /// no limit. The search drops a label that can't reach the arrival place within it, which
+    /// skips the slow journeys when the caller wants none of them. The default has no limit.
+    fn maximum_duration_minutes(&self) -> Option<u32> {
+        None
+    }
+
+    /// Returns the highest cost worth searching for before the search has found a journey,
+    /// when the caller knows one that costs that much. The search drops a label that can't
+    /// lead to a journey that costs less. The default knows none.
+    fn initial_cost_limit(&self) -> i32 {
+        i32::MAX
+    }
+
     /// Returns the highest cost worth searching for once a journey that costs `best_cost` is
     /// known. The search drops labels whose lower bound lies above it, even when their journeys
     /// would not be beaten on every criterion. The default keeps all such journeys.
@@ -798,6 +812,7 @@ pub fn search_leg_journeys_by_cost<M: JourneyCostModel>(
     let rounds = usize::from(query.maximum_train_rides.get()) + 1;
     let station_count = bundle.station_count();
     buffers.reset(station_count, bundle.route_count(), rounds);
+    buffers.cost_limit_by_days = [model.initial_cost_limit(); TRAVEL_DAY_COUNTS];
     index.lower_bounds.compute_bounds(
         query.arrival_candidates,
         &mut buffers.lower_bound_by_station,
@@ -902,6 +917,13 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
             return false;
         }
         let earliest_arrival = label.arrival.saturating_add(lower_bound);
+        if self
+            .model
+            .maximum_duration_minutes()
+            .is_some_and(|maximum| earliest_arrival.saturating_sub(self.departure) > maximum)
+        {
+            return false;
+        }
         let cost_bound = self
             .model
             .remaining_cost_lower_bound(

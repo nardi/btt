@@ -88,21 +88,21 @@ impl<P: JourneyPricer> LegPlanningBackend<P> {
         match self {
             #[cfg(feature = "stub")]
             Self::Stub(_) => {
-                let _ = (input, plan, with_pass_options, cancellation);
-                LegExtras::default()
+                let _ = (input, with_pass_options, cancellation);
+                plan.extras_without_changes()
             }
             Self::TimetableBundle(router) => {
                 let router = Arc::clone(router);
                 let input = input.clone();
-                let plan = plan.clone();
+                let owned_plan = plan.clone();
                 let cancellation = cancellation.clone();
                 tokio::task::spawn_blocking(move || {
-                    router.plan_extras(&input, &plan, with_pass_options, || {
+                    router.plan_extras(&input, &owned_plan, with_pass_options, || {
                         cancellation.is_cancelled()
                     })
                 })
                 .await
-                .unwrap_or_default()
+                .unwrap_or_else(|_| plan.extras_without_changes())
             }
         }
     }

@@ -137,9 +137,42 @@ pub struct Journey {
     /// in plans stored without it and from backends that don't rank journeys.
     #[serde(default)]
     pub cost_parts: Option<JourneyCostParts>,
+    /// Why the planner offers the journey as an alternative beyond its rank, when a search at
+    /// another weight found it. `None` for the other journeys.
+    #[serde(default)]
+    pub alternative_kind: Option<AlternativeKind>,
+}
+
+/// What a journey that a search at another weight found offers over the chosen journey.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub enum AlternativeKind {
+    /// It costs much less and takes a little longer.
+    Cheaper,
+    /// It is much faster and costs a little more.
+    Faster,
 }
 
 impl Journey {
+    /// Points every station of the journey at another place in the station table, where
+    /// `mapping[i]` is the new index of the station at index `i`.
+    pub fn remap_stations(&mut self, mapping: &[LegPlanStationIndex]) {
+        let map = |station: LegPlanStationIndex| {
+            mapping
+                .get(usize::from(station.0))
+                .copied()
+                .unwrap_or(station)
+        };
+        self.first_ride.boarding_station = map(self.first_ride.boarding_station);
+        self.first_ride.alighting_station = map(self.first_ride.alighting_station);
+        for later in &mut self.later_rides {
+            later.ride.boarding_station = map(later.ride.boarding_station);
+            later.ride.alighting_station = map(later.ride.alighting_station);
+        }
+        if let Some(footpath) = &mut self.arrival_footpath {
+            footpath.to_station = map(footpath.to_station);
+        }
+    }
+
     /// Returns every ride in travel order.
     pub fn rides(&self) -> impl Iterator<Item = &TrainRide> {
         std::iter::once(&self.first_ride).chain(self.later_rides.iter().map(|later| &later.ride))
@@ -223,14 +256,24 @@ pub struct PassJourneyOption {
 /// What the planner finds about a leg after its main plan, with searches at other weights and
 /// on the days of a pass. The planner delivers the main plan first, because these searches
 /// take longer than the plan itself.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+///
+/// The extras hold the parts of the plan they change, which replace the plan's own. The
+/// journeys of a search at another weight join the alternatives, marked by their
+/// `Journey::alternative_kind`. A cheaper journey that takes exactly the same time as the
+/// chosen one becomes the chosen journey, and the old one an alternative. Every journey indexes
+/// `station_table`, which holds the stations of the plan and the ones the extras add.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
 pub struct LegExtras {
-    /// A journey that costs much less than the chosen one and takes a little longer. See
-    /// `LegPlan::cheapest`.
-    pub cheapest: Option<Journey>,
-    /// A journey that is much faster than the chosen one and costs a little more. See
-    /// `LegPlan::fastest`.
-    pub fastest: Option<Journey>,
+    /// The chosen journey, which a cheaper journey with the same times can replace.
+    pub chosen_journey: Journey,
+    /// The alternatives, with the journeys the searches at other weights found.
+    #[specta(type = Vec<Journey>)]
+    pub alternative_journeys: SmallVec<[Journey; 4]>,
+    /// The stations of the plan and of the journeys the extras add.
+    #[specta(type = Vec<LegPlanStation>)]
+    pub station_table: SmallVec<[LegPlanStation; 8]>,
+    /// The cost of the best journey, which a replacement of the chosen journey can lower.
+    pub best_journey_cost: u32,
     /// The best journeys of the leg on the travel days of a pass. See `LegPlan::pass_options`.
     #[specta(type = Vec<PassJourneyOption>)]
     pub pass_options: SmallVec<[PassJourneyOption; 3]>,
@@ -241,7 +284,9 @@ pub struct LegExtras {
 pub struct LegPlan {
     /// The journey the planner picked.
     pub chosen_journey: Journey,
-    /// Other good journeys the traveller can switch to.
+    /// Other journeys the traveller can switch to: the next best by the planner's cost and,
+    /// once the extra searches are done, a much cheaper and a much faster journey that searches
+    /// at other weights found, which carry an `alternative_kind`.
     #[specta(type = Vec<Journey>)]
     pub alternative_journeys: SmallVec<[Journey; 4]>,
     /// Stations used by the journeys in this leg.
@@ -254,16 +299,6 @@ pub struct LegPlan {
     /// to others by same-day stops, the best journey is the one on the best chain.
     #[serde(default)]
     pub best_journey_cost: u32,
-    /// A journey that costs much less than the chosen one and takes a little longer, which the
-    /// planner found by searching at the cheapest weight. `None` when the traveller already
-    /// searches for the cheapest, or when no journey is cheaper by enough.
-    #[serde(default)]
-    pub cheapest: Option<Journey>,
-    /// A journey that is much faster than the chosen one and costs a little more, which the
-    /// planner found by searching without a weight. `None` when the traveller already searches
-    /// by time alone, or when no journey is faster by enough.
-    #[serde(default)]
-    pub fastest: Option<Journey>,
     /// The best journeys of the leg on the travel days of a pass, one for each number of days
     /// the journey uses and each first date, for the solve of the whole trip. Empty when no
     /// pass covers the leg or the traveller searches by time alone.
@@ -339,10 +374,23 @@ pub enum LegPlanningResult {
 }
 
 impl LegPlan {
-    /// Adds what the searches after the main plan found.
+    /// Returns extras that change nothing, for a plan whose extra searches found nothing.
+    pub fn extras_without_changes(&self) -> LegExtras {
+        LegExtras {
+            chosen_journey: self.chosen_journey.clone(),
+            alternative_journeys: self.alternative_journeys.clone(),
+            station_table: self.station_table.clone(),
+            best_journey_cost: self.best_journey_cost,
+            pass_options: self.pass_options.clone(),
+        }
+    }
+
+    /// Replaces the parts of the plan that the searches after the main plan changed.
     pub fn apply_extras(&mut self, extras: LegExtras) {
-        self.cheapest = extras.cheapest;
-        self.fastest = extras.fastest;
+        self.chosen_journey = extras.chosen_journey;
+        self.alternative_journeys = extras.alternative_journeys;
+        self.station_table = extras.station_table;
+        self.best_journey_cost = extras.best_journey_cost;
         self.pass_options = extras.pass_options;
     }
 }

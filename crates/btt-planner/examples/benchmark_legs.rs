@@ -9,7 +9,10 @@
 //! the frugal price weight, which reports how many legs get a different chosen journey when
 //! prices count. Run it with `times` and a limit, then the weights in hundredths of a minute
 //! per euro, such as `times <bundle> <queries.txt> <responses.txt> 500 0 100 300 800`, to time
-//! every leg at each weight.
+//! every leg at each weight. Run it with `leg`, a bundle, a date, the coordinates of both ends
+//! as `departure_lat,departure_lon,arrival_lat,arrival_lon` and the weights, such as
+//! `leg <bundle> 2026-11-16 59.33,18.07,38.11,13.35 0 300`, to time one leg, with the plan and
+//! the extras apart.
 
 use std::fmt::Write as _;
 use std::sync::Arc;
@@ -17,8 +20,9 @@ use std::time::Instant;
 
 use btt_geo::TimeZoneFinder;
 use btt_model::{
-    DurationMinutes, EuroRange, GeoCoordinates, Journey, LegPlanStation, LegPlanningResult,
-    LegTravelMode, OvernightLegOptions, PriceWeight, StationSearchRadius, TripPreferences,
+    AlternativeKind, DurationMinutes, EuroRange, GeoCoordinates, Journey, LegPlanStation,
+    LegPlanningResult, LegTravelMode, OvernightLegOptions, PriceWeight, StationSearchRadius,
+    TripPreferences,
 };
 use btt_planner::{JourneyPricer, LegEndpoint, LegPlanningInput, TimetableBundleRouter};
 use chrono::{DateTime, Utc};
@@ -135,6 +139,13 @@ struct LegResult {
 }
 
 fn main() {
+    let all_arguments: Vec<String> = std::env::args().skip(1).collect();
+    if let [mode, arguments @ ..] = all_arguments.as_slice()
+        && mode == "leg"
+    {
+        time_one_leg(arguments);
+        return;
+    }
     let mut arguments = std::env::args().skip(1);
     let mode = arguments.next().expect("pass record, check or count");
     let bundle_path = arguments.next().expect("pass the bundle");
@@ -317,7 +328,11 @@ fn time_price_weights(
                 let extras = router.plan_extras(&weighted, plan, true, || false);
                 plan.apply_extras(extras);
                 with_pass_options += usize::from(!plan.pass_options.is_empty());
-                with_cheapest += usize::from(plan.cheapest.is_some());
+                with_cheapest += usize::from(
+                    plan.alternative_journeys
+                        .iter()
+                        .any(|journey| journey.alternative_kind == Some(AlternativeKind::Cheaper)),
+                );
             }
             let extras_milliseconds = started.elapsed().as_secs_f64() * 1000.0;
             results.push(LegResult {
@@ -331,6 +346,78 @@ fn time_price_weights(
             "weight {weight}: {with_pass_options} legs with pass options, {with_cheapest} with a cheaper journey"
         );
         print_times("now", &results);
+    }
+}
+
+/// Plans one leg at each weight and prints the time of its plan and of its extras, and the
+/// journeys the extras found. The arguments are the bundle, the date, the coordinates of both
+/// ends and the weights.
+fn time_one_leg(arguments: &[String]) {
+    let [bundle_path, travel_date, coordinates, weights @ ..] = arguments else {
+        panic!("pass the bundle, the date, the coordinates and the weights");
+    };
+    let numbers: Vec<f64> = coordinates
+        .split(',')
+        .map(|number| number.parse().expect("coordinates as numbers"))
+        .collect();
+    let [from_lat, from_lon, to_lat, to_lon] = numbers[..] else {
+        panic!("pass four coordinates");
+    };
+    let data = btt_fares::FareData::bundled().expect("the bundled fare data is valid");
+    let book = btt_fares::PriceBook::from_data(&data);
+    let router = TimetableBundleRouter::open(
+        bundle_path.as_ref(),
+        Arc::new(TimeZoneFinder::new()),
+        TicketingPricer { data, book },
+    )
+    .expect("bundle loads");
+    let preferences = TripPreferences::default();
+    let endpoint = |latitude, longitude, time_window| LegEndpoint {
+        coordinates: GeoCoordinates::from_degrees(latitude, longitude).expect("coordinates"),
+        station_search_radius: StationSearchRadius::DEFAULT,
+        time_window,
+    };
+    let input = LegPlanningInput {
+        departure: endpoint(from_lat, from_lon, preferences.default_windows.departure),
+        arrival: endpoint(to_lat, to_lon, preferences.default_windows.arrival),
+        departure_date: travel_date.parse().expect("date as YYYY-MM-DD"),
+        travel_mode: LegTravelMode::Daytime,
+        minimum_transfer_time: DurationMinutes(10),
+        pass_policy: preferences.pass_policy,
+        transfer_aversion: preferences.transfer_aversion,
+        price_weight: PriceWeight::TIME_FIRST,
+        chosen_journey: None,
+    };
+    for weight in weights
+        .iter()
+        .filter_map(|weight| weight.parse::<u16>().ok())
+    {
+        let mut weighted = input.clone();
+        weighted.price_weight = PriceWeight::new(weight).expect("every u16 is a weight");
+        let started = Instant::now();
+        let result = router.plan_leg(&weighted, || false);
+        let plan_milliseconds = started.elapsed().as_secs_f64() * 1000.0;
+        let LegPlanningResult::Found(plan) = &result else {
+            println!("weight {weight}: no journey");
+            continue;
+        };
+        let started = Instant::now();
+        let extras = router.plan_extras(&weighted, plan, true, || false);
+        let extras_milliseconds = started.elapsed().as_secs_f64() * 1000.0;
+        let has_kind = |kind| {
+            extras
+                .alternative_journeys
+                .iter()
+                .any(|journey| journey.alternative_kind == Some(kind))
+        };
+        println!(
+            "weight {weight}: plan {plan_milliseconds:.0} ms, extras {extras_milliseconds:.0} ms, \
+             {} alternatives, cheaper {}, faster {}, {} pass options",
+            plan.alternative_journeys.len(),
+            has_kind(AlternativeKind::Cheaper),
+            has_kind(AlternativeKind::Faster),
+            extras.pass_options.len()
+        );
     }
 }
 

@@ -221,8 +221,10 @@ export class TauriTripSource implements TripViewState {
           status: "found",
           legPlan: {
             ...state.legPlan,
-            cheapest: extras.cheapest,
-            fastest: extras.fastest,
+            chosen_journey: extras.chosen_journey,
+            alternative_journeys: extras.alternative_journeys,
+            station_table: extras.station_table,
+            best_journey_cost: extras.best_journey_cost,
             pass_options: extras.pass_options,
           },
         });

@@ -21,7 +21,8 @@
     formatTimeInZone,
     parseMinutesOfDay,
   } from "../format";
-  import { formatEuroRange, formatEuro } from "../tickets";
+  import { alternativesOfKind, describeDifference, describeKinds } from "../alternatives";
+  import { formatEuroRange } from "../tickets";
   import type { LegRow } from "../itinerary";
   import type { LegViewState } from "../trip-source";
   import JourneyExplanation from "./JourneyExplanation.svelte";
@@ -180,24 +181,6 @@
       .join(", ");
   }
 
-  /** Returns the euro cents a candidate journey saves against the chosen one, or `null`. */
-  function priceSaving(candidate: Journey, chosen: Journey): number | null {
-    const candidatePrice = candidate.cost_parts?.price?.median ?? null;
-    const chosenPrice = chosen.cost_parts?.price?.median ?? null;
-    if (candidatePrice === null || chosenPrice === null) {
-      return null;
-    }
-    return chosenPrice - candidatePrice;
-  }
-
-  /** Returns the minutes a candidate journey takes longer than the chosen one. */
-  function minutesLonger(candidate: Journey, chosen: Journey): number {
-    return (
-      (candidate.cost_parts?.door_to_door_minutes ?? 0) -
-      (chosen.cost_parts?.door_to_door_minutes ?? 0)
-    );
-  }
-
   function stationName(legPlan: LegPlan, stationIndex: number): string {
     return legPlan.station_table[stationIndex]?.name ?? "Unknown station";
   }
@@ -267,7 +250,10 @@
 
   <div class="plan">
     {#if legState.status === "pending"}
-      <span class="pending">Planning…</span>
+      <span class="hint">
+        <Spinner label="Planning the leg" />
+        Planning…
+      </span>
     {:else if legState.status === "none"}
       <span class="no-journey">{noJourneyMessages[legState.reason]}</span>
     {:else}
@@ -316,6 +302,10 @@
             {legPlan.alternative_journeys.length}
             {legPlan.alternative_journeys.length === 1 ? "alternative" : "alternatives"}
           </button>
+          <!-- An alternative that a search at another weight found is easy to miss in a list. -->
+          {#if describeKinds(legPlan) !== null}
+            ({describeKinds(legPlan)} included)
+          {/if}
         {/if}
         {#if journey.cost_parts !== null && journey.cost_parts !== undefined}
           <button
@@ -358,12 +348,18 @@
         </span>
       {/if}
       {#if showAlternatives}
-        <!-- Other good journeys, best first by the same cost that picked the chosen one. -->
+        <!--
+          Other journeys, best first by the same cost that picked the chosen journey. A much
+          cheaper or much faster journey that a search at another weight found is among them.
+        -->
         <ol class="alternatives">
           {#each legPlan.alternative_journeys as alternative, alternativeIndex (alternativeIndex)}
             {@const rides = journeyRides(alternative)}
             {@const lastRide = rides.at(-1) ?? alternative.first_ride}
             <li>
+              {#if alternative.alternative_kind !== null && alternative.alternative_kind !== undefined}
+                <span class="kind">{alternative.alternative_kind}</span>
+              {/if}
               <span class="time">
                 {stationTime(legPlan, alternative.first_ride.boarding_station, alternative.first_ride.departure_time)}
               </span>
@@ -374,6 +370,10 @@
               <span class="alternative-details">
                 {formatDuration(journeyMinutes(alternative))} · {transferSummary(alternative)} ·
                 {rides.map((ride) => `${ride.train_label.category} ${ride.train_label.number}`).join(", ")}
+                {#if journeyPrice(alternative) !== null}
+                  · {journeyPrice(alternative)}
+                {/if}
+                <span class="difference">· {describeDifference(alternative, journey)}</span>
                 {#if onEdit !== undefined}
                   · <button type="button" class="link" onclick={() => chooseJourney(alternative)}>
                     Take this one
@@ -386,42 +386,14 @@
       {/if}
       {#if legState.extrasPending === true}
         <!-- The searches after the main plan take longer than the plan itself. -->
-        <span class="nearby-day">
+        <span class="hint">
           <Spinner label="Searching for cheaper and faster journeys and pass options" />
-          Looking for cheaper and faster journeys.
-        </span>
-      {/if}
-      {#if legPlan.cheapest !== null && legPlan.cheapest !== undefined}
-        <!-- A journey the planner found by searching for the cheapest, which saves a lot. -->
-        {@const cheapest = legPlan.cheapest}
-        <span class="nearby-day">
-          Cheaper: {journeyTrains(cheapest)}, saves
-          {formatEuro(priceSaving(cheapest, journey) ?? 0)} and takes
-          {formatDuration(minutesLonger(cheapest, journey))} longer.
-          {#if onEdit !== undefined}
-            <button type="button" class="link" onclick={() => chooseJourney(cheapest)}>
-              Take this one
-            </button>
-          {/if}
-        </span>
-      {/if}
-      {#if legPlan.fastest !== null && legPlan.fastest !== undefined}
-        <!-- A journey the planner found by searching by time alone, which is much faster. -->
-        {@const fastest = legPlan.fastest}
-        <span class="nearby-day">
-          Faster: {journeyTrains(fastest)},
-          {formatDuration(-minutesLonger(fastest, journey))} quicker for
-          {formatEuro(Math.max(-(priceSaving(fastest, journey) ?? 0), 0))} more.
-          {#if onEdit !== undefined}
-            <button type="button" class="link" onclick={() => chooseJourney(fastest)}>
-              Take this one
-            </button>
-          {/if}
+          Looking for cheaper and faster journeys…
         </span>
       {/if}
       {#if legState.liveOvertaken !== null && legState.liveOvertaken !== undefined}
         <!-- The booking sites' prices put another journey ahead of the planner's estimates. -->
-        <span class="nearby-day">
+        <span class="hint">
           With the live prices, {journeyTrains(journey)} at {journeyPrice(journey) ?? "an unknown price"}
           now comes before {journeyTrains(legState.liveOvertaken)}, which the estimates put first.
         </span>
@@ -432,7 +404,7 @@
       {@const dayPlan = nearbyDay.plan}
       {@const dayRides = journeyRides(dayPlan.chosen_journey)}
       {@const dayLastRide = dayRides.at(-1) ?? dayPlan.chosen_journey.first_ride}
-      <span class="nearby-day">
+      <span class="hint">
         {nearbyDay.day_offset < 0 ? "A day earlier" : "A day later"}, {formatDate(nearbyDay.departure_date)}:
         {dayRides.map((ride) => `${ride.train_label.category} ${ride.train_label.number}`).join(", ")},
         {transferSummary(dayPlan.chosen_journey)}, arrives
@@ -518,7 +490,6 @@
     color: var(--color-danger);
   }
 
-  .pending,
   .summary,
   .station-way {
     color: var(--color-text-muted);
@@ -561,7 +532,8 @@
     list-style: none;
   }
 
-  .nearby-day {
+  /* A note below the journey, such as work that is still going on or a better day. */
+  .hint {
     display: block;
     margin-top: var(--space-1);
     padding: var(--space-1) var(--space-2);
@@ -578,5 +550,15 @@
   .alternative-details {
     display: block;
     color: var(--color-text-muted);
+  }
+
+  /* Marks an alternative that a search at another weight found. */
+  .kind {
+    margin-right: var(--space-2);
+    padding: 0 var(--space-1);
+    border-radius: 4px;
+    background: var(--color-notice);
+    color: var(--color-text);
+    font-size: 0.85em;
   }
 </style>

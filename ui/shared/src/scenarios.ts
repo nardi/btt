@@ -62,14 +62,15 @@ export function passOptionOfLeg(state: PassScenarioState | null, arrivalPlaceId:
 
 /**
  * Returns the plan of a leg with the journey of one of its pass options as the chosen one. The
- * cheaper and faster journeys compare with single tickets, so they go.
+ * alternatives are journeys on single tickets, which don't compare with a journey on a pass
+ * day, so they go.
  */
 export function legPlanOnPass(legPlan: LegPlan, optionIndex: number): LegPlan {
   const option = legPlan.pass_options?.[optionIndex];
   if (option === undefined) {
     return legPlan;
   }
-  return { ...legPlan, chosen_journey: option.journey, cheapest: null, fastest: null };
+  return { ...legPlan, chosen_journey: option.journey, alternative_journeys: [] };
 }
 
 /** Returns the name of a scenario, such as the pass and its window of validity. */

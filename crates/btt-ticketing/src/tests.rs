@@ -981,6 +981,7 @@ fn connected_journey(
         egress: station_way(),
         sleeping_ride: None,
         cost_parts: None,
+        alternative_kind: None,
     };
     (journey, stations)
 }

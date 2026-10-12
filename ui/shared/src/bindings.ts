@@ -159,6 +159,13 @@ export type AccommodationRequest = {
 	seat_estimate?: EuroCents | null,
 };
 
+/**  What a journey that a search at another weight found offers over the chosen journey. */
+export type AlternativeKind = 
+/**  It costs much less and takes a little longer. */
+"Cheaper" | 
+/**  It is much faster and costs a little more. */
+"Faster";
+
 /**
  *  A walk or local transit trip from the last alighting station to another station near the
  *  arrival place, for when no train serves that station in time.
@@ -377,6 +384,11 @@ export type Journey = {
 	 *  in plans stored without it and from backends that don't rank journeys.
 	 */
 	cost_parts?: JourneyCostParts | null,
+	/**
+	 *  Why the planner offers the journey as an alternative beyond its rank, when a search at
+	 *  another weight found it. `None` for the other journeys.
+	 */
+	alternative_kind?: AlternativeKind | null,
 };
 
 /**
@@ -448,18 +460,22 @@ export type Latitude = number;
  *  What the planner finds about a leg after its main plan, with searches at other weights and
  *  on the days of a pass. The planner delivers the main plan first, because these searches
  *  take longer than the plan itself.
+ * 
+ *  The extras hold the parts of the plan they change, which replace the plan's own. The
+ *  journeys of a search at another weight join the alternatives, marked by their
+ *  `Journey::alternative_kind`. A cheaper journey that takes exactly the same time as the
+ *  chosen one becomes the chosen journey, and the old one an alternative. Every journey indexes
+ *  `station_table`, which holds the stations of the plan and the ones the extras add.
  */
 export type LegExtras = {
-	/**
-	 *  A journey that costs much less than the chosen one and takes a little longer. See
-	 *  `LegPlan::cheapest`.
-	 */
-	cheapest: Journey | null,
-	/**
-	 *  A journey that is much faster than the chosen one and costs a little more. See
-	 *  `LegPlan::fastest`.
-	 */
-	fastest: Journey | null,
+	/**  The chosen journey, which a cheaper journey with the same times can replace. */
+	chosen_journey: Journey,
+	/**  The alternatives, with the journeys the searches at other weights found. */
+	alternative_journeys: Journey[],
+	/**  The stations of the plan and of the journeys the extras add. */
+	station_table: LegPlanStation[],
+	/**  The cost of the best journey, which a replacement of the chosen journey can lower. */
+	best_journey_cost: number,
 	/**  The best journeys of the leg on the travel days of a pass. See `LegPlan::pass_options`. */
 	pass_options: PassJourneyOption[],
 };
@@ -468,7 +484,11 @@ export type LegExtras = {
 export type LegPlan = {
 	/**  The journey the planner picked. */
 	chosen_journey: Journey,
-	/**  Other good journeys the traveller can switch to. */
+	/**
+	 *  Other journeys the traveller can switch to: the next best by the planner's cost and,
+	 *  once the extra searches are done, a much cheaper and a much faster journey that searches
+	 *  at other weights found, which carry an `alternative_kind`.
+	 */
 	alternative_journeys: Journey[],
 	/**  Stations used by the journeys in this leg. */
 	station_table: LegPlanStation[],
@@ -480,18 +500,6 @@ export type LegPlan = {
 	 *  to others by same-day stops, the best journey is the one on the best chain.
 	 */
 	best_journey_cost?: number,
-	/**
-	 *  A journey that costs much less than the chosen one and takes a little longer, which the
-	 *  planner found by searching at the cheapest weight. `None` when the traveller already
-	 *  searches for the cheapest, or when no journey is cheaper by enough.
-	 */
-	cheapest?: Journey | null,
-	/**
-	 *  A journey that is much faster than the chosen one and costs a little more, which the
-	 *  planner found by searching without a weight. `None` when the traveller already searches
-	 *  by time alone, or when no journey is faster by enough.
-	 */
-	fastest?: Journey | null,
 	/**
 	 *  The best journeys of the leg on the travel days of a pass, one for each number of days
 	 *  the journey uses and each first date, for the solve of the whole trip. Empty when no

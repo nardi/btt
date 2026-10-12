@@ -6,10 +6,11 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use btt_geo::{TimeZoneFinder, local_time_to_unix_minutes};
 use btt_model::{
-    ArrivalFootpath, DurationMinutes, EuroRange, Journey, JourneyChoice, JourneyCostParts,
-    LegExtras, LegPlan, LegPlanStation, LegPlanStationIndex, LegPlanningResult, LegTravelMode,
-    NoJourneyReason, OvernightLegOptions, PassDays, PassJourneyOption, PriceWeight, SearchedWindow,
-    StationWay, TrainLabel, TrainRide, TransferAndRide, UnixTimeMinutes, WayToStationMode,
+    AlternativeKind, ArrivalFootpath, DurationMinutes, EuroRange, Journey, JourneyChoice,
+    JourneyCostParts, LegExtras, LegPlan, LegPlanStation, LegPlanStationIndex, LegPlanningResult,
+    LegTravelMode, NoJourneyReason, OvernightLegOptions, PassDays, PassJourneyOption, PriceWeight,
+    SearchedWindow, StationWay, TrainLabel, TrainRide, TransferAndRide, UnixTimeMinutes,
+    WayToStationMode,
 };
 use btt_router::{
     CandidateStation, CostParetoJourneySet, CostSearchBuffers, MinutesSinceBundleStart,
@@ -209,7 +210,8 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
     ) -> LegPlanningResult {
         match self.search_leg(input, &should_stop) {
             Err(reason) => LegPlanningResult::NoJourneyFound(reason),
-            Ok(search) => {
+            Ok(mut search) => {
+                self.add_pick_from_other_weights(&mut search, input, None, &should_stop);
                 let ranking = self.rank_journeys(&search, input);
                 self.leg_plan(&ranking, input)
             }
@@ -236,34 +238,103 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
     /// travel days of a pass finds the journeys that the solve of the whole trip picks among.
     /// Each takes about as long as the main plan or longer, so the main plan is delivered first.
     ///
-    /// `with_pass_options` is false for a leg joined to others by same-day stops, because its
-    /// departure window follows the leg before it and a pass would have to cover the chain.
-    /// `should_stop` lets a newer planning run cancel the searches, and the result of a
-    /// cancelled run is dropped by the caller.
+    /// The journeys of the searches at other weights join the alternatives of the plan, each
+    /// marked as the cheaper or the faster journey, and a journey that the same search finds
+    /// twice shows once. A cheaper journey that leaves and arrives when the chosen journey does
+    /// becomes the chosen journey, because it is the same trip for less, and only a search at
+    /// another weight can tell the two apart when the traveller's weight is zero. The traveller's
+    /// own pick stays.
+    ///
+    /// `on_its_own` is false for a leg joined to others by same-day stops. Its departure window
+    /// follows the leg before it, so it gets no pass options, and its chosen journey is the one
+    /// on the best chain, which no search of the leg alone can replace.
+    ///
+    /// `should_stop` lets a newer planning run cancel the searches, and the caller drops the
+    /// result of a cancelled run.
     pub fn plan_extras(
         &self,
         input: &LegPlanningInput,
         plan: &LegPlan,
-        with_pass_options: bool,
+        on_its_own: bool,
         should_stop: impl Fn() -> bool + Sync,
     ) -> LegExtras {
-        let mut extras = LegExtras::default();
+        let mut extras = plan.extras_without_changes();
         let weight = input.price_weight.hundredths_of_minute_per_euro();
+        let mut found: Vec<(AlternativeKind, ExtraJourney)> = Vec::new();
         // A traveller below the cheapest weight never sees a cheap journey otherwise, and one
-        // above zero never sees a fast one.
+        // above zero never sees a fast one. A cheaper journey is only worth showing when it
+        // takes at most `CHEAPEST_EXTRA_MINUTES` longer, so the search drops slower journeys.
+        let mut replacement: Option<ExtraJourney> = None;
         if weight < PriceWeight::CHEAPEST.hundredths_of_minute_per_euro() {
-            extras.cheapest = self
-                .best_journey_at(input, PriceWeight::CHEAPEST, &should_stop)
-                .filter(|cheapest| cheaper_by_enough(cheapest, &plan.chosen_journey));
+            let bounds = SearchBounds::for_cheaper_than(&plan.chosen_journey, on_its_own);
+            if let Some(cheaper) =
+                self.best_journey_at(input, PriceWeight::CHEAPEST, bounds, &should_stop)
+            {
+                if on_its_own
+                    && !plan.follows_traveller_choice
+                    && is_the_same_trip_for_less(&cheaper.journey, &plan.chosen_journey)
+                {
+                    replacement = Some(cheaper);
+                } else if cheaper_by_enough(&cheaper.journey, &plan.chosen_journey) {
+                    found.push((AlternativeKind::Cheaper, cheaper));
+                }
+            }
         }
-        if weight > PriceWeight::TIME_FIRST.hundredths_of_minute_per_euro() {
-            extras.fastest = self
-                .best_journey_at(input, PriceWeight::TIME_FIRST, &should_stop)
-                .filter(|fastest| faster_by_enough(fastest, &plan.chosen_journey));
+        if weight > PriceWeight::TIME_FIRST.hundredths_of_minute_per_euro()
+            && let Some(faster) = self.best_journey_at(
+                input,
+                PriceWeight::TIME_FIRST,
+                SearchBounds::for_faster_than(&plan.chosen_journey, on_its_own),
+                &should_stop,
+            )
+            && faster_by_enough(&faster.journey, &plan.chosen_journey)
+        {
+            found.push((AlternativeKind::Faster, faster));
         }
-        if with_pass_options {
-            extras.pass_options = self.pass_options(input, &should_stop);
+
+        let mut table = plan.station_table.clone();
+        if let Some(replacement) = replacement
+            && let Some(better) = absorb_journey(&mut table, replacement)
+        {
+            let old = std::mem::replace(&mut extras.chosen_journey, better);
+            if let Some(parts) = extras.chosen_journey.cost_parts {
+                extras.best_journey_cost = extras
+                    .best_journey_cost
+                    .min(u32::try_from(parts.total_cost).unwrap_or(u32::MAX));
+            }
+            extras.alternative_journeys.push(old);
         }
+        for (kind, candidate) in found {
+            let Some(mut journey) = absorb_journey(&mut table, candidate) else {
+                continue;
+            };
+            let known = std::iter::once(&extras.chosen_journey)
+                .chain(&extras.alternative_journeys)
+                .any(|shown| same_trains(shown, &journey));
+            if known {
+                // The journey is one of the alternatives already, so it only gets the mark.
+                if let Some(shown) = extras
+                    .alternative_journeys
+                    .iter_mut()
+                    .find(|shown| same_trains(shown, &journey))
+                {
+                    shown.alternative_kind = Some(kind);
+                }
+            } else {
+                journey.alternative_kind = Some(kind);
+                extras.alternative_journeys.push(journey);
+            }
+        }
+        // The alternatives keep the planner's order, which is by cost at the traveller's weight.
+        extras.alternative_journeys.sort_by_key(|journey| {
+            journey
+                .cost_parts
+                .map_or(i32::MAX, |parts| parts.total_cost)
+        });
+        if on_its_own {
+            extras.pass_options = self.pass_options(input, &should_stop, &mut table);
+        }
+        extras.station_table = table;
         extras
     }
 
@@ -288,12 +359,26 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
                 let previous_search = searches[previous].as_ref().ok()?;
                 self.window_after_stay(previous_search, chain.stops[previous], &leg.input)
             });
+            let window_used = window_after_stay.clone();
             searches.push(match window_after_stay {
-                Some(window) => {
-                    self.search_leg_in_window(&leg.input, window, PriceMode::Single, &should_stop)
-                }
+                Some(window) => self.search_leg_in_window(
+                    &leg.input,
+                    window,
+                    SearchOptions::SINGLE,
+                    &should_stop,
+                ),
                 None => self.search_leg(&leg.input, &should_stop),
             });
+            // The traveller's pick can come from a search at another weight, which this one
+            // would not find again.
+            if let Some(Ok(search)) = searches.last_mut() {
+                self.add_pick_from_other_weights(
+                    search,
+                    &leg.input,
+                    window_used.as_ref(),
+                    &should_stop,
+                );
+            }
         }
 
         let mut results: Vec<Option<LegPlanningResult>> = vec![None; chain.legs.len()];
@@ -529,7 +614,7 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
         input: &LegPlanningInput,
         should_stop: &(impl Fn() -> bool + Sync),
     ) -> Result<LegSearch, NoJourneyReason> {
-        self.search_leg_in_mode(input, PriceMode::Single, should_stop)
+        self.search_leg_in_mode(input, SearchOptions::SINGLE, should_stop)
     }
 
     /// Finds the candidate stations of a leg and searches its Pareto set of journeys, priced
@@ -537,13 +622,13 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
     fn search_leg_in_mode(
         &self,
         input: &LegPlanningInput,
-        mode: PriceMode,
+        options: SearchOptions,
         should_stop: &(impl Fn() -> bool + Sync),
     ) -> Result<LegSearch, NoJourneyReason> {
         let departure_window = self
             .departure_window(input)
             .ok_or(NoJourneyReason::TravelDateOutsideTimetable)?;
-        self.search_leg_in_window(input, departure_window, mode, should_stop)
+        self.search_leg_in_window(input, departure_window, options, should_stop)
     }
 
     /// Searches a leg like `search_leg_in_mode`, leaving the departure place within a given
@@ -552,7 +637,7 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
         &self,
         input: &LegPlanningInput,
         departure_window: std::ops::Range<MinutesSinceBundleStart>,
-        mode: PriceMode,
+        options: SearchOptions,
         should_stop: &(impl Fn() -> bool + Sync),
     ) -> Result<LegSearch, NoJourneyReason> {
         let searched_window = departure_window.clone();
@@ -585,7 +670,9 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             ),
             arrival_window: self.ranking_arrival_window(input, night.as_ref()),
             night: night.clone(),
-            cost_limit_factor: MAXIMUM_ALTERNATIVE_COST_FACTOR,
+            cost_limit_factor: options
+                .cost_limit_factor
+                .unwrap_or(MAXIMUM_ALTERNATIVE_COST_FACTOR),
             routes_with_berths: &self.routes_with_berths,
             price_weight_hundredths,
             prices: if price_weight_hundredths > 0 {
@@ -593,7 +680,9 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             } else {
                 None
             },
-            price_mode: mode,
+            price_mode: options.mode,
+            maximum_duration_minutes: options.maximum_minutes,
+            initial_cost_limit: options.maximum_cost.unwrap_or(i32::MAX),
         };
         let found = self.search_in_parallel(
             &departure_candidates,
@@ -709,23 +798,102 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
         arrival_window
     }
 
-    /// Returns the best journey of a leg searched at another price weight, or `None` when the
-    /// search finds nothing. The traveller's pick does not hold, because the plan shows the
-    /// other weight's own best.
+    /// Returns the best journey of a leg searched at another price weight, costed at the
+    /// traveller's weight like the plan's own journeys, with the stations it uses. Returns
+    /// `None` when the search finds nothing. The traveller's pick does not hold, because the
+    /// plan shows the other weight's own best. The bounds say how long and how costly the journeys
+    /// the search looks for can be.
     fn best_journey_at(
         &self,
         input: &LegPlanningInput,
         weight: PriceWeight,
+        bounds: SearchBounds,
         should_stop: &(impl Fn() -> bool + Sync),
-    ) -> Option<Journey> {
+    ) -> Option<ExtraJourney> {
         let mut weighted = input.clone();
         weighted.price_weight = weight;
         weighted.chosen_journey = None;
-        let search = self.search_leg(&weighted, should_stop).ok()?;
-        let ranking = self.rank_journeys(&search, &weighted);
-        let ranked = ranking.journeys.first()?;
+        let options = SearchOptions {
+            mode: PriceMode::Single,
+            maximum_minutes: bounds.minutes,
+            maximum_cost: bounds.cost,
+            cost_limit_factor: Some(1),
+        };
+        let search = self
+            .search_leg_in_mode(&weighted, options, should_stop)
+            .ok()?;
+        let best = self
+            .rank_journeys(&search, &weighted)
+            .journeys
+            .first()?
+            .journey;
+        // The cost parts must hold the price at the traveller's weight, so the journey compares
+        // with the journeys of the plan.
+        let at_travellers_weight = self.journey_costs(&search, input);
+        let ranked = at_travellers_weight
+            .iter()
+            .find(|ranked| std::ptr::eq(ranked.journey, best))?;
         let mut stations = LegPlanStations::default();
-        self.journey(ranked, &weighted, ranking.night.as_ref(), &mut stations)
+        let journey = self.journey(ranked, input, search.night.as_ref(), &mut stations)?;
+        Some(ExtraJourney {
+            journey,
+            stations: stations.table,
+        })
+    }
+
+    /// Adds the traveller's pick to a search that doesn't have it. The pick can come from a
+    /// search at another weight, such as the cheaper journey of the extras, which the search at
+    /// the traveller's weight drops when it ties with another journey or loses to it on cost.
+    /// The pick is then among the journeys of the search at another weight, and costed at the
+    /// traveller's weight with the others. `window` is the departure window of a leg after a
+    /// same-day stop, and `None` for the leg's own.
+    fn add_pick_from_other_weights(
+        &self,
+        search: &mut LegSearch,
+        input: &LegPlanningInput,
+        window: Option<&std::ops::Range<MinutesSinceBundleStart>>,
+        should_stop: &(impl Fn() -> bool + Sync),
+    ) {
+        let Some(choice) = input.chosen_journey.as_ref() else {
+            return;
+        };
+        if search
+            .journeys
+            .iter()
+            .any(|journey| self.journey_matches_choice(journey, choice))
+        {
+            return;
+        }
+        // The search by time alone is the quicker one, so it goes first.
+        for weight in [PriceWeight::TIME_FIRST, PriceWeight::CHEAPEST] {
+            if weight == input.price_weight {
+                continue;
+            }
+            let mut other = input.clone();
+            other.price_weight = weight;
+            other.chosen_journey = None;
+            let searched = match window {
+                Some(window) => self.search_leg_in_window(
+                    &other,
+                    window.start..window.end,
+                    SearchOptions::SINGLE,
+                    should_stop,
+                ),
+                None => self.search_leg(&other, should_stop),
+            };
+            let Ok(searched) = searched else {
+                continue;
+            };
+            if let Some(journey) = searched
+                .journeys
+                .into_iter()
+                .find(|journey| self.journey_matches_choice(journey, choice))
+            {
+                search.journeys.push(journey);
+                search.days.push(0);
+                return;
+            }
+        }
     }
 
     /// Returns the best journeys of the leg on the travel days of a pass, one for each number of
@@ -736,6 +904,7 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
         &self,
         input: &LegPlanningInput,
         should_stop: &(impl Fn() -> bool + Sync),
+        table: &mut SmallVec<[LegPlanStation; 8]>,
     ) -> SmallVec<[PassJourneyOption; 3]> {
         let weight = u32::from(input.price_weight.hundredths_of_minute_per_euro());
         if weight == 0 {
@@ -747,7 +916,7 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
         if !prices.any_pass_takes() {
             return SmallVec::new();
         }
-        let Ok(search) = self.search_leg_in_mode(input, PriceMode::Pass, should_stop) else {
+        let Ok(search) = self.search_leg_in_mode(input, SearchOptions::PASS, should_stop) else {
             return SmallVec::new();
         };
         // The best journey for a number of days and a first date is the one the solve would
@@ -792,6 +961,16 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
                 .total_cost
                 .saturating_add(i32::try_from(price_cost / 100).unwrap_or(i32::MAX));
             model.cost_parts = Some(parts);
+            // The journey indexes the station table of the plan, like the other journeys.
+            let Some(model) = absorb_journey(
+                table,
+                ExtraJourney {
+                    journey: model,
+                    stations: stations.table,
+                },
+            ) else {
+                continue;
+            };
             let option = PassJourneyOption {
                 journey: model,
                 cost_minutes,
@@ -873,8 +1052,6 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             station_table: stations.table,
             follows_traveller_choice: ranking.follows_traveller_choice,
             best_journey_cost: best_own_cost,
-            cheapest: None,
-            fastest: None,
             pass_options: SmallVec::new(),
             departure_window: Some(SearchedWindow {
                 start: UnixTimeMinutes(
@@ -1213,6 +1390,7 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
                     .flatten()
             }),
             cost_parts: None,
+            alternative_kind: None,
         })
     }
 
@@ -1304,6 +1482,162 @@ impl LegPlanStations {
         });
         Some(index)
     }
+}
+
+/// How a search runs: with which prices, and with which limit on the time of the journeys.
+#[derive(Debug, Clone, Copy)]
+struct SearchOptions {
+    /// Which tickets the rides are priced as.
+    mode: PriceMode,
+    /// The longest door-to-door time in minutes of the journeys the search is for, or `None`
+    /// for no limit.
+    maximum_minutes: Option<u32>,
+    /// The cost in hundredths of a minute that no journey the search is for exceeds, because a
+    /// journey that costs that much is known, or `None` for no limit.
+    maximum_cost: Option<i32>,
+    /// How many times the cost of the best journey found so far a journey may cost to be worth
+    /// searching for, or `None` for the factor that keeps the alternatives of a plan. A search
+    /// for the best journey alone needs no more than 1.
+    cost_limit_factor: Option<u32>,
+}
+
+impl SearchOptions {
+    /// Prices rides as single tickets, with no limit.
+    const SINGLE: Self = Self {
+        mode: PriceMode::Single,
+        maximum_minutes: None,
+        maximum_cost: None,
+        cost_limit_factor: None,
+    };
+
+    /// Prices rides for the days of a pass, with no limit.
+    const PASS: Self = Self {
+        mode: PriceMode::Pass,
+        maximum_minutes: None,
+        maximum_cost: None,
+        cost_limit_factor: None,
+    };
+}
+
+/// What a search that looks for an alternative to the chosen journey can leave out.
+#[derive(Debug, Clone, Copy, Default)]
+struct SearchBounds {
+    /// The longest door-to-door time in minutes of a journey worth finding.
+    minutes: Option<u32>,
+    /// The cost in hundredths of a minute that no journey worth finding exceeds.
+    cost: Option<i32>,
+}
+
+impl SearchBounds {
+    /// How much slack the cost bound has, in hundredths of a minute. The search adds up its
+    /// cost without the rounding of the ranking, which differs by less than a minute.
+    const COST_SLACK: i32 = 200;
+
+    /// Returns the bounds of the search at the cheapest weight for a journey that is cheaper
+    /// than the chosen one. The leg plan shows such a journey only when it takes at most
+    /// `CHEAPEST_EXTRA_MINUTES` longer. The chosen journey is a result of the search too, when
+    /// the leg is on its own, so a journey that costs more than it does at the cheapest weight
+    /// can't be the best.
+    fn for_cheaper_than(chosen: &Journey, on_its_own: bool) -> Self {
+        let Some(parts) = chosen.cost_parts else {
+            return Self::default();
+        };
+        let cost = parts.price.filter(|_| on_its_own).map(|price| {
+            let own = Self::cost_without_price(&parts);
+            let price_cost = i64::from(PriceWeight::CHEAPEST.hundredths_of_minute_per_euro())
+                * i64::from(price.median().0)
+                / 100;
+            i32::try_from(i64::from(own) * 100 + price_cost + i64::from(Self::COST_SLACK))
+                .unwrap_or(i32::MAX)
+        });
+        Self {
+            minutes: Some(parts.door_to_door_minutes + CHEAPEST_EXTRA_MINUTES),
+            cost,
+        }
+    }
+
+    /// Returns the bounds of the search without a weight for a journey that is faster than the
+    /// chosen one: none cost more by time than the chosen journey, when the leg is on its own.
+    fn for_faster_than(chosen: &Journey, on_its_own: bool) -> Self {
+        let cost = chosen.cost_parts.filter(|_| on_its_own).map(|parts| {
+            i32::try_from(i64::from(Self::cost_without_price(&parts)) * 100)
+                .unwrap_or(i32::MAX)
+                .saturating_add(Self::COST_SLACK)
+        });
+        Self {
+            minutes: None,
+            cost,
+        }
+    }
+
+    /// Returns what the cost parts of a journey add up to without the price and without the
+    /// rest of a chain, in minutes.
+    fn cost_without_price(parts: &JourneyCostParts) -> i32 {
+        parts
+            .total_cost
+            .saturating_sub(i32::try_from(parts.price_cost / 100).unwrap_or(i32::MAX))
+            .saturating_sub(parts.rest_of_chain_cost)
+    }
+}
+
+/// A journey that a search at another weight found, with the table of the stations it uses.
+struct ExtraJourney {
+    /// The journey, which indexes `stations`.
+    journey: Journey,
+    /// The stations of the journey.
+    stations: SmallVec<[LegPlanStation; 8]>,
+}
+
+/// Moves a journey into the station table of a plan, adding the stations the table lacks.
+/// Returns `None` when the table has no room for them.
+fn absorb_journey(
+    table: &mut SmallVec<[LegPlanStation; 8]>,
+    extra: ExtraJourney,
+) -> Option<Journey> {
+    let mut journey = extra.journey;
+    let mapping: Option<Vec<LegPlanStationIndex>> = extra
+        .stations
+        .into_iter()
+        .map(|station| {
+            let position = table
+                .iter()
+                .position(|known| *known == station)
+                .unwrap_or_else(|| {
+                    table.push(station);
+                    table.len() - 1
+                });
+            u8::try_from(position).ok().map(LegPlanStationIndex)
+        })
+        .collect();
+    journey.remap_stations(&mapping?);
+    Some(journey)
+}
+
+/// Returns whether two journeys leave at the same time and take the same trains.
+fn same_trains(first: &Journey, second: &Journey) -> bool {
+    first.first_ride.departure_time == second.first_ride.departure_time
+        && first.rides().count() == second.rides().count()
+        && first
+            .rides()
+            .zip(second.rides())
+            .all(|(a, b)| a.train_label == b.train_label)
+}
+
+/// Returns whether a journey leaves and arrives when another does, costs the planner no more
+/// and has a lower price, so it is the same trip for less.
+fn is_the_same_trip_for_less(candidate: &Journey, chosen: &Journey) -> bool {
+    let (Some(candidate_parts), Some(chosen_parts)) = (candidate.cost_parts, chosen.cost_parts)
+    else {
+        return false;
+    };
+    let (Some(candidate_price), Some(chosen_price)) = (candidate_parts.price, chosen_parts.price)
+    else {
+        return false;
+    };
+    candidate.first_ride.departure_time == chosen.first_ride.departure_time
+        && candidate.last_ride().arrival_time == chosen.last_ride().arrival_time
+        && candidate_parts.total_cost <= chosen_parts.total_cost
+        && candidate_price.median() < chosen_price.median()
 }
 
 /// Returns the minutes of the footpath that ends a journey, or `None` when the last train
@@ -1733,19 +2067,28 @@ mod tests {
         };
         // The main plan has the chosen journey and none of what the extra searches find.
         assert_eq!(plan.chosen_journey.first_ride.train_label.category, "RE");
-        assert!(plan.cheapest.is_none());
-        assert!(plan.fastest.is_none());
+        assert!(
+            plan.alternative_journeys
+                .iter()
+                .all(|journey| journey.alternative_kind.is_none())
+        );
         assert!(plan.pass_options.is_empty());
+        // A leg joined to others has no pass options.
+        let joined = router.plan_extras(&input, &plan, false, || false);
+        assert!(joined.pass_options.is_empty());
         // The extras follow from the plan, and applying them gives the complete plan.
         let extras = router.plan_extras(&input, &plan, true, || false);
         assert_eq!(extras.pass_options.len(), 1);
         plan.apply_extras(extras);
         assert_eq!(plan.pass_options.len(), 1);
-        // A leg joined to others has no pass options.
-        let joined = router.plan_extras(&input, &plan, false, || false);
-        assert!(joined.pass_options.is_empty());
-        assert_eq!(joined.fastest, plan.fastest);
-        assert_eq!(LegExtras::default().cheapest, None);
+        assert_eq!(joined.alternative_journeys, plan.alternative_journeys);
+    }
+
+    /// Returns the alternative that a search at another weight found, of a kind.
+    fn alternative_of_kind(plan: &btt_model::LegPlan, kind: AlternativeKind) -> Option<&Journey> {
+        plan.alternative_journeys
+            .iter()
+            .find(|journey| journey.alternative_kind == Some(kind))
     }
 
     #[test]
@@ -1870,17 +2213,17 @@ mod tests {
         // By time alone the regional train is dominated: it leaves no earlier, arrives no
         // earlier and takes longer. At a weight its lower price keeps it in the search, and
         // the plan shows the fast train as the alternative.
+        let ranked = |plan: &btt_model::LegPlan| {
+            plan.alternative_journeys
+                .iter()
+                .filter(|journey| journey.alternative_kind.is_none())
+                .map(|journey| journey.first_ride.train_label.category.to_string())
+                .collect::<Vec<_>>()
+        };
         let by_time = planned_leg(pricer, PriceWeight::TIME_FIRST, 480);
-        assert_eq!(by_time.alternative_journeys.len(), 0);
+        assert!(ranked(&by_time).is_empty());
         let by_price = planned_leg(pricer, PriceWeight::FRUGAL, 480);
-        assert_eq!(by_price.alternative_journeys.len(), 1);
-        assert_eq!(
-            by_price.alternative_journeys[0]
-                .first_ride
-                .train_label
-                .category,
-            "ICE"
-        );
+        assert_eq!(ranked(&by_price), ["ICE"]);
     }
 
     #[test]
@@ -1893,9 +2236,15 @@ mod tests {
         // finds the regional train, which saves 85 euro for 25 minutes more.
         let plan = planned_leg(pricer, PriceWeight::TIME_FIRST, 480);
         assert_eq!(plan.chosen_journey.first_ride.train_label.category, "ICE");
-        let cheapest = plan.cheapest.as_ref().unwrap();
-        assert_eq!(cheapest.first_ride.train_label.category, "RE");
-        assert!(plan.fastest.is_none(), "no weight means no fastest search");
+        let cheaper = alternative_of_kind(&plan, AlternativeKind::Cheaper).unwrap();
+        assert_eq!(cheaper.first_ride.train_label.category, "RE");
+        assert!(
+            alternative_of_kind(&plan, AlternativeKind::Faster).is_none(),
+            "no weight means no faster search"
+        );
+        // The cheaper journey costs what it costs at the traveller's weight, like the others.
+        let parts = cheaper.cost_parts.unwrap();
+        assert_eq!(parts.price_cost, 0);
     }
 
     #[test]
@@ -1907,7 +2256,7 @@ mod tests {
         // The prices lie within the noise of the model, so the cheapest search picks the same
         // fast train and nothing cheaper shows.
         let plan = planned_leg(pricer, PriceWeight::TIME_FIRST, 480);
-        assert!(plan.cheapest.is_none());
+        assert!(alternative_of_kind(&plan, AlternativeKind::Cheaper).is_none());
     }
 
     #[test]
@@ -1924,11 +2273,11 @@ mod tests {
             bundle_with_ice_arrival(495, 480),
         );
         assert_eq!(plan.chosen_journey.first_ride.train_label.category, "RE");
-        let fastest = plan.fastest.as_ref().unwrap();
-        assert_eq!(fastest.first_ride.train_label.category, "ICE");
+        let faster = alternative_of_kind(&plan, AlternativeKind::Faster).unwrap();
+        assert_eq!(faster.first_ride.train_label.category, "ICE");
         assert!(
-            plan.cheapest.is_none(),
-            "the cheapest weight needs no cheapest search"
+            alternative_of_kind(&plan, AlternativeKind::Cheaper).is_none(),
+            "the cheapest weight needs no cheaper search"
         );
     }
 
@@ -1945,7 +2294,160 @@ mod tests {
             PriceWeight::CHEAPEST,
             bundle_with_ice_arrival(495, 480),
         );
-        assert!(plan.fastest.is_none());
+        assert!(alternative_of_kind(&plan, AlternativeKind::Faster).is_none());
+    }
+
+    /// A bundle where the ICE and the regional train leave and arrive together, so only their
+    /// prices tell them apart.
+    fn bundle_of_equal_times() -> LoadedTimetableBundle {
+        bundle_with_ice_arrival(530, 480)
+    }
+
+    #[test]
+    fn a_cheaper_journey_with_the_same_times_becomes_the_chosen_one() {
+        let pricer = CategoryPricer {
+            ice: EuroCents(12_000),
+            regional: EuroCents(3_500),
+        };
+        // Without a weight the two trains tie, and the search keeps one of them. The extras
+        // find the cheaper one with the same times, which then is the chosen journey, and the
+        // other is an alternative.
+        let plan = planned_leg_on_bundle(pricer, PriceWeight::TIME_FIRST, bundle_of_equal_times());
+        assert_eq!(plan.chosen_journey.first_ride.train_label.category, "RE");
+        assert!(
+            plan.alternative_journeys
+                .iter()
+                .any(|journey| journey.first_ride.train_label.category == "ICE")
+        );
+    }
+
+    #[test]
+    fn the_travellers_pick_stays_when_a_cheaper_journey_has_the_same_times() {
+        let pricer = CategoryPricer {
+            ice: EuroCents(12_000),
+            regional: EuroCents(3_500),
+        };
+        let router = TimetableBundleRouter::from_loaded(
+            bundle_of_equal_times(),
+            Arc::new(TimeZoneFinder::new()),
+            pricer,
+        );
+        let mut input = leg_input(PriceWeight::TIME_FIRST);
+        let LegPlanningResult::Found(plan) = router.plan_leg_with_extras(&input, || false) else {
+            panic!("the leg has a journey");
+        };
+        // The traveller picks the expensive train, whichever one the plan had.
+        let ice = std::iter::once(&plan.chosen_journey)
+            .chain(&plan.alternative_journeys)
+            .find(|journey| journey.first_ride.train_label.category == "ICE")
+            .unwrap();
+        input.chosen_journey = Some(JourneyChoice::of_journey(ice));
+        let LegPlanningResult::Found(picked) = router.plan_leg_with_extras(&input, || false) else {
+            panic!("the leg has a journey");
+        };
+        assert!(picked.follows_traveller_choice);
+        assert_eq!(picked.chosen_journey.first_ride.train_label.category, "ICE");
+    }
+
+    #[test]
+    fn a_pick_that_only_another_weight_finds_is_still_found() {
+        let pricer = CategoryPricer {
+            ice: EuroCents(12_000),
+            regional: EuroCents(3_500),
+        };
+        let router = TimetableBundleRouter::from_loaded(
+            bundle_of_equal_times(),
+            Arc::new(TimeZoneFinder::new()),
+            pricer,
+        );
+        let input = leg_input(PriceWeight::TIME_FIRST);
+        // One of the two tied trains is not among the journeys of the search without a weight.
+        // Picking either of them must work, so the one the search drops comes from another
+        // weight.
+        for category in ["ICE", "RE"] {
+            let LegPlanningResult::Found(plan) = router.plan_leg_with_extras(&input, || false)
+            else {
+                panic!("the leg has a journey");
+            };
+            let wanted = std::iter::once(&plan.chosen_journey)
+                .chain(&plan.alternative_journeys)
+                .find(|journey| journey.first_ride.train_label.category == category)
+                .unwrap();
+            let mut picking = input.clone();
+            picking.chosen_journey = Some(JourneyChoice::of_journey(wanted));
+            let LegPlanningResult::Found(picked) = router.plan_leg(&picking, || false) else {
+                panic!("the leg has a journey");
+            };
+            assert!(picked.follows_traveller_choice, "{category} was picked");
+            assert_eq!(
+                picked.chosen_journey.first_ride.train_label.category,
+                category
+            );
+        }
+    }
+
+    #[test]
+    fn the_journeys_of_the_extras_index_the_station_table_of_the_plan() {
+        let pricer = PassCategoryPricer {
+            ice: EuroCents(12_000),
+            regional: EuroCents(3_500),
+            ice_reservation: EuroCents(1_000),
+        };
+        let plan = planned_leg(pricer, PriceWeight::FRUGAL, 480);
+        let journeys = std::iter::once(&plan.chosen_journey)
+            .chain(&plan.alternative_journeys)
+            .chain(plan.pass_options.iter().map(|option| &option.journey));
+        for journey in journeys {
+            for ride in journey.rides() {
+                for station in [ride.boarding_station, ride.alighting_station] {
+                    assert!(usize::from(station.0) < plan.station_table.len());
+                }
+            }
+        }
+        // The pass journey boards where the chosen journey does, and the table names it so.
+        let option = &plan.pass_options[0];
+        let name = |journey: &Journey| {
+            plan.station_table[usize::from(journey.first_ride.boarding_station.0)]
+                .name
+                .clone()
+        };
+        assert_eq!(name(&option.journey), name(&plan.chosen_journey));
+    }
+
+    #[test]
+    fn a_duration_limit_leaves_out_the_slower_journeys() {
+        let pricer = CategoryPricer {
+            ice: EuroCents(12_000),
+            regional: EuroCents(3_500),
+        };
+        let router = TimetableBundleRouter::from_loaded(
+            bundle(480),
+            Arc::new(TimeZoneFinder::new()),
+            pricer,
+        );
+        let input = leg_input(PriceWeight::TIME_FIRST);
+        let LegPlanningResult::Found(plan) = router.plan_leg(&input, || false) else {
+            panic!("the leg has a journey");
+        };
+        let fast_minutes = plan.chosen_journey.cost_parts.unwrap().door_to_door_minutes;
+        // The regional train takes 25 minutes longer than the ICE and is much cheaper, so the
+        // search at the cheapest weight finds it unless a limit leaves it out.
+        let category = |limit| {
+            router
+                .best_journey_at(
+                    &input,
+                    PriceWeight::CHEAPEST,
+                    SearchBounds {
+                        minutes: limit,
+                        cost: None,
+                    },
+                    &|| false,
+                )
+                .map(|found| found.journey.first_ride.train_label.category)
+        };
+        assert_eq!(category(None).as_deref(), Some("RE"));
+        assert_eq!(category(Some(fast_minutes + 60)).as_deref(), Some("RE"));
+        assert_eq!(category(Some(fast_minutes + 10)).as_deref(), Some("ICE"));
     }
 
     /// A category pricer whose pass covers the fast train for a reservation and no other, so
