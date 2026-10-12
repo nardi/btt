@@ -29,9 +29,9 @@ pub use itinerary::{
 pub use place_search::PlaceSearchResult;
 pub use plan::{
     ArrivalFootpath, Journey, JourneyChoice, JourneyCostParts, LegPlan, LegPlanStation,
-    LegPlanStationIndex, LegPlanningResult, NearbyDaySuggestion, NoJourneyReason, PlanningRunId,
-    PlanningSessionEvent, SearchedWindow, StationWay, TrainLabel, TrainRide, TransferAndRide,
-    WayToStationMode,
+    LegPlanStationIndex, LegPlanningResult, NearbyDaySuggestion, NoJourneyReason,
+    PassJourneyOption, PlanningRunId, PlanningSessionEvent, SearchedWindow, StationWay, TrainLabel,
+    TrainRide, TransferAndRide, WayToStationMode,
 };
 pub use tickets::{
     AccommodationRequest, BookingLink, BookingLinkKind, EuroCents, EuroRange, ForeignAmount,

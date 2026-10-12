@@ -8,8 +8,8 @@ use btt_geo::{TimeZoneFinder, local_time_to_unix_minutes};
 use btt_model::{
     ArrivalFootpath, DurationMinutes, EuroRange, Journey, JourneyChoice, JourneyCostParts, LegPlan,
     LegPlanStation, LegPlanStationIndex, LegPlanningResult, LegTravelMode, NoJourneyReason,
-    OvernightLegOptions, PriceWeight, SearchedWindow, StationWay, TrainLabel, TrainRide,
-    TransferAndRide, UnixTimeMinutes, WayToStationMode,
+    OvernightLegOptions, PassDays, PassJourneyOption, PriceWeight, SearchedWindow, StationWay,
+    TrainLabel, TrainRide, TransferAndRide, UnixTimeMinutes, WayToStationMode,
 };
 use btt_router::{
     CandidateStation, CostParetoJourneySet, CostSearchBuffers, MinutesSinceBundleStart,
@@ -31,7 +31,7 @@ use crate::cost_model::LegCostModel;
 use crate::explanation::{CandidateExplanation, LegExplanation, RankedJourneyExplanation};
 use crate::input::{LegChainInput, LegEndpoint, LegPlanningInput, SameDayStop};
 use crate::operators::OperatorTable;
-use crate::pricing::{JourneyPricer, NoPrice, RidePrices};
+use crate::pricing::{JourneyPricer, NoPrice, PriceMode, RidePrices};
 use crate::ride_path::StationHopGraph;
 use crate::scoring::{
     JourneyCostInputs, ScoringWeights, journey_cost, journey_cost_parts, transfer_cost_minutes,
@@ -210,7 +210,9 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             Err(reason) => LegPlanningResult::NoJourneyFound(reason),
             Ok(search) => {
                 let ranking = self.rank_journeys(&search, input);
-                self.complete_leg_plan(&ranking, input, &should_stop)
+                let mut result = self.complete_leg_plan(&ranking, input, &should_stop);
+                self.add_pass_options(&mut result, input, &should_stop);
+                result
             }
         }
     }
@@ -237,7 +239,9 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
                 self.window_after_stay(previous_search, chain.stops[previous], &leg.input)
             });
             searches.push(match window_after_stay {
-                Some(window) => self.search_leg_in_window(&leg.input, window, &should_stop),
+                Some(window) => {
+                    self.search_leg_in_window(&leg.input, window, PriceMode::Single, &should_stop)
+                }
                 None => self.search_leg(&leg.input, &should_stop),
             });
         }
@@ -469,24 +473,37 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
         }
     }
 
-    /// Finds the candidate stations of a leg and searches its Pareto set of journeys.
+    /// Finds the candidate stations of a leg and searches its Pareto set of journeys on
+    /// single tickets.
     fn search_leg(
         &self,
         input: &LegPlanningInput,
         should_stop: &(impl Fn() -> bool + Sync),
     ) -> Result<LegSearch, NoJourneyReason> {
+        self.search_leg_in_mode(input, PriceMode::Single, should_stop)
+    }
+
+    /// Finds the candidate stations of a leg and searches its Pareto set of journeys, priced
+    /// as the mode says.
+    fn search_leg_in_mode(
+        &self,
+        input: &LegPlanningInput,
+        mode: PriceMode,
+        should_stop: &(impl Fn() -> bool + Sync),
+    ) -> Result<LegSearch, NoJourneyReason> {
         let departure_window = self
             .departure_window(input)
             .ok_or(NoJourneyReason::TravelDateOutsideTimetable)?;
-        self.search_leg_in_window(input, departure_window, should_stop)
+        self.search_leg_in_window(input, departure_window, mode, should_stop)
     }
 
-    /// Searches a leg like `search_leg`, leaving the departure place within a given window
-    /// instead of the leg's own.
+    /// Searches a leg like `search_leg_in_mode`, leaving the departure place within a given
+    /// window instead of the leg's own.
     fn search_leg_in_window(
         &self,
         input: &LegPlanningInput,
         departure_window: std::ops::Range<MinutesSinceBundleStart>,
+        mode: PriceMode,
         should_stop: &(impl Fn() -> bool + Sync),
     ) -> Result<LegSearch, NoJourneyReason> {
         let searched_window = departure_window.clone();
@@ -507,7 +524,8 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
         // The search adds up the same cost the ranking uses, so no journey that would rank
         // first is pruned for leaving earlier or arriving later than another. At a weight
         // above zero the price of every ride enters it, and at weight zero the search skips
-        // every price step.
+        // every price step. On the days of a pass a covered ride costs what the pass charges
+        // on top, and the search also counts the travel days the journey uses.
         let price_weight_hundredths = u32::from(input.price_weight.hundredths_of_minute_per_euro());
         let model = LegCostModel {
             bundle: &self.bundle,
@@ -526,6 +544,7 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             } else {
                 None
             },
+            price_mode: mode,
         };
         let found = self.search_in_parallel(
             &departure_candidates,
@@ -535,14 +554,17 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             &model,
             should_stop,
         );
+        let mut journeys = Vec::with_capacity(found.journeys.len());
+        let mut days = Vec::with_capacity(found.journeys.len());
+        for costed in found.journeys {
+            journeys.push(costed.journey);
+            days.push(costed.days);
+        }
         Ok(LegSearch {
             departure_candidates,
             arrival_candidates,
-            journeys: found
-                .journeys
-                .into_iter()
-                .map(|costed| costed.journey)
-                .collect(),
+            journeys,
+            days,
             night,
             departure_window: searched_window,
         })
@@ -688,6 +710,97 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
         self.journey(ranked, &weighted, ranking.night.as_ref(), &mut stations)
     }
 
+    /// Adds the best journeys of the leg on the travel days of a pass, one for each number of
+    /// days the journey uses, which the solve of the whole trip picks among. The search runs
+    /// after the plan is complete, so the chosen journey is decided first, and a leg that
+    /// stops early keeps the plan it has.
+    ///
+    /// A leg joined to others by same-day stops gets no pass options, because its departure
+    /// window follows the leg before it and the pass would have to cover the whole chain.
+    fn add_pass_options(
+        &self,
+        result: &mut LegPlanningResult,
+        input: &LegPlanningInput,
+        should_stop: &(impl Fn() -> bool + Sync),
+    ) {
+        let LegPlanningResult::Found(plan) = result else {
+            return;
+        };
+        let weight = u32::from(input.price_weight.hundredths_of_minute_per_euro());
+        if weight == 0 {
+            return;
+        }
+        let Some(prices) = self.ride_prices.as_ref() else {
+            return;
+        };
+        if !prices.any_pass_takes() {
+            return;
+        }
+        let Ok(search) = self.search_leg_in_mode(input, PriceMode::Pass, should_stop) else {
+            return;
+        };
+        // The best journey for a number of days and a first date is the one the solve would
+        // pick: the lowest weighted total of its cost in minutes and what the pass does not
+        // cover. The dates matter to the solve, because a pass is valid in a window of them.
+        let arrival_window = self.ranking_arrival_window(input, search.night.as_ref());
+        let mut best: SmallVec<[(u64, PassJourneyOption); 3]> = SmallVec::new();
+        for (journey, &journey_days) in search.journeys.iter().zip(&search.days) {
+            let Ok(days) = PassDays::new(journey_days) else {
+                continue;
+            };
+            let Some(first_date) = Self::first_pass_day(journey, prices)
+                .map(|day| self.bundle.validity_start() + chrono::Days::new(u64::from(day)))
+            else {
+                continue;
+            };
+            let cost_inputs =
+                self.journey_cost_inputs(journey, &arrival_window, search.night.as_ref());
+            let cost_minutes = journey_cost(
+                cost_inputs,
+                input.transfer_aversion,
+                ScoringWeights::DEFAULT,
+            );
+            let mut stations = LegPlanStations::default();
+            let Some(model) =
+                self.model_journey(journey, input, search.night.as_ref(), &mut stations)
+            else {
+                continue;
+            };
+            let Some(price) = self.pricer.journey_price_with_pass(&model, &stations.table) else {
+                continue;
+            };
+            let price_cents = price.median();
+            let weighted =
+                u64::from(cost_minutes) * 100 + u64::from(weight) * u64::from(price_cents.0) / 100;
+            let option = PassJourneyOption {
+                journey: model,
+                cost_minutes,
+                price_cents,
+                days,
+                first_date,
+            };
+            match best
+                .iter_mut()
+                .find(|(_, known)| known.days == days && known.first_date == first_date)
+            {
+                Some(known) if weighted < known.0 => *known = (weighted, option),
+                Some(_) => {}
+                None => best.push((weighted, option)),
+            }
+        }
+        best.sort_by_key(|(_, option)| (option.days, option.first_date));
+        plan.pass_options
+            .extend(best.into_iter().map(|(_, option)| option));
+    }
+
+    /// Returns the travel day of the first ride a pass takes, as local days since the bundle
+    /// starts, or `None` when the pass takes no ride of the journey.
+    fn first_pass_day(journey: &RaptorJourney, prices: &RidePrices) -> Option<u16> {
+        journey.rides.iter().find_map(|ride| {
+            prices.pass_travel_day(ride.raptor_route, ride.boarding_position, ride.departure.0)
+        })
+    }
+
     /// Turns ranked journeys into a leg plan, with the first as the chosen journey.
     fn leg_plan(
         &self,
@@ -743,6 +856,7 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             best_journey_cost: best_own_cost,
             cheapest: None,
             fastest: None,
+            pass_options: SmallVec::new(),
             departure_window: Some(SearchedWindow {
                 start: UnixTimeMinutes(
                     self.bundle_start_unix_minutes + ranking.departure_window.start.0,
@@ -1231,6 +1345,9 @@ struct LegSearch {
     arrival_candidates: SmallVec<[CandidateStation; 16]>,
     /// The journeys that no other beats on departure, arrival, number of trains and cost.
     journeys: Vec<RaptorJourney>,
+    /// How many travel days each journey uses, in the order of `journeys`. Zero on single
+    /// tickets and on a journey no pass covers.
+    days: Vec<u8>,
     /// The night of an overnight leg in bundle minutes.
     night: Option<std::ops::Range<u32>>,
     /// The moments between which the traveller could leave the departure place.
@@ -1776,5 +1893,139 @@ mod tests {
             bundle_with_ice_arrival(495, 480),
         );
         assert!(plan.fastest.is_none());
+    }
+
+    /// A category pricer whose pass covers the fast train for a reservation and no other, so
+    /// a pass day turns the expensive train into the cheap one.
+    #[derive(Clone, Copy)]
+    struct PassCategoryPricer {
+        /// Price of the ICE on single tickets, in euro cents.
+        ice: EuroCents,
+        /// Price of the regional train, in euro cents.
+        regional: EuroCents,
+        /// Reservation the pass charges for the ICE, in euro cents.
+        ice_reservation: EuroCents,
+    }
+
+    impl PassCategoryPricer {
+        /// Returns the cents of a journey by the category of its first train.
+        fn cents_of(&self, journey: &Journey) -> EuroCents {
+            if journey.first_ride.train_label.category == "ICE" {
+                self.ice
+            } else {
+                self.regional
+            }
+        }
+    }
+
+    impl JourneyPricer for PassCategoryPricer {
+        fn journey_price(&self, journey: &Journey, _: &[LegPlanStation]) -> Option<EuroRange> {
+            let cents = self.cents_of(journey);
+            Some(EuroRange::new(cents, cents, cents).unwrap())
+        }
+
+        fn journey_price_with_pass(
+            &self,
+            journey: &Journey,
+            _: &[LegPlanStation],
+        ) -> Option<EuroRange> {
+            let cents = if journey.first_ride.train_label.category == "ICE" {
+                self.ice_reservation
+            } else {
+                self.regional
+            };
+            Some(EuroRange::new(cents, cents, cents).unwrap())
+        }
+
+        fn price_table(
+            &self,
+            classes: &[crate::pricing::RidePriceClass],
+        ) -> Option<crate::pricing::RidePriceTable> {
+            Some(crate::pricing::RidePriceTable {
+                rows: classes
+                    .iter()
+                    .map(|class| {
+                        let cents = if class.category == "ICE" {
+                            self.ice
+                        } else {
+                            self.regional
+                        };
+                        flat_price_row(cents)
+                    })
+                    .collect(),
+                reference_kilometres: 1.0,
+            })
+        }
+
+        fn pass_price_table(
+            &self,
+            classes: &[crate::pricing::RidePriceClass],
+        ) -> Option<crate::pricing::RidePassTable> {
+            Some(crate::pricing::RidePassTable {
+                rows: classes
+                    .iter()
+                    .map(|class| crate::pricing::RidePassRow {
+                        takes: class.category == "ICE",
+                        cents: if class.category == "ICE" {
+                            self.ice_reservation.0
+                        } else {
+                            0
+                        },
+                    })
+                    .collect(),
+            })
+        }
+    }
+
+    #[test]
+    fn the_plan_offers_the_fast_train_as_a_pass_day() {
+        let pricer = PassCategoryPricer {
+            ice: EuroCents(12_000),
+            regional: EuroCents(3_500),
+            ice_reservation: EuroCents(1_000),
+        };
+        // On single tickets the cheap regional train wins the ranking, but the pass takes the
+        // ICE for its reservation, so the plan holds a pass option with the fast train.
+        let by_price = planned_leg(pricer, PriceWeight::FRUGAL, 480);
+        assert_eq!(
+            by_price.chosen_journey.first_ride.train_label.category,
+            "RE"
+        );
+        let [option] = &by_price.pass_options[..] else {
+            panic!("the leg has one pass option per number of days");
+        };
+        assert_eq!(option.journey.first_ride.train_label.category, "ICE");
+        assert_eq!(option.days, PassDays::new(1).unwrap());
+        assert_eq!(option.price_cents, EuroCents(1_000));
+        assert_eq!(
+            option.first_date,
+            NaiveDate::from_ymd_opt(2026, 10, 1).unwrap()
+        );
+        // The option costs the fast train's 25 minutes, not the fare.
+        assert_eq!(option.cost_minutes, 25);
+    }
+
+    #[test]
+    fn without_a_weight_no_leg_is_searched_on_pass_days() {
+        let pricer = PassCategoryPricer {
+            ice: EuroCents(12_000),
+            regional: EuroCents(3_500),
+            ice_reservation: EuroCents(1_000),
+        };
+        // Without a weight a pass saves nothing that counts, so the planner searches no pass
+        // days and offers no pass option.
+        let by_time = planned_leg(pricer, PriceWeight::TIME_FIRST, 480);
+        assert!(by_time.pass_options.is_empty());
+    }
+
+    #[test]
+    fn no_pass_option_without_a_pass_that_takes_a_train() {
+        let pricer = CategoryPricer {
+            ice: EuroCents(12_000),
+            regional: EuroCents(3_500),
+        };
+        // The pricer offers no pass table, which means no pass covers a train of the leg.
+        let plan = planned_leg(pricer, PriceWeight::FRUGAL, 480);
+        assert!(plan.pass_options.is_empty());
     }
 }

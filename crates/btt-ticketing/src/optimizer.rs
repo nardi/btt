@@ -340,6 +340,46 @@ impl<'a> Problem<'a> {
                 high += u64::from(price.high.0);
             }
         }
+        let to_cents = |cents: u64| EuroCents(u32::try_from(cents).unwrap_or(u32::MAX));
+        EuroRange::new(to_cents(low), to_cents(middle), to_cents(high)).ok()
+    }
+
+    /// Returns the estimated price of the rides on the travel days of a pass: the fares of the
+    /// rides the pass does not cover, the seat reservations of the ones it does, and the night
+    /// accommodation of a pass holder, which the pass charges on top of the covered ride. The
+    /// median is the number the planner decides with. Empty rides have no price.
+    pub fn rides_price_on_pass(&self) -> Option<EuroRange> {
+        if self.rides.is_empty() {
+            return None;
+        }
+        let covered = self.pass_covers_ride();
+        let mut parts: Vec<Price> = Vec::new();
+        for day in &self.days {
+            let cover = self.cover(day, |index| !covered[index]);
+            for &(first, last) in &cover.runs {
+                parts.push(self.run_price(first, last).clone());
+            }
+        }
+        for (index, &is_covered) in covered.iter().enumerate() {
+            if is_covered {
+                if let Some(rule) = self.seat_rule(index) {
+                    parts.push(fee_price(rule, self.settings.class));
+                }
+                if let Some(price) = self.accommodation_price(index, true) {
+                    parts.push(price);
+                }
+            } else if let Some(price) = self.accommodation_price(index, false) {
+                parts.push(price);
+            }
+        }
+        let mut low = 0_u64;
+        let mut middle = 0_u64;
+        let mut high = 0_u64;
+        for price in &parts {
+            low += u64::from(price.low.0);
+            middle += u64::from(price.middle().0);
+            high += u64::from(price.high.0);
+        }
         // Every part holds low <= middle <= high, so the sums do too, and saturating each at
         // the largest amount keeps that order.
         let to_cents = |cents: u64| EuroCents(u32::try_from(cents).unwrap_or(u32::MAX));

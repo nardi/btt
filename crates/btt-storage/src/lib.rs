@@ -751,6 +751,7 @@ mod tests {
             best_journey_cost: 300,
             cheapest: None,
             fastest: None,
+            pass_options: smallvec::SmallVec::new(),
             departure_window: None,
         }));
         // A key with the highest bit set checks the conversion to SQLite's signed integers.

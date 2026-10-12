@@ -30,6 +30,18 @@ const NOT_QUEUED: u16 = u16::MAX;
 /// Marks a station and round without a bag, or a label without a parent.
 const NONE: u32 = u32::MAX;
 
+/// Marks a journey that uses no travel day yet. A real day stays far below this, since a
+/// bundle runs for a few months.
+const NO_DAY: u16 = u16::MAX;
+
+/// The most travel days a journey may use when the model counts them. The search drops a
+/// journey that would use more.
+pub const MAXIMUM_TRAVEL_DAYS: u8 = 3;
+
+/// Number of travel day counts the search keeps arrivals and cost limits apart for, from zero
+/// to `MAXIMUM_TRAVEL_DAYS`.
+const TRAVEL_DAY_COUNTS: usize = MAXIMUM_TRAVEL_DAYS as usize + 1;
+
 /// Marks a station from which no ride that lowers the cost can be reached.
 const NO_CREDIT: i32 = i32::MIN;
 
@@ -81,6 +93,22 @@ pub trait JourneyCostModel {
     ) -> i32 {
         let _ = (raptor_route, boarding_position, alighting_position);
         0
+    }
+
+    /// Returns the day a ride counts as a travel day on, as days since the start of the
+    /// bundle, or `None` when the ride counts none, such as on single tickets or when a pass
+    /// does not take the train. Journeys then keep a small criterion of how many travel days
+    /// they use, and a label only drops another that uses no more. A journey uses at most
+    /// `MAXIMUM_TRAVEL_DAYS`. The default counts none.
+    fn travel_day_of(
+        &self,
+        raptor_route: RaptorRouteIndex,
+        trip: BundleTripIndex,
+        boarding_position: u16,
+        departure: MinutesSinceBundleStart,
+    ) -> Option<u16> {
+        let _ = (raptor_route, trip, boarding_position, departure);
+        None
     }
 
     /// Returns the added cost of getting from an arrival candidate station to the arrival
@@ -156,20 +184,24 @@ pub struct CostedJourney {
     pub journey: RaptorJourney,
     /// The elapsed cost plus every added cost, in the model's unit.
     pub cost: i32,
+    /// How many travel days the journey uses. Zero when the model counts none.
+    pub days: u8,
 }
 
 impl CostedJourney {
     /// Returns whether this journey is at least as good as another in departure, arrival,
-    /// rides and cost, and better in at least one.
+    /// rides, travel days and cost, and better in at least one.
     fn dominates(&self, other: &Self) -> bool {
         let (own, theirs) = (&self.journey, &other.journey);
         let at_least_as_good = own.departure >= theirs.departure
             && own.arrival <= theirs.arrival
             && own.ride_count() <= theirs.ride_count()
+            && self.days <= other.days
             && self.cost <= other.cost;
         let better = own.departure > theirs.departure
             || own.arrival < theirs.arrival
             || own.ride_count() < theirs.ride_count()
+            || self.days < other.days
             || self.cost < other.cost;
         at_least_as_good && better
     }
@@ -214,6 +246,51 @@ impl CostParetoJourneySet {
                 costed.cost,
             )
         });
+    }
+}
+
+/// The travel days a journey uses so far, for models that count them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct TravelDays {
+    /// How many travel days the journey uses. Zero when the model counts none.
+    count: u8,
+    /// The day of the last ride that counted as a travel day, as days since the start of the
+    /// bundle. `NO_DAY` when the journey uses none.
+    last_day: u16,
+}
+
+impl TravelDays {
+    /// The days of a journey that has ridden no train yet.
+    const NONE: Self = Self {
+        count: 0,
+        last_day: NO_DAY,
+    };
+
+    /// Returns the travel days after a ride that counts on `day`, or the same days when the
+    /// ride counts none. Rides come in order of time, so a ride on another day than the last
+    /// one takes a new travel day.
+    fn after_ride(self, day: Option<u16>) -> Self {
+        match day {
+            Some(day) if day != NO_DAY && day != self.last_day => Self {
+                count: self.count.saturating_add(1),
+                last_day: day,
+            },
+            _ => self,
+        }
+    }
+
+    /// Returns whether a journey with these days ends up with no more travel days than one
+    /// with the other days, after any rides both go on with. Fewer days are enough, because
+    /// the rides add at most one day more to this one, and after the first counted ride both
+    /// have the same last day. Equal counts need the same last day, because a ride on the
+    /// other's last day would add a day to this one only.
+    fn covers(self, other: Self) -> bool {
+        self.count < other.count || self == other
+    }
+
+    /// Returns the position of the count among the counts the search keeps apart.
+    fn index(self) -> usize {
+        usize::from(self.count).min(TRAVEL_DAY_COUNTS - 1)
     }
 }
 
@@ -269,6 +346,8 @@ struct CostLabel {
     run: u32,
     /// Round that created the label.
     round: u8,
+    /// The travel days the journey so far uses.
+    days: TravelDays,
     /// How the label was reached.
     origin: CostLabelOrigin,
 }
@@ -282,6 +361,7 @@ impl CostLabel {
             && self.ready <= other.ready
             && self.cost <= other.cost
             && self.cost_with_egress <= other.cost_with_egress
+            && self.days.covers(other.days)
     }
 }
 
@@ -299,6 +379,9 @@ struct RouteLabel {
     cost_before_ride: i32,
     /// Whether the ride is the first of the journey.
     is_first_ride: bool,
+    /// The travel days the journey uses with this ride, which counts on the day it is
+    /// boarded.
+    days: TravelDays,
 }
 
 impl RouteLabel {
@@ -309,12 +392,14 @@ impl RouteLabel {
     /// because the earlier boarding pays for the extra distance. On another trip, only when
     /// the ride cost doesn't depend on the trip's times, and the trip runs earlier on the same
     /// service day, so it reaches every later stop no later. `extension` is the price of the
-    /// stops between this boarding and the other's.
+    /// stops between this boarding and the other's. Either way the ride must use no more
+    /// travel days.
     #[inline]
     fn covers(&self, other: &Self, ride_cost_depends_on_time: bool, extension: i32) -> bool {
         let no_worse_start = self.cost_before_ride.saturating_add(extension)
             <= other.cost_before_ride
-            && (self.is_first_ride || !other.is_first_ride);
+            && (self.is_first_ride || !other.is_first_ride)
+            && self.days.covers(other.days);
         let same_trip =
             self.trip_offset == other.trip_offset && self.service_day == other.service_day;
         if same_trip {
@@ -393,17 +478,20 @@ struct BoardedBefore {
     is_first_ride: bool,
     /// The round of the ride.
     round: u8,
+    /// The travel days the journey uses with the ride.
+    days: TravelDays,
 }
 
 impl BoardedBefore {
-    /// Returns whether this boarding reaches everything that another one does, at no more cost
-    /// and no more rides. `extension` is the price of the stops between this boarding and the
-    /// other's, which the earlier boarding pays for.
+    /// Returns whether this boarding reaches everything that another one does, at no more cost,
+    /// no more rides and no more travel days. `extension` is the price of the stops between
+    /// this boarding and the other's, which the earlier boarding pays for.
     fn covers(self, other: Self, extension: i32) -> bool {
         self.position <= other.position
             && self.cost.saturating_add(extension) <= other.cost
             && (self.is_first_ride || !other.is_first_ride)
             && self.round <= other.round
+            && self.days.covers(other.days)
     }
 }
 
@@ -417,6 +505,8 @@ struct RideArrival {
     ride: RideOrigin,
     /// Position where the traveller left the trip.
     alighting_position: u16,
+    /// The travel days the journey so far uses.
+    days: TravelDays,
 }
 
 /// Working memory of a cost-aware search. Reusing it across queries avoids most allocation
@@ -432,10 +522,13 @@ pub struct CostSearchBuffers {
     /// Label positions per bag. Only the first `bag_count` are in use.
     bags: Vec<SmallVec<[u32; 4]>>,
     bag_count: usize,
-    /// Arrivals at the arrival place found per round. Labels that can't beat them are pruned.
+    /// Arrivals at the arrival place found per round and travel day count, flattened as
+    /// `round * TRAVEL_DAY_COUNTS + count`. Labels that can't beat them are pruned. An arrival
+    /// prunes only labels with at least its travel days.
     targets_by_round: Vec<ArrivalStaircase>,
-    /// Highest cost worth searching for, from the model and the cheapest arrival found so far.
-    cost_limit: i32,
+    /// Highest cost worth searching for per travel day count, from the model and the cheapest
+    /// arrival with that many days found so far.
+    cost_limit_by_days: [i32; TRAVEL_DAY_COUNTS],
     /// Stations with labels the current round created, and a mark per station against
     /// repeats.
     stations_created: Vec<BundleStationIndex>,
@@ -492,8 +585,8 @@ impl CostSearchBuffers {
         self.bag_by_slot.resize(station_count * rounds, NONE);
         self.bag_count = 0;
         self.targets_by_round
-            .resize_with(rounds, ArrivalStaircase::default);
-        self.cost_limit = i32::MAX;
+            .resize_with(rounds * TRAVEL_DAY_COUNTS, ArrivalStaircase::default);
+        self.cost_limit_by_days = [i32::MAX; TRAVEL_DAY_COUNTS];
         for targets in &mut self.targets_by_round {
             targets.entries.clear();
         }
@@ -788,7 +881,8 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
     /// the cost to come.
     ///
     /// Arrivals found in earlier runs left later, so beating a label's bound on arrival and
-    /// cost means beating it on every criterion.
+    /// cost means beating it on every criterion. Only arrivals with no more travel days than
+    /// the label count, because the label's days can only grow.
     fn may_beat_targets(
         &self,
         round: usize,
@@ -809,12 +903,19 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                 self.buffers.credit_reach.credit_cap(station, label.arrival),
             )
             .saturating_add(label.cost);
-        if cost_bound > self.buffers.cost_limit {
+        let counts = 0..=label.days.index();
+        if self.buffers.cost_limit_by_days[counts.clone()]
+            .iter()
+            .any(|&limit| cost_bound > limit)
+        {
             return false;
         }
-        !self.buffers.targets_by_round[1..=round]
-            .iter()
-            .any(|targets| targets.beats(earliest_arrival, cost_bound))
+        !(1..=round).any(|earlier_round| {
+            let start = earlier_round * TRAVEL_DAY_COUNTS;
+            self.buffers.targets_by_round[start..=start + label.days.index()]
+                .iter()
+                .any(|targets| targets.beats(earliest_arrival, cost_bound))
+        })
     }
 
     /// Returns the bag of a slot for changing, creating it when the slot has none.
@@ -885,8 +986,12 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                     MinutesSinceBundleStart(arrival),
                 )
                 .saturating_add(label.cost_with_egress);
-            if self.buffers.targets_by_round[round].insert(arrival, cost) {
-                self.buffers.cost_limit = self.buffers.cost_limit.min(self.model.cost_limit(cost));
+            let count = label.days.index();
+            if self.buffers.targets_by_round[round * TRAVEL_DAY_COUNTS + count]
+                .insert(arrival, cost)
+            {
+                let limit = &mut self.buffers.cost_limit_by_days[count];
+                *limit = (*limit).min(self.model.cost_limit(cost));
             }
         }
         Some(position)
@@ -938,6 +1043,7 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                 parent: NONE,
                 run: self.run,
                 round: 0,
+                days: TravelDays::NONE,
                 origin: CostLabelOrigin::DepartureCandidate {
                     candidate: candidate_index,
                 },
@@ -1021,6 +1127,7 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
             cost: route_label.cost_before_ride,
             is_first_ride: route_label.is_first_ride,
             round: u8::try_from(round).unwrap_or(u8::MAX),
+            days: route_label.days,
         };
         let key = (u64::from(trip.0) << 16) | u64::from(route_label.service_day);
         // The price extensions are read before the map entry is borrowed, so the model is
@@ -1186,9 +1293,10 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                         .stop_event(&route, route_label.trip_offset, position);
                     let arrival = u32::from(route_label.service_day) * MINUTES_PER_DAY
                         + u32::from(times.arrival.0);
+                    let trip = BundleTripIndex(route.first_trip_index + route_label.trip_offset);
                     let ride_cost = self.model.ride_cost(
                         raptor_route,
-                        BundleTripIndex(route.first_trip_index + route_label.trip_offset),
+                        trip,
                         route_label.boarding_position,
                         position,
                         MinutesSinceBundleStart(route_label.departure),
@@ -1211,6 +1319,7 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                         parent: route_label.parent,
                         run: self.run,
                         round: u8::try_from(round).unwrap_or(u8::MAX),
+                        days: route_label.days,
                         origin: CostLabelOrigin::TrainRide {
                             ride,
                             alighting_position: position,
@@ -1229,6 +1338,7 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                             parent: route_label.parent,
                             ride,
                             alighting_position: position,
+                            days: route_label.days,
                         });
                     }
                     self.insert(round, label, None);
@@ -1297,6 +1407,18 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                 }
             };
             let label = self.buffers.labels[parent as usize];
+            let trip_index = BundleTripIndex(route.first_trip_index + trip.trip_offset);
+            // The ride counts as a travel day on the day it is boarded, and a journey that
+            // would use more travel days than any pass gives is no option.
+            let days = label.days.after_ride(self.model.travel_day_of(
+                raptor_route,
+                trip_index,
+                trip.boarding_position,
+                MinutesSinceBundleStart(trip.departure),
+            ));
+            if days.count > MAXIMUM_TRAVEL_DAYS {
+                continue;
+            }
             let route_label = RouteLabel {
                 trip_offset: trip.trip_offset,
                 service_day: trip.service_day,
@@ -1305,8 +1427,8 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                 parent,
                 cost_before_ride: label.cost,
                 is_first_ride: matches!(label.origin, CostLabelOrigin::DepartureCandidate { .. }),
+                days,
             };
-            let trip_index = BundleTripIndex(route.first_trip_index + trip.trip_offset);
             if self.repeats_boarding(raptor_route, trip_index, &route_label, round) {
                 continue;
             }
@@ -1343,8 +1465,9 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
     /// until it ends at an arrival candidate.
     fn relax_footpaths(&mut self, round: usize) {
         let mut arrivals = std::mem::take(&mut self.buffers.ride_arrivals);
-        // Walking on from an arrival that another at the same station beats on time and cost
-        // leads nowhere new, so in order of arrival only arrivals cheaper than all before walk.
+        // Walking on from an arrival that another at the same station beats on time, cost and
+        // travel days leads nowhere new, so in order of arrival an arrival walks unless the
+        // cheapest one before it covers it.
         arrivals.sort_unstable_by_key(|ride_arrival| {
             (
                 ride_arrival.station,
@@ -1352,15 +1475,20 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                 ride_arrival.cost,
             )
         });
-        let mut cheapest_before: Option<(BundleStationIndex, i32)> = None;
+        let mut cheapest_before: Option<(BundleStationIndex, i32, TravelDays)> = None;
         for ride_arrival in &arrivals {
             match cheapest_before {
-                Some((station, cost))
-                    if station == ride_arrival.station && cost <= ride_arrival.cost =>
+                Some((station, cost, days))
+                    if station == ride_arrival.station
+                        && cost <= ride_arrival.cost
+                        && days.covers(ride_arrival.days) =>
                 {
                     continue;
                 }
-                _ => cheapest_before = Some((ride_arrival.station, ride_arrival.cost)),
+                _ => {
+                    cheapest_before =
+                        Some((ride_arrival.station, ride_arrival.cost, ride_arrival.days));
+                }
             }
             for footpath in self.bundle.footpaths_from(ride_arrival.station) {
                 let arrival = ride_arrival.arrival + u32::from(footpath.duration_minutes);
@@ -1377,6 +1505,7 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                     parent: ride_arrival.parent,
                     run: self.run,
                     round: u8::try_from(round).unwrap_or(u8::MAX),
+                    days: ride_arrival.days,
                     origin: CostLabelOrigin::TrainRideAndFootpath {
                         ride: ride_arrival.ride,
                         alighting_position: ride_arrival.alighting_position,
@@ -1417,7 +1546,11 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                         .model
                         .elapsed_cost(journey.departure, journey.arrival)
                         .saturating_add(label.cost_with_egress);
-                    journeys.push(CostedJourney { journey, cost });
+                    journeys.push(CostedJourney {
+                        journey,
+                        cost,
+                        days: label.days.count,
+                    });
                 }
             }
         }
@@ -1485,6 +1618,7 @@ mod tests {
             parent: 0,
             cost_before_ride,
             is_first_ride: true,
+            days: TravelDays::NONE,
         }
     }
 
@@ -1509,12 +1643,14 @@ mod tests {
             cost: 100,
             is_first_ride: true,
             round: 2,
+            days: TravelDays::NONE,
         };
         let later = BoardedBefore {
             position: 3,
             cost: 100,
             is_first_ride: true,
             round: 2,
+            days: TravelDays::NONE,
         };
         // Boarding the same trip two stops earlier costs the price of the stops in between.
         assert!(!earlier.covers(later, 40));
@@ -1524,7 +1660,50 @@ mod tests {
             cost: 60,
             is_first_ride: true,
             round: 2,
+            days: TravelDays::NONE,
         };
         assert!(cheaper.covers(later, 40));
+    }
+
+    #[test]
+    fn fewer_travel_days_or_the_same_last_day_cover() {
+        let first_day = TravelDays::NONE.after_ride(Some(4));
+        let second_day = TravelDays::NONE.after_ride(Some(5));
+        // A ride on the day already used adds no day, and a ride that counts none neither.
+        assert_eq!(first_day.after_ride(Some(4)), first_day);
+        assert_eq!(first_day.after_ride(None), first_day);
+        assert_eq!(first_day.after_ride(Some(5)).count, 2);
+        // One day each, but a ride on day 5 next would add a day to the first only.
+        assert!(!first_day.covers(second_day));
+        assert!(!second_day.covers(first_day));
+        assert!(first_day.covers(first_day));
+        // No day at all covers any day.
+        assert!(TravelDays::NONE.covers(second_day));
+        assert!(!second_day.covers(TravelDays::NONE));
+    }
+
+    #[test]
+    fn a_boarding_on_more_travel_days_covers_nothing() {
+        let mut fewer_days = route_label(0, 100);
+        let mut more_days = route_label(0, 100);
+        fewer_days.days = TravelDays::NONE.after_ride(Some(1));
+        more_days.days = fewer_days.days.after_ride(Some(2));
+        // The same trip from the same stop at the same cost, but one journey already used
+        // another travel day.
+        assert!(fewer_days.covers(&more_days, false, 0));
+        assert!(!more_days.covers(&fewer_days, false, 0));
+        let earlier = BoardedBefore {
+            position: 0,
+            cost: 100,
+            is_first_ride: true,
+            round: 1,
+            days: more_days.days,
+        };
+        let later = BoardedBefore {
+            days: fewer_days.days,
+            ..earlier
+        };
+        assert!(!earlier.covers(later, 0));
+        assert!(later.covers(earlier, 0));
     }
 }

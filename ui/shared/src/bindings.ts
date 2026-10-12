@@ -448,6 +448,12 @@ export type LegPlan = {
 	 */
 	fastest?: Journey | null,
 	/**
+	 *  The best journeys of the leg on the travel days of a pass, one for each number of days
+	 *  the journey uses and each first date, for the solve of the whole trip. Empty when no
+	 *  pass covers the leg or the traveller searches by time alone.
+	 */
+	pass_options?: PassJourneyOption[],
+	/**
 	 *  The moments between which the planner let the traveller leave the departure place.
 	 *  `None` in plans stored without it.
 	 */
@@ -580,6 +586,36 @@ export type OwnedInterrailPass = {
 	pass_id: string,
 	/**  First day of validity of the pass. */
 	first_valid_date: string,
+};
+
+/**
+ *  The number of travel days a journey uses on a pass, from 1 to 3. A journey over midnight
+ *  uses the day it leaves on and the morning after, and a long one takes a third day.
+ * 
+ *  The field stays private, so the only ways to build a value are `new` and `TryFrom`.
+ *  Deserialization goes through `new` as well, so a bad file cannot bypass the range.
+ */
+export type PassDays = number;
+
+/**
+ *  The best journey of a leg on the travel days of a pass, for one number of days the journey
+ *  uses and one first date. The solve of the whole trip picks among these and the journeys on
+ *  single tickets.
+ */
+export type PassJourneyOption = {
+	/**  The journey. */
+	journey: Journey,
+	/**  The journey's cost in minutes of train travel, without the price. */
+	cost_minutes: number,
+	/**
+	 *  What the pass does not cover, such as reservations and the night accommodation, in
+	 *  euro cents. The median of the estimate.
+	 */
+	price_cents: EuroCents,
+	/**  How many travel days the journey uses. */
+	days: PassDays,
+	/**  The first travel day it uses, the date its first covered train leaves on. */
+	first_date: string,
 };
 
 /**  Where a new place goes in the itinerary. */

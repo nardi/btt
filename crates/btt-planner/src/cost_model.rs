@@ -5,7 +5,7 @@ use std::ops::Range;
 use btt_router::{CandidateStation, JourneyCostModel, MinutesSinceBundleStart, PreviousRide};
 use btt_timetable::{BundleTripIndex, LoadedTimetableBundle, RaptorRouteIndex};
 
-use crate::pricing::RidePrices;
+use crate::pricing::{PriceMode, RidePrices};
 use crate::scoring::ScoringWeights;
 
 /// Hundredths of a minute per minute. The model counts in hundredths so that the weights in
@@ -40,6 +40,8 @@ pub(crate) struct LegCostModel<'a> {
     /// The prices of rides, which the search adds to the cost. `None` when the weight is zero
     /// or no price table was built.
     pub(crate) prices: Option<&'a RidePrices>,
+    /// Which tickets the rides are priced as: single tickets, or the days of a pass.
+    pub(crate) price_mode: PriceMode,
 }
 
 /// Converts a minute count or a percentage to the model's signed arithmetic.
@@ -111,6 +113,7 @@ impl JourneyCostModel for LegCostModel<'_> {
                 boarding_position,
                 alighting_position,
                 previous,
+                self.price_mode,
             ))
         });
         change - sleep + price
@@ -125,12 +128,29 @@ impl JourneyCostModel for LegCostModel<'_> {
         alighting_position: u16,
     ) -> i32 {
         self.prices.map_or(0, |prices| {
-            self.price_cost(prices.full_price_cents(
+            self.price_cost(prices.boarding_extension_cents(
                 raptor_route,
                 boarding_position,
                 alighting_position,
+                self.price_mode,
             ))
         })
+    }
+
+    /// On the days of a pass, a ride the pass takes counts its local departure date as a
+    /// travel day.
+    fn travel_day_of(
+        &self,
+        raptor_route: RaptorRouteIndex,
+        _: BundleTripIndex,
+        boarding_position: u16,
+        departure: MinutesSinceBundleStart,
+    ) -> Option<u16> {
+        if self.price_mode != PriceMode::Pass {
+            return None;
+        }
+        self.prices
+            .and_then(|prices| prices.pass_travel_day(raptor_route, boarding_position, departure.0))
     }
 
     fn egress_cost(
@@ -304,6 +324,7 @@ mod tests {
             routes_with_berths: &[],
             price_weight_hundredths: 0,
             prices: None,
+            price_mode: PriceMode::Single,
         };
         let (berth_trip, seated_trip) = if bundle.trip_offers_berths(BundleTripIndex(0)) {
             (BundleTripIndex(0), BundleTripIndex(1))

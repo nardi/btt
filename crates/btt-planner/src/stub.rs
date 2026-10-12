@@ -111,6 +111,7 @@ impl StubBackend {
             best_journey_cost: u32::from(ride_minutes),
             cheapest: None,
             fastest: None,
+            pass_options: SmallVec::new(),
             departure_window: None,
         }))
     }

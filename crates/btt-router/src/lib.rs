@@ -13,8 +13,8 @@ mod lower_bound;
 mod search;
 
 pub use cost_search::{
-    CostParetoJourneySet, CostSearchBuffers, CostedJourney, JourneyCostModel, PreviousRide,
-    search_leg_journeys_by_cost,
+    CostParetoJourneySet, CostSearchBuffers, CostedJourney, JourneyCostModel, MAXIMUM_TRAVEL_DAYS,
+    PreviousRide, search_leg_journeys_by_cost,
 };
 pub use index::SearchIndex;
 pub use search::{

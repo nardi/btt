@@ -9,9 +9,9 @@ use std::num::NonZeroU8;
 
 use btt_model::GeoCoordinates;
 use btt_router::{
-    AllowEveryRide, CandidateStation, CostSearchBuffers, JourneyCostModel, MinutesSinceBundleStart,
-    ParetoJourneySet, PreviousRide, RaptorLegQuery, RaptorSearchBuffers, SearchIndex,
-    search_leg_journeys, search_leg_journeys_by_cost,
+    AllowEveryRide, CandidateStation, CostSearchBuffers, JourneyCostModel, MAXIMUM_TRAVEL_DAYS,
+    MinutesSinceBundleStart, ParetoJourneySet, PreviousRide, RaptorLegQuery, RaptorSearchBuffers,
+    SearchIndex, search_leg_journeys, search_leg_journeys_by_cost,
 };
 use btt_timetable::{
     BundleBuilder, BundleStationIndex, BundleTripIndex, LoadedTimetableBundle, RaptorRouteIndex,
@@ -320,18 +320,21 @@ impl JourneyCostModel for WindowCostModel {
     }
 }
 
-/// Every journey as departure, arrival, number of trains and cost, with no two alike and none
-/// that another beats on all four.
-fn pareto_front(mut journeys: Vec<(u32, u32, usize, i32)>) -> Vec<(u32, u32, usize, i32)> {
+/// A journey as departure, arrival, number of trains, number of travel days and cost.
+type CostedTuple = (u32, u32, usize, u8, i32);
+
+/// Every journey with no two alike and none that another beats on all five criteria.
+fn pareto_front(mut journeys: Vec<CostedTuple>) -> Vec<CostedTuple> {
     journeys.sort_unstable();
     journeys.dedup();
-    let dominated = |journey: &(u32, u32, usize, i32)| {
+    let dominated = |journey: &CostedTuple| {
         journeys.iter().any(|other| {
             other != journey
                 && other.0 >= journey.0
                 && other.1 <= journey.1
                 && other.2 <= journey.2
                 && other.3 <= journey.3
+                && other.4 <= journey.4
         })
     };
     journeys
@@ -342,8 +345,9 @@ fn pareto_front(mut journeys: Vec<(u32, u32, usize, i32)>) -> Vec<(u32, u32, usi
 }
 
 /// Lists every journey with at most `MAXIMUM_COSTED_RIDES` trains that leaves the place within
-/// the window, as departure, arrival, number of trains and cost, and keeps the Pareto front.
-/// Every ride asks the model, so prices that depend on the stops of the ride enter the cost.
+/// the window, as departure, arrival, number of trains, travel days and cost, and keeps the
+/// Pareto front. Every ride asks the model, so prices that depend on the stops of the ride
+/// enter the cost, and the travel days are the distinct days the model counts rides on.
 #[allow(clippy::too_many_lines)]
 fn brute_force_costs<M: JourneyCostModel>(
     trips: &[RandomTrip],
@@ -353,7 +357,7 @@ fn brute_force_costs<M: JourneyCostModel>(
     window: (u32, u32),
     model: &M,
     routes_of_trips: &[RaptorRouteIndex],
-) -> Vec<(u32, u32, usize, i32)> {
+) -> Vec<CostedTuple> {
     /// The state of a journey on board a trip.
     struct OnBoard {
         trip: usize,
@@ -364,6 +368,18 @@ fn brute_force_costs<M: JourneyCostModel>(
         cost_before_ride: i32,
         rides: usize,
         previous: Option<PreviousRide>,
+        /// The days the model counted the rides so far on, this one included.
+        days: Vec<u16>,
+    }
+
+    /// Adds the day a ride counts on to the days of the rides before it.
+    fn with_day(mut days: Vec<u16>, day: Option<u16>) -> Vec<u16> {
+        if let Some(day) = day
+            && !days.contains(&day)
+        {
+            days.push(day);
+        }
+        days
     }
 
     let stops: Vec<Vec<(u32, u16, u16)>> = trips.iter().map(RandomTrip::stops).collect();
@@ -382,6 +398,12 @@ fn brute_force_costs<M: JourneyCostModel>(
                     continue;
                 };
                 if station == origin && leave >= window.0 && leave < window.1 {
+                    let day = model.travel_day_of(
+                        routes_of_trips[trip],
+                        BundleTripIndex(u32::try_from(trip).unwrap_or(u32::MAX)),
+                        u16::try_from(position).unwrap_or(u16::MAX),
+                        MinutesSinceBundleStart(u32::from(departure)),
+                    );
                     stack.push(OnBoard {
                         trip,
                         route: routes_of_trips[trip],
@@ -391,6 +413,7 @@ fn brute_force_costs<M: JourneyCostModel>(
                         cost_before_ride: model.access_cost(&departure_candidate),
                         rides: 1,
                         previous: None,
+                        days: with_day(Vec::new(), day),
                     });
                 }
             }
@@ -409,6 +432,12 @@ fn brute_force_costs<M: JourneyCostModel>(
         for (trip, trip_stops) in stops.iter().enumerate() {
             for (position, &(stop_station, _, departure)) in trip_stops.iter().enumerate() {
                 if stop_station == station && u32::from(departure) >= ready {
+                    let day = model.travel_day_of(
+                        routes_of_trips[trip],
+                        BundleTripIndex(u32::try_from(trip).unwrap_or(u32::MAX)),
+                        u16::try_from(position).unwrap_or(u16::MAX),
+                        MinutesSinceBundleStart(u32::from(departure)),
+                    );
                     next.push(OnBoard {
                         trip,
                         route: routes_of_trips[trip],
@@ -418,6 +447,7 @@ fn brute_force_costs<M: JourneyCostModel>(
                         cost_before_ride: cost,
                         rides: state.rides + 1,
                         previous: Some(previous),
+                        days: with_day(state.days.clone(), day),
                     });
                 }
             }
@@ -425,6 +455,11 @@ fn brute_force_costs<M: JourneyCostModel>(
         next
     };
     while let Some(state) = stack.pop() {
+        // A journey on more travel days than the search keeps is no option.
+        let days = u8::try_from(state.days.len()).unwrap_or(u8::MAX);
+        if days > MAXIMUM_TRAVEL_DAYS {
+            continue;
+        }
         for (offset, &(station, arrival, _)) in stops[state.trip][state.boarding_position + 1..]
             .iter()
             .enumerate()
@@ -454,7 +489,13 @@ fn brute_force_costs<M: JourneyCostModel>(
                     + model.egress_cost(&arrival_candidate, footpath)
             };
             if station == target {
-                found.push((state.departure, arrival, state.rides, total(arrival, None)));
+                found.push((
+                    state.departure,
+                    arrival,
+                    state.rides,
+                    days,
+                    total(arrival, None),
+                ));
             }
             let ready = arrival + u32::from(MINIMUM_TRANSFER_MINUTES);
             stack.extend(boardings_after(station, ready, &state, cost, ride));
@@ -468,6 +509,7 @@ fn brute_force_costs<M: JourneyCostModel>(
                         state.departure,
                         walked,
                         state.rides,
+                        days,
                         total(walked, Some(minutes)),
                     ));
                 }
@@ -611,6 +653,113 @@ impl JourneyCostModel for PricedCostModel {
     }
 }
 
+/// Length of a travel day in the pass model. It is short, so that the trips of a test, which
+/// run within a few hours, span several days.
+const PASS_DAY_MINUTES: u32 = 90;
+
+/// Fixed price of a ride the pass takes, such as a reservation.
+const PASS_RESERVATION: i32 = 50;
+
+/// A cost model with the prices of `PricedCostModel` on the travel days of a pass. The pass
+/// takes the routes with an even number, for a fixed price and one travel day per day it is
+/// ridden on. A ride on another route is a ticket of its own and counts no travel day.
+struct PassCostModel {
+    priced: PricedCostModel,
+}
+
+impl PassCostModel {
+    /// Returns whether the pass takes the trains of a route.
+    fn takes(raptor_route: RaptorRouteIndex) -> bool {
+        raptor_route.0.is_multiple_of(2)
+    }
+}
+
+impl JourneyCostModel for PassCostModel {
+    fn access_cost(&self, candidate: &CandidateStation) -> i32 {
+        self.priced.access_cost(candidate)
+    }
+
+    fn ride_cost(
+        &self,
+        raptor_route: RaptorRouteIndex,
+        _: BundleTripIndex,
+        boarding_position: u16,
+        alighting_position: u16,
+        _: MinutesSinceBundleStart,
+        _: MinutesSinceBundleStart,
+        previous: Option<PreviousRide>,
+    ) -> i32 {
+        let change = if previous.is_some() {
+            TRANSFER_PENALTY
+        } else {
+            0
+        };
+        if Self::takes(raptor_route) {
+            change + PASS_RESERVATION
+        } else {
+            change + PricedCostModel::price(alighting_position.saturating_sub(boarding_position))
+        }
+    }
+
+    fn ride_price(
+        &self,
+        raptor_route: RaptorRouteIndex,
+        boarding_position: u16,
+        alighting_position: u16,
+    ) -> i32 {
+        if Self::takes(raptor_route) {
+            0
+        } else {
+            PricedCostModel::price(alighting_position.saturating_sub(boarding_position))
+        }
+    }
+
+    fn travel_day_of(
+        &self,
+        raptor_route: RaptorRouteIndex,
+        _: BundleTripIndex,
+        _: u16,
+        departure: MinutesSinceBundleStart,
+    ) -> Option<u16> {
+        Self::takes(raptor_route).then(|| u16::try_from(departure.0 / PASS_DAY_MINUTES).unwrap())
+    }
+
+    fn egress_cost(
+        &self,
+        candidate: &CandidateStation,
+        final_footpath_minutes: Option<u16>,
+    ) -> i32 {
+        self.priced.egress_cost(candidate, final_footpath_minutes)
+    }
+
+    fn elapsed_cost(
+        &self,
+        departure: MinutesSinceBundleStart,
+        arrival: MinutesSinceBundleStart,
+    ) -> i32 {
+        self.priced.elapsed_cost(departure, arrival)
+    }
+
+    fn remaining_cost_lower_bound(
+        &self,
+        departure: MinutesSinceBundleStart,
+        moment: MinutesSinceBundleStart,
+        earliest_arrival: MinutesSinceBundleStart,
+        credit_minutes_cap: Option<u32>,
+    ) -> i32 {
+        self.priced.remaining_cost_lower_bound(
+            departure,
+            moment,
+            earliest_arrival,
+            credit_minutes_cap,
+        )
+    }
+
+    fn ride_cost_depends_on_time(&self, _: RaptorRouteIndex) -> bool {
+        false
+    }
+}
+
 /// Searches with the cost model and returns the Pareto front like `brute_force_costs`.
 fn cost_router<M: JourneyCostModel>(
     trips: &[RandomTrip],
@@ -619,7 +768,7 @@ fn cost_router<M: JourneyCostModel>(
     target: u32,
     window: (u32, u32),
     model: &M,
-) -> Vec<(u32, u32, usize, i32)> {
+) -> Vec<CostedTuple> {
     let bundle = build_bundle(trips, footpaths);
     let (departure_candidates, arrival_candidates) = candidates(origins, target);
     let query = RaptorLegQuery {
@@ -646,6 +795,7 @@ fn cost_router<M: JourneyCostModel>(
                     costed.journey.departure.0,
                     costed.journey.arrival.0,
                     costed.journey.ride_count(),
+                    costed.days,
                     costed.cost,
                 )
             })
@@ -727,6 +877,30 @@ proptest! {
         // finds beaten, which is what the property asserts.
         let origins = [(0, first_access), (1, second_access)];
         let model = PricedCostModel { window_start, window_end: window_start + 60 };
+        let target = STATION_COUNT - 1;
+        let routes = routes_of_trips(&build_bundle(&trips, &footpaths), &trips);
+        let expected =
+            brute_force_costs(&trips, &footpaths, &origins, target, (start, 1440), &model, &routes);
+        let actual = cost_router(&trips, &footpaths, &origins, target, (start, 1440), &model);
+        prop_assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn cost_search_on_pass_days_matches_brute_force(
+        trips in proptest::collection::vec(random_trip(), 1..10),
+        footpaths in proptest::collection::vec(random_footpath(), 0..4),
+        start in 0..300u32,
+        first_access in 0..30u16,
+        second_access in 0..30u16,
+        window_start in 0..500u32,
+    ) {
+        // Travel days are a criterion of their own, so a journey on fewer days stays beside a
+        // cheaper one on more, and the shortcuts that drop a boarding or a label have to keep
+        // it. The brute force counts the distinct days by listing them.
+        let origins = [(0, first_access), (1, second_access)];
+        let model = PassCostModel {
+            priced: PricedCostModel { window_start, window_end: window_start + 60 },
+        };
         let target = STATION_COUNT - 1;
         let routes = routes_of_trips(&build_bundle(&trips, &footpaths), &trips);
         let expected =

@@ -8,9 +8,9 @@ use specta::Type;
 
 use crate::coordinates::GeoCoordinates;
 use crate::itinerary::TripPlaceId;
-use crate::tickets::EuroRange;
+use crate::tickets::{EuroCents, EuroRange};
 use crate::time::{DurationMinutes, UnixTimeMinutes};
-use crate::trip::Trip;
+use crate::trip::{PassDays, Trip};
 
 /// Points into `LegPlan::station_table`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
@@ -202,6 +202,24 @@ pub struct SearchedWindow {
     pub end: UnixTimeMinutes,
 }
 
+/// The best journey of a leg on the travel days of a pass, for one number of days the journey
+/// uses and one first date. The solve of the whole trip picks among these and the journeys on
+/// single tickets.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub struct PassJourneyOption {
+    /// The journey.
+    pub journey: Journey,
+    /// The journey's cost in minutes of train travel, without the price.
+    pub cost_minutes: u32,
+    /// What the pass does not cover, such as reservations and the night accommodation, in
+    /// euro cents. The median of the estimate.
+    pub price_cents: EuroCents,
+    /// How many travel days the journey uses.
+    pub days: PassDays,
+    /// The first travel day it uses, the date its first covered train leaves on.
+    pub first_date: NaiveDate,
+}
+
 /// The planned journey for one leg and its alternatives.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
 pub struct LegPlan {
@@ -230,6 +248,12 @@ pub struct LegPlan {
     /// by time alone, or when no journey is faster by enough.
     #[serde(default)]
     pub fastest: Option<Journey>,
+    /// The best journeys of the leg on the travel days of a pass, one for each number of days
+    /// the journey uses and each first date, for the solve of the whole trip. Empty when no
+    /// pass covers the leg or the traveller searches by time alone.
+    #[serde(default)]
+    #[specta(type = Vec<PassJourneyOption>)]
+    pub pass_options: SmallVec<[PassJourneyOption; 3]>,
     /// The moments between which the planner let the traveller leave the departure place.
     /// `None` in plans stored without it.
     #[serde(default)]

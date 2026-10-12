@@ -21,7 +21,10 @@ pub use input::{
     IdentifiedLegInput, LegCacheKey, LegChainInput, LegEndpoint, LegPlanningInput, SameDayStop,
     leg_chain_inputs, leg_planning_inputs,
 };
-pub use pricing::{JourneyPricer, NoPrice, RidePriceClass, RidePriceRow, RidePriceTable};
+pub use pricing::{
+    JourneyPricer, NoPrice, PriceMode, RidePassRow, RidePassTable, RidePriceClass, RidePriceRow,
+    RidePriceTable,
+};
 pub use session::{
     DEFAULT_PLANNING_DEBOUNCE, LegResultStore, NoLegResultStore, PlanningEventSink,
     TripPlanningSession,

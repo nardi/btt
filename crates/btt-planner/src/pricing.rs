@@ -5,6 +5,35 @@ use btt_model::{EuroRange, Journey, LegPlanStation};
 use btt_timetable::RaptorRouteIndex;
 use smol_str::SmolStr;
 
+/// Which tickets a leg is searched with: single tickets, or the travel days of a pass. A pass
+/// covers a ride for nothing but what it charges on top, such as a reservation, and a ride
+/// the pass does not take costs its fare.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PriceMode {
+    /// Every ride costs its fare.
+    Single,
+    /// Rides the pass covers cost what it charges on top, and the search counts the travel
+    /// days the journey uses.
+    Pass,
+}
+
+/// What rides of one class cost on the days of a pass.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RidePassRow {
+    /// Whether the pass covers the trains of the class.
+    pub takes: bool,
+    /// What a ride costs on the pass, in whole euro cents, such as a reservation or the pass
+    /// price of a night accommodation. Zero when the pass covers the ride for nothing.
+    pub cents: u32,
+}
+
+/// The pass prices of the classes of rides of one bundle, built once beside the fare rows.
+#[derive(Debug, Clone, Default)]
+pub struct RidePassTable {
+    /// One row per class, in the order the classes were given.
+    pub rows: Vec<RidePassRow>,
+}
+
 /// Prices the rides of a planned journey, with the same sources the ticket plan uses.
 ///
 /// The planner calls this as a generic parameter, so every call is a static dispatch. The
@@ -15,10 +44,30 @@ pub trait JourneyPricer: Send + Sync + 'static {
     /// journey, or `None` when no price is known for its trains.
     fn journey_price(&self, journey: &Journey, stations: &[LegPlanStation]) -> Option<EuroRange>;
 
+    /// Returns the price of a journey on the days of a pass: what the pass does not cover,
+    /// such as reservations, the night accommodation and the fares of trains it does not take.
+    /// Returns `None` when no pass covers the journey.
+    fn journey_price_with_pass(
+        &self,
+        journey: &Journey,
+        stations: &[LegPlanStation],
+    ) -> Option<EuroRange> {
+        let _ = (journey, stations);
+        None
+    }
+
     /// Returns the prices of the classes of rides the planner searches over, or `None` when
     /// the planner should search without prices. The rows come from the same model that
     /// prices tickets, and are a snapshot: what the model learns later does not change them.
     fn price_table(&self, classes: &[RidePriceClass]) -> Option<RidePriceTable>;
+
+    /// Returns what rides of the classes cost on the days of a pass, or `None` when no pass
+    /// covers any of them. The rows follow the same rules the ticket optimizer applies to a
+    /// pass holder.
+    fn pass_price_table(&self, classes: &[RidePriceClass]) -> Option<RidePassTable> {
+        let _ = classes;
+        None
+    }
 }
 
 /// A pricer that knows no prices, for backends and tests that plan without fares.
@@ -94,6 +143,15 @@ pub struct RidePrices {
     operator_of_route: Vec<u16>,
     /// One row per class of ride.
     rows: Vec<RidePriceRow>,
+    /// What rides of each class cost on the days of a pass, in the same order as the rows.
+    pass_rows: Vec<RidePassRow>,
+    /// The time zone of each class, as an index into the zones of `utc_offset_minutes`.
+    zone_of_row: Vec<u16>,
+    /// The offset of local time from UTC in minutes, per time zone and day of the bundle,
+    /// flattened as `zone * validity_days + day`. A pass counts a ride on its local date.
+    utc_offset_minutes: Vec<i16>,
+    /// Number of days the bundle runs, which is the stride of `utc_offset_minutes`.
+    validity_days: u16,
     /// The distance the log price divides by, in kilometres.
     reference_kilometres: f32,
 }
@@ -123,6 +181,8 @@ impl RidePrices {
         let mut classes: Vec<RidePriceClass> = Vec::new();
         let mut classes_seen: rustc_hash::FxHashMap<RidePriceClass, u16> =
             rustc_hash::FxHashMap::default();
+        let mut zones: Vec<SmolStr> = Vec::new();
+        let mut zone_of_row: Vec<u16> = Vec::new();
         for route_index in 0..bundle.route_count() {
             let index = RaptorRouteIndex(u32::try_from(route_index).unwrap_or(u32::MAX));
             let route = bundle.route(index);
@@ -171,6 +231,14 @@ impl RidePrices {
                         known
                     } else {
                         let next = u16::try_from(classes.len()).ok()?;
+                        let zone = zones
+                            .iter()
+                            .position(|zone| *zone == class.time_zone)
+                            .unwrap_or_else(|| {
+                                zones.push(class.time_zone.clone());
+                                zones.len() - 1
+                            });
+                        zone_of_row.push(u16::try_from(zone).ok()?);
                         classes.push(class.clone());
                         classes_seen.insert(class, next);
                         next
@@ -180,14 +248,70 @@ impl RidePrices {
             }
         }
         let table = pricer.price_table(&classes)?;
+        // The pass rows follow the classes. A pricer without them leaves the search in
+        // `Single` mode.
+        let pass_rows = pricer.pass_price_table(&classes).map_or(
+            vec![
+                RidePassRow {
+                    takes: false,
+                    cents: 0
+                };
+                classes.len()
+            ],
+            |table| table.rows,
+        );
+        let validity_days = bundle.validity_days();
         Some(Self {
             route_offsets,
             row_of_boarding,
             stop_distances,
             operator_of_route,
             rows: table.rows,
+            pass_rows,
+            zone_of_row,
+            utc_offset_minutes: utc_offsets(&zones, bundle.validity_start(), validity_days),
+            validity_days,
             reference_kilometres: table.reference_kilometres,
         })
+    }
+
+    /// Returns the row of the rides that board a route at a position, or `None` when they have
+    /// no price.
+    fn row_of(&self, raptor_route: RaptorRouteIndex, boarding_position: u16) -> Option<usize> {
+        let offset = self.route_offsets[raptor_route.as_usize()] as usize;
+        self.row_of_boarding
+            .get(offset + usize::from(boarding_position))
+            .filter(|&&row| row != NO_ROW)
+            .map(|&row| usize::from(row))
+    }
+
+    /// Returns the travel day of a pass that a ride boarding a route at a position and a
+    /// moment counts on, as local days since the bundle starts, or `None` when the pass does
+    /// not take the ride. The day is the local date of the boarding station, the way the
+    /// ticket optimizer counts it.
+    pub(crate) fn pass_travel_day(
+        &self,
+        raptor_route: RaptorRouteIndex,
+        boarding_position: u16,
+        departure: u32,
+    ) -> Option<u16> {
+        let row = self.row_of(raptor_route, boarding_position)?;
+        if !self.pass_rows.get(row)?.takes {
+            return None;
+        }
+        let utc_day = (departure / MINUTES_PER_DAY).min(u32::from(self.validity_days) - 1);
+        let zone = usize::from(self.zone_of_row[row]);
+        let offset =
+            self.utc_offset_minutes[zone * usize::from(self.validity_days) + utc_day as usize];
+        // A zone west of UTC can put the first minutes of the bundle on the day before it,
+        // which counts as its first day. No train of the bundle runs there.
+        let local = i64::from(departure) + i64::from(offset);
+        u16::try_from(local.div_euclid(i64::from(MINUTES_PER_DAY)).max(0)).ok()
+    }
+
+    /// Returns whether the pass covers the trains of any class the planner searches over.
+    pub fn any_pass_takes(&self) -> bool {
+        self.pass_rows.iter().any(|row| row.takes)
     }
 
     /// Returns the distance of a ride in units of 100 metres.
@@ -229,19 +353,23 @@ impl RidePrices {
         boarding_position: u16,
         alighting_position: u16,
         previous: Option<btt_router::PreviousRide>,
+        mode: PriceMode,
     ) -> u32 {
-        let offset = self.route_offsets[raptor_route.as_usize()] as usize;
-        let Some(&row_index) = self
-            .row_of_boarding
-            .get(offset + usize::from(boarding_position))
-        else {
+        let Some(row_index) = self.row_of(raptor_route, boarding_position) else {
             return 0;
         };
-        if row_index == NO_ROW {
-            return 0;
-        }
-        let row = self.rows[usize::from(row_index)];
+        let row = self.rows[row_index];
         let distance = self.distance_units(raptor_route, boarding_position, alighting_position);
+        // On the days of a pass a covered ride costs what the pass charges on top, and a ride
+        // the pass does not take costs its fare, as one ticket on its own.
+        if mode == PriceMode::Pass {
+            let pass_row = self.pass_rows[row_index];
+            return if pass_row.takes {
+                pass_row.cents
+            } else {
+                self.price_cents(row, distance)
+            };
+        }
         match previous {
             // A ticket covers rides of one operator as one run, so the second ride pays the
             // extra over the first.
@@ -261,13 +389,66 @@ impl RidePrices {
         }
     }
 
-    /// Returns the price of a ride in whole euro cents, without the discount of a run.
-    pub(crate) fn full_price_cents(
+    /// Returns what boarding a route at an earlier position costs at most on top of boarding
+    /// it at a later one, for any stop after both, in whole euro cents.
+    ///
+    /// On single tickets that is the price of the stops in between, without the discount of a
+    /// run. On the days of a pass a covered ride costs the same from any stop, so an earlier
+    /// boarding that the pass takes for no more than the later one costs nothing on top, and
+    /// otherwise its whole charge bounds the extra.
+    pub(crate) fn boarding_extension_cents(
         &self,
         raptor_route: RaptorRouteIndex,
-        boarding_position: u16,
-        alighting_position: u16,
+        earlier: u16,
+        later: u16,
+        mode: PriceMode,
     ) -> u32 {
-        self.ride_price_cents(raptor_route, boarding_position, alighting_position, None)
+        if mode == PriceMode::Pass
+            && let (Some(earlier_row), Some(later_row)) = (
+                self.row_of(raptor_route, earlier),
+                self.row_of(raptor_route, later),
+            )
+        {
+            let (earlier_pass, later_pass) =
+                (self.pass_rows[earlier_row], self.pass_rows[later_row]);
+            if earlier_pass.takes && later_pass.takes && earlier_pass.cents <= later_pass.cents {
+                return 0;
+            }
+        }
+        self.ride_price_cents(raptor_route, earlier, later, None, mode)
     }
+}
+
+/// Minutes in a day.
+const MINUTES_PER_DAY: u32 = 1440;
+
+/// Returns the offset of local time from UTC in minutes for each time zone and each day of a
+/// bundle, flattened as `zone * validity_days + day`. The offset of a day is the one at noon
+/// UTC, so a ride in the hour around a change to or from summer time can count on the wrong
+/// date. A zone that does not parse counts as UTC.
+fn utc_offsets(
+    zones: &[SmolStr],
+    validity_start: chrono::NaiveDate,
+    validity_days: u16,
+) -> Vec<i16> {
+    use chrono::{Offset, TimeZone};
+
+    let mut offsets = Vec::with_capacity(zones.len() * usize::from(validity_days));
+    for zone in zones {
+        let time_zone = zone.parse::<chrono_tz::Tz>().ok();
+        for day in 0..validity_days {
+            let noon = (validity_start + chrono::Days::new(u64::from(day)))
+                .and_hms_opt(12, 0, 0)
+                .map(|moment| moment.and_utc());
+            let seconds = match (time_zone, noon) {
+                (Some(time_zone), Some(noon)) => time_zone
+                    .offset_from_utc_datetime(&noon.naive_utc())
+                    .fix()
+                    .local_minus_utc(),
+                _ => 0,
+            };
+            offsets.push(i16::try_from(seconds / 60).unwrap_or(0));
+        }
+    }
+    offsets
 }

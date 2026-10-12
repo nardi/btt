@@ -5,3 +5,4 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc a21ab15e2c90d7db35625534db3a0aad3d2c99a01ee8547a48f6e145529a27e2 # shrinks to trips = [RandomTrip { stations: [2, 0, 3], first_departure: 155, segment_minutes: [54, 5], dwell_minutes: [2, 0] }, RandomTrip { stations: [3, 0], first_departure: 221, segment_minutes: [5], dwell_minutes: [0] }], footpaths = [(0, 4, 1)], start = 0
+cc f796df400b5e9a0c310cdcfbb95fd01de81357e32a8ed0a4484fd44d8d7e302f # shrinks to trips = [RandomTrip { stations: [0, 1], first_departure: 0, segment_minutes: [5], dwell_minutes: [0] }, RandomTrip { stations: [1, 3], first_departure: 255, segment_minutes: [5], dwell_minutes: [0] }, RandomTrip { stations: [0, 3], first_departure: 257, segment_minutes: [5], dwell_minutes: [0] }], footpaths = [(3, 4, 1)], start = 0, first_access = 14, second_access = 0, window_start = 0
