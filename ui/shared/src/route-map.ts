@@ -1,12 +1,15 @@
 // The drawing of the route of a trip as a small metro map: every leg is a line of straight
 // pieces and 45 degree pieces with rounded bends, and every place is a station on it.
 
+import { haversineMeters } from "./geo";
 import { legLineOf } from "./itinerary";
 
 /** A place of the route, as the trip list receives it. */
 export interface RouteStop {
   /** Where the place is. */
   coordinates: { latitude: number; longitude: number };
+  /** How far around the place the planner looks for stations, in meters. */
+  station_search_radius: number;
   /** Whether the leg that arrives here includes a night train. False for the origin. */
   arrives_by_night: boolean;
 }
@@ -205,6 +208,40 @@ function roundedCommands(points: readonly MapPoint[], radius: number): string {
 }
 
 /**
+ * Returns for each stop the index of the place it stands for on the map, with the places numbered
+ * in the order the route first reaches them. Two stops are the same place when each lies within
+ * the other's station search radius, and stops linked by a chain of such pairs are one place too.
+ */
+export function samePlaceIndices(stops: readonly RouteStop[]): number[] {
+  const parent = stops.map((_, index) => index);
+  const root = (index: number): number => {
+    let current = index;
+    while (parent[current] !== current) {
+      current = parent[current]!;
+    }
+    return current;
+  };
+  stops.forEach((stop, index) => {
+    for (let other = index + 1; other < stops.length; other++) {
+      const distance = haversineMeters(stop.coordinates, stops[other]!.coordinates);
+      if (distance <= Math.min(stop.station_search_radius, stops[other]!.station_search_radius)) {
+        // The earlier stop stays the root, so a place takes its number from its first visit.
+        const [first, second] = [root(index), root(other)].sort((left, right) => left - right);
+        parent[second!] = first!;
+      }
+    }
+  });
+  const numbers = new Map<number, number>();
+  return stops.map((_, index) => {
+    const placeRoot = root(index);
+    if (!numbers.has(placeRoot)) {
+      numbers.set(placeRoot, numbers.size);
+    }
+    return numbers.get(placeRoot)!;
+  });
+}
+
+/**
  * Draws the route of a trip as a schematic metro map that fits a box. The places mostly keep their order
  * from west to east and from north to south, but not their distances. Places close together
  * spread out, and every station keeps a few grid cells from every other. The lines between them
@@ -215,10 +252,13 @@ export function routeMap(stops: readonly RouteStop[], options: RouteMapOptions):
     return null;
   }
   const { width, height, padding, grid, bendRadius } = options;
-  const meanLatitude = stops.reduce((sum, stop) => sum + stop.coordinates.latitude, 0) / stops.length;
+  // The layout places each place once, and the stops that stand for the same place share it.
+  const placeOfStop = samePlaceIndices(stops);
+  const places = stops.filter((_, index) => placeOfStop.indexOf(placeOfStop[index]!) === index);
+  const meanLatitude = places.reduce((sum, stop) => sum + stop.coordinates.latitude, 0) / places.length;
   const widthFactor = Math.cos((meanLatitude * Math.PI) / 180);
   // North is up, and a degree of longitude is shorter than a degree of latitude away from the equator.
-  const projected = stops.map((stop) => ({ x: stop.coordinates.longitude * widthFactor, y: -stop.coordinates.latitude }));
+  const projected = places.map((stop) => ({ x: stop.coordinates.longitude * widthFactor, y: -stop.coordinates.latitude }));
   const minimumX = Math.min(...projected.map((point) => point.x));
   const maximumX = Math.max(...projected.map((point) => point.x));
   const minimumY = Math.min(...projected.map((point) => point.y));
@@ -257,9 +297,9 @@ export function routeMap(stops: readonly RouteStop[], options: RouteMapOptions):
   for (const point of ideal) {
     cells.push(freeCell(point, cells, { padding, grid, lastColumn, lastRow }));
   }
-  const points: MapPoint[] = cells.map((cell) => ({
-    x: padding + cell.column * grid,
-    y: padding + cell.row * grid,
+  const points: MapPoint[] = placeOfStop.map((place) => ({
+    x: padding + cells[place]!.column * grid,
+    y: padding + cells[place]!.row * grid,
   }));
 
   const stations: MapStation[] = points.map((point, index) => ({

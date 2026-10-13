@@ -12,7 +12,7 @@ use uuid::Uuid;
 use crate::bounded::ValueOutOfRangeError;
 use crate::bounded::bounded_integer;
 use crate::coordinates::GeoCoordinates;
-use crate::itinerary::{Itinerary, SameDayStayRange, TripPlaceId};
+use crate::itinerary::{Itinerary, SameDayStayRange, StationSearchRadius, TripPlaceId};
 use crate::plan::JourneyChoice;
 use crate::time::{DailyTimeWindow, DurationMinutes, LocalTimeOfDay, TravelDayWindows};
 
@@ -346,10 +346,12 @@ impl Trip {
             .next()
             .map(|place| TripSummaryStop {
                 coordinates: place.coordinates,
+                station_search_radius: place.station_search_radius,
                 arrives_by_night: false,
             });
         let arrivals = self.itinerary.legs().map(|leg| TripSummaryStop {
             coordinates: leg.arrival_place.coordinates,
+            station_search_radius: leg.arrival_place.station_search_radius,
             arrives_by_night: leg.travel_mode.is_overnight(),
         });
         origin.into_iter().chain(arrivals).collect()
@@ -389,6 +391,9 @@ pub struct TripSummary {
 pub struct TripSummaryStop {
     /// Where the place is.
     pub coordinates: GeoCoordinates,
+    /// How far around the place the planner looks for stations. Two places that lie within
+    /// each other's radius are the same place on the map.
+    pub station_search_radius: StationSearchRadius,
     /// Whether the leg that arrives here includes a night train. False for the origin.
     pub arrives_by_night: bool,
 }

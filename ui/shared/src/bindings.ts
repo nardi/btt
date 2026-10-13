@@ -1407,6 +1407,11 @@ export type TripSummary = {
 export type TripSummaryStop = {
 	/**  Where the place is. */
 	coordinates: GeoCoordinates,
+	/**
+	 *  How far around the place the planner looks for stations. Two places that lie within
+	 *  each other's radius are the same place on the map.
+	 */
+	station_search_radius: StationSearchRadius,
 	/**  Whether the leg that arrives here includes a night train. False for the origin. */
 	arrives_by_night: boolean,
 };

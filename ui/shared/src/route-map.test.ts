@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { evenRanks, octilinearPoints, type RouteMapOptions, type RouteStop, routeMap } from "./route-map";
+import { evenRanks, octilinearPoints, samePlaceIndices, type RouteMapOptions, type RouteStop, routeMap } from "./route-map";
 
 const options: RouteMapOptions = { width: 120, height: 64, padding: 10, grid: 8, bendRadius: 6 };
 
-function stop(latitude: number, longitude: number, night = false): RouteStop {
-  return { coordinates: { latitude, longitude }, arrives_by_night: night };
+function stop(latitude: number, longitude: number, night = false, radius = 5000): RouteStop {
+  return { coordinates: { latitude, longitude }, station_search_radius: radius, arrives_by_night: night };
 }
 
 const amsterdam = stop(52.3789, 4.9003);
@@ -121,7 +121,8 @@ describe("routeMap", () => {
   }
 
   it("keeps every station apart from every other, even for places close together", () => {
-    const close = [stop(50.9432, 6.9587), stop(50.9433, 6.9588), stop(50.9434, 6.9589, true), stop(50.9435, 6.959)];
+    // Four stations in Cologne, a few hundred meters apart, each with a radius too small to reach the others.
+    const close = [stop(50.9432, 6.9587, false, 100), stop(50.9452, 6.9617, false, 100), stop(50.9472, 6.9647, true, 100), stop(50.9492, 6.9677, false, 100)];
     expect(closestCells(routeMap(close, options)!.stations)).toBeGreaterThanOrEqual(3);
   });
 
@@ -150,9 +151,31 @@ describe("routeMap", () => {
     expect(width).toBeGreaterThan(20);
   });
 
+  it("draws a place that the route visits twice at one position", () => {
+    // A round trip from Amsterdam, with its end a few streets from where it started.
+    const map = routeMap([amsterdam, vienna, rome, stop(52.37, 4.89)], options)!;
+    expect(map.stations).toHaveLength(4);
+    expect({ x: map.stations[3]!.x, y: map.stations[3]!.y }).toEqual({ x: map.stations[0]!.x, y: map.stations[0]!.y });
+    expect(Number.isFinite(map.length)).toBe(true);
+  });
+
   it("copes with places that share a position", () => {
     const map = routeMap([amsterdam, amsterdam], options)!;
     expect(map.stations).toHaveLength(2);
     expect(Number.isFinite(map.stations[0]!.x)).toBe(true);
+  });
+});
+
+describe("samePlaceIndices", () => {
+  it("numbers the places in the order the route first reaches them", () => {
+    expect(samePlaceIndices([amsterdam, vienna, stop(52.37, 4.89), rome])).toEqual([0, 1, 0, 2]);
+  });
+
+  it("needs each place within the radius of the other", () => {
+    // About 3 km apart, inside the radius of the first but outside the radius of the second.
+    const wide = stop(52.0, 5.0, false, 5000);
+    const narrow = stop(52.027, 5.0, false, 1000);
+    expect(samePlaceIndices([wide, narrow])).toEqual([0, 1]);
+    expect(samePlaceIndices([wide, stop(52.027, 5.0)])).toEqual([0, 0]);
   });
 });
