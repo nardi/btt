@@ -64,8 +64,70 @@ export interface RouteMapOptions {
 /** The most an axis stretches beyond the scale that keeps the shape of the route. */
 const maximumStretch = 3;
 
-/** The fewest grid cells between two stations that follow each other. */
-const minimumCells = 2;
+/** How much of a station's place on the map comes from its rank along each axis, against its true position. */
+const rankShare = 0.5;
+
+/** The fewest grid cells between any two stations, where the box has room for it. */
+const preferredCells = 3;
+
+/** A grid cell of the drawing, counted from the padding. */
+interface GridCell {
+  column: number;
+  row: number;
+}
+
+/** The grid that the stations snap to. */
+interface StationGrid {
+  padding: number;
+  grid: number;
+  lastColumn: number;
+  lastRow: number;
+}
+
+/** Mixes a true position on an axis with a rank on it, both between 0 and 1. */
+function mix(position: number, rank: number): number {
+  return (1 - rankShare) * position + rankShare * rank;
+}
+
+/**
+ * Returns the rank of each value among the distinct values, spread evenly between 0 and 1.
+ * Equal values get the same rank, and a single distinct value gets 0.
+ */
+export function evenRanks(values: readonly number[]): number[] {
+  const distinct = [...new Set(values)].sort((left, right) => left - right);
+  const last = Math.max(1, distinct.length - 1);
+  return values.map((value) => distinct.indexOf(value) / last);
+}
+
+/**
+ * Returns the grid cell nearest to a point that keeps `preferredCells` from every station placed
+ * so far. Where the box has no such cell, the spacing shrinks one cell at a time, and with no
+ * room at all the nearest cell wins.
+ */
+function freeCell(point: MapPoint, placed: readonly GridCell[], stationGrid: StationGrid): GridCell {
+  const { padding, grid, lastColumn, lastRow } = stationGrid;
+  for (let spacing = preferredCells; spacing >= 0; spacing--) {
+    let best: GridCell | null = null;
+    let bestDistance = Infinity;
+    for (let column = 0; column <= lastColumn; column++) {
+      for (let row = 0; row <= lastRow; row++) {
+        const isFree = placed.every((other) => Math.max(Math.abs(other.column - column), Math.abs(other.row - row)) >= spacing);
+        if (!isFree) {
+          continue;
+        }
+        const distance = Math.hypot(padding + column * grid - point.x, padding + row * grid - point.y);
+        if (distance < bestDistance) {
+          best = { column, row };
+          bestDistance = distance;
+        }
+      }
+    }
+    if (best !== null) {
+      return best;
+    }
+  }
+  return { column: 0, row: 0 };
+}
 
 /** Returns the length of a line through points. */
 function polylineLength(points: readonly MapPoint[]): number {
@@ -143,9 +205,10 @@ function roundedCommands(points: readonly MapPoint[], radius: number): string {
 }
 
 /**
- * Draws the route of a trip as a metro map that fits a box. The places keep their relative
- * positions, snap to a grid, and are joined by lines that only run along an axis or at 45
- * degrees. Returns `null` for a route with no places.
+ * Draws the route of a trip as a schematic metro map that fits a box. The places mostly keep their order
+ * from west to east and from north to south, but not their distances. Places close together
+ * spread out, and every station keeps a few grid cells from every other. The lines between them
+ * only run along an axis or at 45 degrees. Returns `null` for a route with no places.
  */
 export function routeMap(stops: readonly RouteStop[], options: RouteMapOptions): RouteMap | null {
   if (stops.length === 0) {
@@ -171,38 +234,28 @@ export function routeMap(stops: readonly RouteStop[], options: RouteMapOptions):
   const shapeScale = Math.min(fitX, fitY);
   const scaleX = Number.isFinite(shapeScale) ? Math.min(fitX, shapeScale * maximumStretch) : 0;
   const scaleY = Number.isFinite(shapeScale) ? Math.min(fitY, shapeScale * maximumStretch) : 0;
-  const offsetX = padding + (availableWidth - spanX * scaleX) / 2;
-  const offsetY = padding + (availableHeight - spanY * scaleY) / 2;
+  const extentX = spanX * scaleX;
+  const extentY = spanY * scaleY;
+  const offsetX = padding + (availableWidth - extentX) / 2;
+  const offsetY = padding + (availableHeight - extentY) / 2;
+
+  // Each axis mixes the true position with the rank of the place along that axis. The ranks are
+  // evenly spaced, so places that cluster together spread out, while the order along each axis
+  // and so the rough shape of the route stay the same.
+  const rankX = evenRanks(projected.map((point) => point.x));
+  const rankY = evenRanks(projected.map((point) => point.y));
+  const ideal = projected.map((point, index) => ({
+    x: offsetX + extentX * mix(spanX === 0 ? 0 : (point.x - minimumX) / spanX, rankX[index]!),
+    y: offsetY + extentY * mix(spanY === 0 ? 0 : (point.y - minimumY) / spanY, rankY[index]!),
+  }));
 
   // The stations sit on the lines of a grid. The last line on each axis is the last one that
   // still leaves the padding to the edge.
   const lastColumn = Math.max(0, Math.floor(availableWidth / grid));
   const lastRow = Math.max(0, Math.floor(availableHeight / grid));
-  const cells = projected.map((point) => ({
-    column: Math.min(lastColumn, Math.max(0, Math.round((offsetX + (point.x - minimumX) * scaleX - padding) / grid))),
-    row: Math.min(lastRow, Math.max(0, Math.round((offsetY + (point.y - minimumY) * scaleY - padding) / grid))),
-  }));
-  // Stations that follow each other keep at least two cells apart, so no station hides another.
-  // A station that is too close moves along the axis it is farthest apart on, away from the one
-  // before it, or toward the middle of the box where there is no room on that side.
-  for (let index = 1; index < cells.length; index++) {
-    const previous = cells[index - 1]!;
-    const cell = cells[index]!;
-    if (Math.max(Math.abs(cell.column - previous.column), Math.abs(cell.row - previous.row)) >= minimumCells) {
-      continue;
-    }
-    const horizontal =
-      Math.abs(projected[index]!.x - projected[index - 1]!.x) >= Math.abs(projected[index]!.y - projected[index - 1]!.y);
-    const direction = Math.sign(horizontal ? projected[index]!.x - projected[index - 1]!.x : projected[index]!.y - projected[index - 1]!.y) || 1;
-    const last = horizontal ? lastColumn : lastRow;
-    const from = horizontal ? previous.column : previous.row;
-    const target = from + direction * minimumCells;
-    const moved = target < 0 || target > last ? from - direction * minimumCells : target;
-    if (horizontal) {
-      cell.column = Math.min(last, Math.max(0, moved));
-    } else {
-      cell.row = Math.min(last, Math.max(0, moved));
-    }
+  const cells: GridCell[] = [];
+  for (const point of ideal) {
+    cells.push(freeCell(point, cells, { padding, grid, lastColumn, lastRow }));
   }
   const points: MapPoint[] = cells.map((cell) => ({
     x: padding + cell.column * grid,

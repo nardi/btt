@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { octilinearPoints, type RouteMapOptions, type RouteStop, routeMap } from "./route-map";
+import { evenRanks, octilinearPoints, type RouteMapOptions, type RouteStop, routeMap } from "./route-map";
 
 const options: RouteMapOptions = { width: 120, height: 64, padding: 10, grid: 8, bendRadius: 6 };
 
@@ -109,17 +109,38 @@ describe("routeMap", () => {
     expect(map.path.match(/M/g)).toHaveLength(1);
   });
 
-  it("keeps stations that follow each other apart, even for places close together", () => {
-    const close = [stop(50.9432, 6.9587), stop(50.9433, 6.9588), stop(50.9434, 6.9589, true), stop(50.9435, 6.959)];
-    const map = routeMap(close, options)!;
-    map.stations.forEach((station, index) => {
-      if (index === 0) {
-        return;
+  /** Returns the fewest grid cells between any two stations of a map. */
+  function closestCells(stations: readonly { x: number; y: number }[], grid = options.grid): number {
+    let closest = Infinity;
+    stations.forEach((station, index) => {
+      for (const other of stations.slice(index + 1)) {
+        closest = Math.min(closest, Math.max(Math.abs(station.x - other.x), Math.abs(station.y - other.y)) / grid);
       }
-      const previous = map.stations[index - 1]!;
-      const cells = Math.max(Math.abs(station.x - previous.x), Math.abs(station.y - previous.y)) / options.grid;
-      expect(cells).toBeGreaterThanOrEqual(2);
     });
+    return closest;
+  }
+
+  it("keeps every station apart from every other, even for places close together", () => {
+    const close = [stop(50.9432, 6.9587), stop(50.9433, 6.9588), stop(50.9434, 6.9589, true), stop(50.9435, 6.959)];
+    expect(closestCells(routeMap(close, options)!.stations)).toBeGreaterThanOrEqual(3);
+  });
+
+  it("spreads out a cluster of places on a long route and keeps their order", () => {
+    // Munich, Salzburg and Innsbruck lie close together between Stockholm and Palermo.
+    const route = [stop(59.3293, 18.0686), stop(48.1351, 11.582), stop(47.8095, 13.055), stop(47.2692, 11.4041), stop(38.1157, 13.3615)];
+    // The box of the trip list, which has room for five places from north to south.
+    const map = routeMap(route, { width: 160, height: 76, padding: 14, grid: 6, bendRadius: 7 })!;
+    expect(closestCells(map.stations, 6)).toBeGreaterThanOrEqual(3);
+    const [stockholm, munich, salzburg, innsbruck, palermo] = map.stations;
+    expect(munich!.y).toBeGreaterThan(stockholm!.y);
+    expect(salzburg!.x).toBeGreaterThan(munich!.x);
+    expect(innsbruck!.y).toBeGreaterThanOrEqual(salzburg!.y);
+    expect(palermo!.y).toBeGreaterThan(innsbruck!.y);
+  });
+
+  it("ranks equal values the same and spreads the others evenly", () => {
+    expect(evenRanks([5, 1, 5, 3])).toEqual([1, 0, 1, 0.5]);
+    expect(evenRanks([2, 2])).toEqual([0, 0]);
   });
 
   it("stretches a narrow route sideways so that it fills more of the box", () => {
