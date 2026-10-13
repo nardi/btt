@@ -218,6 +218,14 @@ impl JourneyCostModel for LegCostModel<'_> {
         self.maximum_duration_minutes
     }
 
+    /// The credit for sleeping in a berth is the only cost that can be negative, and it can't
+    /// take off more than the whole night asleep.
+    fn largest_credit(&self) -> i32 {
+        self.night.as_ref().map_or(0, |night| {
+            signed(night.end.saturating_sub(night.start)).saturating_mul(self.sleep_per_minute())
+        })
+    }
+
     fn initial_cost_limit(&self) -> i32 {
         self.initial_cost_limit
     }

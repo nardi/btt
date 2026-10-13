@@ -17,6 +17,7 @@ use fixedbitset::FixedBitSet;
 use smallvec::SmallVec;
 
 use crate::index::SearchIndex;
+use crate::latest_arrival::LatestArrivals;
 use crate::lower_bound::UNREACHABLE;
 use crate::search::{
     BoardedTrip, CandidateStation, MINUTES_PER_DAY, MinutesSinceBundleStart, RaptorJourney,
@@ -147,6 +148,51 @@ pub trait JourneyCostModel {
     /// lead to a journey that costs less. The default knows none.
     fn initial_cost_limit(&self) -> i32 {
         i32::MAX
+    }
+
+    /// Returns the most that the costs a journey adds besides the elapsed time can take off its
+    /// cost, such as credit for sleeping in a berth. The other added costs are never negative.
+    /// The default is nothing.
+    fn largest_credit(&self) -> i32 {
+        0
+    }
+
+    /// Returns the latest arrival at the arrival place of a journey that can still cost less
+    /// than `initial_cost_limit`, for a traveller who leaves no later than `latest_departure`,
+    /// or `None` without a limit.
+    ///
+    /// A journey costs at least the elapsed cost of its departure and arrival less the largest
+    /// credit, and the elapsed cost grows with the arrival and falls with the departure. So the
+    /// latest arrival is the last one whose elapsed cost from the latest departure stays within
+    /// the limit plus the credit, which a binary search over a month of arrivals finds.
+    fn arrival_deadline(
+        &self,
+        latest_departure: MinutesSinceBundleStart,
+    ) -> Option<MinutesSinceBundleStart> {
+        let limit = self.initial_cost_limit();
+        if limit == i32::MAX {
+            return None;
+        }
+        let allowed = limit.saturating_add(self.largest_credit());
+        let within = |arrival: u32| {
+            self.elapsed_cost(latest_departure, MinutesSinceBundleStart(arrival)) <= allowed
+        };
+        let (mut low, mut high) = (
+            latest_departure.0,
+            latest_departure.0 + 31 * MINUTES_PER_DAY,
+        );
+        if !within(low) {
+            return Some(latest_departure);
+        }
+        while low < high {
+            let middle = low + (high - low).div_ceil(2);
+            if within(middle) {
+                low = middle;
+            } else {
+                high = middle - 1;
+            }
+        }
+        Some(MinutesSinceBundleStart(low))
     }
 
     /// Returns the highest cost worth searching for once a journey that costs `best_cost` is
@@ -600,6 +646,12 @@ pub struct CostSearchBuffers {
     lower_bound_queue: BinaryHeap<Reverse<(u32, u32)>>,
     /// For each tier of cost-lowering rides, from where it can still be reached.
     credit_reach: CreditReach,
+    /// The latest moments at every station from which the arrival place can still be reached
+    /// by `deadline`.
+    latest_arrivals: LatestArrivals,
+    /// The latest arrival at the arrival place that a journey worth finding can have, or `None`
+    /// when the search has no such bound.
+    deadline: Option<u32>,
 }
 
 impl CostSearchBuffers {
@@ -825,6 +877,26 @@ pub fn search_leg_journeys_by_cost<M: JourneyCostModel>(
     let station_count = bundle.station_count();
     buffers.reset(station_count, bundle.route_count(), rounds);
     buffers.cost_limit_by_days = [model.initial_cost_limit(); TRAVEL_DAY_COUNTS];
+    // A known cost or a longest duration bounds the arrival. The search backwards from the
+    // arrival place then says how late a label may be at each station.
+    let latest_departure = query.departure_window.end;
+    let deadline = [
+        model
+            .arrival_deadline(latest_departure)
+            .map(|deadline| deadline.0),
+        model
+            .maximum_duration_minutes()
+            .map(|minutes| latest_departure.0.saturating_add(minutes)),
+    ]
+    .into_iter()
+    .flatten()
+    .min();
+    buffers.deadline = deadline;
+    if let Some(deadline) = deadline {
+        buffers
+            .latest_arrivals
+            .compute(bundle, index, query, deadline);
+    }
     index.lower_bounds.compute_bounds(
         query.arrival_candidates,
         &mut buffers.lower_bound_by_station,
@@ -928,6 +1000,15 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
         if lower_bound == UNREACHABLE {
             return false;
         }
+        if self.buffers.deadline.is_some()
+            && self
+                .buffers
+                .latest_arrivals
+                .latest(station)
+                .is_none_or(|latest| label.arrival > latest)
+        {
+            return false;
+        }
         let earliest_arrival = label.arrival.saturating_add(lower_bound);
         if self
             .model
@@ -957,6 +1038,49 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
             self.buffers.targets_by_round[start..=start + label.days.index()]
                 .iter()
                 .any(|targets| targets.beats(earliest_arrival, cost_bound))
+        })
+    }
+
+    /// Returns whether a walk that arrives at a moment, with a cost so far and travel days, can't
+    /// beat the journeys found so far at any station. This is the test of `may_beat_targets`
+    /// without the lower bound of the station the walk ends at, so it holds for every longer
+    /// walk too. This is the early pruning of Rohovyi, Abuaisha and Walsh, "Early Pruning for
+    /// Public Transport Routing" (2026).
+    fn walk_cannot_beat_targets(
+        &self,
+        round: usize,
+        arrival: u32,
+        cost: i32,
+        days: TravelDays,
+    ) -> bool {
+        if self
+            .buffers
+            .deadline
+            .is_some_and(|deadline| arrival > deadline)
+        {
+            return true;
+        }
+        let cost_bound = self
+            .model
+            .remaining_cost_lower_bound(
+                MinutesSinceBundleStart(self.departure),
+                MinutesSinceBundleStart(arrival),
+                MinutesSinceBundleStart(arrival),
+                None,
+            )
+            .saturating_add(cost);
+        let counts = 0..=days.index();
+        if self.buffers.cost_limit_by_days[counts.clone()]
+            .iter()
+            .any(|&limit| cost_bound > limit)
+        {
+            return true;
+        }
+        (1..=round).any(|earlier_round| {
+            let start = earlier_round * TRAVEL_DAY_COUNTS;
+            self.buffers.targets_by_round[start..=start + days.index()]
+                .iter()
+                .any(|targets| targets.beats(arrival, cost_bound))
         })
     }
 
@@ -1513,6 +1637,10 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                 ride_arrival.cost,
             )
         });
+        // The walks from an arrival go shortest first, so once one arrives too late to beat a
+        // journey found so far, the longer ones do too. That holds only when a later arrival
+        // never costs less, which credit for a night in a berth can break.
+        let stops_early = self.model.credit_window().is_none();
         let mut cheapest_before: Option<(BundleStationIndex, i32, TravelDays)> = None;
         for ride_arrival in &arrivals {
             match cheapest_before {
@@ -1528,8 +1656,18 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                         Some((ride_arrival.station, ride_arrival.cost, ride_arrival.days));
                 }
             }
-            for footpath in self.bundle.footpaths_from(ride_arrival.station) {
+            for &footpath in self.index.footpaths_shortest_first(ride_arrival.station) {
                 let arrival = ride_arrival.arrival + u32::from(footpath.duration_minutes);
+                if stops_early
+                    && self.walk_cannot_beat_targets(
+                        round,
+                        arrival,
+                        ride_arrival.cost,
+                        ride_arrival.days,
+                    )
+                {
+                    break;
+                }
                 let label = CostLabel {
                     arrival,
                     ready: arrival,

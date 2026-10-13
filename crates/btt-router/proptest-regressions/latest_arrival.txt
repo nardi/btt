@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 939da333a8f098edf50ec27f53978fc5b3530ef70eb8bd4ff1e2aaa6b0f4c350 # shrinks to trips = [([0, 4], 211, [17])], footpaths = [], time_to_place = 7, deadline = 235

@@ -912,7 +912,7 @@ pub(crate) fn collect_departures(
 
 /// Returns the first trip offset for which `is_before` is false. Trips of a route are sorted by
 /// departure at every stop, so `is_before` is true for a prefix of the offsets.
-fn partition_point(trip_count: u32, is_before: impl Fn(u32) -> bool) -> u32 {
+pub(crate) fn partition_point(trip_count: u32, is_before: impl Fn(u32) -> bool) -> u32 {
     let (mut low, mut high) = (0, trip_count);
     while low < high {
         let middle = low + (high - low) / 2;

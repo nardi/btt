@@ -208,7 +208,7 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
         input: &LegPlanningInput,
         should_stop: impl Fn() -> bool + Sync,
     ) -> LegPlanningResult {
-        match self.search_leg(input, &should_stop) {
+        match self.search_leg_from_anchors(input, &should_stop) {
             Err(reason) => LegPlanningResult::NoJourneyFound(reason),
             Ok(mut search) => {
                 self.add_pick_from_other_weights(&mut search, input, None, &should_stop);
@@ -557,7 +557,7 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
     /// Plans one leg like `plan_leg` and also returns what the plan came from: the candidate
     /// stations and every journey of the Pareto set with its cost, for problem reports.
     pub fn explain_leg(&self, input: &LegPlanningInput) -> LegExplanation {
-        let search = match self.search_leg(input, &|| false) {
+        let search = match self.search_leg_from_anchors(input, &|| false) {
             Err(reason) => {
                 return LegExplanation::without_search(LegPlanningResult::NoJourneyFound(reason));
             }
@@ -605,6 +605,97 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             station_table: stations.table.into_vec(),
             follows_traveller_choice: ranking.follows_traveller_choice,
         }
+    }
+
+    /// Searches a leg on single tickets like `search_leg`, with the bounds of Bounded McRAPTOR
+    /// when the traveller weighs prices.
+    ///
+    /// A search without prices runs first. It is several times faster than one with prices,
+    /// and its journeys are the anchors: the cheapest of them at the traveller's weight is a
+    /// journey the priced search needs to beat. That cost goes to the priced search as its
+    /// limit, so it drops every label that can't lead to a cheaper journey from the first train
+    /// on, and turns into a deadline for the search backwards from the arrival place. The
+    /// anchors then join the journeys of the priced search, so the plan never loses one of
+    /// them. See Delling, Dibbelt and Pajor, "Fast and Exact Public Transit Routing with
+    /// Restricted Pareto Sets" (ALENEX 2019).
+    fn search_leg_from_anchors(
+        &self,
+        input: &LegPlanningInput,
+        should_stop: &(impl Fn() -> bool + Sync),
+    ) -> Result<LegSearch, NoJourneyReason> {
+        let Some(prices) = self.ride_prices.as_ref() else {
+            return self.search_leg(input, should_stop);
+        };
+        if input.price_weight == PriceWeight::TIME_FIRST {
+            return self.search_leg(input, should_stop);
+        }
+        let mut plain = input.clone();
+        plain.price_weight = PriceWeight::TIME_FIRST;
+        plain.chosen_journey = None;
+        let anchors = self.search_leg(&plain, should_stop)?;
+        let options = SearchOptions {
+            maximum_cost: self.anchor_cost_limit(&anchors, input, prices),
+            ..SearchOptions::SINGLE
+        };
+        let mut search = self.search_leg_in_mode(input, options, should_stop)?;
+        for (journey, days) in anchors.journeys.into_iter().zip(anchors.days) {
+            if !search.journeys.contains(&journey) {
+                search.journeys.push(journey);
+                search.days.push(days);
+            }
+        }
+        Ok(search)
+    }
+
+    /// Returns the cost limit that the anchors give a priced search, in its unit of hundredths
+    /// of a minute, or `None` without an anchor.
+    ///
+    /// Each anchor costs what the priced search would add up for it: the cost without the
+    /// price, and the price of every ride as the search charges it. The limit is the cheapest
+    /// anchor, with a margin. The ranking prices a journey from its tickets and with a dead
+    /// band of ten percent, which the ride by ride price of the search only estimates, so a
+    /// journey that ranks first can cost the search a little more than the anchor does. The
+    /// margin is a tenth of the anchor's price cost and two minutes.
+    fn anchor_cost_limit(
+        &self,
+        anchors: &LegSearch,
+        input: &LegPlanningInput,
+        prices: &RidePrices,
+    ) -> Option<i32> {
+        let weight = u64::from(input.price_weight.hundredths_of_minute_per_euro());
+        let arrival_window = self.ranking_arrival_window(input, anchors.night.as_ref());
+        anchors
+            .journeys
+            .iter()
+            .map(|journey| {
+                let cost_inputs =
+                    self.journey_cost_inputs(journey, &arrival_window, anchors.night.as_ref());
+                let minutes = journey_cost(
+                    cost_inputs,
+                    input.transfer_aversion,
+                    ScoringWeights::DEFAULT,
+                );
+                let mut previous: Option<btt_router::PreviousRide> = None;
+                let mut cents = 0_u64;
+                for ride in &journey.rides {
+                    cents += u64::from(prices.ride_price_cents(
+                        ride.raptor_route,
+                        ride.boarding_position,
+                        ride.alighting_position,
+                        previous,
+                        PriceMode::Single,
+                    ));
+                    previous = Some(btt_router::PreviousRide {
+                        raptor_route: ride.raptor_route,
+                        boarding_position: ride.boarding_position,
+                        alighting_position: ride.alighting_position,
+                    });
+                }
+                let price_cost = weight * cents / 100;
+                u64::from(minutes) * 100 + price_cost + price_cost / 10 + 200
+            })
+            .min()
+            .map(|limit| i32::try_from(limit).unwrap_or(i32::MAX))
     }
 
     /// Finds the candidate stations of a leg and searches its Pareto set of journeys on
@@ -2047,6 +2138,35 @@ mod tests {
             panic!("the leg has a journey");
         };
         plan
+    }
+
+    #[test]
+    fn the_anchors_keep_the_journey_an_unbounded_search_ranks_first() {
+        for (ice, regional) in [(12_000, 3_500), (4_300, 3_500), (6_000, 3_500)] {
+            let pricer = CategoryPricer {
+                ice: EuroCents(ice),
+                regional: EuroCents(regional),
+            };
+            let router = TimetableBundleRouter::from_loaded(
+                bundle(480),
+                Arc::new(TimeZoneFinder::new()),
+                pricer,
+            );
+            for weight in [
+                PriceWeight::BALANCED,
+                PriceWeight::FRUGAL,
+                PriceWeight::CHEAPEST,
+            ] {
+                let input = leg_input(weight);
+                // The priced search alone, without anchors or bounds.
+                let unbounded = router.search_leg(&input, &|| false).unwrap();
+                let ranking = router.rank_journeys(&unbounded, &input);
+                let expected = ranking.journeys.first().unwrap().journey;
+                let bounded = router.search_leg_from_anchors(&input, &|| false).unwrap();
+                let ranking = router.rank_journeys(&bounded, &input);
+                assert_eq!(ranking.journeys.first().unwrap().journey, expected);
+            }
+        }
     }
 
     #[test]

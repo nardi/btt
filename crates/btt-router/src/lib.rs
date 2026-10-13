@@ -9,6 +9,7 @@
 
 mod cost_search;
 mod index;
+mod latest_arrival;
 mod lower_bound;
 mod search;
 

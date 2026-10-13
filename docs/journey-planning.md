@@ -58,6 +58,8 @@ Without the ride constraint, this is a plain shortest path problem. Its constrai
 
 Every term sits on single edges, so the cost of a path is the sum of its edge costs. The sleep term counts each train with berths for the night minutes it covers, and the arrival window term depends only on the arrival moment, which the egress edges carry.
 
+With a price weight the problem has two objectives, the cost in time $c^\top x$ and the price $p(x)$, and the planner minimizes their weighted sum $c^\top x + w \, p(x)$. This is the weighted sum scalarization of a bi-objective shortest path problem on a time-dependent graph. The price is not a sum over edges, because a ticket covers several rides and its fare grows less than in proportion to the distance. The search therefore adds an estimate per ride, and the ranking prices the journeys it finds from their tickets. Euler, Lindner and Borndörfer describe the exact version of this problem, with fares that depend on the rides before, as price-optimal routing on a conditional fare network.
+
 ### From legs to a trip
 
 Legs that meet at a place with nights are independent, because the traveller sleeps between them, so each is its own problem. Legs joined by same-day stops form a chain, and the chain is one shortest path problem over the layers of its legs, connected by the stay edges. The trip's problem is the sum of these independent problems.
@@ -75,6 +77,16 @@ Plain RAPTOR keeps one label per station and round, the earliest arrival. The pl
 The planner runs the search as a range query over the departure window, the variant known as rRAPTOR. It starts from the latest departure and works back, reusing the labels of later departures. The result is the set of journeys that no other journey beats on all four of: a later departure, an earlier arrival, fewer trains and a lower cost. For a typical leg that is between 10 and 50 journeys. The window is split into parts that run on separate threads, and the results are merged into one set.
 
 Three techniques keep this fast. A backward search from the arrival stations over the fastest times between stations gives a lower bound on the arrival for every station. With a lower bound on the cost still to come, a label is dropped when a journey already found arrives no later and costs no more than the label could at best. On a night leg the cost bound subtracts the sleep that is still possible. It caps that sleep by the berth trains the station can still reach, found in four tiers by how much of the night a train covers, which prunes labels that could not sleep anyway but stays weak where a full night train is within reach. The search also skips the days on which no trip of a route runs. And on routes without berths, where a ride's cost doesn't depend on its times, an earlier trip that was boarded with no more cost stands for the later trips of the same day. MOTIS, whose routing core nigiri is also based on RAPTOR, uses similar techniques.
+
+### Bounds from a search without prices
+
+A search with prices keeps several times as many labels as one without, so at a price weight above zero the planner runs a search without prices first. Its journeys are the anchors. The planner prices each anchor at the traveller's weight, and the cheapest of them is a journey that the search with prices has to beat. That cost, with a margin, becomes the cost limit of the search with prices. A label whose cost and lower bound already exceed the limit can't lead to a journey worth showing, so the search drops it from the first train on, not only after it found a good journey itself. The anchors then join the journeys of the search with prices, so the plan never loses one of them.
+
+The cost limit also bounds the arrival. A journey costs at least the time from its departure to its arrival, less the most it can get back as credit for sleeping in a berth, so a journey that leaves by the end of the window and arrives after some deadline can't stay within the limit. A second search runs backwards from the arrival place before the search with prices. It finds, for every station, the latest moment from which a traveller still reaches the arrival place by that deadline, following the timetable round by round as RAPTOR does. The search with prices then drops every label that arrives at a station after that moment. The backward search keeps only moments that a label can reach at all, at the earliest the start of the window plus the fewest minutes from the departure place in the graph of fastest times between stations. Without that limit it would go back through the whole timetable before the window and cost more than it saves.
+
+This is Bounded McRAPTOR from Delling, Dibbelt and Pajor. In terms of optimization it is branch and bound: the anchors give an upper bound on the best cost, the lower bounds of the search give a bound for each label, and a label goes when its bound exceeds the limit. The labels of each station form the branches, and the rounds of RAPTOR order the search. Only the plan of a single leg at the traveller's weight uses anchors. The searches for the cheaper and the faster journey already have a cost limit, the cost of the chosen journey, so they get the backward search without anchors. The legs of a chain search without a limit, because the rest of the chain can make a costly journey the best one.
+
+On the long leg from Stockholm to Palermo at 3 minutes per euro, the plan took 7.6 seconds without bounds, 3.7 seconds with the anchors, and 2.0 seconds with the backward search as well. On a typical leg the anchor search costs about as much as the bounds save, and the backward search adds a few milliseconds.
 
 Other algorithms solve the same search problem. The Connection Scan Algorithm (Dibbelt et al., 2013) scans a sorted list of connections instead of routes, and Trip-Based Routing (Witt, 2015) precomputes the transfers between trips. RAPTOR fits well here because the ride count is a natural part of it, and because it works on a timetable that is rebuilt every few days without preprocessing.
 
@@ -138,11 +150,11 @@ The planner is exact for part of the cost and a heuristic for the rest. This sec
 
 ### Pruning in the search
 
-The search is exact for the stated cost in all but two places.
+The search is exact for the stated cost in all but three places.
 
 1. **Only the earliest trip.** At each stop, a label boards the earliest trip of a route it can reach, as in RAPTOR. A later trip of the same route is only tried from a later label. On a route with berths, a later trip can cover more of the night and cost less. A traveller who could wait for it at a station in the evening but doesn't leave the place later won't get it, which is rare because the search also starts from every later departure from the place.
 2. **Costly journeys.** Once a journey is found, labels that can't cost less than twice its cost are dropped, even when their journeys would leave later or arrive earlier. The ranking shows no alternative that costs more than twice the best, so these journeys would only matter for a chain, where the rest of the chain can make an otherwise costly journey the best.
-
+3. **The margin of the anchors.** The cost limit from the anchors is a cost of the search, which prices ride by ride. The ranking prices a journey from its tickets, with the dead band of ten percent. A journey can cost the search more than the limit and still rank first, when its tickets cost much less than its rides add up to. The margin of a tenth of the anchor's price cost and two minutes covers most of these. On the 80 legs of the benchmark at 3 minutes per euro, two legs lost their best journey this way. Frankfurt to Rostock now ranks first a journey that costs 3.5 percent more, and Pratola Peligna to Esquelbecq one that costs 0.25 percent more. A margin of half the price cost still lost the first and made the long legs slower again. In return, 21 legs got a better journey, because an anchor ranked above every journey of the search with prices. Two more legs chose a journey that costs a few minutes more, because the anchors shifted the cheapest price that the dead band counts from.
 
 Four exact shortcuts keep the number of scans down. The first round of a run boards only the trains that leave when the traveller reaches the station, because a train that leaves later belongs to the run for its own departure time, which leaves later and so beats this one. A trip that an earlier run or round boarded at the same stop or an earlier one, with no higher cost and no more rides, is not boarded again, because everything it reaches is in the bags already. A route that runs on none of the days a label could board is not queued, and a scan of a route skips the stops that have no labels from the previous round until it rides a train.
 
@@ -151,6 +163,10 @@ At a price weight above zero, the search adds the price of every ride to the cos
 On pass days the travel days are one more criterion, and every shortcut has to respect it. A journey on fewer days must stay beside a cheaper one on more, because the solve may have no pass day left for the cheaper one. A label covers another only when it uses fewer days, or the same number with the same last day. The same count with another last day is not enough, because a ride on the other's last day would add a day to one of them only. The two boarding shortcuts compare the days after the ride in the same way. Arrivals at the arrival place, and the cost limit they set, prune only labels with at least as many days. A journey that would use more than three days is dropped, since no pass option holds it.
 
 A train arrival that another train arrival covers does not walk on to the stations next to it. The label that covers it has walked on, or will, and its walks cover the walks from here. A label that arrived on foot can't walk on, so an arrival that only such labels cover still does. Nearly nine in ten labels of a priced search are covered when they are made, so this skips most of the footpath work, about a tenth of the CPU time of a priced search.
+
+The walks from a station go shortest first. Once a walk arrives too late or costs too much to beat a journey found so far, at any station, every longer walk does too, so the search stops there. This is the early pruning of Rohovyi, Abuaisha and Walsh. It leaves out the lower bound of the station the walk ends at, because that bound differs per station and would not hold for the longer walks. On a night leg a later arrival can cost less, through the credit for sleep, so the walks of a night leg all go through the usual test.
+
+The backward search of the anchors is exact. A property test compares its latest moments with the forward search on random timetables. A label that arrives at a station after its latest moment can't reach the arrival place by the deadline.
 
 A label from the departure place does not stand for a journey, even at a station where the arrival place also has a candidate, and does not keep a train that arrives there from standing for one. Without this rule, a leg between two places that share a station could miss journeys, because the walk covered the train arrival in the bag.
 The search counts cost in hundredths of a minute, while the ranking rounds the extra weight of the ways to stations to whole minutes once per journey. The two differ by less than a minute, and the ranking recomputes the cost of every journey the search returns.
@@ -164,12 +180,12 @@ The searches of a plan do not all block the leg. The plan of the leg at its weig
 | Weight | Plan, daytime | Plan, night | Extras, daytime | Extras, night |
 |---|---|---|---|---|
 | Before prices | 22 / 170 | 232 / 434 | none | none |
-| None | 28 / 208 | 263 / 535 | 73 / 1,284 | 377 / 2,328 |
-| 1 minute per euro | 83 / 725 | 658 / 1,744 | 132 / 1,703 | 951 / 3,205 |
-| 3 minutes per euro | 70 / 1,054 | 586 / 2,049 | 133 / 1,765 | 1,020 / 3,407 |
-| 8 minutes per euro | 69 / 1,104 | 400 / 2,207 | 56 / 488 | 514 / 1,012 |
+| None | 27 / 173 | 247 / 514 | 28 / 169 | 77 / 687 |
+| 1 minute per euro | 44 / 393 | 551 / 1,280 | 67 / 467 | 539 / 1,113 |
+| 3 minutes per euro | 41 / 548 | 568 / 1,263 | 68 / 513 | 500 / 1,051 |
+| 8 minutes per euro | 44 / 787 | 515 / 1,400 | 38 / 376 | 415 / 874 |
 
-On all 1000 legs of the benchmark, the plan without a weight takes a median of 36 ms for a daytime leg and 256 ms for a night leg, against 31 and 232 ms before prices. The chosen journey and its cost are the same as before for all 1000 legs.
+On all 1000 legs of the benchmark, the plan without a weight takes a median of 32 ms for a daytime leg and 239 ms for a night leg, against 31 and 232 ms before prices. The cost of the chosen journey is the same as before for all 1000 legs. Six night legs pick other trains at the same cost, because the walks from a station now go shortest first and a tie goes the other way.
 
 Two changes made the priced search faster. The boarding shortcuts ask the model for the price of the stops between two boardings only after every cheaper condition has held, which saves most of those calls. And the search reads prices from a curve per class and not from the formula. Together they cut the median planning time by about a third and the 90th percentile by up to half. What remains comes from the number of labels. A lower bound that adds the price of the distance still to cover, at the lowest price per kilometre of any class, would prune more, but it does nothing here. The fitted price of 10 of the 1471 classes in the benchmark bundle is flat over some distance beyond 20 km, so the lowest rate is zero and the bound adds nothing.
 
@@ -203,4 +219,11 @@ MOTIS, run on the same rail feeds with its own benchmark queries, gives a check 
 - J. Dibbelt, T. Pajor, B. Strasser, D. Wagner. Intriguingly Simple and Fast Transit Routing. SEA 2013. Describes the Connection Scan Algorithm.
 - S. Witt. Trip-Based Public Transit Routing. ESA 2015.
 - S. Irnich, G. Desaulniers. Shortest Path Problems with Resource Constraints. In Column Generation, Springer, 2005.
+- D. Delling, J. Dibbelt, T. Pajor. Fast and Exact Public Transit Routing with Restricted Pareto Sets. ALENEX 2019. Describes Bounded McRAPTOR, with anchor journeys and a backward pruning search.
+- A. Rohovyi, T. Abuaisha, T. Walsh. Early Pruning for Public Transport Routing. 2026. Sorts the footpaths of a station and stops at the first one that can't improve a journey.
+- M. Müller-Hannemann, M. Schnee. Finding All Attractive Train Connections by Multi-Criteria Pareto Search. In Algorithmic Methods for Railway Optimization, Springer, 2007. Searches the Deutsche Bahn timetable with fares as a criterion and a relaxed dominance.
+- R. Euler, N. Lindner, R. Borndörfer. Price Optimal Routing in Public Transportation. EURO Journal on Transportation and Logistics, 2024. States the exact problem with fares that depend on the rides before, as a shortest path on a conditional fare network.
+- M. Ehrgott. Multicriteria Optimization. Springer, 2005. Covers the weighted sum scalarization and the a posteriori approach.
+- A. H. Land, A. G. Doig. An Automatic Method of Solving Discrete Programming Problems. Econometrica 28(3), 1960. The origin of branch and bound.
+- L. Mandow, J. L. Pérez de la Cruz. Multiobjective A* Search with Consistent Heuristics. Journal of the ACM 57(5), 2010. Describes NAMOA*, a label-setting search for several objectives with lower bounds on each.
 - MOTIS and its routing core nigiri, at [github.com/motis-project](https://github.com/motis-project).
