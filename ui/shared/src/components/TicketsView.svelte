@@ -1,7 +1,8 @@
 <script lang="ts">
   // The tickets screen: the trains of the trip on the left, the tickets to buy on the right.
-  import type { Price, TicketItem, TicketPlan, TicketStrategy } from "../bindings";
+  import type { Price, TicketItem, TicketPlan, TicketStrategy, TripPlaceId } from "../bindings";
   import { formatDate, formatTimeInZone } from "../format";
+  import type { LegLine } from "../itinerary";
   import {
     adjustedTotal,
     effectivePrice,
@@ -20,10 +21,13 @@
     ridesByDate,
     ticketColour,
   } from "../tickets";
+  import Icon from "./Icon.svelte";
   import Spinner from "./Spinner.svelte";
+  import TrainChip from "./TrainChip.svelte";
 
   let {
     plan,
+    legLines,
     loading,
     livePrices,
     liveLoading,
@@ -34,6 +38,8 @@
   }: {
     /** The plan, or `null` before the first one arrives. */
     plan: TicketPlan | null;
+    /** The color of each leg by its arrival place, which colors the train of each ride. */
+    legLines: ReadonlyMap<TripPlaceId, LegLine>;
     loading: boolean;
     /** Live prices from booking sites, by ticket. They replace the estimates they are for. */
     livePrices: LivePrices;
@@ -80,13 +86,19 @@
     return (total.low + total.high) / 2;
   }
 
-  /** Describes how much more a strategy costs than the cheapest. */
+  /**
+   * Describes how much more a strategy costs than the cheapest. The difference is exact only
+   * when both totals are exact, and an estimate of an estimate carries a tilde.
+   */
   function difference(strategy: TicketStrategy): string {
     const cheapest = strategies.reduce((best, other) => (middle(other) < middle(best) ? other : best), strategies[0]!);
     if (strategy === cheapest) {
       return "cheapest";
     }
-    return `${formatEuro(Math.round(middle(strategy) - middle(cheapest)))} more`;
+    const exact = totalOf(strategy).kind !== "Range" && totalOf(cheapest).kind !== "Range";
+    const cents = middle(strategy) - middle(cheapest);
+    // A difference of estimates is shown in whole euro, because cents would claim precision.
+    return `${exact ? formatEuro(Math.round(cents)) : `~${formatEuro(Math.round(cents / 100) * 100)}`} more`;
   }
 
   /** Says where a price comes from, for its tooltip. */
@@ -103,21 +115,12 @@
 {#snippet retryButton(item: TicketItem)}
   <button
     type="button"
-    class="retry"
+    class="icon-button retry"
     aria-label="Look up the live price again"
     title="Look up the live price again"
     onclick={() => onRetryLivePrice(item)}
   >
-    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
-      <path
-        d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      />
-    </svg>
+    <Icon name="retry" size={14} />
   </button>
 {/snippet}
 
@@ -130,28 +133,32 @@
     <div class="trains">
       <h2>Trains</h2>
       {#each groups as group (group.date)}
-        <h3>{formatDate(group.date)}</h3>
-        <ol>
+        <h3 class="numbers">{formatDate(group.date)}</h3>
+        <ol class="rides">
           {#each group.indices as index (index)}
             {@const ride = plan.rides[index]!}
-            <li>
-              <div class="ride">
-                <span class="name">{ride.train_label.category} {ride.train_label.number}</span>
-                <span class="route">
-                  {formatTimeInZone(ride.departure_time, ride.time_zone)}
-                  {ride.from_name} to {ride.to_name}
-                </span>
+            <li class="ride-row">
+              <div class="run">
+                <TrainChip
+                  label={`${ride.train_label.category} ${ride.train_label.number}`}
+                  colour={legLines.get(ride.leg_arrival_place_id)?.colour ?? "var(--color-text-muted)"}
+                />
                 <span class="chips">
                   {#each selected.covers[index] ?? [] as ticketId (ticketId)}
                     {@const ticket = selected.items.find((item) => item.id === ticketId)}
                     <span class="chip" style:--ticket-colour={ticketColour(ticketId)}>
-                      {ticket?.title.split(",")[0] ?? "Ticket"}
+                      <span class="chip-dot" aria-hidden="true"></span>
+                      <span>{ticket?.title.split(",")[0] ?? "Ticket"}</span>
                     </span>
                   {:else}
                     <span class="chip none">no ticket</span>
                   {/each}
                 </span>
               </div>
+              <span class="route numbers">
+                {formatTimeInZone(ride.departure_time, ride.time_zone)}
+                {ride.from_name} to {ride.to_name}
+              </span>
             </li>
           {/each}
         </ol>
@@ -167,11 +174,11 @@
         </p>
       {/if}
       <div class="total" title={priceKindDescription(totalOf(selected).kind)}>
-        <span class="total-price">{formatTotal(totalOf(selected))}</span>
+        <span class="total-price numbers">{formatTotal(totalOf(selected))}</span>
         {#if totalPending(selected)}
           {@render spinner("Looking up live prices")}
         {/if}
-        <span class="badge kind-{totalOf(selected).kind}">
+        <span class="badge">
           {priceKindLabel(totalOf(selected).kind)}
         </span>
         {#if plan.traveller_name !== null}
@@ -188,11 +195,11 @@
             onclick={() => (selectedIndex = strategyIndex)}
           >
             <span class="strategy-title">{strategy.title}</span>
-            <span>
+            <span class="strategy-total numbers">
               {formatTotal(totalOf(strategy))}
               {#if totalPending(strategy)}{@render spinner("Looking up live prices")}{/if}
             </span>
-            <span class="muted">
+            <span class="difference muted numbers">
               {#if anyPending}{@render spinner("Comparing")}{:else}{difference(strategy)}{/if}
             </span>
           </button>
@@ -205,23 +212,33 @@
         {#each selected.items as item (item.id)}
           {@const price = effectivePrice(item, livePrices)}
           <li class="item" style:--ticket-colour={ticketColour(item.id)}>
-            <div class="item-header">
-              <span class="item-title">{item.title}</span>
-              <span class="item-price" title={sourceText(price)}>
-                {formatPrice(price)}
-                {#if isRetrying(item) || isLivePending(item, livePrices, liveLoading)}
-                  {@render spinner("Looking up the live price")}
-                {:else if isLiveUnavailable(item, livePrices)}
-                  <span class="badge unavailable" title="The booking site shows this trip but sells no ticket for it now, for example because the sale has not opened or it is sold out.">Unavailable</span>
-                  {@render retryButton(item)}
-                {:else if isLiveFailed(item, livePrices)}
-                  <span class="badge failed" title="The booking site gave no price, for example because it did not answer.">No live price</span>
-                  {@render retryButton(item)}
-                {:else}
-                  <span class="badge kind-{price.kind}">{priceKindLabel(price.kind)}</span>
-                {/if}
-              </span>
-            </div>
+            <span class="item-title">{item.title}</span>
+            <span class="item-price numbers" title={sourceText(price)}>
+              {formatPrice(price)}
+              {#if isRetrying(item) || isLivePending(item, livePrices, liveLoading)}
+                {@render spinner("Looking up the live price")}
+              {:else if isLiveUnavailable(item, livePrices)}
+                <span
+                  class="badge unavailable"
+                  title="The booking site shows this trip but sells no ticket for it now, for example because the sale has not opened or it is sold out."
+                >Unavailable</span>
+                {@render retryButton(item)}
+              {:else if isLiveFailed(item, livePrices)}
+                <span
+                  class="badge failed"
+                  title="The booking site gave no price, for example because it did not answer."
+                >No live price</span>
+                {@render retryButton(item)}
+              {:else if price.kind === "Live"}
+                <!-- A filled green dot marks a live price. -->
+                <span class="dot" title="A live price from the booking site."></span>
+              {:else if price.kind === "Range"}
+                <!-- An open dot marks an estimate. -->
+                <span class="dot open" title="An estimate from the price model."></span>
+              {:else}
+                <span class="badge">{priceKindLabel(price.kind)}</span>
+              {/if}
+            </span>
             <p class="detail">{item.detail}</p>
             {#if livePriceOf(item, livePrices) !== null}
               <p class="detail">
@@ -230,10 +247,10 @@
             {/if}
             {#if item.booking_link !== null}
               {@const link = item.booking_link}
-              <button type="button" class="link" onclick={() => onOpenLink(link.url)}>
+              <button type="button" class="item-buy" onclick={() => onOpenLink(link.url)}>
                 {link.label}
               </button>
-              <span class="muted">
+              <span class="muted link-note">
                 {link.kind === "Product" ? "opens the page that sells it" : "opens the shop's search"}
               </span>
             {/if}
@@ -247,21 +264,23 @@
 <style>
   .tickets {
     display: grid;
-    grid-template-columns: minmax(320px, 1fr) minmax(360px, 1fr);
+    grid-template-columns: minmax(320px, 1fr) minmax(380px, 1.2fr);
     gap: var(--space-6);
     overflow-y: auto;
     min-height: 0;
     align-items: start;
   }
 
-  h2,
-  h3 {
-    margin: 0 0 var(--space-2);
+  h2 {
+    margin: 0 0 var(--space-1);
+    font-weight: 700;
+    font-size: var(--text-section);
   }
 
   h3 {
-    margin-top: var(--space-3);
-    font-size: 1rem;
+    margin: var(--space-3) 0 var(--space-1);
+    font-size: var(--text-small);
+    font-weight: 400;
     color: var(--color-text-muted);
   }
 
@@ -277,25 +296,32 @@
     color: var(--color-text-muted);
   }
 
-  li {
-    padding: var(--space-2) 0;
-    border-bottom: 1px solid var(--color-border);
-  }
-
-  .ride {
+  .rides {
     display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-1) var(--space-3);
-    align-items: baseline;
+    flex-direction: column;
+    gap: var(--space-2);
   }
 
-  .name {
-    font-weight: 600;
+  .ride-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px var(--space-4);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+  }
+
+  .run {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
   }
 
   .route {
-    flex: 1;
-    min-width: 12em;
+    color: var(--color-text-muted);
+    font-size: var(--text-caption);
   }
 
   .chips {
@@ -304,12 +330,24 @@
     flex-wrap: wrap;
   }
 
+  /* A chip keeps its whole label in one child, so the flex gap cannot split the words. The
+     ticket colour links each train to the ticket that covers it. */
   .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 10px 2px 8px;
+    border-radius: var(--radius-pill);
+    font-size: var(--text-caption);
+    font-weight: 600;
+    background: color-mix(in srgb, var(--ticket-colour) 14%, var(--color-surface));
+  }
+
+  .chip .chip-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
     background: var(--ticket-colour);
-    color: white;
-    border-radius: 999px;
-    padding: 0 var(--space-2);
-    font-size: 0.85em;
   }
 
   .chip.none {
@@ -328,36 +366,57 @@
     align-items: baseline;
     gap: var(--space-3);
     flex-wrap: wrap;
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
   }
 
   .total-price {
-    font-size: 1.6rem;
+    font-size: var(--text-figure);
     font-weight: 700;
   }
 
+  /* The strategy choices sit above a rule, apart from the ticket list under it. */
   .strategies {
     display: flex;
     flex-direction: column;
-    gap: var(--space-1);
+    gap: var(--space-2);
+    padding-bottom: var(--space-4);
+    border-bottom: 1px solid var(--color-border);
   }
 
   .strategies button {
     display: flex;
-    gap: var(--space-3);
-    align-items: baseline;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
     text-align: left;
+    padding: 10px 16px;
+    border-radius: var(--radius);
   }
 
   .strategies button.selected {
-    border-color: var(--color-accent);
-    outline: 1px solid var(--color-accent);
+    border: 2px solid var(--color-accent);
+    padding: 9px 15px;
   }
 
   .strategy-title {
-    flex: 1;
+    font-size: var(--text-button);
     font-weight: 600;
   }
 
+  .strategy-total {
+    font-weight: 700;
+    font-size: var(--text-lead);
+  }
+
+  .difference {
+    font-size: var(--text-caption);
+  }
+
+  /* A ticket card: title and detail on the left, the price with the buy button under it on the
+     right, so the eye links the two. */
   .items {
     display: flex;
     flex-direction: column;
@@ -369,93 +428,92 @@
     border: 1px solid var(--color-border);
     border-left: 4px solid var(--ticket-colour);
     border-radius: var(--radius);
-    padding: var(--space-2) var(--space-3);
-  }
-
-  .item-header {
-    display: flex;
-    justify-content: space-between;
-    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: var(--space-4);
+    row-gap: var(--space-1);
+    align-items: start;
   }
 
   .item-title {
+    grid-column: 1;
     font-weight: 600;
   }
 
   .item-price {
+    grid-column: 2;
+    justify-self: end;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-weight: 700;
     white-space: nowrap;
   }
 
-  .detail,
-  .note {
-    margin: var(--space-1) 0;
+  .detail {
+    grid-column: 1;
+    margin: 0;
     color: var(--color-text-muted);
+    font-size: var(--text-small);
+  }
+
+  .item-buy {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+    padding: 5px 13px;
+    font-size: var(--text-small);
+  }
+
+  .link-note {
+    grid-column: 2;
+    justify-self: end;
+    font-size: var(--text-caption);
+    text-align: right;
   }
 
   .notice {
     margin: 0;
-    padding: var(--space-2) var(--space-3);
-    background: var(--color-notice);
+    padding: 10px var(--space-4);
+    background: var(--color-notice-fill);
+    color: var(--color-notice);
     border-radius: var(--radius);
+    font-size: var(--text-small);
+  }
+
+  .note {
+    margin: 0;
+    color: var(--color-text-muted);
   }
 
   .badge {
-    font-size: 0.8em;
-    border-radius: 4px;
-    padding: 0 var(--space-1);
-    border: 1px solid var(--color-border);
-  }
-
-  .badge.kind-Formula {
-    border-color: #2f8f5b;
-  }
-
-  .badge.kind-Live {
-    border-color: #1f6fb2;
-  }
-
-  .badge.kind-Range {
-    border-color: #b2851f;
+    font-size: var(--text-caption);
+    border-radius: var(--radius-pill);
+    padding: 3px 10px;
+    background: var(--color-surface-muted);
+    color: var(--color-text-muted);
   }
 
   .badge.unavailable {
-    border-color: var(--color-danger);
+    background: color-mix(in srgb, var(--color-danger) 8%, transparent);
     color: var(--color-danger);
   }
 
   .badge.failed {
-    color: var(--color-text-muted);
-  }
-
-  .retry {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 2px;
-    margin-left: var(--space-1);
-    border: 1px solid var(--color-border);
-    border-radius: 50%;
     background: none;
-    color: var(--color-text-muted);
-    vertical-align: middle;
-    cursor: pointer;
+    border: 1px solid var(--color-border);
   }
 
-  .retry:hover,
-  .retry:focus-visible {
-    color: var(--color-accent);
-    border-color: var(--color-accent);
+  /* The small round button that asks the booking site again. */
+  .retry {
+    width: 24px;
+    height: 24px;
+    margin-left: var(--space-1);
+    color: var(--color-text-muted);
   }
 
   .muted {
     color: var(--color-text-muted);
-  }
-
-  .link {
-    border: none;
-    background: none;
-    padding: 0;
-    color: var(--color-accent);
-    text-decoration: underline;
   }
 </style>

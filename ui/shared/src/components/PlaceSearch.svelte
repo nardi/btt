@@ -1,6 +1,7 @@
 <script lang="ts">
   // Searches places by name and reports the one the user picks.
   import type { PlaceSearchResult } from "../bindings";
+  import Spinner from "./Spinner.svelte";
 
   /** Time without typing after which a search starts, so each keystroke sends no request. */
   const searchDelayMilliseconds = 300;
@@ -59,7 +60,10 @@
     oninput={(event) => scheduleSearch(event.currentTarget.value)}
   />
   {#if searching}
-    <span class="status">Searching…</span>
+    <span class="status">
+      <Spinner label="Searching" />
+      Searching…
+    </span>
   {/if}
   {#if results.length > 0}
     <ul class="results">
@@ -90,7 +94,11 @@
     position: absolute;
     right: var(--space-3);
     top: var(--space-2);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
     color: var(--color-text-muted);
+    font-size: var(--text-small);
   }
 
   .results {
@@ -100,6 +108,7 @@
     border: 1px solid var(--color-border);
     border-radius: var(--radius);
     background: var(--color-surface);
+    overflow: hidden;
   }
 
   .results button {

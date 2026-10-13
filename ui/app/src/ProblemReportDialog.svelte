@@ -77,15 +77,16 @@
     flex-direction: column;
     gap: var(--space-3);
     width: min(520px, calc(100vw - 2 * var(--space-4)));
-    padding: var(--space-4);
+    padding: var(--space-4) var(--space-6);
+    border: 1px solid var(--color-border);
     border-radius: var(--radius);
     background: var(--color-surface);
-    box-shadow: 0 8px 32px rgb(0 0 0 / 30%);
   }
 
   h2 {
     margin: 0;
-    font-size: 1.2em;
+    font-weight: 700;
+    font-size: var(--text-heading);
   }
 
   p {

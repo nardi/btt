@@ -16,7 +16,8 @@
   import SetupView from "@btt/shared/components/SetupView.svelte";
   import TicketsView from "@btt/shared/components/TicketsView.svelte";
   import TripMap from "@btt/shared/components/TripMap.svelte";
-  import { itineraryRows } from "@btt/shared/itinerary";
+  import Icon from "@btt/shared/components/Icon.svelte";
+  import { itineraryRows, legLine, type LegLine } from "@btt/shared/itinerary";
   import { liveQuoteKey } from "@btt/shared/tickets";
   import { legViewState } from "@btt/shared/trip-source";
   import type { PlaceFocusRequest } from "@btt/shared/map-features";
@@ -52,6 +53,18 @@
   let liveLoading = $state(false);
   /** The keys of the tickets whose live price is being looked up again. */
   let retrying: ReadonlySet<string> = $state(new Set());
+  /** The color of each leg of the open trip by its arrival place, as the itinerary draws it. */
+  const legLines: ReadonlyMap<number, LegLine> = $derived.by(() => {
+    const source = openSource;
+    if (source === null) {
+      return new Map();
+    }
+    return new Map(
+      itineraryRows(source.trip).legs.map(
+        (leg, index) => [leg.arrivalPlace.id, legLine(leg.travelMode, index + 1)] as const,
+      ),
+    );
+  });
   /** Numbers the pricing requests, so that a late answer to an old request is dropped. */
   let ticketRequestNumber = 0;
   /** Where the map of the open trip looks, for problem reports. */
@@ -294,7 +307,10 @@
     <TripList {trips} onCreate={createTrip} onOpen={openTrip} onDelete={deleteTrip} />
   {:else}
     <header class="trip-header">
-      <button type="button" onclick={closeTrip}>← Trips</button>
+      <button type="button" class="with-icon" onclick={closeTrip}>
+        <Icon name="back" />
+        Trips
+      </button>
       <input
         class="trip-name"
         type="text"
@@ -302,10 +318,11 @@
         aria-label="Trip name"
         onchange={(event) => renameTrip(event.currentTarget.value)}
       />
-      <label>
-        Start
+      <label class="start-date">
+        <span class="label">Start</span>
         <input
           type="date"
+          class="numbers"
           value={openSource.trip.start_date}
           onchange={(event) => {
             if (event.currentTarget.value !== "") {
@@ -317,23 +334,27 @@
       <div class="history-buttons">
         <button
           type="button"
+          class="icon-button large"
           disabled={openSource.history.undo_description === null}
+          aria-label="Undo"
           title={openSource.history.undo_description === null
             ? "Nothing to undo"
             : `Undo: ${openSource.history.undo_description} (Ctrl+Z)`}
           onclick={() => void openSource?.undo()}
         >
-          Undo
+          <Icon name="undo" />
         </button>
         <button
           type="button"
+          class="icon-button large"
           disabled={openSource.history.redo_description === null}
+          aria-label="Redo"
           title={openSource.history.redo_description === null
             ? "Nothing to redo"
             : `Redo: ${openSource.history.redo_description} (Ctrl+Shift+Z)`}
           onclick={() => void openSource?.redo()}
         >
-          Redo
+          <Icon name="redo" />
         </button>
       </div>
       <button type="button" onclick={() => (showProblemReport = true)}>Report a problem</button>
@@ -359,46 +380,51 @@
         </button>
       {/each}
     </nav>
-    {#if screen === "setup"}
-      <SetupView
-        source={openSource}
-        {travellers}
-        onSaveTraveller={saveTraveller}
-        onDeleteTraveller={deleteTraveller}
-      />
-    {:else if screen === "tickets"}
-      <TicketsView
-        plan={ticketPlan}
-        loading={ticketsLoading}
-        {livePrices}
-        {liveLoading}
-        {retrying}
-        {unplannedLegs}
-        onOpenLink={openBookingLink}
-        onRetryLivePrice={retryLivePrice}
-      />
-    {:else}
-    <div class="workspace">
-      <div class="itinerary-column">
-        <ItineraryView
-          source={openSource}
-          {selectedPlaceId}
-          onSelect={(placeId) => (selectedPlaceId = placeId)}
-          onFocus={focusPlace}
-          onOpenSetup={() => (screen = "setup")}
-        />
+    {#key screen}
+      <div class="panel">
+        {#if screen === "setup"}
+          <SetupView
+            source={openSource}
+            {travellers}
+            onSaveTraveller={saveTraveller}
+            onDeleteTraveller={deleteTraveller}
+          />
+        {:else if screen === "tickets"}
+          <TicketsView
+            plan={ticketPlan}
+            {legLines}
+            loading={ticketsLoading}
+            {livePrices}
+            {liveLoading}
+            {retrying}
+            {unplannedLegs}
+            onOpenLink={openBookingLink}
+            onRetryLivePrice={retryLivePrice}
+          />
+        {:else}
+          <div class="workspace">
+            <div class="itinerary-column">
+              <ItineraryView
+                source={openSource}
+                {selectedPlaceId}
+                onSelect={(placeId) => (selectedPlaceId = placeId)}
+                onFocus={focusPlace}
+                onOpenSetup={() => (screen = "setup")}
+              />
+            </div>
+            <div class="map-column">
+              <TripMap
+                source={openSource}
+                {selectedPlaceId}
+                {focusRequest}
+                onSelect={(placeId) => (selectedPlaceId = placeId)}
+                onViewChange={(view) => (mapView = view)}
+              />
+            </div>
+          </div>
+        {/if}
       </div>
-      <div class="map-column">
-        <TripMap
-          source={openSource}
-          {selectedPlaceId}
-          {focusRequest}
-          onSelect={(placeId) => (selectedPlaceId = placeId)}
-          onViewChange={(view) => (mapView = view)}
-        />
-      </div>
-    </div>
-    {/if}
+    {/key}
   {/if}
 </main>
 
@@ -422,13 +448,32 @@
   .trip-header {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
+    gap: var(--space-6);
   }
 
   .trip-name {
     flex: 1;
-    font-size: 1.3rem;
-    font-weight: 600;
+    min-width: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: none;
+    font-size: var(--text-title);
+    font-weight: 700;
+  }
+
+  .trip-name:focus-visible {
+    outline-offset: 4px;
+  }
+
+  .start-date {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .start-date .label {
+    color: var(--color-text-muted);
   }
 
   .history-buttons {
@@ -447,11 +492,34 @@
     border-bottom: 2px solid transparent;
     border-radius: 0;
     background: none;
+    padding: var(--space-2) var(--space-3) calc(var(--space-2) + 2px);
+    color: var(--color-text-muted);
+    font-weight: 500;
+  }
+
+  .tabs button:hover {
+    background: none;
+    color: var(--color-text);
   }
 
   .tabs button.active {
     border-bottom-color: var(--color-accent);
+    color: var(--color-text);
     font-weight: 600;
+  }
+
+  /* Only the open screen is in the flow. It enters with a short crossfade and slide. */
+  .panel {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    animation: panel-enter 150ms ease-out;
+  }
+
+  .panel > * {
+    flex: 1;
+    min-height: 0;
   }
 
   .workspace {

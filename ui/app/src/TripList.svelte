@@ -2,6 +2,7 @@
   // Lists stored trips and creates new ones.
   import type { TripId, TripSummary } from "@btt/shared/bindings";
   import { formatDate } from "@btt/shared/format";
+  import Icon from "@btt/shared/components/Icon.svelte";
 
   let {
     trips,
@@ -40,7 +41,10 @@
   <form class="new-trip" onsubmit={create}>
     <input type="text" placeholder="Name of a new trip" bind:value={newTripName} required />
     <input type="date" bind:value={newTripStartDate} required />
-    <button type="submit" class="primary">Create trip</button>
+    <button type="submit" class="primary with-icon">
+      <Icon name="plus" />
+      Create trip
+    </button>
   </form>
 
   {#if trips.length === 0}
@@ -49,14 +53,23 @@
     <ul>
       {#each trips as trip (trip.trip_id)}
         <li>
-          <button type="button" class="open" onclick={() => onOpen(trip.trip_id)}>
+          <span class="text">
             <span class="name">{trip.name}</span>
-            <span class="details">
+            <span class="details numbers">
               from {formatDate(trip.start_date)} · {trip.place_count}
               {trip.place_count === 1 ? "place" : "places"}
             </span>
+          </span>
+          <button type="button" onclick={() => onOpen(trip.trip_id)}>Open</button>
+          <button
+            type="button"
+            class="icon-button danger-hover"
+            aria-label="Delete trip"
+            title="Delete trip"
+            onclick={() => onDelete(trip.trip_id)}
+          >
+            <Icon name="trash" />
           </button>
-          <button type="button" class="delete" onclick={() => onDelete(trip.trip_id)}>Delete</button>
         </li>
       {/each}
     </ul>
@@ -72,7 +85,8 @@
 
   h1 {
     margin: 0;
-    font-size: 1.4rem;
+    font-size: 1.75rem;
+    font-weight: 700;
   }
 
   .new-trip {
@@ -95,27 +109,29 @@
 
   li {
     display: flex;
-    gap: var(--space-2);
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
   }
 
-  .open {
+  .text {
     display: flex;
     flex: 1;
     flex-direction: column;
-    align-items: flex-start;
-    padding: var(--space-2) var(--space-3);
+    gap: var(--space-1);
   }
 
   .name {
-    font-weight: 600;
+    font-weight: 700;
+    font-size: var(--text-lead);
   }
 
   .details,
   .empty {
     color: var(--color-text-muted);
-  }
-
-  .delete {
-    color: var(--color-danger);
+    font-size: var(--text-small);
   }
 </style>
