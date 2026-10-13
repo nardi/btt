@@ -517,6 +517,18 @@ impl BoardedBefore {
     }
 }
 
+/// What became of a label that was offered to a bag.
+#[derive(Debug, Clone, Copy)]
+enum InsertOutcome {
+    /// The bag took the label, which is at this position.
+    Inserted(u32),
+    /// A label of the bag covers it.
+    Covered {
+        /// Whether one of the labels that cover it arrived by train and not on foot.
+        by_ride: bool,
+    },
+}
+
 /// A train arrival that footpaths start from.
 #[derive(Debug, Clone, Copy)]
 struct RideArrival {
@@ -972,6 +984,19 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
     /// removes the labels it covers. `existing` is the label's position when it is already
     /// stored. Returns the label's position when the bag took it.
     fn insert(&mut self, round: usize, label: CostLabel, existing: Option<u32>) -> Option<u32> {
+        match self.insert_checked(round, label, existing) {
+            InsertOutcome::Inserted(position) => Some(position),
+            InsertOutcome::Covered { .. } => None,
+        }
+    }
+
+    /// Adds a label like `insert`, and says why it was left out when it was.
+    fn insert_checked(
+        &mut self,
+        round: usize,
+        label: CostLabel,
+        existing: Option<u32>,
+    ) -> InsertOutcome {
         let slot = round * self.station_count + label.station.as_usize();
         // A walk from the departure place at a station that is also an arrival station is not a
         // journey to it, so it can't keep a ride from arriving there.
@@ -981,11 +1006,18 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
         let existing_bag = self.buffers.bag_by_slot[slot];
         if existing_bag != NONE {
             let entries = &mut self.buffers.bags[existing_bag as usize];
-            if entries.iter().any(|&other| {
+            let mut covered = false;
+            for &other in entries.iter() {
                 let other = &labels[other as usize];
-                other.covers(&label) && !(is_ride_to_arrival_station && other.origin.is_walk())
-            }) {
-                return None;
+                if other.covers(&label) && !(is_ride_to_arrival_station && other.origin.is_walk()) {
+                    covered = true;
+                    if matches!(other.origin, CostLabelOrigin::TrainRide { .. }) {
+                        return InsertOutcome::Covered { by_ride: true };
+                    }
+                }
+            }
+            if covered {
+                return InsertOutcome::Covered { by_ride: false };
             }
             entries.retain(|other| !label.covers(&labels[*other as usize]));
         }
@@ -1024,7 +1056,7 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                 *limit = (*limit).min(self.model.cost_limit(cost));
             }
         }
-        Some(position)
+        InsertOutcome::Inserted(position)
     }
 
     /// Moves the station lists of the round that just ended to the lists of the previous round
@@ -1334,9 +1366,14 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                     if !self.may_beat_targets(round, station, &label) {
                         continue;
                     }
-                    // Footpaths start from every train arrival, because a label that arrived
-                    // on foot can cover this one here but can't walk on.
-                    if self.bundle.footpaths_from(station).len() > 0 {
+                    // Footpaths start from every train arrival that no other train arrival
+                    // covers, because a label that arrived on foot can cover this one here but
+                    // can't walk on. A train arrival that covers this one has walked on, or
+                    // will, and its walks cover the ones from here.
+                    let outcome = self.insert_checked(round, label, None);
+                    if !matches!(outcome, InsertOutcome::Covered { by_ride: true })
+                        && self.bundle.footpaths_from(station).len() > 0
+                    {
                         self.buffers.ride_arrivals.push(RideArrival {
                             station,
                             arrival,
@@ -1347,7 +1384,6 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                             days: route_label.days,
                         });
                     }
-                    self.insert(round, label, None);
                 }
             }
             // Only stations with labels from the previous round can board.
