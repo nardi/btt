@@ -5,7 +5,12 @@
   import "maplibre-gl/dist/maplibre-gl.css";
 
   import type { GeoCoordinates, TripEdit, TripPlace, TripPlaceId } from "../bindings";
-  import type { Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent } from "maplibre-gl";
+  import type {
+    ExpressionSpecification,
+    Map as MapLibreMap,
+    MapLayerMouseEvent,
+    MapMouseEvent,
+  } from "maplibre-gl";
   import {
     CircleLayer,
     FillLayer,
@@ -17,7 +22,7 @@
   } from "svelte-maplibre-gl";
 
   import { destinationPoint, haversineMeters } from "../geo";
-  import { tripPlaces } from "../itinerary";
+  import { itineraryRows, tripPlaces } from "../itinerary";
   import {
     type PlaceDragPreview,
     type PlaceFocusRequest,
@@ -28,10 +33,20 @@
     intermediateStopPoints,
     transferPoints,
   } from "../map-features";
+  import {
+    legPalette,
+    mapAccent,
+    mapInk,
+    mapMuted,
+    mapStyle,
+    mapSurface,
+    nightColour,
+    theme,
+  } from "../theme.svelte";
   import type { TripSource } from "../trip-source";
 
-  /** OpenFreeMap style. Needs no API key and asks for OpenStreetMap attribution, which MapLibre shows. */
-  const mapStyleUrl = "https://tiles.openfreemap.org/styles/liberty";
+  /** The derived base style of the current theme, which keeps the OpenFreeMap attribution. */
+  const baseStyle = $derived(mapStyle(theme.current));
   /** Limits of a station search radius, matching `StationSearchRadius` in Rust. */
   const minimumRadiusMeters = 100;
   const maximumRadiusMeters = 50_000;
@@ -72,12 +87,33 @@
 
   const trip = $derived(source.viewState.trip);
   const places = $derived(tripPlaces(trip.itinerary));
+  /** The places that are stops in between, which the map draws as squares like the itinerary. */
+  const viaPlaceIds = $derived(
+    new Set(itineraryRows(trip).places.filter((row) => row.role === "via").map((row) => row.place.id)),
+  );
   const editable = $derived(source.kind === "editable" ? source : null);
   const circles = $derived(radiusCircles(trip, selectedPlaceId, dragPreview));
   const rides = $derived(rideLines(source.viewState));
   const stationWays = $derived(stationWayLines(source.viewState));
   const intermediateStops = $derived(intermediateStopPoints(source.viewState));
   const transfers = $derived(transferPoints(source.viewState));
+
+  /** The colour of a day ride, by the leg's position in the cycling palette. */
+  const dayRideColour = $derived(
+    [
+      "match",
+      ["get", "legPosition"],
+      1,
+      legPalette[theme.current][0],
+      2,
+      legPalette[theme.current][1],
+      3,
+      legPalette[theme.current][2],
+      4,
+      legPalette[theme.current][3],
+      legPalette[theme.current][0],
+    ] as ExpressionSpecification,
+  );
 
   /** The feature under the pointer and where its tooltip goes, or `null` when there is none. */
   let tooltip: { lnglat: [number, number]; lines: string[] } | null = $state(null);
@@ -108,6 +144,13 @@
       map.getCanvas().style.cursor = "";
     }
   }
+
+  // A remount of the map, such as when the theme changes, needs to fit the trip again.
+  $effect(() => {
+    void map;
+    fittedTripId = null;
+    knownPlaceIds = new Set();
+  });
 
   // Zooms to all places when a trip opens.
   $effect(() => {
@@ -239,128 +282,148 @@
   }
 </script>
 
-<MapLibre
-  bind:map
-  class="trip-map"
-  style={mapStyleUrl}
-  autoloadGlobalCss={false}
-  center={[10, 50]}
-  zoom={4}
-  doubleClickZoom={editable === null}
-  onclick={handleMapClick}
-  ondblclick={handleMapDoubleClick}
-  onmoveend={reportView}
->
-  <GeoJSONSource id="station-search-radii" data={circles}>
-    <FillLayer
-      paint={{
-        "fill-color": "#1f4e79",
-        "fill-opacity": ["case", ["get", "selected"], 0.16, 0.07],
-      }}
-    />
-    <LineLayer paint={{ "line-color": "#1f4e79", "line-width": 1.5, "line-opacity": 0.6 }} />
-  </GeoJSONSource>
+{#key theme.current}
+  <MapLibre
+    bind:map
+    class="trip-map"
+    style={baseStyle}
+    autoloadGlobalCss={false}
+    center={[10, 50]}
+    zoom={4}
+    doubleClickZoom={editable === null}
+    onclick={handleMapClick}
+    ondblclick={handleMapDoubleClick}
+    onmoveend={reportView}
+  >
+    <GeoJSONSource id="station-search-radii" data={circles}>
+      <FillLayer
+        paint={{
+          "fill-color": mapAccent[theme.current],
+          "fill-opacity": ["case", ["get", "selected"], 0.16, 0.07],
+        }}
+      />
+      <LineLayer
+        paint={{ "line-color": mapAccent[theme.current], "line-width": 1.5, "line-opacity": 0.6 }}
+      />
+    </GeoJSONSource>
 
-  <GeoJSONSource id="station-ways" data={stationWays}>
-    <LineLayer
-      layout={{ "line-cap": "round" }}
-      paint={{ "line-color": "#475569", "line-width": 2, "line-dasharray": [0.5, 2] }}
-    />
-  </GeoJSONSource>
+    <GeoJSONSource id="station-ways" data={stationWays}>
+      <LineLayer
+        layout={{ "line-cap": "round" }}
+        paint={{
+          "line-color": mapMuted[theme.current],
+          "line-width": 2,
+          "line-dasharray": [0.5, 2],
+        }}
+      />
+    </GeoJSONSource>
 
-  <GeoJSONSource id="planned-rides" data={rides}>
-    <!-- Purple marks trains with couchettes or sleepers, whatever the leg's travel mode. -->
-    <LineLayer
-      layout={{ "line-cap": "round" }}
-      paint={{
-        "line-color": ["case", ["get", "offersBerths"], "#6d28d9", "#c2410c"],
-        "line-width": 3,
-      }}
-    />
-    <!-- A wide invisible line catches the pointer, because a 3 pixel line is hard to hit. -->
-    <LineLayer
-      paint={{ "line-color": "#000000", "line-opacity": 0, "line-width": 14 }}
-      onmousemove={showTooltip}
-      onmouseleave={hideTooltip}
-    />
-  </GeoJSONSource>
+    <GeoJSONSource id="planned-rides" data={rides}>
+      <!-- Day rides take the cycling palette by leg position. -->
+      <LineLayer
+        filter={["==", ["get", "night"], false]}
+        layout={{ "line-cap": "round" }}
+        paint={{ "line-color": dayRideColour, "line-width": 4 }}
+      />
+      <!-- A night leg stays dashed and purple. -->
+      <LineLayer
+        filter={["==", ["get", "night"], true]}
+        layout={{ "line-cap": "round" }}
+        paint={{
+          "line-color": nightColour[theme.current],
+          "line-width": 4,
+          "line-dasharray": [2, 1.5],
+        }}
+      />
+      <!-- A wide invisible line catches the pointer, because a 4 pixel line is hard to hit. -->
+      <LineLayer
+        paint={{ "line-color": "#000000", "line-opacity": 0, "line-width": 14 }}
+        onmousemove={showTooltip}
+        onmouseleave={hideTooltip}
+      />
+    </GeoJSONSource>
 
-  <!-- Small dots for stops the traveller stays on the train through. They take no pointer
-       events, so hovering one still shows the tooltip of the line below. -->
-  <GeoJSONSource id="intermediate-stops" data={intermediateStops}>
-    <CircleLayer
-      paint={{
-        "circle-radius": 2.5,
-        "circle-color": "#ffffff",
-        "circle-stroke-color": ["case", ["get", "offersBerths"], "#6d28d9", "#c2410c"],
-        "circle-stroke-width": 1.5,
-      }}
-    />
-  </GeoJSONSource>
+    <!-- Small dots for stops the traveller stays on the train through. They take no pointer
+         events, so hovering one still shows the tooltip of the line below. -->
+    <GeoJSONSource id="intermediate-stops" data={intermediateStops}>
+      <CircleLayer
+        paint={{
+          "circle-radius": 2.5,
+          "circle-color": [
+            "case",
+            ["get", "night"],
+            nightColour[theme.current],
+            dayRideColour,
+          ] as ExpressionSpecification,
+        }}
+      />
+    </GeoJSONSource>
 
-  <GeoJSONSource id="transfer-points" data={transfers}>
-    <CircleLayer
-      paint={{
-        "circle-radius": ["case", ["==", ["get", "kind"], "transfer"], 6, 4],
-        "circle-color": "#ffffff",
-        "circle-stroke-color": "#c2410c",
-        "circle-stroke-width": ["case", ["==", ["get", "kind"], "transfer"], 3, 2],
-      }}
-      onmousemove={showTooltip}
-      onmouseleave={hideTooltip}
-    />
-  </GeoJSONSource>
+    <GeoJSONSource id="transfer-points" data={transfers}>
+      <CircleLayer
+        paint={{
+          "circle-radius": ["case", ["==", ["get", "kind"], "transfer"], 6, 4],
+          "circle-color": mapSurface[theme.current],
+          "circle-stroke-color": mapInk[theme.current],
+          "circle-stroke-width": ["case", ["==", ["get", "kind"], "transfer"], 3, 2],
+        }}
+        onmousemove={showTooltip}
+        onmouseleave={hideTooltip}
+      />
+    </GeoJSONSource>
 
-  {#if tooltip !== null}
-    <Popup
-      lnglat={tooltip.lnglat}
-      open
-      closeButton={false}
-      closeOnClick={false}
-      offset={10}
-      maxWidth="280px"
-    >
-      <div class="map-tooltip">
-        {#each tooltip.lines as line, lineIndex (lineIndex)}
-          <div class:title={lineIndex === 0}>{line}</div>
-        {/each}
-      </div>
-    </Popup>
-  {/if}
+    {#if tooltip !== null}
+      <Popup
+        lnglat={tooltip.lnglat}
+        open
+        closeButton={false}
+        closeOnClick={false}
+        offset={10}
+        maxWidth="280px"
+      >
+        <div class="map-tooltip">
+          {#each tooltip.lines as line, lineIndex (lineIndex)}
+            <div class:title={lineIndex === 0}>{line}</div>
+          {/each}
+        </div>
+      </Popup>
+    {/if}
 
-  {#each places as place, index (place.id)}
-    <Marker
-      lnglat={[place.coordinates.longitude, place.coordinates.latitude]}
-      draggable={editable !== null}
-      ondrag={(event) => previewMove(place, event.target.getLngLat())}
-      ondragend={(event) => finishMove(place, event.target.getLngLat())}
-    >
-      {#snippet content()}
-        <button
-          type="button"
-          class="place-marker"
-          class:selected={place.id === selectedPlaceId}
-          title={place.name}
-          onclick={() => onSelect(place.id)}
-        >
-          {index + 1}
-        </button>
-      {/snippet}
-    </Marker>
-    {#if editable !== null}
+    {#each places as place, index (place.id)}
       <Marker
-        lnglat={radiusHandlePosition(place)}
-        draggable
-        ondrag={(event) => previewRadius(place, event.target.getLngLat())}
-        ondragend={() => finishRadius(place)}
+        lnglat={[place.coordinates.longitude, place.coordinates.latitude]}
+        draggable={editable !== null}
+        ondrag={(event) => previewMove(place, event.target.getLngLat())}
+        ondragend={(event) => finishMove(place, event.target.getLngLat())}
       >
         {#snippet content()}
-          <div class="radius-handle" title="Drag to change the station search radius"></div>
+          <button
+            type="button"
+            class="place-marker"
+            class:selected={place.id === selectedPlaceId}
+            class:via={viaPlaceIds.has(place.id)}
+            title={place.name}
+            onclick={() => onSelect(place.id)}
+          >
+            {index + 1}
+          </button>
         {/snippet}
       </Marker>
-    {/if}
-  {/each}
-</MapLibre>
+      {#if editable !== null}
+        <Marker
+          lnglat={radiusHandlePosition(place)}
+          draggable
+          ondrag={(event) => previewRadius(place, event.target.getLngLat())}
+          ondragend={() => finishRadius(place)}
+        >
+          {#snippet content()}
+            <div class="radius-handle" title="Drag to change the station search radius"></div>
+          {/snippet}
+        </Marker>
+      {/if}
+    {/each}
+  </MapLibre>
+{/key}
 
 <style>
   :global(.trip-map) {
@@ -368,40 +431,67 @@
     height: 100%;
   }
 
+  /* The places are numbered ink circles, with a keyline in the background colour. */
   .place-marker {
     display: grid;
     place-items: center;
     width: 28px;
     height: 28px;
     padding: 0;
-    border: 2px solid #ffffff;
+    border: none;
     border-radius: 50%;
-    background: #1f4e79;
-    color: #ffffff;
+    background: var(--color-text);
+    color: var(--color-background);
     font-weight: 700;
-    box-shadow: 0 1px 4px rgb(0 0 0 / 40%);
+    box-shadow: 0 0 0 2px var(--color-background);
   }
 
+  /* A via place is a rounded square, as it is on the spine of the itinerary. */
+  .place-marker.via {
+    border-radius: 7px;
+  }
+
+  .place-marker:hover {
+    background: var(--color-text);
+    box-shadow: 0 0 0 2px var(--color-background), 0 0 0 3px var(--color-accent);
+  }
+
+  /* The chosen place gets a ring in the accent. */
   .place-marker.selected {
-    background: #c2410c;
+    box-shadow: 0 0 0 2px var(--color-background), 0 0 0 4px var(--color-accent);
   }
 
   .map-tooltip {
-    color: #1b2430;
+    color: var(--color-text);
     font-size: 13px;
     line-height: 1.4;
   }
 
   .map-tooltip .title {
-    font-weight: 600;
+    font-weight: 700;
   }
 
   .radius-handle {
     width: 12px;
     height: 12px;
-    border: 2px solid #1f4e79;
+    border: 2px solid var(--color-accent);
     border-radius: 50%;
-    background: #ffffff;
+    background: var(--color-surface);
     cursor: ew-resize;
+  }
+
+  /* The tooltip shares the surface look of the app: a hairline border and no shadow. */
+  :global(.maplibregl-popup-content) {
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-surface);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    box-shadow: none;
+  }
+
+  :global(.maplibregl-popup-tip) {
+    border-top-color: var(--color-surface);
+    border-bottom-color: var(--color-surface);
   }
 </style>

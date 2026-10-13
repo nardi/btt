@@ -5,7 +5,7 @@ import type { FeatureCollection, LineString, Point, Polygon } from "geojson";
 import type { GeoCoordinates, LegPlan, TrainRide, Trip, TripPlaceId } from "./bindings";
 import { formatDuration, formatTimeInZone } from "./format";
 import { circleRing } from "./geo";
-import { itineraryRows, tripPlaces } from "./itinerary";
+import { itineraryRows, isOvernight, tripPlaces } from "./itinerary";
 import { curvedRidePath } from "./ride-path";
 import { legViewState, type TripViewState } from "./trip-source";
 
@@ -18,8 +18,10 @@ export interface RadiusCircleProperties {
 /** Properties of a ride line. */
 export interface RideLineProperties {
   arrivalPlaceId: TripPlaceId;
-  /** Whether the train has couchettes or sleepers, which the map shows in purple. */
-  offersBerths: boolean;
+  /** The position of the leg in the cycling line palette, from one to four. */
+  legPosition: number;
+  /** Whether the leg is a night leg, which draws dashed in the night colour. */
+  night: boolean;
   /** Lines of text for the hover tooltip, separated by line breaks. */
   tooltip: string;
 }
@@ -109,11 +111,15 @@ function ridePathPoints(ride: TrainRide): GeoCoordinates[] {
  */
 export function rideLines(viewState: TripViewState): FeatureCollection<LineString, RideLineProperties> {
   const features: FeatureCollection<LineString, RideLineProperties>["features"] = [];
-  for (const leg of itineraryRows(viewState.trip).legs) {
+  const legs = itineraryRows(viewState.trip).legs;
+  for (const [legIndex, leg] of legs.entries()) {
     const legState = legViewState(viewState, leg.arrivalPlace.id);
     if (legState.status !== "found") {
       continue;
     }
+    // The palette cycles by leg position, and a night leg takes the night colour instead.
+    const legPosition = (legIndex % 4) + 1;
+    const night = isOvernight(leg.travelMode);
     const legPlan = legState.legPlan;
     for (const ride of chosenRides(legPlan)) {
       const boarding = legPlan.station_table[ride.boarding_station];
@@ -132,7 +138,7 @@ export function rideLines(viewState: TripViewState): FeatureCollection<LineStrin
           type: "LineString",
           coordinates: curvedRidePath([boarding.coordinates, ...ridePathPoints(ride), alighting.coordinates]),
         },
-        properties: { arrivalPlaceId: leg.arrivalPlace.id, offersBerths: ride.offers_berths, tooltip },
+        properties: { arrivalPlaceId: leg.arrivalPlace.id, legPosition, night, tooltip },
       });
     }
   }
@@ -141,8 +147,10 @@ export function rideLines(viewState: TripViewState): FeatureCollection<LineStrin
 
 /** Properties of a stop where the train halts but the traveller stays on. */
 export interface IntermediateStopProperties {
-  /** Whether the train has couchettes or sleepers, so the dot matches the line's color. */
-  offersBerths: boolean;
+  /** The position of the leg in the cycling line palette, from one to four. */
+  legPosition: number;
+  /** Whether the leg is a night leg. */
+  night: boolean;
 }
 
 /** Returns a point for every stop between boarding and alighting of the planned trains. */
@@ -150,17 +158,20 @@ export function intermediateStopPoints(
   viewState: TripViewState,
 ): FeatureCollection<Point, IntermediateStopProperties> {
   const features: FeatureCollection<Point, IntermediateStopProperties>["features"] = [];
-  for (const leg of itineraryRows(viewState.trip).legs) {
+  const legs = itineraryRows(viewState.trip).legs;
+  for (const [legIndex, leg] of legs.entries()) {
     const legState = legViewState(viewState, leg.arrivalPlace.id);
     if (legState.status !== "found") {
       continue;
     }
+    const legPosition = (legIndex % 4) + 1;
+    const night = isOvernight(leg.travelMode);
     for (const ride of chosenRides(legState.legPlan)) {
       for (const coordinates of ride.intermediate_station_coordinates) {
         features.push({
           type: "Feature",
           geometry: { type: "Point", coordinates: position(coordinates) },
-          properties: { offersBerths: ride.offers_berths },
+          properties: { legPosition, night },
         });
       }
     }

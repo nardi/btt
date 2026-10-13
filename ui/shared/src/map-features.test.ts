@@ -70,7 +70,7 @@ describe("rideLines", () => {
     const lines = rideLines(viewState([[3, { status: "found", legPlan: viennaToRome }]]));
     expect(lines.features).toHaveLength(1);
     const line = lines.features[0]!;
-    expect(line.properties).toMatchObject({ arrivalPlaceId: 3, offersBerths: true });
+    expect(line.properties).toMatchObject({ arrivalPlaceId: 3, legPosition: 2, night: true });
     expect(line.properties.tooltip.split("\n")[0]).toBe("NJ 40233");
     // The curve starts and ends at the stations and passes the station in between.
     const coordinates = line.geometry.coordinates;
@@ -110,7 +110,7 @@ describe("intermediateStopPoints", () => {
     const points = intermediateStopPoints(viewState([[3, { status: "found", legPlan: viennaToRome }]]));
     expect(points.features).toHaveLength(1);
     expect(points.features[0]!.geometry.coordinates).toEqual([11.2, 43.7]);
-    expect(points.features[0]!.properties.offersBerths).toBe(true);
+    expect(points.features[0]!.properties).toMatchObject({ legPosition: 2, night: true });
   });
 });
 
