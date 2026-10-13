@@ -250,9 +250,6 @@
               <button type="button" class="item-buy" onclick={() => onOpenLink(link.url)}>
                 {link.label}
               </button>
-              <span class="muted link-note">
-                {link.kind === "Product" ? "opens the page that sells it" : "opens the shop's search"}
-              </span>
             {/if}
           </li>
         {/each}
@@ -464,13 +461,6 @@
     justify-self: end;
     padding: 5px 13px;
     font-size: var(--text-small);
-  }
-
-  .link-note {
-    grid-column: 2;
-    justify-self: end;
-    font-size: var(--text-caption);
-    text-align: right;
   }
 
   .notice {
