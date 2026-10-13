@@ -3,6 +3,7 @@
   import type { TripId, TripSummary } from "@btt/shared/bindings";
   import { formatDate } from "@btt/shared/format";
   import Icon from "@btt/shared/components/Icon.svelte";
+  import TripRouteMap from "@btt/shared/components/TripRouteMap.svelte";
 
   let {
     trips,
@@ -53,6 +54,7 @@
     <ul>
       {#each trips as trip (trip.trip_id)}
         <li>
+          <TripRouteMap route={trip.route} />
           <span class="text">
             <span class="name">{trip.name}</span>
             <span class="details numbers">
