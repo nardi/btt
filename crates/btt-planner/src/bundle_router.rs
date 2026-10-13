@@ -633,11 +633,7 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
         plain.price_weight = PriceWeight::TIME_FIRST;
         plain.chosen_journey = None;
         let anchors = self.search_leg(&plain, should_stop)?;
-        let options = SearchOptions {
-            maximum_cost: self.anchor_cost_limit(&anchors, input, prices),
-            ..SearchOptions::SINGLE
-        };
-        let mut search = self.search_leg_in_mode(input, options, should_stop)?;
+        let mut search = self.search_leg_within_anchors(input, &anchors, prices, should_stop)?;
         for (journey, days) in anchors.journeys.into_iter().zip(anchors.days) {
             if !search.journeys.contains(&journey) {
                 search.journeys.push(journey);
@@ -645,6 +641,23 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             }
         }
         Ok(search)
+    }
+
+    /// Searches a leg on single tickets at the traveller's weight, with the cost limit that the
+    /// journeys of a search without prices give, as `search_leg_from_anchors` describes. The
+    /// result leaves out the anchors themselves.
+    fn search_leg_within_anchors(
+        &self,
+        input: &LegPlanningInput,
+        anchors: &LegSearch,
+        prices: &RidePrices,
+        should_stop: &(impl Fn() -> bool + Sync),
+    ) -> Result<LegSearch, NoJourneyReason> {
+        let options = SearchOptions {
+            maximum_cost: self.anchor_cost_limit(anchors, input, prices),
+            ..SearchOptions::SINGLE
+        };
+        self.search_leg_in_mode(input, options, should_stop)
     }
 
     /// Returns the cost limit that the anchors give a priced search, in its unit of hundredths
@@ -955,6 +968,15 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
         {
             return;
         }
+        let find_pick = |searched: LegSearch| {
+            searched
+                .journeys
+                .into_iter()
+                .find(|journey| self.journey_matches_choice(journey, choice))
+        };
+        // The journeys of the search by time alone, which bound the search at the cheapest
+        // weight like the anchors of `search_leg_from_anchors`.
+        let mut plain: Option<LegSearch> = None;
         // The search by time alone is the quicker one, so it goes first.
         for weight in [PriceWeight::TIME_FIRST, PriceWeight::CHEAPEST] {
             if weight == input.price_weight {
@@ -963,23 +985,52 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             let mut other = input.clone();
             other.price_weight = weight;
             other.chosen_journey = None;
-            let searched = match window {
-                Some(window) => self.search_leg_in_window(
-                    &other,
-                    window.start..window.end,
-                    SearchOptions::SINGLE,
-                    should_stop,
-                ),
-                None => self.search_leg(&other, should_stop),
+            let found = match window {
+                Some(window) => self
+                    .search_leg_in_window(
+                        &other,
+                        window.start..window.end,
+                        SearchOptions::SINGLE,
+                        should_stop,
+                    )
+                    .ok()
+                    .and_then(find_pick),
+                None if weight == PriceWeight::TIME_FIRST => {
+                    let searched = self.search_leg(&other, should_stop).ok();
+                    let found = searched.as_ref().and_then(|searched| {
+                        searched
+                            .journeys
+                            .iter()
+                            .find(|journey| self.journey_matches_choice(journey, choice))
+                            .cloned()
+                    });
+                    plain = searched;
+                    found
+                }
+                None => {
+                    // A cheaper journey of the extras is the best one at the cheapest weight, so
+                    // the bounded search finds it in a fraction of the time. A pick that is not
+                    // the best there still gets the search without bounds.
+                    let anchors = if input.price_weight == PriceWeight::TIME_FIRST {
+                        Some(&*search)
+                    } else {
+                        plain.as_ref()
+                    };
+                    let bounded = match (anchors, self.ride_prices.as_ref()) {
+                        (Some(anchors), Some(prices)) => self
+                            .search_leg_within_anchors(&other, anchors, prices, should_stop)
+                            .ok()
+                            .and_then(find_pick),
+                        _ => None,
+                    };
+                    bounded.or_else(|| {
+                        self.search_leg(&other, should_stop)
+                            .ok()
+                            .and_then(find_pick)
+                    })
+                }
             };
-            let Ok(searched) = searched else {
-                continue;
-            };
-            if let Some(journey) = searched
-                .journeys
-                .into_iter()
-                .find(|journey| self.journey_matches_choice(journey, choice))
-            {
+            if let Some(journey) = found {
                 search.journeys.push(journey);
                 search.days.push(0);
                 return;
