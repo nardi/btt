@@ -299,7 +299,7 @@
         </ol>
       {:else}
         {@const overview = journeyOverview(plan, journey)}
-        <JourneyLine rideCount={rides.length} night={legLine.night} />
+        <JourneyLine rideMinutes={rides.map((ride) => ride.arrival_time - ride.departure_time)} night={legLine.night} />
         <div class="times">
           <span>
             <span class="time numbers">{overview.boarding.time}</span>
