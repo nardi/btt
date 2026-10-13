@@ -92,7 +92,7 @@
   {#each shape.paths as path (path)}
     <path d={path} />
   {/each}
-  {#each shape.circles ?? [] as circle (circle.cx)}
+  {#each shape.circles ?? [] as circle (`${circle.cx},${circle.cy}`)}
     <circle cx={circle.cx} cy={circle.cy} r={circle.r} />
   {/each}
 </svg>
