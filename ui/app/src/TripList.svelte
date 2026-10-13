@@ -54,14 +54,17 @@
     <ul>
       {#each trips as trip (trip.trip_id)}
         <li>
-          <TripRouteMap route={trip.route} />
-          <span class="text">
-            <span class="name">{trip.name}</span>
-            <span class="details numbers">
-              from {formatDate(trip.start_date)} · {trip.place_count}
-              {trip.place_count === 1 ? "place" : "places"}
+          <!-- The map and the name open the trip too, as the larger target. -->
+          <button type="button" class="open-area" onclick={() => onOpen(trip.trip_id)}>
+            <TripRouteMap route={trip.route} />
+            <span class="text">
+              <span class="name">{trip.name}</span>
+              <span class="details numbers">
+                from {formatDate(trip.start_date)} · {trip.place_count}
+                {trip.place_count === 1 ? "place" : "places"}
+              </span>
             </span>
-          </span>
+          </button>
           <button type="button" onclick={() => onOpen(trip.trip_id)}>Open</button>
           <button
             type="button"
@@ -117,6 +120,29 @@
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius);
+  }
+
+  .open-area {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .open-area:hover {
+    background: none;
+  }
+
+  .open-area:hover .name {
+    color: var(--color-accent);
   }
 
   .text {
