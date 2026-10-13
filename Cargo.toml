@@ -96,3 +96,15 @@ opt-level = 3
 # calls it.
 [profile.dev.package.btt-planner]
 opt-level = 3
+
+# The app instantiates the router with its own pricer, so the generic planner and search code is
+# compiled in the app crate. Unoptimized, a long leg takes 12 seconds there instead of 1.
+[profile.dev.package.btt-app]
+opt-level = 3
+
+# The ranking prices every journey with the fares, and the extras price many more.
+[profile.dev.package.btt-ticketing]
+opt-level = 2
+
+[profile.dev.package.btt-fares]
+opt-level = 2
