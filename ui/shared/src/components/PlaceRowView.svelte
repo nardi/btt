@@ -168,6 +168,12 @@
   </div>
   <div class="place-card">
     <div class="head">
+      {#if onReorder !== undefined}
+        <!-- The grip shows that the whole row can be dragged to another position. -->
+        <span class="grip" title="Drag to move this place in the route" aria-hidden="true">
+          <Icon name="grip" />
+        </span>
+      {/if}
       <span class="title">
         <span class="name">{row.place.name}</span>
         <span class="dates numbers">{dates}</span>
@@ -380,6 +386,23 @@
     display: flex;
     align-items: center;
     gap: var(--space-2);
+  }
+
+  .grip {
+    display: flex;
+    margin-left: calc(-1 * var(--space-2));
+    color: var(--color-text-muted);
+    opacity: 0.6;
+    cursor: grab;
+    transition: opacity 130ms ease;
+  }
+
+  .place-row:hover .grip {
+    opacity: 1;
+  }
+
+  .place-row[draggable="true"] .head {
+    cursor: grab;
   }
 
   .title {
