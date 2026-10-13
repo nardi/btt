@@ -1,6 +1,6 @@
 // Helpers for traveller profiles on the setup screen.
 
-import type { DiscountCard, Traveller } from "./bindings";
+import type { Traveller } from "./bindings";
 
 /** Countries a traveller can live in, as two-letter codes with their names. */
 export const RESIDENCE_COUNTRIES: readonly { code: string; name: string }[] = [
@@ -33,16 +33,6 @@ export const RESIDENCE_COUNTRIES: readonly { code: string; name: string }[] = [
   { code: "SE", name: "Sweden" },
   { code: "CH", name: "Switzerland" },
   { code: "GB", name: "United Kingdom" },
-];
-
-/** Names of the discount cards, in the order the setup screen lists them. */
-export const DISCOUNT_CARDS: readonly { card: DiscountCard; name: string }[] = [
-  { card: "BahnCard25", name: "BahnCard 25" },
-  { card: "BahnCard50", name: "BahnCard 50" },
-  { card: "BahnCard100", name: "BahnCard 100" },
-  { card: "SwissHalfFare", name: "Swiss Half Fare Card" },
-  { card: "OebbVorteilscard", name: "ÖBB Vorteilscard" },
-  { card: "SncfAvantage", name: "SNCF Carte Avantage" },
 ];
 
 /** Creates a second class traveller born 30 years before `today`, with no cards or pass. */

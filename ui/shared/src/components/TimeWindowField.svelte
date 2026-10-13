@@ -51,11 +51,11 @@
   .time-window-field {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
+    gap: 10px;
   }
 
   .label {
-    min-width: 7em;
+    min-width: 8.5em;
     color: var(--color-text-muted);
   }
 </style>
