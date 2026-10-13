@@ -13,13 +13,13 @@
 <style>
   .spinner {
     display: inline-block;
-    width: 0.9em;
-    height: 0.9em;
-    vertical-align: -0.1em;
+    width: 14px;
+    height: 14px;
+    vertical-align: -0.15em;
     border: 2px solid var(--color-border);
     border-top-color: var(--color-accent);
     border-radius: 50%;
-    animation: spin 0.8s linear infinite;
+    animation: spin 700ms linear infinite;
   }
 
   @keyframes spin {

@@ -1,41 +1,98 @@
-/* Colors and spacing shared by the desktop app and the web viewer. */
+/* Design tokens, base elements and shared classes for the desktop app and the web viewer.
+   The palette and the two themes come from `design/visual-restyle-plan.md`. */
+
+/* Cabin is a variable font that covers the weights 400 to 700. The file ships inside this
+   package, so the app loads no font from the network and works offline from the first run.
+   Its licence sits next to it in `fonts/OFL.txt`. */
+@font-face {
+  font-family: "Cabin";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("../../fonts/Cabin.woff2") format("woff2");
+}
 
 :root {
   color-scheme: light dark;
-  --color-background: #f6f7f9;
+  --color-background: #fafaf9;
   --color-surface: #ffffff;
-  --color-surface-muted: #eef1f5;
-  --color-border: #d5dbe3;
-  --color-text: #1b2430;
-  --color-text-muted: #5b6878;
-  --color-accent: #1f4e79;
+  --color-surface-muted: #ececeb;
+  --color-border: #e1e1df;
+  --color-text: #1c1d21;
+  --color-text-muted: #62666f;
+  --color-accent: #2456c8;
   --color-accent-contrast: #ffffff;
   --color-danger: #b3261e;
-  --color-notice: #fff4d6;
-  --color-night-train: #6d28d9;
-  --radius: 8px;
+  /* A step darker than the plan asked for, so the notice text passes AA on its fill. */
+  --color-notice: #8a5f16;
+  --color-notice-fill: #f6ead1;
+  --color-live: #1e8e5a;
+  --color-night: #6d28d9;
+  --color-water: #d9e2e8;
+  --color-land-line: #d9d9d6;
+  /* The journey line palette, which cycles by leg position. The fourth colour is cyan,
+     because blue stays reserved for the interactive elements. */
+  --leg-1: #e4484f;
+  --leg-2: #f2a93b;
+  --leg-3: #2fa876;
+  --leg-4: #0fb0c9;
+  /* The ticket palette, which links each train on the tickets screen to the ticket that
+     covers it. */
+  --ticket-1: #1f6fb2;
+  --ticket-2: #b25e1f;
+  --ticket-3: #2f8f5b;
+  --ticket-4: #8a3fa8;
+  --ticket-5: #b2331f;
+  --radius: 12px;
+  --radius-pill: 999px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
   --space-6: 24px;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  font-size: 14px;
+  --font-text: "Cabin", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* The type scale, in rem against the 15px root size. Sizes that differ by less than a pixel
+     share one token. */
+  --text-caption: 0.833rem;
+  --text-small: 0.867rem;
+  --text-chip: 0.9rem;
+  --text-button: 0.933rem;
+  --text-lead: 1.1rem;
+  --text-heading: 1.2rem;
+  --text-section: 1.267rem;
+  --text-title: 1.667rem;
+  --text-figure: 1.8rem;
+  font-family: var(--font-text);
+  font-size: 15px;
   line-height: 1.45;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-background: #12161c;
-    --color-surface: #1b212a;
-    --color-surface-muted: #242c37;
-    --color-border: #354050;
-    --color-text: #e6ebf1;
-    --color-text-muted: #9aa7b6;
-    --color-accent: #7fb3e6;
-    --color-accent-contrast: #0c1a28;
-    --color-danger: #f2b8b5;
-    --color-notice: #3d3420;
+    --color-background: #101014;
+    --color-surface: #191a21;
+    --color-surface-muted: #23252e;
+    --color-border: #33363f;
+    --color-text: #ecedf0;
+    --color-text-muted: #9a9fab;
+    --color-accent: #8ab0ff;
+    --color-accent-contrast: #0e1524;
+    --color-danger: #ff7b72;
+    --color-notice: #e2b45c;
+    --color-notice-fill: #2e2a1c;
+    --color-live: #3ed598;
+    --color-night: #a78bfa;
+    --color-water: #20262e;
+    --color-land-line: #2a2c35;
+    --leg-1: #ff6b6b;
+    --leg-2: #ffb84d;
+    --leg-3: #3ed598;
+    --leg-4: #45d4e8;
+    --ticket-1: #6ba3e0;
+    --ticket-2: #d8965c;
+    --ticket-3: #58bd8c;
+    --ticket-4: #b58ad6;
+    --ticket-5: #e0796a;
   }
 }
 
@@ -47,7 +104,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
   color: inherit;
 }
@@ -56,8 +114,30 @@ button {
   cursor: pointer;
   border: 1px solid var(--color-border);
   background: var(--color-surface);
-  border-radius: var(--radius);
-  padding: var(--space-1) var(--space-3);
+  color: var(--color-text);
+  border-radius: var(--radius-pill);
+  padding: 7px 16px;
+  font-size: var(--text-button);
+  font-weight: 600;
+  transition:
+    background-color 130ms ease,
+    border-color 130ms ease,
+    color 130ms ease;
+}
+
+/* Every interactive element answers within 130 ms. The primary button darkens one step. */
+button:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+  border-color: var(--color-text-muted);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 
 button.primary {
@@ -66,10 +146,196 @@ button.primary {
   color: var(--color-accent-contrast);
 }
 
+button.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-accent) 84%, var(--color-text));
+  border-color: color-mix(in srgb, var(--color-accent) 84%, var(--color-text));
+}
+
+/* A destructive action, such as deleting a trip, turns red under the pointer. */
+button.danger-hover:hover:not(:disabled) {
+  color: var(--color-danger);
+  border-color: color-mix(in srgb, var(--color-danger) 55%, transparent);
+  background: color-mix(in srgb, var(--color-danger) 8%, transparent);
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
 input,
 select {
   border: 1px solid var(--color-border);
   background: var(--color-surface);
+  border-radius: var(--radius-pill);
+  padding: 6px 14px;
+}
+
+/* A native checkbox, radio or range takes the accent, so a control that is on reads as
+   interactive. */
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"] {
+  accent-color: var(--color-accent);
+}
+
+/* A card of the setup screen, with its title and the fields under it. */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: var(--space-4) 20px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius);
-  padding: var(--space-1) var(--space-2);
+}
+
+.card > h3 {
+  margin: 0;
+  font-size: var(--text-heading);
+  font-weight: 700;
+}
+
+/* A switch, which is a checkbox styled as a pill that fills with the accent when on. */
+input.switch {
+  appearance: none;
+  width: 36px;
+  height: 20px;
+  margin: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  position: relative;
+  cursor: pointer;
+  flex: none;
+  transition:
+    background-color 130ms ease,
+    border-color 130ms ease;
+}
+
+input.switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+  transition:
+    left 130ms ease,
+    background-color 130ms ease;
+}
+
+input.switch:hover {
+  border-color: var(--color-text-muted);
+}
+
+input.switch:checked {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+input.switch:checked::after {
+  left: 18px;
+  background: var(--color-accent-contrast);
+}
+
+/* The row a switch sits in, with its label next to it. */
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Small caps mark special terms, mostly operator and site names such as ÖBB or bahn.de.
+   The browser synthesizes the caps, so they need no extra letter-spacing. */
+.term {
+  font-variant-caps: all-small-caps;
+}
+
+/* Times and prices ask for lining and tabular figures. The bundled Cabin has neither feature,
+   so this does nothing today and starts to work if a font with the features replaces it. */
+.numbers {
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* A small button for a secondary action, such as one inside a card. */
+button.small {
+  padding: 4px 12px;
+  font-size: var(--text-small);
+}
+
+/* A button with an icon next to its words. */
+button.with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* A small round button for an icon or a single glyph, such as the "?" of a leg row. It keeps
+   the edge of every button, so it reads as a button before it is touched. */
+.icon-button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border-radius: 50%;
+  font-size: var(--text-small);
+  font-weight: 700;
+}
+
+.icon-button.large {
+  width: 32px;
+  height: 32px;
+}
+
+/* A short label that sets one item of a list apart, such as a cheaper journey. */
+.tag {
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  font-weight: 600;
+}
+
+/* The confidence dot of a price. Filled green for a live price, open for an estimate. */
+.dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-live);
+}
+
+.dot.open {
+  background: none;
+  border: 1.5px solid var(--color-text-muted);
+  box-sizing: border-box;
+}
+
+/* A screen panel enters with a short crossfade and a slide up, the same in both
+   directions. */
+@keyframes panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 1ms;
+  }
 }
