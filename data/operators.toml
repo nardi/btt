@@ -69,6 +69,22 @@ name = "European Sleeper"
 country = "NL"
 agency = '^European Sleeper$'
 
+# Train Charter Services runs European Sleeper, and the Dutch feed names it as the agency.
+[[operator]]
+id = "european-sleeper"
+name = "European Sleeper"
+country = "NL"
+agency = '^Train Charter Services'
+
+# CityRail holds the Czech licence of European Sleeper, and the Czech feed names it as the
+# agency of the trains to Prague. Its other trains keep their own agency.
+[[operator]]
+id = "european-sleeper"
+name = "European Sleeper"
+country = "NL"
+agency = '^CityRail'
+category = '^ES$'
+
 # Sweden.
 [[operator]]
 id = "snalltaget"

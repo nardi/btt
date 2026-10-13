@@ -119,6 +119,29 @@ mod tests {
     }
 
     #[test]
+    fn every_feed_name_of_european_sleeper_gets_its_operator() {
+        // European Sleeper sells its tickets alone, so a train that misses the operator would
+        // share a ticket with the trains before it.
+        let table = OperatorTable::bundled();
+        assert_eq!(
+            table.operator_of("European Sleeper", "ES"),
+            "european-sleeper"
+        );
+        assert_eq!(
+            table.operator_of("Train Charter Services B.V.", "ES"),
+            "european-sleeper"
+        );
+        assert_eq!(
+            table.operator_of("CityRail, a.s.", "ES"),
+            "european-sleeper"
+        );
+        assert_ne!(
+            table.operator_of("CityRail, a.s.", "Os"),
+            "european-sleeper"
+        );
+    }
+
+    #[test]
     fn an_unknown_agency_keeps_its_name() {
         let table = OperatorTable::bundled();
         assert_eq!(
