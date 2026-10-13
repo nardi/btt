@@ -1396,6 +1396,19 @@ export type TripSummary = {
 	start_date: string,
 	/**  Number of places in the itinerary. */
 	place_count: number,
+	/**
+	 *  The places in travel order, which the trip list draws as a small map. Empty when the
+	 *  stored trip cannot be read.
+	 */
+	route: TripSummaryStop[],
+};
+
+/**  A place of the route of a trip, as the small map of the trip list needs it. */
+export type TripSummaryStop = {
+	/**  Where the place is. */
+	coordinates: GeoCoordinates,
+	/**  Whether the leg that arrives here includes a night train. False for the origin. */
+	arrives_by_night: boolean,
 };
 
 /**  Minutes since the Unix epoch, 1970-01-01 00:00 UTC. */

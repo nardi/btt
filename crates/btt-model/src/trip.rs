@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 use crate::bounded::ValueOutOfRangeError;
 use crate::bounded::bounded_integer;
+use crate::coordinates::GeoCoordinates;
 use crate::itinerary::{Itinerary, SameDayStayRange, TripPlaceId};
 use crate::plan::JourneyChoice;
 use crate::time::{DailyTimeWindow, DurationMinutes, LocalTimeOfDay, TravelDayWindows};
@@ -336,6 +337,23 @@ impl Trip {
             chosen_journeys: Vec::new(),
         }
     }
+
+    /// Returns the places of the trip in travel order, for the small map of the trip list.
+    pub fn summary_route(&self) -> Vec<TripSummaryStop> {
+        let origin = self
+            .itinerary
+            .trip_places()
+            .next()
+            .map(|place| TripSummaryStop {
+                coordinates: place.coordinates,
+                arrives_by_night: false,
+            });
+        let arrivals = self.itinerary.legs().map(|leg| TripSummaryStop {
+            coordinates: leg.arrival_place.coordinates,
+            arrives_by_night: leg.travel_mode.is_overnight(),
+        });
+        origin.into_iter().chain(arrivals).collect()
+    }
 }
 
 /// Schema version that `StoredTrip` documents written by this build carry.
@@ -361,6 +379,66 @@ pub struct TripSummary {
     pub start_date: NaiveDate,
     /// Number of places in the itinerary.
     pub place_count: u16,
+    /// The places in travel order, which the trip list draws as a small map. Empty when the
+    /// stored trip cannot be read.
+    pub route: Vec<TripSummaryStop>,
+}
+
+/// A place of the route of a trip, as the small map of the trip list needs it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct TripSummaryStop {
+    /// Where the place is.
+    pub coordinates: GeoCoordinates,
+    /// Whether the leg that arrives here includes a night train. False for the origin.
+    pub arrives_by_night: bool,
+}
+
+#[cfg(test)]
+mod summary_route_tests {
+    use super::*;
+    use crate::itinerary::tests::{overnight, place};
+    use crate::itinerary::{ItineraryRoute, LegTravelMode, PlaceStay, ViaPlace};
+
+    fn route_trip() -> Trip {
+        let mut trip = Trip::new("Test".into(), NaiveDate::from_ymd_opt(2026, 10, 1).unwrap());
+        trip.itinerary = Itinerary::Route(ItineraryRoute {
+            origin: place(1, "Amsterdam", 52.3789, 4.9003),
+            via_places: vec![ViaPlace {
+                arriving_leg_travel_mode: LegTravelMode::Daytime,
+                place: place(2, "Vienna", 48.1852, 16.3761),
+                stay: PlaceStay::Nights(NonZeroU8::new(2).unwrap()),
+            }],
+            final_leg_travel_mode: overnight(),
+            destination: place(3, "Rome", 41.901, 12.5007),
+        });
+        trip
+    }
+
+    #[test]
+    fn the_route_lists_every_place_and_marks_the_night_legs() {
+        let route = route_trip().summary_route();
+        assert_eq!(route.len(), 3);
+        assert_eq!(
+            route
+                .iter()
+                .map(|stop| stop.arrives_by_night)
+                .collect::<Vec<_>>(),
+            [false, false, true]
+        );
+        assert_eq!(
+            route[0].coordinates,
+            GeoCoordinates::from_degrees(52.3789, 4.9003).unwrap()
+        );
+    }
+
+    #[test]
+    fn a_trip_with_one_place_has_a_route_of_one_stop() {
+        let mut trip = route_trip();
+        trip.itinerary = Itinerary::OriginOnly(place(1, "Amsterdam", 52.3789, 4.9003));
+        assert_eq!(trip.summary_route().len(), 1);
+        trip.itinerary = Itinerary::Empty;
+        assert!(trip.summary_route().is_empty());
+    }
 }
 
 #[cfg(test)]

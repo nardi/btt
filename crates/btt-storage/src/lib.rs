@@ -171,15 +171,22 @@ impl Storage {
     pub fn list_trips(&self) -> Result<Vec<TripSummary>, StorageError> {
         let connection = self.connection();
         let mut statement = connection.prepare_cached(
-            "SELECT trip_id, name, start_date, place_count FROM trips ORDER BY updated_at DESC",
+            "SELECT trip_id, name, start_date, place_count, document FROM trips
+                ORDER BY updated_at DESC",
         )?;
         let summaries = statement
             .query_map([], |row| {
+                let document: String = row.get(4)?;
                 Ok(TripSummary {
                     trip_id: TripId(Uuid::from_bytes(row.get(0)?)),
                     name: row.get::<_, String>(1)?.into(),
                     start_date: row.get::<_, NaiveDate>(2)?,
                     place_count: row.get(3)?,
+                    // A document that cannot be read costs the trip its map and not its place in
+                    // the list.
+                    route: trip_from_document(&document)
+                        .map(|trip| trip.summary_route())
+                        .unwrap_or_default(),
                 })
             })?
             .collect::<Result<_, _>>()?;
@@ -560,6 +567,16 @@ mod tests {
         assert_eq!(summaries[0].trip_id, trip.id);
         assert_eq!(summaries[0].place_count, 3);
         assert_eq!(summaries[0].start_date, trip.start_date);
+        assert_eq!(summaries[0].route, trip.summary_route());
+        assert_eq!(summaries[0].route.len(), 3);
+        assert_eq!(
+            summaries[0]
+                .route
+                .iter()
+                .map(|stop| stop.arrives_by_night)
+                .collect::<Vec<_>>(),
+            [false, false, true]
+        );
     }
 
     #[test]
