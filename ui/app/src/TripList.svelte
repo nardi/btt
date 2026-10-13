@@ -4,6 +4,7 @@
   import { formatDate } from "@btt/shared/format";
   import Icon from "@btt/shared/components/Icon.svelte";
   import TripRouteMap from "@btt/shared/components/TripRouteMap.svelte";
+  import ThemeSwitch from "@btt/shared/components/ThemeSwitch.svelte";
 
   let {
     trips,
@@ -38,7 +39,10 @@
 </script>
 
 <section class="trip-list">
-  <h1>Trips</h1>
+  <div class="title-row">
+    <h1>Trips</h1>
+    <ThemeSwitch />
+  </div>
   <form class="new-trip" onsubmit={create}>
     <input type="text" placeholder="Name of a new trip" bind:value={newTripName} required />
     <input type="date" bind:value={newTripStartDate} required />
@@ -86,6 +90,12 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
+  }
+
+  .title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
 
   h1 {

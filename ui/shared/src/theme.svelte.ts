@@ -1,5 +1,6 @@
 // The theme the app shows and the paint colours the map needs in code, because the map cannot
-// read the CSS variables. The app follows the system preference, as the restyle plan asks.
+// read the CSS variables. The app follows the system preference unless the traveller picks a
+// theme, and the pick stays in the browser storage of this device.
 
 import type { StyleSpecification } from "maplibre-gl";
 
@@ -9,6 +10,12 @@ import darkStyle from "./map-styles/dark.json";
 /** The theme the app can show. */
 export type Theme = "light" | "dark";
 
+/** What the traveller picked: a theme, or to follow the system. */
+export type ThemeChoice = Theme | "system";
+
+/** The key of the traveller's pick in the browser storage. */
+const themeChoiceKey = "btt.theme";
+
 /** Returns the theme the system prefers right now. */
 function systemTheme(): Theme {
   return typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches
@@ -16,13 +23,46 @@ function systemTheme(): Theme {
     : "light";
 }
 
-/** The theme the app currently shows, which follows the system preference. */
-export const theme = $state({ current: systemTheme() });
+/** Returns the pick stored on this device, or to follow the system when there is none. */
+function storedChoice(): ThemeChoice {
+  try {
+    const stored = localStorage.getItem(themeChoiceKey);
+    return stored === "light" || stored === "dark" ? stored : "system";
+  } catch {
+    return "system";
+  }
+}
 
+/** The traveller's pick and the theme the app currently shows. */
+export const theme = $state<{ choice: ThemeChoice; current: Theme }>({ choice: "system", current: "light" });
+
+/** Sets the theme the app shows from the pick and the system, and marks the document with it. */
+function applyTheme(): void {
+  theme.current = theme.choice === "system" ? systemTheme() : theme.choice;
+  if (typeof document !== "undefined") {
+    document.documentElement.dataset.theme = theme.current;
+  }
+}
+
+/** Stores the traveller's pick and shows its theme. */
+export function setThemeChoice(choice: ThemeChoice): void {
+  theme.choice = choice;
+  try {
+    if (choice === "system") {
+      localStorage.removeItem(themeChoiceKey);
+    } else {
+      localStorage.setItem(themeChoiceKey, choice);
+    }
+  } catch {
+    // Without storage the pick lasts until the app closes.
+  }
+  applyTheme();
+}
+
+theme.choice = storedChoice();
+applyTheme();
 if (typeof matchMedia === "function") {
-  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (event) => {
-    theme.current = event.matches ? "dark" : "light";
-  });
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
 }
 
 /** The derived base style of the map, per theme. Both keep the OpenFreeMap attribution. */

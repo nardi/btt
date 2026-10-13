@@ -13,7 +13,7 @@
 }
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --color-background: #fafaf9;
   --color-surface: #ffffff;
   --color-surface-muted: #ececeb;
@@ -67,33 +67,34 @@
   line-height: 1.45;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-background: #101014;
-    --color-surface: #191a21;
-    --color-surface-muted: #23252e;
-    --color-border: #33363f;
-    --color-text: #ecedf0;
-    --color-text-muted: #9a9fab;
-    --color-accent: #8ab0ff;
-    --color-accent-contrast: #0e1524;
-    --color-danger: #ff7b72;
-    --color-notice: #e2b45c;
-    --color-notice-fill: #2e2a1c;
-    --color-live: #3ed598;
-    --color-night: #a78bfa;
-    --color-water: #20262e;
-    --color-land-line: #2a2c35;
-    --leg-1: #ff6b6b;
-    --leg-2: #ffb84d;
-    --leg-3: #3ed598;
-    --leg-4: #45d4e8;
-    --ticket-1: #6ba3e0;
-    --ticket-2: #d8965c;
-    --ticket-3: #58bd8c;
-    --ticket-4: #b58ad6;
-    --ticket-5: #e0796a;
-  }
+/* The dark theme follows the system or the traveller's pick, which `theme.svelte.ts` marks
+   on the document. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-background: #101014;
+  --color-surface: #191a21;
+  --color-surface-muted: #23252e;
+  --color-border: #33363f;
+  --color-text: #ecedf0;
+  --color-text-muted: #9a9fab;
+  --color-accent: #8ab0ff;
+  --color-accent-contrast: #0e1524;
+  --color-danger: #ff7b72;
+  --color-notice: #e2b45c;
+  --color-notice-fill: #2e2a1c;
+  --color-live: #3ed598;
+  --color-night: #a78bfa;
+  --color-water: #20262e;
+  --color-land-line: #2a2c35;
+  --leg-1: #ff6b6b;
+  --leg-2: #ffb84d;
+  --leg-3: #3ed598;
+  --leg-4: #45d4e8;
+  --ticket-1: #6ba3e0;
+  --ticket-2: #d8965c;
+  --ticket-3: #58bd8c;
+  --ticket-4: #b58ad6;
+  --ticket-5: #e0796a;
 }
 
 body {

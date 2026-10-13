@@ -16,6 +16,7 @@
   import SetupView from "@btt/shared/components/SetupView.svelte";
   import TicketsView from "@btt/shared/components/TicketsView.svelte";
   import TripMap from "@btt/shared/components/TripMap.svelte";
+  import ThemeSwitch from "@btt/shared/components/ThemeSwitch.svelte";
   import Icon from "@btt/shared/components/Icon.svelte";
   import { itineraryRows, legLine, type LegLine } from "@btt/shared/itinerary";
   import { liveQuoteKey } from "@btt/shared/tickets";
@@ -361,6 +362,7 @@
           <Icon name="redo" />
         </button>
       </div>
+      <ThemeSwitch />
       <button type="button" onclick={() => (showProblemReport = true)}>Report a problem</button>
     </header>
     {#if showProblemReport}

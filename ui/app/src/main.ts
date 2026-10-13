@@ -1,4 +1,6 @@
 import "@btt/shared/styles/theme.css";
+// Marks the document with the theme before the app mounts, so the first paint has its colours.
+import "@btt/shared/theme.svelte";
 
 import { mount } from "svelte";
 

@@ -7,6 +7,9 @@
     | "trash"
     | "pin"
     | "moon"
+    | "sun"
+    | "contrast"
+    | "grip"
     | "undo"
     | "redo"
     | "plus"
@@ -34,6 +37,23 @@
       circles: [{ cx: 12, cy: 10, r: 2.2 }],
     },
     moon: { paths: ["M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"], filled: true },
+    sun: {
+      paths: ["M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"],
+      circles: [{ cx: 12, cy: 12, r: 4 }],
+    },
+    contrast: { paths: ["M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z", "M12 3v18"] },
+    grip: {
+      paths: [],
+      circles: [
+        { cx: 9, cy: 6, r: 1.6 },
+        { cx: 15, cy: 6, r: 1.6 },
+        { cx: 9, cy: 12, r: 1.6 },
+        { cx: 15, cy: 12, r: 1.6 },
+        { cx: 9, cy: 18, r: 1.6 },
+        { cx: 15, cy: 18, r: 1.6 },
+      ],
+      filled: true,
+    },
     undo: { paths: ["M4 9h10a5 5 0 0 1 0 10H8M4 9l4-4M4 9l4 4"] },
     redo: { paths: ["M20 9H10a5 5 0 0 0 0 10h6M20 9l-4-4M20 9l-4 4"] },
     plus: { paths: ["M12 5v14M5 12h14"] },
