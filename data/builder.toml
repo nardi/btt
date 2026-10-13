@@ -194,6 +194,9 @@ category_field = "agency_name"
 # Stops are national stop IDs without UIC codes. Trains carry their number in the trip short
 # name, or in the route short name when the trip has none.
 mirror_name = "se_Trafiklab"
+# Transitous lists no license for this feed. Trafiklab publishes it as CC0.
+license = "CC0-1.0"
+license_url = "https://www.trafiklab.se/api/gtfs-datasets/gtfs-sverige-2/"
 [feed.train_label]
 field = "trip_short_name"
 fallback_field = "route_short_name"
@@ -203,6 +206,9 @@ category_field = "agency_name"
 [[feed]]
 # Norwegian trains have no numbers, so the line is the label.
 mirror_name = "no_Entur"
+# Transitous lists no license for this feed. Entur publishes it under NLOD.
+license = "NLOD"
+license_url = "https://developer.entur.org/stops-and-timetable-data"
 station_code = "entur_stop_place"
 [feed.train_label]
 field = "route_short_name"

@@ -83,8 +83,9 @@ pub fn assemble_bundle(
 
 /// Reads the license of a feed from the Transitous feed configuration of its country.
 ///
-/// Falls back to an unknown license when the file has no entry with a license for the feed,
-/// so a gap in the configuration shows up in the bundle instead of stopping the build.
+/// Falls back to the license in the builder configuration when the file has no entry with a
+/// license for the feed. Without either, the license is unknown, so a gap shows up in the
+/// bundle instead of stopping the build.
 pub fn feed_attribution(
     database: &WorkDatabase,
     feed: &FeedConfig,
@@ -115,9 +116,16 @@ pub fn feed_attribution(
     let (license, url) = match found {
         Ok(values) => values,
         Err(error) => {
-            tracing::warn!(feed = feed.mirror_name, %error, "no license found in the Transitous configuration");
+            if feed.license.is_none() {
+                tracing::warn!(feed = feed.mirror_name, %error, "no license found in the Transitous configuration");
+            }
             (None, None)
         }
+    };
+    // A license from the Transitous configuration wins, with its own URL.
+    let (license, url) = match license {
+        Some(license) => (Some(license), url),
+        None => (feed.license.clone(), feed.license_url.clone()),
     };
     FeedAttributionInput {
         feed_name: feed.mirror_name.clone(),

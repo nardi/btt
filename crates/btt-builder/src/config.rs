@@ -87,6 +87,11 @@ pub struct FeedConfig {
     /// Readable names of the brands a NeTEx feed puts on its journeys, such as `TGV INOUI` for
     /// `OUI`. A brand without a name here shows as its code.
     pub netex_brand_names: std::collections::BTreeMap<String, String>,
+    /// SPDX identifier or name of the license of the feed. Used only when the Transitous feed
+    /// configuration lists no license for the feed.
+    pub license: Option<String>,
+    /// Where the license of the feed is published. Used together with `license`.
+    pub license_url: Option<String>,
 }
 
 /// Format of a feed file.
@@ -219,6 +224,8 @@ struct FeedConfigFile {
     source_url: Option<String>,
     #[serde(default)]
     netex_brand_names: std::collections::BTreeMap<String, String>,
+    license: Option<String>,
+    license_url: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -357,6 +364,8 @@ impl TryFrom<FeedConfigFile> for FeedConfig {
             format: file.format,
             source_url: file.source_url,
             netex_brand_names: file.netex_brand_names,
+            license: file.license,
+            license_url: file.license_url,
             mirror_name: file.mirror_name,
         })
     }
@@ -395,6 +404,27 @@ mod tests {
         assert_eq!((feed.country(), feed.source_name()), ("de", "DELFI"));
         assert!(matches!(feed.station_key, StationKeyRule::StopIdPattern(_)));
         assert_eq!(feed.station_code, FeedStationCodeScheme::NoStationCodes);
+    }
+
+    #[test]
+    fn reads_a_license_for_a_feed() {
+        let feed = feed(
+            r#"
+            mirror_name = "se_Trafiklab"
+            license = "CC0-1.0"
+            license_url = "https://example.org/license"
+            [train_label]
+            field = "trip_short_name"
+            pattern = '^(?<number>\d+)$'
+            category_field = "agency_name"
+            "#,
+        )
+        .unwrap();
+        assert_eq!(feed.license.as_deref(), Some("CC0-1.0"));
+        assert_eq!(
+            feed.license_url.as_deref(),
+            Some("https://example.org/license")
+        );
     }
 
     #[test]
