@@ -24,14 +24,54 @@ export function formatPriceRange(low: EuroCents, high: EuroCents): string {
 }
 
 /**
+ * Formats a price of a ticket as a range. An estimate with one amount gets a tilde, so an
+ * estimate never reads as exact. A live price and a published price are exact and stay plain.
+ */
+function formatKnownPrice(low: EuroCents, high: EuroCents, kind: PriceKind): string {
+  return kind === "Range" && low === high ? `~${formatEuro(low)}` : formatPriceRange(low, high);
+}
+
+/**
  * Formats a planned journey's estimated price as its median with its range, such as
- * `about €48 (€39 to €61)`, and one amount when both ends are the same.
+ * `about €48 (€39 to €61)`, and with a tilde, as `~€48`, when both ends are the same. An
+ * estimate is never written as an exact amount.
  */
 export function formatEuroRange(range: EuroRange): string {
   if (range.low === range.high) {
-    return formatEuro(range.low);
+    return `~${formatEuro(range.median)}`;
   }
   return `about ${formatEuro(range.median)} (${formatEuro(range.low)} to ${formatEuro(range.high)})`;
+}
+
+/**
+ * Formats a planned journey's estimated price for a small slot, as its range such as
+ * `€39 to €61`, and with a tilde, as `~€48`, when both ends are the same. The median belongs
+ * in a tooltip.
+ */
+export function formatEstimate(range: EuroRange): string {
+  if (range.low === range.high) {
+    return `~${formatEuro(range.median)}`;
+  }
+  return formatPriceRange(range.low, range.high);
+}
+
+/**
+ * Formats the price of a planned journey for a small slot. A live price is exact and shows as
+ * one amount. Every other price is an estimate and shows as a range or with a tilde. Returns
+ * `null` when the journey has no price.
+ */
+export function formatJourneyPrice(price: EuroRange | null | undefined, live: boolean): string | null {
+  if (price === null || price === undefined) {
+    return null;
+  }
+  return live ? formatEuro(price.median) : formatEstimate(price);
+}
+
+/** Says where the price of a planned journey comes from, for the tooltip of its slot. */
+export function describeJourneyPrice(price: EuroRange, live: boolean): string {
+  return live
+    ? "A live price from the booking site."
+    : `An estimate from the price model, about ${formatEuro(price.median)}.`;
 }
 
 /**
@@ -39,7 +79,7 @@ export function formatEuroRange(range: EuroRange): string {
  * it in when that is not the euro, such as `€52 (50 CHF)`.
  */
 export function formatPrice(price: Price): string {
-  const euro = formatPriceRange(price.low, price.high);
+  const euro = formatKnownPrice(price.low, price.high, price.kind);
   const original = price.original ?? null;
   if (original === null) {
     return euro;
@@ -49,9 +89,9 @@ export function formatPrice(price: Price): string {
   return `${euro} (${amount} ${original.currency})`;
 }
 
-/** Formats the total of a strategy as a range. */
+/** Formats the total of a strategy as a range, or with a tilde when it is one estimated amount. */
 export function formatTotal(total: PriceTotal): string {
-  return formatPriceRange(total.low, total.high);
+  return formatKnownPrice(total.low, total.high, total.kind);
 }
 
 /** Names a kind of price for its badge. */

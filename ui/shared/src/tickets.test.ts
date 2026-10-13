@@ -4,10 +4,15 @@ import type { TicketItem, TicketRide } from "./bindings";
 import {
   adjustedTotal,
   effectivePrice,
+  describeJourneyPrice,
+  formatEstimate,
   formatEuro,
+  formatJourneyPrice,
+  formatEuroRange,
   formatPriceRange,
   isLivePending,
   formatPrice,
+  formatTotal,
   isLiveFailed,
   isLiveUnavailable,
   liveQuoteKey,
@@ -166,5 +171,61 @@ describe("pending live prices", () => {
     });
     const keys = [ticket, accommodation(false), accommodation(true)].map((entry) => liveQuoteKey(entry));
     expect(new Set(keys).size).toBe(3);
+  });
+});
+
+describe("formatEstimate", () => {
+  it("shows a range as its two ends", () => {
+    expect(formatEstimate({ low: 3900, median: 4800, high: 6100 })).toBe("€39 to €61");
+  });
+
+  it("marks a single estimated amount with a tilde and never shows it as exact", () => {
+    expect(formatEstimate({ low: 4800, median: 4800, high: 4800 })).toBe("~€48");
+  });
+});
+
+describe("formatEuroRange", () => {
+  it("adds the median to the range and marks a single amount with a tilde", () => {
+    expect(formatEuroRange({ low: 3900, median: 4800, high: 6100 })).toBe("about €48 (€39 to €61)");
+    expect(formatEuroRange({ low: 4800, median: 4800, high: 4800 })).toBe("~€48");
+  });
+});
+
+describe("formatJourneyPrice", () => {
+  const range = { low: 3900, median: 4800, high: 6100 };
+
+  it("shows a live price as one exact amount", () => {
+    expect(formatJourneyPrice({ low: 4799, median: 4799, high: 4799 }, true)).toBe("€47.99");
+  });
+
+  it("never shows an estimate as an exact amount", () => {
+    expect(formatJourneyPrice(range, false)).toBe("€39 to €61");
+    expect(formatJourneyPrice({ low: 4800, median: 4800, high: 4800 }, false)).toBe("~€48");
+  });
+
+  it("returns nothing for a journey with no price", () => {
+    expect(formatJourneyPrice(null, false)).toBeNull();
+    expect(formatJourneyPrice(undefined, true)).toBeNull();
+  });
+
+  it("names the source of the price for its tooltip", () => {
+    expect(describeJourneyPrice(range, true)).toBe("A live price from the booking site.");
+    expect(describeJourneyPrice(range, false)).toBe("An estimate from the price model, about €48.");
+  });
+});
+
+describe("estimated prices of tickets", () => {
+  const source = { name: "t", note: "", as_of: null, page: null };
+
+  it("mark an estimate with one amount with a tilde", () => {
+    expect(formatPrice({ low: 4800, high: 4800, kind: "Range", source, original: null })).toBe("~€48");
+    expect(formatTotal({ low: 9000, high: 9000, kind: "Range" })).toBe("~€90");
+  });
+
+  it("keep a range, a live price and a published price as they are", () => {
+    expect(formatPrice({ low: 3900, high: 6100, kind: "Range", source, original: null })).toBe("€39 to €61");
+    expect(formatPrice({ low: 4800, high: 4800, kind: "Live", source, original: null })).toBe("€48");
+    expect(formatPrice({ low: 4800, high: 4800, kind: "Formula", source, original: null })).toBe("€48");
+    expect(formatTotal({ low: 9000, high: 12000, kind: "Range" })).toBe("€90 to €120");
   });
 });

@@ -9,12 +9,15 @@
     label,
     window,
     defaultWindow,
+    disabled = false,
     onChange,
   }: {
     label: string;
     /** The overriding window, or `null` when the default applies. */
     window: DailyTimeWindow | null;
     defaultWindow: DailyTimeWindow;
+    /** Whether the fields only show the window, as in a read-only view. */
+    disabled?: boolean;
     /** Receives the new overriding window, or `null` when both fields are empty. */
     onChange: (window: DailyTimeWindow | null) => void;
   } = $props();
@@ -65,6 +68,7 @@
     inputmode="numeric"
     placeholder={startPlaceholder}
     aria-invalid={invalid}
+    {disabled}
     bind:value={startText}
     onchange={commit}
   />
@@ -74,6 +78,7 @@
     inputmode="numeric"
     placeholder={endPlaceholder}
     aria-invalid={invalid}
+    {disabled}
     bind:value={endText}
     onchange={commit}
   />

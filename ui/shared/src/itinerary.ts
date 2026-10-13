@@ -7,19 +7,42 @@ import type {
   DailyTimeWindow,
   Itinerary,
   ItineraryRoute,
+  Journey,
   JourneyChoice,
   LegPlan,
   LegTravelMode,
   PlaceStay,
   PlaceWindowOverride,
+  TrainRide,
   Trip,
   TripPlace,
   TripPlaceId,
 } from "./bindings";
-import { dateInZone } from "./format";
+import { dateInZone, formatTimeInZone } from "./format";
 
 /** Position of a place in the itinerary. Only via places have a stay. */
 export type PlaceRole = "origin" | "via" | "destination";
+
+/** The colour a leg takes on the itinerary spine, the map and its train chips. */
+export interface LegLine {
+  /** A CSS colour value, such as `var(--leg-3)`. */
+  colour: string;
+  /** Whether the leg is a night leg, which draws as a dashed line. */
+  night: boolean;
+}
+
+/** Returns the colour of the leg at a one-based position, cycling the line palette. */
+export function legLine(travelMode: LegTravelMode, position: number): LegLine {
+  return legLineOf(travelMode !== "Daytime", position);
+}
+
+/** Returns the colour of a night leg, or of a day leg at a one-based position in the palette. */
+export function legLineOf(night: boolean, position: number): LegLine {
+  if (night) {
+    return { colour: "var(--color-night)", night: true };
+  }
+  return { colour: `var(--leg-${((position - 1) % 4) + 1})`, night: false };
+}
 
 /** One place of the itinerary, with the dates the itinerary implies. */
 export interface PlaceRow {
@@ -71,6 +94,18 @@ export function tripPlaces(itinerary: Itinerary): TripPlace[] {
 /** Returns whether a leg includes a night train. */
 export function isOvernight(travelMode: LegTravelMode): boolean {
   return travelMode !== "Daytime";
+}
+
+/** Names how long a place stays on its card: its role at the ends and its stay in between. */
+export function stayLabel(role: PlaceRole, stay: PlaceStay | null): string {
+  if (role !== "via" || stay === null) {
+    return role;
+  }
+  const nights = stayNights(stay);
+  if (stay.SameDay !== undefined) {
+    return "same day";
+  }
+  return `${nights} ${nights === 1 ? "night" : "nights"}`;
 }
 
 /** Returns the nights of a stay, which is zero for a same-day stay. */
@@ -195,4 +230,86 @@ export function storedJourneyChoice(trip: Trip, leg: LegRow): JourneyChoice | nu
       candidate.departure_place_id === leg.departurePlace.id && candidate.arrival_place_id === leg.arrivalPlace.id,
   );
   return chosen?.choice ?? null;
+}
+
+/** Returns the rides of a journey in travel order. */
+export function journeyRides(journey: Journey): TrainRide[] {
+  return [journey.first_ride, ...journey.later_rides.map((later) => later.ride)];
+}
+
+/** Returns how a train is named, such as `ICE 125`. */
+export function trainName(ride: TrainRide): string {
+  return `${ride.train_label.category} ${ride.train_label.number}`;
+}
+
+/** Returns door-to-door minutes, including the ways to and from the stations. */
+export function journeyMinutes(journey: Journey): number {
+  const lastRide = journey.later_rides.at(-1)?.ride ?? journey.first_ride;
+  return (
+    journey.access.duration +
+    (lastRide.arrival_time - journey.first_ride.departure_time) +
+    (journey.arrival_footpath?.way.duration ?? 0) +
+    journey.egress.duration
+  );
+}
+
+/** Describes the number of transfers, such as "direct" or "2 transfers". */
+export function transferSummary(journey: Journey): string {
+  const count = journey.later_rides.length;
+  if (count === 0) {
+    return "direct";
+  }
+  return `${count} ${count === 1 ? "transfer" : "transfers"}`;
+}
+
+/** Returns the name of a station of a leg plan, or a placeholder for an index it lacks. */
+export function stationName(legPlan: LegPlan, stationIndex: number): string {
+  return legPlan.station_table[stationIndex]?.name ?? "Unknown station";
+}
+
+/** Returns a moment as the local time of a station of a leg plan. */
+export function stationTime(legPlan: LegPlan, stationIndex: number, moment: number): string {
+  const timeZone = legPlan.station_table[stationIndex]?.time_zone ?? "UTC";
+  return formatTimeInZone(moment, timeZone);
+}
+
+/** A moment at a station, as the card of a journey shows it. */
+export interface StationMoment {
+  /** The local time at the station. */
+  time: string;
+  /** The name of the station. */
+  station: string;
+}
+
+/** What the card of a journey shows of it at a glance. */
+export interface JourneyOverview {
+  /** The first boarding. */
+  boarding: StationMoment;
+  /** The last alighting. */
+  alighting: StationMoment;
+  /** Door-to-door minutes, with the ways to and from the stations. */
+  minutes: number;
+  /** The number of changes of train. */
+  transfers: number;
+  /** The names of the trains in travel order. */
+  trains: string[];
+}
+
+/** Summarises a journey of a leg plan by its first boarding, its last alighting and its length. */
+export function journeyOverview(legPlan: LegPlan, journey: Journey): JourneyOverview {
+  const rides = journeyRides(journey);
+  const lastRide = rides.at(-1) ?? journey.first_ride;
+  return {
+    boarding: {
+      time: stationTime(legPlan, journey.first_ride.boarding_station, journey.first_ride.departure_time),
+      station: stationName(legPlan, journey.first_ride.boarding_station),
+    },
+    alighting: {
+      time: stationTime(legPlan, lastRide.alighting_station, lastRide.arrival_time),
+      station: stationName(legPlan, lastRide.alighting_station),
+    },
+    minutes: journeyMinutes(journey),
+    transfers: journey.later_rides.length,
+    trains: rides.map(trainName),
+  };
 }

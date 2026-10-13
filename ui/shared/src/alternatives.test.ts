@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import type { Journey, LegPlan } from "./bindings";
-import { alternativesOfKind, centsMore, describeDifference, describeKinds, minutesLonger } from "./alternatives";
+import type { Journey, LegPlan, NearbyDaySuggestion } from "./bindings";
+import {
+  alternativeRows,
+  alternativesOfKind,
+  centsMore,
+  describeDifference,
+  describeKinds,
+  describeKindsForTooltip,
+  minutesLonger,
+} from "./alternatives";
 
 /** A journey with a door-to-door time and a median price, and the kind it was offered as. */
 function journey(minutes: number, priceCents: number | null, kind: Journey["alternative_kind"] = null): Journey {
@@ -44,13 +52,13 @@ const chosen = journey(300, 12_000);
 
 describe("describeDifference", () => {
   it("says how much faster and cheaper or longer and more expensive", () => {
-    expect(describeDifference(journey(260, 13_500), chosen)).toBe("40 min faster, €15 more");
-    expect(describeDifference(journey(380, 3_500), chosen)).toBe("1 h 20 min longer, €85 cheaper");
+    expect(describeDifference(journey(260, 13_500), chosen)).toBe("40 min faster, ~€15 more");
+    expect(describeDifference(journey(380, 3_500), chosen)).toBe("1 h 20 min longer, ~€85 cheaper");
   });
 
   it("says same for a difference that is too small to matter", () => {
     expect(describeDifference(journey(302, 11_950), chosen)).toBe("same time, same price");
-    expect(describeDifference(journey(300, 10_500), chosen)).toBe("same time, €15 cheaper");
+    expect(describeDifference(journey(300, 10_500), chosen)).toBe("same time, ~€15 cheaper");
   });
 
   it("leaves a price out that is not known", () => {
@@ -77,5 +85,44 @@ describe("alternativesOfKind", () => {
     expect(describeKinds(plan)).toBe("cheaper and faster");
     const plain = { ...plan, alternative_journeys: [journey(310, 12_500)] } as unknown as LegPlan;
     expect(describeKinds(plain)).toBeNull();
+  });
+
+  it("words the kinds for a tooltip", () => {
+    expect(describeKindsForTooltip(plan)).toBe("Includes a much cheaper and a much faster journey");
+    const cheaperOnly = { ...plan, alternative_journeys: [journey(300, 10_500, "Cheaper")] } as unknown as LegPlan;
+    expect(describeKindsForTooltip(cheaperOnly)).toBe("Includes a much cheaper journey");
+    const plain = { ...plan, alternative_journeys: [journey(310, 12_500)] } as unknown as LegPlan;
+    expect(describeKindsForTooltip(plain)).toBeNull();
+  });
+});
+
+describe("alternativeRows", () => {
+  const plan = {
+    chosen_journey: chosen,
+    alternative_journeys: [journey(310, 12_500), journey(300, 10_500, "Cheaper")],
+    station_table: [],
+    follows_traveller_choice: false,
+  } as unknown as LegPlan;
+  const dayPlan = { ...plan, chosen_journey: journey(280, 11_000) } as unknown as LegPlan;
+  const nearbyDay: NearbyDaySuggestion = { day_offset: -1, departure_date: "2026-10-12", plan: dayPlan };
+
+  it("lists the alternatives of the plan in order, with no day", () => {
+    const rows = alternativeRows(plan, null);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => row.day)).toEqual([null, null]);
+    expect(rows[1]!.journey.alternative_kind).toBe("Cheaper");
+  });
+
+  it("adds the journey of a nearby day last, with its own plan and its day", () => {
+    const rows = alternativeRows(plan, nearbyDay);
+    expect(rows).toHaveLength(3);
+    const last = rows.at(-1)!;
+    expect(last.day).toEqual({ offset: -1, date: "2026-10-12" });
+    expect(last.plan).toBe(dayPlan);
+    expect(last.journey).toBe(dayPlan.chosen_journey);
+  });
+
+  it("is empty for a leg with no alternatives and no nearby day", () => {
+    expect(alternativeRows({ ...plan, alternative_journeys: [] } as unknown as LegPlan, null)).toEqual([]);
   });
 });

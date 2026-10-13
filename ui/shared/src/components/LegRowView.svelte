@@ -1,7 +1,9 @@
 <script lang="ts">
-  // One leg between two places: its planned trains and whether it includes a night train.
+  // One leg between two places. The closed card shows the journey at a glance, and the open card
+  // shows its rides and the settings of a night train.
   import type {
     AcceptedBerths,
+    EuroRange,
     Journey,
     JourneyChoice,
     LegPlan,
@@ -9,53 +11,98 @@
     NearbyDaySuggestion,
     NoJourneyReason,
     OvernightLegOptions,
-    TrainRide,
     TripEdit,
   } from "../bindings";
+  import { alternativeRows, describeKindsForTooltip } from "../alternatives";
   import {
     explainStationWay,
     formatDate,
     formatDuration,
     formatMinutesOfDay,
     formatStationWay,
-    formatTimeInZone,
     parseMinutesOfDay,
   } from "../format";
-  import { alternativesOfKind, describeDifference, describeKinds } from "../alternatives";
-  import { formatEuroRange } from "../tickets";
-  import type { LegRow } from "../itinerary";
+  import {
+    journeyOverview,
+    journeyRides,
+    type LegLine,
+    type LegRow,
+    stationName,
+    stationTime,
+    trainName,
+    transferSummary,
+  } from "../itinerary";
+  import { journeyKey } from "../live-ranking";
+  import { expandTransition, rowEnter, rowExit } from "../motion";
+  import { describeJourneyPrice, formatJourneyPrice } from "../tickets";
   import type { LegViewState } from "../trip-source";
+  import AlternativesPopup from "./AlternativesPopup.svelte";
+  import Icon from "./Icon.svelte";
   import JourneyExplanation from "./JourneyExplanation.svelte";
+  import JourneyLine from "./JourneyLine.svelte";
   import Spinner from "./Spinner.svelte";
+  import TrainChip from "./TrainChip.svelte";
+  import { fly, slide } from "svelte/transition";
 
   let {
     leg,
     legState,
+    legLine,
     storedChoice,
     nearbyDay,
+    livePrices,
     onEdit,
+    enterDelay,
   }: {
     leg: LegRow;
     legState: LegViewState;
-    /** The journey the traveller picked for this leg, or `null` for the planner's pick. */
+    /** The colour the leg takes on the itinerary spine and its train chips. */
+    legLine: LegLine;
+    /** The journey the traveller picked for this leg, or `null` for the default pick. */
     storedChoice: JourneyChoice | null;
     /** A much better day before or after the leg's date, or `null`. */
     nearbyDay: NearbyDaySuggestion | null;
+    /** Live prices of journeys from the booking sites, by `journeyKey`. */
+    livePrices: ReadonlyMap<string, EuroRange>;
     /** Missing in a read-only view. */
     onEdit?: (edit: TripEdit) => void;
+    /** Staggers the enter transition of the rows of a freshly opened trip. */
+    enterDelay: number;
   } = $props();
+
+  /** Whether the rides and the settings of the leg are open. */
+  let expanded = $state(false);
+
+  /** Whether the explanation of the chosen journey is open. */
+  let showExplanation = $state(false);
+
+  const plan: LegPlan | null = $derived(legState.status === "found" ? legState.legPlan : null);
+  const journey: Journey | null = $derived(plan?.chosen_journey ?? null);
+  const rides = $derived(journey === null ? [] : journeyRides(journey));
+  const overnightOptions = $derived(leg.travelMode === "Daytime" ? null : leg.travelMode.Overnight);
+  const rows = $derived(plan === null ? [] : alternativeRows(plan, nearbyDay));
+  const price = $derived(journey?.cost_parts?.price ?? null);
+  const live = $derived(journey !== null && livePrices.has(journeyKey(journey)));
+  const priceText = $derived(formatJourneyPrice(price, live));
+  const sleepingRide = $derived(
+    journey?.sleeping_ride === null || journey?.sleeping_ride === undefined
+      ? null
+      : (rides[journey.sleeping_ride] ?? null),
+  );
+  const hasExplanation = $derived(journey?.cost_parts !== null && journey?.cost_parts !== undefined);
+  const canExpand = $derived(plan !== null || overnightOptions !== null);
 
   /**
    * Returns whether a journey is the one a choice describes. A plan whose alternatives still
    * hold the picked journey is from before the pick and about to be replaced, so the leg row
    * doesn't claim the pick is gone.
    */
-  function matchesChoice(journey: Journey, choice: JourneyChoice): boolean {
-    const rides = journeyRides(journey);
+  function matchesChoice(candidate: Journey, choice: JourneyChoice): boolean {
+    const candidateRides = journeyRides(candidate);
     return (
-      journey.first_ride.departure_time === choice.first_departure_time &&
-      rides.length === choice.trains.length &&
-      rides.every(
+      candidate.first_ride.departure_time === choice.first_departure_time &&
+      candidateRides.length === choice.trains.length &&
+      candidateRides.every(
         (ride, index) =>
           ride.train_label.category === choice.trains[index]?.category &&
           ride.train_label.number === choice.trains[index]?.number,
@@ -72,14 +119,14 @@
     );
   }
 
-  /** Makes a journey the chosen one for this leg, or goes back to the planner's pick. */
-  function chooseJourney(journey: Journey | null) {
+  /** Makes a journey the chosen one for this leg, or goes back to the default pick. */
+  function chooseJourney(picked: Journey | null) {
     const choice =
-      journey === null
+      picked === null
         ? null
         : {
-            first_departure_time: journey.first_ride.departure_time,
-            trains: journeyRides(journey).map((ride) => ride.train_label),
+            first_departure_time: picked.first_ride.departure_time,
+            trains: journeyRides(picked).map((ride) => ride.train_label),
           };
     onEdit?.({ ChooseJourney: { arrival_place_id: leg.arrivalPlace.id, choice } });
   }
@@ -90,10 +137,6 @@
     wake_up_time: 6 * 60 + 30,
     accepted_berths: { Either: { preferred: null } },
   };
-
-  const overnightOptions = $derived(
-    leg.travelMode === "Daytime" ? null : leg.travelMode.Overnight,
-  );
 
   const noJourneyMessages: Record<NoJourneyReason, string> = {
     NoStationNearDeparturePlace: "No station with service near the departure place.",
@@ -137,361 +180,367 @@
     return acceptedBerths.Only ?? "Either";
   }
 
-  /** Whether the list of alternative journeys is open. */
-  let showAlternatives = $state(false);
-
-  /** Whether the explanation of the chosen journey is open. */
-  let showExplanation = $state(false);
-
-  /** Returns the rides of a journey in travel order. */
-  function journeyRides(journey: Journey): TrainRide[] {
-    return [journey.first_ride, ...journey.later_rides.map((later) => later.ride)];
-  }
-
-  /** Describes the number of transfers, such as "direct" or "2 transfers". */
-  function transferSummary(journey: Journey): string {
-    const count = journey.later_rides.length;
-    if (count === 0) {
-      return "direct";
-    }
-    return `${count} ${count === 1 ? "transfer" : "transfers"}`;
-  }
-
-  /** Returns door-to-door minutes, including the ways to and from the stations. */
-  function journeyMinutes(journey: Journey): number {
-    const lastRide = journey.later_rides.at(-1)?.ride ?? journey.first_ride;
-    return (
-      journey.access.duration +
-      (lastRide.arrival_time - journey.first_ride.departure_time) +
-      (journey.arrival_footpath?.way.duration ?? 0) +
-      journey.egress.duration
-    );
-  }
-
-  /** Returns the estimated price of the journey's tickets, or `null` when none is known. */
-  function journeyPrice(journey: Journey): string | null {
-    const price = journey.cost_parts?.price ?? null;
-    return price === null ? null : formatEuroRange(price);
-  }
-
   /** Returns the trains of a journey, such as "RE 2". */
-  function journeyTrains(journey: Journey): string {
-    return journeyRides(journey)
-      .map((ride) => `${ride.train_label.category} ${ride.train_label.number}`)
-      .join(", ");
+  function journeyTrains(candidate: Journey): string {
+    return journeyRides(candidate).map(trainName).join(", ");
   }
 
-  function stationName(legPlan: LegPlan, stationIndex: number): string {
-    return legPlan.station_table[stationIndex]?.name ?? "Unknown station";
-  }
-
-  function stationTime(legPlan: LegPlan, stationIndex: number, moment: number): string {
-    const timeZone = legPlan.station_table[stationIndex]?.time_zone ?? "UTC";
-    return formatTimeInZone(moment, timeZone);
+  /** Returns the price of a journey for a note, or a placeholder when it has none. */
+  function notePrice(candidate: Journey): string {
+    return formatJourneyPrice(candidate.cost_parts?.price ?? null, false) ?? "an unknown price";
   }
 </script>
 
-<li class="leg-row" class:overnight={overnightOptions !== null}>
-  <div class="header">
-    <span class="date">{formatDate(leg.departureDate)}</span>
-    {#if onEdit !== undefined}
-      <label class="night-train-toggle">
-        <input
-          type="checkbox"
-          checked={overnightOptions !== null}
-          onchange={(event) =>
-            setTravelMode(
-              event.currentTarget.checked ? { Overnight: defaultOvernightOptions } : "Daytime",
-            )}
-        />
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-          <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill="currentColor" />
-        </svg>
-        Night train
-      </label>
-    {/if}
+<li
+  class="leg-row"
+  style:--leg-colour={legLine.colour}
+  in:fly={rowEnter(enterDelay)}
+  out:fly={rowExit()}
+>
+  <div class="spine" aria-hidden="true">
+    <div class="line leg" class:night={legLine.night}></div>
   </div>
-
-  {#if overnightOptions !== null}
-    <div class="overnight-options">
-      <label class="time-field">
-        <span class="label">In bed by</span>
-        <input
-          type="time"
-          value={formatMinutesOfDay(overnightOptions.bedtime)}
-          disabled={onEdit === undefined}
-          onchange={(event) => setOvernightTime("bedtime", event.currentTarget.value)}
-        />
-      </label>
-      <label class="time-field">
-        <span class="label">Up at</span>
-        <input
-          type="time"
-          value={formatMinutesOfDay(overnightOptions.wake_up_time)}
-          disabled={onEdit === undefined}
-          onchange={(event) => setOvernightTime("wake_up_time", event.currentTarget.value)}
-        />
-      </label>
-      <label>
-        Berth
-        <select
-          value={berthChoice(overnightOptions.accepted_berths)}
-          disabled={onEdit === undefined}
-          onchange={(event) =>
-            setOvernightOptions({ accepted_berths: acceptedBerthsFromChoice(event.currentTarget.value) })}
+  <div class="leg-card" class:expanded data-popup-edge>
+    <div class="head">
+      <!-- An open card names its trains in the list of rides, so the header keeps only the date. -->
+      {#if !expanded && journey !== null}
+        <span class="chips">
+          {#each rides as ride, rideIndex (rideIndex)}
+            <TrainChip
+              label={trainName(ride)}
+              colour={legLine.colour}
+              sleeping={journey.sleeping_ride === rideIndex}
+            />
+          {/each}
+        </span>
+      {/if}
+      <span class="when numbers" class:open={expanded}>{formatDate(leg.departureDate)}</span>
+      <span class="grow"></span>
+      {#if hasExplanation}
+        <button
+          type="button"
+          class="icon-button"
+          aria-expanded={showExplanation}
+          aria-label="Why this journey"
+          title="Why this journey"
+          onclick={() => (showExplanation = !showExplanation)}
         >
-          <option value="Either">Couchette or sleeper</option>
-          <option value="Couchette">Couchette only</option>
-          <option value="Sleeper">Sleeper only</option>
-        </select>
-      </label>
+          ?
+        </button>
+      {/if}
+      {#if onEdit !== undefined}
+        <button
+          type="button"
+          class="icon-button moon"
+          class:on={overnightOptions !== null}
+          aria-pressed={overnightOptions !== null}
+          aria-label="Take a night train"
+          title="Take a night train"
+          onclick={() =>
+            setTravelMode(overnightOptions === null ? { Overnight: defaultOvernightOptions } : "Daytime")}
+        >
+          <Icon name="moon" />
+        </button>
+      {/if}
+      {#if canExpand}
+        <button
+          type="button"
+          class="icon-button"
+          aria-expanded={expanded}
+          aria-label={expanded ? "Hide details" : "Show details"}
+          title={expanded ? "Hide details" : "Show details"}
+          onclick={() => (expanded = !expanded)}
+        >
+          <Icon name="chevron" turned={expanded} />
+        </button>
+      {/if}
     </div>
-  {/if}
 
-  <div class="plan">
     {#if legState.status === "pending"}
-      <span class="hint">
+      <span class="pending">
         <Spinner label="Planning the leg" />
         Planning…
       </span>
     {:else if legState.status === "none"}
       <span class="no-journey">{noJourneyMessages[legState.reason]}</span>
-    {:else}
-      {@const legPlan = legState.legPlan}
-      {@const journey = legPlan.chosen_journey}
-      <ol class="rides">
-        <li class="station-way" title={explainStationWay(journey.access)}>
-          {formatStationWay(journey.access, stationName(legPlan, journey.first_ride.boarding_station))}
-        </li>
-        {#each [journey.first_ride, ...journey.later_rides.map((later) => later.ride)] as ride, rideIndex (rideIndex)}
-          <li>
-            <span class="time">{stationTime(legPlan, ride.boarding_station, ride.departure_time)}</span>
-            {stationName(legPlan, ride.boarding_station)}
-            <span class="train" class:sleeping={journey.sleeping_ride === rideIndex}>
-              {ride.train_label.category} {ride.train_label.number}
-            </span>
-            <span class="time">{stationTime(legPlan, ride.alighting_station, ride.arrival_time)}</span>
-            {stationName(legPlan, ride.alighting_station)}
+    {:else if plan !== null && journey !== null}
+      <!-- Opening the card swaps the overview for the list of rides, which says the same in
+           more detail. -->
+      {#if expanded}
+        <ol class="rides">
+          <li class="station-way" title={explainStationWay(journey.access)}>
+            {formatStationWay(journey.access, stationName(plan, journey.first_ride.boarding_station))}
           </li>
-        {/each}
-        {#if journey.arrival_footpath !== null}
-          <li class="station-way" title={explainStationWay(journey.arrival_footpath.way)}>
-            {formatStationWay(
-              journey.arrival_footpath.way,
-              stationName(legPlan, journey.arrival_footpath.to_station),
-            )}
-          </li>
-        {/if}
-        <li class="station-way" title={explainStationWay(journey.egress)}>
-          {formatStationWay(journey.egress, leg.arrivalPlace.name)}
-        </li>
-      </ol>
-      <span class="summary">
-        {formatDuration(journeyMinutes(journey))} · {transferSummary(journey)}
-        {#if journeyPrice(journey) !== null}
-          · {journeyPrice(journey)}
-        {/if}
-        {#if legPlan.alternative_journeys.length > 0}
-          ·
-          <button
-            type="button"
-            class="link"
-            aria-expanded={showAlternatives}
-            onclick={() => (showAlternatives = !showAlternatives)}
-          >
-            {legPlan.alternative_journeys.length}
-            {legPlan.alternative_journeys.length === 1 ? "alternative" : "alternatives"}
-          </button>
-          <!-- An alternative that a search at another weight found is easy to miss in a list. -->
-          {#if describeKinds(legPlan) !== null}
-            ({describeKinds(legPlan)} included)
+          {#each rides as ride, rideIndex (rideIndex)}
+            <li>
+              <span class="time numbers">{stationTime(plan, ride.boarding_station, ride.departure_time)}</span>
+              <span class="station">{stationName(plan, ride.boarding_station)}</span>
+              <TrainChip
+                label={trainName(ride)}
+                colour={legLine.colour}
+                sleeping={journey.sleeping_ride === rideIndex}
+                small
+              />
+              <span class="time numbers">{stationTime(plan, ride.alighting_station, ride.arrival_time)}</span>
+              <span class="station">{stationName(plan, ride.alighting_station)}</span>
+            </li>
+          {/each}
+          {#if journey.arrival_footpath !== null}
+            <li class="station-way" title={explainStationWay(journey.arrival_footpath.way)}>
+              {formatStationWay(
+                journey.arrival_footpath.way,
+                stationName(plan, journey.arrival_footpath.to_station),
+              )}
+            </li>
           {/if}
-        {/if}
-        {#if journey.cost_parts !== null && journey.cost_parts !== undefined}
-          <button
-            type="button"
-            class="explain"
-            aria-expanded={showExplanation}
-            aria-label="Why this journey"
-            title="Why this journey"
-            onclick={() => (showExplanation = !showExplanation)}
-          >
-            ?
-          </button>
-        {/if}
-      </span>
-      {#if showExplanation}
-        <JourneyExplanation {legPlan} {nearbyDay} />
+          <li class="station-way" title={explainStationWay(journey.egress)}>
+            {formatStationWay(journey.egress, leg.arrivalPlace.name)}
+          </li>
+        </ol>
+      {:else}
+        {@const overview = journeyOverview(plan, journey)}
+        <JourneyLine rideCount={rides.length} night={legLine.night} />
+        <div class="times">
+          <span>
+            <span class="time numbers">{overview.boarding.time}</span>
+            <span class="station">{overview.boarding.station}</span>
+          </span>
+          <span>
+            <span class="time numbers">{overview.alighting.time}</span>
+            <span class="station">{overview.alighting.station}</span>
+          </span>
+          <span class="duration numbers">
+            {formatDuration(overview.minutes)}, {transferSummary(journey)}
+          </span>
+        </div>
+      {/if}
+
+      {#if legState.status === "found" && legState.extrasPending === true}
+        <!-- The searches after the main plan take longer than the plan itself. -->
+        <span class="note">
+          <Spinner label="Searching for cheaper and faster journeys and pass options" />
+          Looking for cheaper and faster journeys…
+        </span>
+      {/if}
+      {#if legState.status === "found" && legState.liveOvertaken !== null && legState.liveOvertaken !== undefined}
+        <!-- The booking sites' prices put another journey ahead of the planner's estimates. -->
+        <span class="note">
+          With the live prices, {journeyTrains(journey)} at {notePrice(journey)} now comes before
+          {journeyTrains(legState.liveOvertaken)}, which the estimates put first.
+        </span>
       {/if}
       {#if overnightOptions !== null && journey.sleeping_ride === null}
-        <span class="night-note">
+        <span class="night-warning">
           No night train with berths covers most of the night from
           {formatMinutesOfDay(overnightOptions.bedtime)} to
           {formatMinutesOfDay(overnightOptions.wake_up_time)} on this date.
         </span>
       {/if}
-      {#if legPlan.follows_traveller_choice}
-        <span class="choice-note">
-          Your pick ·
+      {#if pickIsGone(plan)}
+        <span class="night-warning">
+          The journey you picked is no longer possible, so this is the default pick.
           {#if onEdit !== undefined}
-            <button type="button" class="link" onclick={() => chooseJourney(null)}>
-              use the planner's pick
+            <button type="button" class="small" onclick={() => chooseJourney(null)}>
+              Use the default pick
             </button>
           {/if}
         </span>
-      {:else if pickIsGone(legPlan)}
-        <span class="choice-note">
-          The journey you picked is no longer possible, so this is the planner's pick.
-          {#if onEdit !== undefined}
-            <button type="button" class="link" onclick={() => chooseJourney(null)}>Forget my pick</button>
+      {/if}
+
+      {#if priceText !== null || sleepingRide !== null || plan.follows_traveller_choice || rows.length > 0}
+        <!-- The price slot sits first, so the price of the planner has its place before a leg has
+             one. The row keeps its height without a price. -->
+        <div class="meta">
+          <span class="price" title={price === null ? undefined : describeJourneyPrice(price, live)}>
+            {#if priceText !== null}
+              {priceText}
+              <span class="dot" class:open={!live}></span>
+            {/if}
+          </span>
+          {#if sleepingRide !== null}
+            <span class="note sleeping"><span>Sleeping on {trainName(sleepingRide)}</span></span>
           {/if}
-        </span>
-      {/if}
-      {#if showAlternatives}
-        <!--
-          Other journeys, best first by the same cost that picked the chosen journey. A much
-          cheaper or much faster journey that a search at another weight found is among them.
-        -->
-        <ol class="alternatives">
-          {#each legPlan.alternative_journeys as alternative, alternativeIndex (alternativeIndex)}
-            {@const rides = journeyRides(alternative)}
-            {@const lastRide = rides.at(-1) ?? alternative.first_ride}
-            <li>
-              {#if alternative.alternative_kind !== null && alternative.alternative_kind !== undefined}
-                <span class="kind">{alternative.alternative_kind}</span>
+          {#if plan.follows_traveller_choice}
+            <span class="note">
+              <span>Your pick</span>
+              {#if onEdit !== undefined}
+                <button
+                  type="button"
+                  class="icon-button"
+                  aria-label="Use the default pick"
+                  title="Use the default pick"
+                  onclick={() => chooseJourney(null)}
+                >
+                  <Icon name="close" />
+                </button>
               {/if}
-              <span class="time">
-                {stationTime(legPlan, alternative.first_ride.boarding_station, alternative.first_ride.departure_time)}
-              </span>
-              {stationName(legPlan, alternative.first_ride.boarding_station)}
-              →
-              <span class="time">{stationTime(legPlan, lastRide.alighting_station, lastRide.arrival_time)}</span>
-              {stationName(legPlan, lastRide.alighting_station)}
-              <span class="alternative-details">
-                {formatDuration(journeyMinutes(alternative))} · {transferSummary(alternative)} ·
-                {rides.map((ride) => `${ride.train_label.category} ${ride.train_label.number}`).join(", ")}
-                {#if journeyPrice(alternative) !== null}
-                  · {journeyPrice(alternative)}
-                {/if}
-                <span class="difference">· {describeDifference(alternative, journey)}</span>
-                {#if onEdit !== undefined}
-                  · <button type="button" class="link" onclick={() => chooseJourney(alternative)}>
-                    Take this one
-                  </button>
-                {/if}
-              </span>
-            </li>
-          {/each}
-        </ol>
+            </span>
+          {/if}
+          {#if rows.length > 0}
+            <AlternativesPopup
+              {rows}
+              chosen={journey}
+              kindsTooltip={describeKindsForTooltip(plan)}
+              {livePrices}
+              onTake={onEdit === undefined ? undefined : chooseJourney}
+            />
+          {/if}
+        </div>
       {/if}
-      {#if legState.extrasPending === true}
-        <!-- The searches after the main plan take longer than the plan itself. -->
-        <span class="hint">
-          <Spinner label="Searching for cheaper and faster journeys and pass options" />
-          Looking for cheaper and faster journeys…
-        </span>
-      {/if}
-      {#if legState.liveOvertaken !== null && legState.liveOvertaken !== undefined}
-        <!-- The booking sites' prices put another journey ahead of the planner's estimates. -->
-        <span class="hint">
-          With the live prices, {journeyTrains(journey)} at {journeyPrice(journey) ?? "an unknown price"}
-          now comes before {journeyTrains(legState.liveOvertaken)}, which the estimates put first.
-        </span>
+      {#if showExplanation}
+        <JourneyExplanation legPlan={plan} {nearbyDay} />
       {/if}
     {/if}
-    {#if nearbyDay !== null}
-      <!-- The traveller decides how to reach the other day, such as by adding a night. -->
-      {@const dayPlan = nearbyDay.plan}
-      {@const dayRides = journeyRides(dayPlan.chosen_journey)}
-      {@const dayLastRide = dayRides.at(-1) ?? dayPlan.chosen_journey.first_ride}
-      <span class="hint">
-        {nearbyDay.day_offset < 0 ? "A day earlier" : "A day later"}, {formatDate(nearbyDay.departure_date)}:
-        {dayRides.map((ride) => `${ride.train_label.category} ${ride.train_label.number}`).join(", ")},
-        {transferSummary(dayPlan.chosen_journey)}, arrives
-        {stationTime(dayPlan, dayLastRide.alighting_station, dayLastRide.arrival_time)}.
-      </span>
+
+    {#if expanded && overnightOptions !== null}
+      <!-- The settings of the night train sit in their own panel, apart from the journey and
+           its properties. -->
+      <div class="settings" transition:slide={expandTransition()}>
+        <h4>Night train settings</h4>
+        <label>
+          <span class="label">In bed by</span>
+          <input
+            type="time"
+            class="numbers"
+            value={formatMinutesOfDay(overnightOptions.bedtime)}
+            disabled={onEdit === undefined}
+            onchange={(event) => setOvernightTime("bedtime", event.currentTarget.value)}
+          />
+        </label>
+        <label>
+          <span class="label">Up at</span>
+          <input
+            type="time"
+            class="numbers"
+            value={formatMinutesOfDay(overnightOptions.wake_up_time)}
+            disabled={onEdit === undefined}
+            onchange={(event) => setOvernightTime("wake_up_time", event.currentTarget.value)}
+          />
+        </label>
+        <label>
+          <span class="label">Berth</span>
+          <select
+            value={berthChoice(overnightOptions.accepted_berths)}
+            disabled={onEdit === undefined}
+            onchange={(event) =>
+              setOvernightOptions({ accepted_berths: acceptedBerthsFromChoice(event.currentTarget.value) })}
+          >
+            <option value="Either">Couchette or sleeper</option>
+            <option value="Couchette">Couchette only</option>
+            <option value="Sleeper">Sleeper only</option>
+          </select>
+        </label>
+      </div>
     {/if}
   </div>
 </li>
 
 <style>
+  /* The row is a grid: the spine cell on the left, the leg card 12px away from it. */
   .leg-row {
+    display: grid;
+    grid-template-columns: 34px 1fr;
+    column-gap: var(--space-3);
     list-style: none;
-    margin-left: calc(0.9em + var(--space-3));
-    padding: var(--space-2) var(--space-4);
-    border-left: 3px solid var(--color-border);
   }
 
-  .leg-row.overnight {
-    border-left-style: dashed;
-    border-left-color: var(--color-accent);
+  .spine {
+    position: relative;
   }
 
-  .header {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
+  .line.leg {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 4px;
+    border-radius: var(--radius-pill);
+    background: var(--leg-colour);
   }
 
-  .date {
-    color: var(--color-text-muted);
+  /* A night leg draws dashed, in the purple that marks night trains everywhere. */
+  .line.leg.night {
+    background: repeating-linear-gradient(
+      to bottom,
+      var(--leg-colour) 0 8px,
+      transparent 8px 13px
+    );
   }
 
-  .night-train-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
-  }
-
-  .overnight-options {
+  .leg-card {
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
-    margin: var(--space-2) 0;
+    margin-bottom: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
   }
 
-  .rides {
-    margin: var(--space-1) 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .time {
-    font-variant-numeric: tabular-nums;
-    font-weight: 600;
-  }
-
-  .train {
-    margin: 0 var(--space-2);
-    padding: 0 var(--space-1);
-    border-radius: 4px;
-    background: var(--color-surface-muted);
-  }
-
-  /* The train the traveller sleeps on, in the purple of night trains on the map. */
-  .train.sleeping {
-    background: var(--color-night-train);
-    color: white;
-  }
-
-  .time-field {
+  .head {
     display: flex;
     align-items: center;
     gap: var(--space-2);
   }
 
-  .time-field .label {
-    min-width: 7em;
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+
+  .grow {
+    flex: 1;
+  }
+
+  .when {
     color: var(--color-text-muted);
+    font-size: var(--text-caption);
   }
 
-  .night-note {
-    display: block;
-    color: var(--color-danger);
+  /* An open card has no chips, so its date reads in the normal ink. */
+  .when.open {
+    color: var(--color-text);
+    font-size: var(--text-small);
+    font-weight: 600;
   }
 
-  .summary,
-  .station-way {
+  /* The moon is filled with the night colour while the leg takes a night train. */
+  .moon.on {
+    color: var(--color-night);
+    border-color: var(--color-night);
+    background: color-mix(in srgb, var(--color-night) 12%, var(--color-surface));
+  }
+
+  .times {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-1) 14px;
+  }
+
+  .time {
+    font-weight: 700;
+  }
+
+  .station {
+    color: var(--color-text-muted);
+    font-size: var(--text-small);
+  }
+
+  .duration {
+    margin-left: auto;
+    color: var(--color-text-muted);
+    font-size: var(--text-small);
+  }
+
+  .pending {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) 2px;
     color: var(--color-text-muted);
   }
 
@@ -499,66 +548,87 @@
     color: var(--color-danger);
   }
 
-  /* The alternatives button reads as part of the summary text. */
-  /* A small round button, so the explanation stays out of the way until asked for. */
-  .explain {
-    width: 1.4em;
-    height: 1.4em;
-    margin-left: var(--space-2);
-    padding: 0;
-    border: 1px solid var(--color-border);
-    border-radius: 50%;
-    background: var(--color-surface);
-    color: var(--color-text-muted);
-    font-size: 0.85em;
-    line-height: 1;
-  }
-
-  .link {
-    padding: 0;
-    border: none;
-    background: none;
-    color: var(--color-accent);
-    text-decoration: underline;
-  }
-
-  .alternatives {
+  .rides {
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
-    margin: var(--space-2) 0 0;
-    padding: 0 0 0 var(--space-3);
-    border-left: 2px solid var(--color-border);
+    margin: 0;
+    padding: 0;
     list-style: none;
   }
 
-  /* A note below the journey, such as work that is still going on or a better day. */
-  .hint {
-    display: block;
+  .rides .station {
+    font-size: inherit;
+  }
+
+  .station-way {
+    color: var(--color-text-muted);
+    font-size: var(--text-small);
+  }
+
+  /* A note below the journey, such as work that is still going on or a changed order. */
+  .note {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--color-text-muted);
+    font-size: var(--text-small);
+  }
+
+  .night-warning {
+    color: var(--color-danger);
+    font-size: var(--text-small);
+  }
+
+  /* The properties of the journey sit under a hairline. The row keeps its height and its left
+     slot without a price. */
+  .meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-3);
+    min-height: 44px;
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--color-border);
+  }
+
+  .price {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-weight: 600;
+  }
+
+  .sleeping {
+    color: var(--color-night);
+  }
+
+  /* The settings of a night train, in a tinted panel of their own. */
+  .settings {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
     margin-top: var(--space-1);
-    padding: var(--space-1) var(--space-2);
-    border-radius: 4px;
-    background: var(--color-notice);
-    color: var(--color-text);
+    padding: var(--space-3);
+    border-radius: 10px;
+    background: var(--color-surface-muted);
   }
 
-  .choice-note {
-    display: block;
+  .settings h4 {
+    margin: 0;
     color: var(--color-text-muted);
+    font-size: var(--text-small);
+    font-weight: 600;
   }
 
-  .alternative-details {
-    display: block;
+  .settings label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .label {
+    min-width: 7em;
     color: var(--color-text-muted);
-  }
-
-  /* Marks an alternative that a search at another weight found. */
-  .kind {
-    margin-right: var(--space-2);
-    padding: 0 var(--space-1);
-    border-radius: 4px;
-    background: var(--color-notice);
-    color: var(--color-text);
-    font-size: 0.85em;
   }
 </style>

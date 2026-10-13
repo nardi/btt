@@ -8,11 +8,10 @@
     TripPreferences,
   } from "../bindings";
   import { formatMinutesOfDay } from "../format";
-  import { itineraryRows, plannedArrivalDate, storedJourneyChoice, tripPlaces } from "../itinerary";
+  import { itineraryRows, legLine, plannedArrivalDate, storedJourneyChoice, tripPlaces } from "../itinerary";
+  import { staggerDelay } from "../motion";
   import { legViewState, type TripSource } from "../trip-source";
   import LegRowView from "./LegRowView.svelte";
-  import PassScenarioPicker from "./PassScenarioPicker.svelte";
-  import Spinner from "./Spinner.svelte";
   import PlaceRowView from "./PlaceRowView.svelte";
   import PlaceSearch from "./PlaceSearch.svelte";
 
@@ -90,6 +89,16 @@
   /** Position of the place being dragged, so rows can show where it would land. */
   let draggedIndex: number | null = $state(null);
 
+  /** The places the view has shown, so a single added place enters without a stagger. */
+  let knownPlaceIds = new Set<TripPlaceId>();
+
+  /** Whether every place is new to the view, such as when a trip opens, which staggers the rows. */
+  const staggered = $derived(rows.places.every((row) => !knownPlaceIds.has(row.place.id)));
+
+  $effect(() => {
+    knownPlaceIds = new Set(rows.places.map((row) => row.place.id));
+  });
+
   function reorderPlace(draggedPlaceId: TripPlaceId, newIndex: number) {
     onEdit?.({ ReorderPlace: { place_id: draggedPlaceId, new_index: newIndex } });
   }
@@ -103,19 +112,6 @@
     <p class="notice" role="status">{noticeMessage(notice)}</p>
   {/each}
 
-  {#if viewState.passScenarios === null && viewState.extrasPendingArrivalPlaces.size > 0 && trip.preferences.price_weight > 0}
-    <p class="empty">
-      <Spinner label="Looking for passes" />
-      Looking for passes that cover the trip.
-    </p>
-  {/if}
-  {#if viewState.passScenarios !== null && viewState.passScenarios.scenarios.length > 1}
-    <PassScenarioPicker
-      scenarioState={viewState.passScenarios}
-      onSelect={editable === null ? undefined : (index) => editable.selectScenario(index)}
-    />
-  {/if}
-
   <ol class="rows">
     {#each rows.places as row, index (row.place.id)}
       {#if index > 0}
@@ -123,14 +119,19 @@
         <LegRowView
           {leg}
           legState={legViewState(viewState, leg.arrivalPlace.id)}
+          legLine={legLine(leg.travelMode, index)}
           nearbyDay={viewState.nearbyDaysByArrivalPlace.get(leg.arrivalPlace.id) ?? null}
           storedChoice={storedJourneyChoice(trip, leg)}
+          livePrices={viewState.livePricesByJourney}
           {onEdit}
+          enterDelay={staggered ? staggerDelay(2 * index - 1) : 0}
         />
       {/if}
       <PlaceRowView
         {row}
         {index}
+        lineAbove={index > 0 ? legLine(rows.legs[index - 1]!.travelMode, index) : null}
+        lineBelow={index < rows.legs.length ? legLine(rows.legs[index]!.travelMode, index + 1) : null}
         selected={row.place.id === selectedPlaceId}
         onSelect={() => onSelect(row.place.id)}
         onFocus={() => onFocus(row.place.id)}
@@ -139,6 +140,7 @@
         onReorder={editable === null ? undefined : reorderPlace}
         {draggedIndex}
         onDragChange={(newDraggedIndex) => (draggedIndex = newDraggedIndex)}
+        enterDelay={staggered ? staggerDelay(2 * index) : 0}
       />
     {/each}
   </ol>
@@ -159,7 +161,7 @@
 
   <p class="preferences-summary">
     {preferencesSummary(trip.preferences)}
-    <button type="button" class="link" onclick={onOpenSetup}>Change in Setup</button>
+    <button type="button" class="small" onclick={onOpenSetup}>Change in Setup</button>
   </p>
 </section>
 
@@ -170,12 +172,23 @@
     gap: var(--space-3);
   }
 
+  /* The rows stack with no gap between them, so the spine line stays continuous. The cards
+     inside the rows carry their own margin. */
   .rows {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
     margin: 0;
     padding: 0;
+    list-style: none;
+  }
+
+  /* The summary of the default windows and the button to the setup screen share a line. */
+  .preferences-summary {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: var(--text-small);
   }
 
   .error,
@@ -191,7 +204,9 @@
   }
 
   .notice {
-    background: var(--color-notice);
+    background: var(--color-notice-fill);
+    color: var(--color-notice);
+    font-size: var(--text-small);
   }
 
   .empty {
