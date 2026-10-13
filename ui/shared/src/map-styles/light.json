@@ -4,7 +4,7 @@
   "sources": {
     "openmaptiles": {
       "type": "vector",
-      "url": "https://tiles.openfreemap.org/planet.json",
+      "url": "https://tiles.openfreemap.org/planet",
       "attribution": "© OpenStreetMap contributors, tiles from OpenFreeMap"
     }
   },
