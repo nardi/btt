@@ -241,6 +241,7 @@
       }
     }
     if (requests.size === 0) {
+      openSource?.lookUpChosenLivePrices();
       return;
     }
     liveLoading = true;
@@ -255,6 +256,9 @@
     }
     if (requestNumber === ticketRequestNumber) {
       liveLoading = false;
+      // The planning screen marks a price as live once the journey has one, and most of the
+      // quotes it needs are now at hand.
+      openSource?.lookUpChosenLivePrices();
     }
   }
 

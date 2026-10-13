@@ -282,6 +282,37 @@ export class TauriTripSource implements TripViewState {
     }
   }
 
+  /**
+   * Queues a live price lookup for the chosen journey of every planned leg that has none yet, at
+   * any price weight. The Tickets screen calls this once it has the live prices of its tickets.
+   * The backend keeps its answers, so a ticket that the Tickets screen already looked up with the
+   * same request costs no new lookup.
+   */
+  lookUpChosenLivePrices(): void {
+    if (!this.trip.preferences.ticket_preferences.live_prices) {
+      return;
+    }
+    for (const [arrivalPlaceId, state] of this.legStatesByArrivalPlace) {
+      if (state.status !== "found") {
+        continue;
+      }
+      const journey = state.legPlan.chosen_journey;
+      const key = journeyKey(journey);
+      // A lookup that found nothing before may find the quotes of the Tickets screen now.
+      if (this.livePricesByJourney.has(key) || this.liveQueue.some((queued) => queued.key === key)) {
+        continue;
+      }
+      this.liveKeysSeen.add(key);
+      this.liveQueue.push({
+        key,
+        leg: { arrival_place_id: arrivalPlaceId, journey, stations: state.legPlan.station_table },
+      });
+    }
+    if (!this.liveLookupRunning) {
+      void this.runLiveLookups();
+    }
+  }
+
   /** Looks up the queued journeys until the queue is empty or the trip closes. */
   private async runLiveLookups(): Promise<void> {
     this.liveLookupRunning = true;
