@@ -76,7 +76,18 @@
     onViewChange?: (view: { center: GeoCoordinates; zoom: number }) => void;
   } = $props();
 
+  /** The length of the equator, which sets the scale of the map at each zoom level. */
+  const earthCircumferenceMeters = 40_075_017;
+  /** Half the size of a place marker. */
+  const markerRadiusPixels = 11;
+  /** How far beyond the marker's edge the handle grows to its full size. */
+  const handleGrowthPixels = 24;
+  /** Below this size the handle is hidden enough that it takes no drags. */
+  const handleActiveScale = 0.35;
+
   let map: MapLibreMap | undefined = $state.raw();
+  /** The zoom level of the map, which sets the size of the radius handles. */
+  let zoom = $state(4);
   let dragPreview: PlaceDragPreview | null = $state(null);
   /** Trip whose places the map last zoomed to, so edits never move the view. */
   let fittedTripId: string | null = null;
@@ -241,6 +252,21 @@
     }
   }
 
+  /**
+   * Returns how large the radius handle of a place draws, from 0 to 1. Zoomed out, the radius is
+   * only a few pixels and the handle would sit on the place marker, so it shrinks and hides
+   * behind the marker.
+   */
+  function handleScale(place: TripPlace): number {
+    const preview = dragPreview?.placeId === place.id ? dragPreview : null;
+    const radiusMeters = preview?.radiusMeters ?? place.station_search_radius;
+    const latitude = (place.coordinates.latitude * Math.PI) / 180;
+    // MapLibre draws the world 512 pixels wide at zoom 0.
+    const metersPerPixel = (earthCircumferenceMeters * Math.cos(latitude)) / (512 * 2 ** zoom);
+    const gapPixels = radiusMeters / metersPerPixel - markerRadiusPixels;
+    return Math.min(1, Math.max(0, gapPixels / handleGrowthPixels));
+  }
+
   function radiusHandlePosition(place: TripPlace): [number, number] {
     const preview = dragPreview?.placeId === place.id ? dragPreview : null;
     const center = preview?.coordinates ?? place.coordinates;
@@ -289,7 +315,7 @@
     style={baseStyle}
     autoloadGlobalCss={false}
     center={[10, 50]}
-    zoom={4}
+    bind:zoom
     doubleClickZoom={editable === null}
     onclick={handleMapClick}
     ondblclick={handleMapDoubleClick}
@@ -390,6 +416,25 @@
     {/if}
 
     {#each places as place, index (place.id)}
+      <!-- The handle comes first, so the place marker covers it where the two meet. -->
+      {#if editable !== null}
+        {@const scale = handleScale(place)}
+        <Marker
+          lnglat={radiusHandlePosition(place)}
+          draggable={scale >= handleActiveScale}
+          ondrag={(event) => previewRadius(place, event.target.getLngLat())}
+          ondragend={() => finishRadius(place)}
+        >
+          {#snippet content()}
+            <div
+              class="radius-handle"
+              class:inactive={scale < handleActiveScale}
+              style:--handle-scale={scale}
+              title="Drag to change the station search radius"
+            ></div>
+          {/snippet}
+        </Marker>
+      {/if}
       <Marker
         lnglat={[place.coordinates.longitude, place.coordinates.latitude]}
         draggable={editable !== null}
@@ -400,27 +445,16 @@
           <button
             type="button"
             class="place-marker"
+            class:editable={editable !== null}
             class:selected={place.id === selectedPlaceId}
             class:via={viaPlaceIds.has(place.id)}
-            title={place.name}
+            title={editable === null ? place.name : `${place.name}. Drag to move the place.`}
             onclick={() => onSelect(place.id)}
           >
             {index + 1}
           </button>
         {/snippet}
       </Marker>
-      {#if editable !== null}
-        <Marker
-          lnglat={radiusHandlePosition(place)}
-          draggable
-          ondrag={(event) => previewRadius(place, event.target.getLngLat())}
-          ondragend={() => finishRadius(place)}
-        >
-          {#snippet content()}
-            <div class="radius-handle" title="Drag to change the station search radius"></div>
-          {/snippet}
-        </Marker>
-      {/if}
     {/each}
   </MapLibre>
 {/key}
@@ -431,34 +465,44 @@
     height: 100%;
   }
 
-  /* The places are numbered ink circles, with a keyline in the background colour. */
+  /* The places are small numbered ink circles, with a thin keyline in the background colour. */
   .place-marker {
     display: grid;
     place-items: center;
-    width: 28px;
-    height: 28px;
+    width: 22px;
+    height: 22px;
     padding: 0;
     border: none;
     border-radius: 50%;
     background: var(--color-text);
     color: var(--color-background);
-    font-weight: 700;
-    box-shadow: 0 0 0 2px var(--color-background);
+    font-size: 11px;
+    font-weight: 600;
+    box-shadow: 0 0 0 1.5px var(--color-background);
+  }
+
+  /* A place that can move shows the grab cursor, so a drag is the expected action. */
+  .place-marker.editable {
+    cursor: grab;
+  }
+
+  .place-marker.editable:active {
+    cursor: grabbing;
   }
 
   /* A via place is a rounded square, as it is on the spine of the itinerary. */
   .place-marker.via {
-    border-radius: 7px;
+    border-radius: 6px;
   }
 
   .place-marker:hover {
     background: var(--color-text);
-    box-shadow: 0 0 0 2px var(--color-background), 0 0 0 3px var(--color-accent);
+    box-shadow: 0 0 0 1.5px var(--color-background), 0 0 0 3px var(--color-accent);
   }
 
   /* The chosen place gets a ring in the accent. */
   .place-marker.selected {
-    box-shadow: 0 0 0 2px var(--color-background), 0 0 0 4px var(--color-accent);
+    box-shadow: 0 0 0 1.5px var(--color-background), 0 0 0 3.5px var(--color-accent);
   }
 
   .map-tooltip {
@@ -471,13 +515,23 @@
     font-weight: 700;
   }
 
+  /* The handle shrinks with the radius on screen and fades out behind the place marker. */
   .radius-handle {
-    width: 12px;
-    height: 12px;
+    width: 10px;
+    height: 10px;
     border: 2px solid var(--color-accent);
     border-radius: 50%;
     background: var(--color-surface);
     cursor: ew-resize;
+    opacity: var(--handle-scale);
+    transform: scale(var(--handle-scale));
+    transition:
+      opacity 120ms ease,
+      transform 120ms ease;
+  }
+
+  .radius-handle.inactive {
+    pointer-events: none;
   }
 
   /* The tooltip shares the surface look of the app: a hairline border and no shadow. */
