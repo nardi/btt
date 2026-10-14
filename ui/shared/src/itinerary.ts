@@ -13,12 +13,14 @@ import type {
   LegTravelMode,
   PlaceStay,
   PlaceWindowOverride,
+  StationWay,
   TrainRide,
   Trip,
   TripPlace,
   TripPlaceId,
 } from "./bindings";
 import { dateInZone, formatTimeInZone } from "./format";
+import { haversineMeters } from "./geo";
 
 /** Position of a place in the itinerary. Only via places have a stay. */
 export type PlaceRole = "origin" | "via" | "destination";
@@ -311,5 +313,33 @@ export function journeyOverview(legPlan: LegPlan, journey: Journey): JourneyOver
     minutes: journeyMinutes(journey),
     transfers: journey.later_rides.length,
     trains: rides.map(trainName),
+  };
+}
+
+/** The farthest straight-line distance in meters that the timetable builder counts as a walk. */
+const longestWalkMeters = 1000;
+
+/**
+ * Returns the way between the stations of two consecutive rides, or `null` when the second ride
+ * boards at the station the first alights at. The plan stores only the time to change, so the
+ * way is estimated from the straight-line distance with the rule of the timetable builder
+ * (`04_footpaths.sql`): walking at 5 km/h along a path 30 percent longer below a kilometer, and
+ * above it 15 minutes plus the distance at 15 km/h by local transport.
+ */
+export function transferWay(legPlan: LegPlan, previous: TrainRide, next: TrainRide): StationWay | null {
+  if (previous.alighting_station === next.boarding_station) {
+    return null;
+  }
+  const from = legPlan.station_table[previous.alighting_station];
+  const to = legPlan.station_table[next.boarding_station];
+  if (from === undefined || to === undefined) {
+    return null;
+  }
+  const meters = haversineMeters(from.coordinates, to.coordinates);
+  const walk = meters < longestWalkMeters;
+  return {
+    duration: Math.max(1, Math.ceil(walk ? (meters * 1.3) / 83.3 : 15 + meters / 250)),
+    distance_meters: Math.round(meters),
+    mode: walk ? "Walk" : "LocalTransport",
   };
 }

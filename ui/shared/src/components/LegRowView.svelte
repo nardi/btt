@@ -31,6 +31,7 @@
     stationTime,
     trainName,
     transferSummary,
+    transferWay,
   } from "../itinerary";
   import { journeyKey } from "../live-ranking";
   import { expandTransition, rowEnter, rowExit } from "../motion";
@@ -301,6 +302,13 @@
           </li>
         </ol>
       {:else}
+            <!-- A change between two stations has a way that the rides alone do not show. -->
+            {@const changeWay = rideIndex === 0 ? null : transferWay(plan, rides[rideIndex - 1]!, ride)}
+            {#if changeWay !== null}
+              <li class="station-way" title={explainStationWay(changeWay)}>
+                {formatStationWay(changeWay, stationName(plan, ride.boarding_station))}
+              </li>
+            {/if}
         {@const overview = journeyOverview(plan, journey)}
         <JourneyLine rideMinutes={rides.map((ride) => ride.arrival_time - ride.departure_time)} night={legLine.night} />
         <div class="times">

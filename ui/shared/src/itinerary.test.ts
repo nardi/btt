@@ -11,6 +11,7 @@ import {
   placeWindowOverride,
   stayLabel,
   transferSummary,
+  transferWay,
   tripPlaces,
 } from "./itinerary";
 import { amsterdamViennaRome, place } from "./test-fixtures";
@@ -158,6 +159,37 @@ describe("transferSummary", () => {
     expect(transferSummary(journey([ride(0, eight, 1, eight + 60, "1")]))).toBe("direct");
     const changing = journey([ride(0, eight, 1, eight + 60, "1"), ride(1, eight + 70, 2, eight + 90, "2")]);
     expect(transferSummary(changing)).toBe("1 transfer");
+  });
+});
+
+describe("transferWay", () => {
+  it("has no way when the next ride boards where the last one alighted", () => {
+    const changing = journey([ride(0, eight, 1, eight + 60, "1"), ride(1, eight + 70, 2, eight + 90, "2")]);
+    const [first, second] = [changing.first_ride, changing.later_rides[0]!.ride];
+    expect(transferWay(legPlan(changing), first, second)).toBeNull();
+  });
+
+  it("estimates a long way between two stations as local transport", () => {
+    // Köln Hbf to Amsterdam Centraal is about 200 km, so the way is long and by local transport.
+    const jump = journey([ride(0, eight, 1, eight + 60, "1"), ride(0, eight + 70, 2, eight + 90, "2")]);
+    const way = transferWay(legPlan(jump), jump.first_ride, jump.later_rides[0]!.ride);
+    expect(way?.mode).toBe("LocalTransport");
+    expect(way?.duration).toBe(Math.ceil(15 + way!.distance_meters / 250));
+  });
+
+  it("estimates a short way as a walk", () => {
+    const near: LegPlan = {
+      ...legPlan(journey([ride(0, eight, 1, eight + 60, "1")])),
+      station_table: [
+        { name: "A", coordinates: { latitude: 52, longitude: 5 }, time_zone: "Europe/Amsterdam" },
+        { name: "B", coordinates: { latitude: 52, longitude: 5.0064 }, time_zone: "Europe/Amsterdam" },
+      ],
+    };
+    // The ride alights at station B and the next one boards at station A, 440 m away.
+    const way = transferWay(near, ride(0, eight, 1, eight + 60, "1"), ride(0, eight + 70, 0, eight + 90, "2"));
+    expect(way?.mode).toBe("Walk");
+    expect(way?.distance_meters).toBeGreaterThan(400);
+    expect(way?.distance_meters).toBeLessThan(500);
   });
 });
 
