@@ -9,10 +9,24 @@
   let {
     searchPlaces,
     onPick,
+    placeholder = "Add a place: city or station",
+    focusOnMount = false,
   }: {
     searchPlaces: (query: string) => Promise<PlaceSearchResult[]>;
     onPick: (result: PlaceSearchResult) => void;
+    /** The hint of the empty search field. */
+    placeholder?: string;
+    /** Whether the field takes the keyboard focus when it appears. */
+    focusOnMount?: boolean;
   } = $props();
+
+  let field: HTMLInputElement | undefined = $state();
+
+  $effect(() => {
+    if (focusOnMount) {
+      field?.focus();
+    }
+  });
 
   let query = $state("");
   let results: PlaceSearchResult[] = $state([]);
@@ -54,8 +68,9 @@
 
 <div class="place-search">
   <input
+    bind:this={field}
     type="search"
-    placeholder="Add a place: city or station"
+    {placeholder}
     value={query}
     oninput={(event) => scheduleSearch(event.currentTarget.value)}
   />

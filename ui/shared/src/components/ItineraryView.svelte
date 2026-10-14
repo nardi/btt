@@ -76,6 +76,33 @@
     });
   }
 
+  /** The arrival place of the leg whose stop search is open, or `null` when none is. */
+  let addingStopBefore: TripPlaceId | null = $state(null);
+
+  /** Opens the stop search of a leg, or closes it when it is open. */
+  function toggleStopSearch(arrivalPlaceId: TripPlaceId) {
+    addingStopBefore = addingStopBefore === arrivalPlaceId ? null : arrivalPlaceId;
+  }
+
+  /** Adds the picked place as a stop in the middle of the open leg, just before its arrival place. */
+  function addStop(result: PlaceSearchResult) {
+    const index = rows.places.findIndex((row) => row.place.id === addingStopBefore);
+    addingStopBefore = null;
+    if (index < 1) {
+      return;
+    }
+    onEdit?.({
+      AddPlace: {
+        place: {
+          name: result.name,
+          coordinates: result.coordinates,
+          station_search_radius: defaultStationSearchRadius,
+        },
+        insert_at: { AtIndex: index },
+      },
+    });
+  }
+
   /** Describes the default time windows of the trip in one line. */
   function preferencesSummary(preferences: TripPreferences): string {
     const { departure, arrival } = preferences.default_windows;
@@ -104,6 +131,17 @@
   }
 </script>
 
+{#snippet stopSearch()}
+  {#if editable !== null}
+    <PlaceSearch
+      placeholder="Add a stop on this leg: city or station"
+      focusOnMount
+      searchPlaces={(query) => editable.searchPlaces(query)}
+      onPick={addStop}
+    />
+  {/if}
+{/snippet}
+
 <section class="itinerary">
   {#if viewState.errorMessage !== null}
     <p class="error" role="alert">{viewState.errorMessage}</p>
@@ -124,6 +162,8 @@
           storedChoice={storedJourneyChoice(trip, leg)}
           livePrices={viewState.livePricesByJourney}
           {onEdit}
+          onAddStop={editable === null ? undefined : () => toggleStopSearch(leg.arrivalPlace.id)}
+          stopSearch={addingStopBefore === leg.arrivalPlace.id ? stopSearch : undefined}
           enterDelay={staggered ? staggerDelay(2 * index - 1) : 0}
         />
       {/if}

@@ -43,6 +43,7 @@
   import JourneyLine from "./JourneyLine.svelte";
   import Spinner from "./Spinner.svelte";
   import TrainChip from "./TrainChip.svelte";
+  import type { Snippet } from "svelte";
   import { fly, slide } from "svelte/transition";
 
   let {
@@ -53,6 +54,8 @@
     nearbyDay,
     livePrices,
     onEdit,
+    onAddStop,
+    stopSearch,
     enterDelay,
   }: {
     leg: LegRow;
@@ -67,6 +70,10 @@
     livePrices: ReadonlyMap<string, EuroRange>;
     /** Missing in a read-only view. */
     onEdit?: (edit: TripEdit) => void;
+    /** Opens or closes the search for a stop on this leg. Missing in a read-only view. */
+    onAddStop?: () => void;
+    /** The search for the stop being added, which exists while the search is open. */
+    stopSearch?: Snippet;
     /** Staggers the enter transition of the rows of a freshly opened trip. */
     enterDelay: number;
   } = $props();
@@ -232,6 +239,19 @@
           ?
         </button>
       {/if}
+      {#if onAddStop !== undefined}
+        <button
+          type="button"
+          class="icon-button"
+          class:on={stopSearch !== undefined}
+          aria-pressed={stopSearch !== undefined}
+          aria-label="Add a stop on this leg"
+          title="Add a stop on this leg"
+          onclick={onAddStop}
+        >
+          <Icon name="plus" />
+        </button>
+      {/if}
       {#if onEdit !== undefined}
         <button
           type="button"
@@ -260,6 +280,12 @@
       {/if}
     </div>
 
+    {#if stopSearch !== undefined}
+      <div class="stop-search" transition:slide={expandTransition()}>
+        {@render stopSearch()}
+      </div>
+    {/if}
+
     {#if legState.status === "pending"}
       <span class="pending">
         <Spinner label="Planning the leg" />
@@ -276,6 +302,13 @@
             {formatStationWay(journey.access, stationName(plan, journey.first_ride.boarding_station))}
           </li>
           {#each rides as ride, rideIndex (rideIndex)}
+            <!-- A change between two stations has a way that the rides alone do not show. -->
+            {@const changeWay = rideIndex === 0 ? null : transferWay(plan, rides[rideIndex - 1]!, ride)}
+            {#if changeWay !== null}
+              <li class="station-way" title={explainStationWay(changeWay)}>
+                {formatStationWay(changeWay, stationName(plan, ride.boarding_station))}
+              </li>
+            {/if}
             <li>
               <span class="time numbers">{stationTime(plan, ride.boarding_station, ride.departure_time)}</span>
               <span class="station">{stationName(plan, ride.boarding_station)}</span>
@@ -302,13 +335,6 @@
           </li>
         </ol>
       {:else}
-            <!-- A change between two stations has a way that the rides alone do not show. -->
-            {@const changeWay = rideIndex === 0 ? null : transferWay(plan, rides[rideIndex - 1]!, ride)}
-            {#if changeWay !== null}
-              <li class="station-way" title={explainStationWay(changeWay)}>
-                {formatStationWay(changeWay, stationName(plan, ride.boarding_station))}
-              </li>
-            {/if}
         {@const overview = journeyOverview(plan, journey)}
         <JourneyLine rideMinutes={rides.map((ride) => ride.arrival_time - ride.departure_time)} night={legLine.night} />
         <div class="times">
@@ -523,6 +549,13 @@
     color: var(--color-night);
     border-color: var(--color-night);
     background: color-mix(in srgb, var(--color-night) 12%, var(--color-surface));
+  }
+
+  /* The plus takes the accent colour while the search for a stop is open. */
+  .icon-button.on:not(.moon) {
+    color: var(--color-accent);
+    border-color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface));
   }
 
   .times {
