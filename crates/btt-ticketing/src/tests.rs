@@ -926,6 +926,30 @@ fn a_european_sleeper_ride_asks_its_booking_service_for_the_ticket_and_the_accom
     assert_eq!(accommodation.price.source.name, "European Sleeper offers");
 }
 
+#[test]
+fn a_european_sleeper_ride_to_a_station_it_does_not_sell_searches_the_nearest_one() {
+    let mut night = ride(0, ("NL", "DE"), "ES", 650.0, true);
+    night.train_label.number = "453".into();
+    night.train_label.operator = "european-sleeper".into();
+    night.from_coordinates = btt_model::GeoCoordinates::from_degrees(52.37919, 4.89943).unwrap();
+    // Berlin Gesundbrunnen lies about 3 km from Berlin Hbf, the nearest station of the service.
+    night.to_coordinates = btt_model::GeoCoordinates::from_degrees(52.5489, 13.3883).unwrap();
+    let plan = plan(vec![night], None);
+    let ticket = plan
+        .strategies
+        .iter()
+        .flat_map(|strategy| &strategy.items)
+        .find(|item| item.product == TicketProduct::SingleTicket)
+        .unwrap();
+    let search = ticket
+        .live_quote_request
+        .as_ref()
+        .and_then(|request| request.site_search.as_ref())
+        .unwrap();
+    assert_eq!(search.origin_code, "8400058");
+    assert_eq!(search.destination_code, "8010100");
+}
+
 /// Builds a journey of two connected rides of one day, with the stations it refers to.
 fn connected_journey(
     operator: &str,

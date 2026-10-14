@@ -53,6 +53,16 @@ impl StationTable {
     /// Several entries can share a position, such as `Berlin Hbf` and `Berlin Hbf (S-Bahn)`.
     /// Among those, a name without a part in brackets wins, because it names the whole station.
     pub fn station_near(&self, coordinates: GeoCoordinates) -> Option<&CodedStation> {
+        self.station_within(coordinates, MATCH_DISTANCE_METERS)
+    }
+
+    /// Returns the nearest station within a distance in metres of a position, with the same
+    /// preference among entries at one position as `station_near`.
+    pub fn station_within(
+        &self,
+        coordinates: GeoCoordinates,
+        maximum_distance_meters: f64,
+    ) -> Option<&CodedStation> {
         self.stations
             .iter()
             .map(|station| {
@@ -61,7 +71,7 @@ impl StationTable {
                     station.coordinates.haversine_distance_meters(coordinates),
                 )
             })
-            .filter(|&(_, distance)| distance <= MATCH_DISTANCE_METERS)
+            .filter(|&(_, distance)| distance <= maximum_distance_meters)
             .min_by(|a, b| {
                 a.1.total_cmp(&b.1)
                     .then_with(|| a.0.name.contains('(').cmp(&b.0.name.contains('(')))
@@ -90,6 +100,19 @@ mod tests {
         );
         let amsterdam = GeoCoordinates::from_degrees(52.3791, 4.9003).unwrap();
         assert!(data.sbb_stations.station_near(amsterdam).is_none());
+    }
+
+    #[test]
+    fn a_wider_distance_finds_the_nearest_station_of_the_table() {
+        let data = FareData::bundled().unwrap();
+        let gesundbrunnen = GeoCoordinates::from_degrees(52.5489, 13.3883).unwrap();
+        let sleeper = &data.european_sleeper_stations;
+        assert!(sleeper.station_near(gesundbrunnen).is_none());
+        assert_eq!(
+            sleeper.station_within(gesundbrunnen, 5_000.0).unwrap().name,
+            "Berlin Hbf"
+        );
+        assert!(sleeper.station_within(gesundbrunnen, 1_000.0).is_none());
     }
 
     #[test]

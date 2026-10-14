@@ -264,6 +264,11 @@ fn end_stations<'a>(
     ))
 }
 
+/// The largest distance in metres from a ride's end to the European Sleeper station that stands
+/// in for it. The timetable can end a ride at a station the booking service does not sell, such
+/// as Berlin Gesundbrunnen, which has the price of Berlin Hbf.
+const SLEEPER_STAND_IN_DISTANCE_METERS: f64 = 5_000.0;
+
 /// Returns a link to the Trenitalia search for the stations of two rides, or `None` when a
 /// station is not in the table.
 ///
@@ -426,14 +431,22 @@ pub fn sj_link(
 }
 
 /// Returns a link to the booking site of European Sleeper for a run of its trains, with the search
-/// for the live price, or `None` when a station is not in the table. The link opens the search of
-/// the day of the first ride.
+/// for the live price, or `None` when no station of the table lies within 5 km of an end of the
+/// run. A run that ends at a station the booking service does not sell is searched at the
+/// nearest station it does. The link opens the search of the day of the first ride.
 pub fn european_sleeper_link(
     stations: &StationTable,
     first: &RideInput,
     last: &RideInput,
 ) -> Option<(BookingLink, SiteSearch)> {
-    let (origin, destination) = end_stations(stations, first, last)?;
+    let origin =
+        stations.station_within(first.from_coordinates, SLEEPER_STAND_IN_DISTANCE_METERS)?;
+    let destination =
+        stations.station_within(last.to_coordinates, SLEEPER_STAND_IN_DISTANCE_METERS)?;
+    // Two ends that share a stand-in would search a trip from a station to itself.
+    if origin.code == destination.code {
+        return None;
+    }
     let url = format!(
         "https://booking.europeansleeper.eu/en?departureStation={}&arrivalStation={}\
          &departureDate={}&bicycleCount=0&petsCount=0&passengerTypes=72",
