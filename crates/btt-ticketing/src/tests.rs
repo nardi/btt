@@ -915,15 +915,15 @@ fn a_european_sleeper_ride_asks_its_booking_service_for_the_ticket_and_the_accom
     assert_eq!(search.destination_code, "8010100");
     // The ticket is priced from the offers of the operator, not from the distance.
     assert_eq!(ticket.price.source.name, "European Sleeper offers");
+    // The ticket holds the bed, so the accommodation costs nothing and has no live price.
+    assert!(ticket.price.source.note.contains("a bed"));
     let accommodation = singles
         .items
         .iter()
         .find(|item| item.product == TicketProduct::NightAccommodation)
         .unwrap();
-    let request = accommodation.live_quote_request.as_ref().unwrap();
-    assert_eq!(request.accommodation.as_ref().unwrap().train, "ES 453");
-    assert_eq!(request.site_search.as_ref().unwrap().origin_code, "8400058");
-    assert_eq!(accommodation.price.source.name, "European Sleeper offers");
+    assert_eq!(accommodation.price.high, btt_model::EuroCents(0));
+    assert!(accommodation.live_quote_request.is_none());
 }
 
 #[test]

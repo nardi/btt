@@ -597,6 +597,41 @@ async fn sleeper_ticket_outcome(
 ) -> LiveQuoteOutcome {
     use btt_quotes::european_sleeper::PlaceKind;
 
+    // A night ride is a ticket for a bed, which the service sells with the ticket. A run that is
+    // known to have no berths gets the cheapest place instead.
+    let night = request
+        .run
+        .as_ref()
+        .is_none_or(|run| run.rides.iter().any(|ride| ride.offers_berths));
+    let beds = night_range(
+        offers.whole_price(PlaceKind::Couchette),
+        offers.whole_price(PlaceKind::Berth),
+        None,
+        false,
+    );
+    if let (true, Some((low, high))) = (night, beds) {
+        let note = format!(
+            "The lowest price of a ticket with a bed on {} on the booking site of European \
+             Sleeper, from a bed in a shared compartment to a bed in a small one. The ticket \
+             holds the bed, so the accommodation costs nothing on top. The booking site shows \
+             the final price.",
+            offers.train
+        );
+        return LiveQuoteOutcome::Quoted {
+            price: Price {
+                low: EuroCents::from_euro(low),
+                high: EuroCents::from_euro(high),
+                kind: PriceKind::Live,
+                source: PriceSource {
+                    name: site_name(BookingSite::EuropeanSleeper).into(),
+                    note: note.into(),
+                    as_of: Some(crate::commands::today_utc()),
+                    page: Some(request.booking_link.clone()),
+                },
+                original: None,
+            },
+        };
+    }
     let Some(amount) = offers.cheapest_ticket() else {
         return LiveQuoteOutcome::NotSold;
     };

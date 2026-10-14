@@ -9,7 +9,7 @@ A night train sells several kinds of accommodation: a seat, a berth in a couchet
 - **Without a pass**, one price holds the ticket and the accommodation together. The cheapest price is that of a seat, and a bed costs more by its extra over the seat.
 - **With a pass**, the ticket is the pass, and the traveller pays for the reservation. A bed is a reservation, so its price holds the accommodation and the reservation. A seat reservation costs 9.90 euro on most Nightjets and 4.90 on some, and a couchette or a berth costs more.
 
-The optimizer prices both. Single tickets for a night train get the price of the seat for the ticket, and the extra over the seat as the accommodation. A day on a pass gets the pass price of the accommodation, and no ticket.
+The optimizer prices both. Single tickets for a night train get the price of the seat for the ticket, and the extra over the seat as the accommodation. European Sleeper is the exception, because it sells a ticket with its place. Its ticket holds the bed and its accommodation without a pass is 0. A day on a pass gets the pass price of the accommodation, and no ticket.
 
 ## The ÖBB shop
 
@@ -62,7 +62,7 @@ The fits are made when the app starts, from the compiled-in data.
 ### Use in the optimizer
 
 - **The ticket of a run with a night train.** `NightTrainTickets` is a price source in front of the general price model. It prices a run in which a night train with berths is the longest ride, with the fit of the seat without a pass at the total distance of the run. `NightOperator` says whose offers the fit comes from. Other runs go on to the general model.
-- **The accommodation of a night ride.** `NightFares::accommodation_price` gives the range from the lowest couchette to the lowest berth. A ride on a pass gets the pass price. Any other ride gets the extra over the seat, because the price of its ticket holds a seat. A night train that the shop does not sell, such as the Intercités de nuit or a Trenitalia night train, has the fee of its rule in `interrail_reservations.toml` for both.
+- **The accommodation of a night ride.** `NightFares::accommodation_price` gives the range from the lowest couchette to the lowest berth. A ride on a pass gets the pass price. Any other ride gets the extra over the seat, because the price of its ticket holds a seat. A European Sleeper ride without a pass gets 0, and `NightTrainTickets` adds the range of the bed to the seat price of its ticket. A night train that the shop does not sell, such as the Intercités de nuit or a Trenitalia night train, has the fee of its rule in `interrail_reservations.toml` for both.
 - **The worth of a pass day.** A day with a night train on the pass saves the ticket and pays the pass price of the accommodation. The optimizer counts both when it picks the days of a pass.
 
 ## Other operators
@@ -101,8 +101,8 @@ Some Nightjets sell beds only, such as the one from Amsterdam to Zürich. Withou
 
 The ticket and the accommodation of a European Sleeper ride ask the booking service for the train that leaves within five minutes of the planned time. The answer holds the prices of an adult and of a pass holder for every kind of place, and it is kept for half an hour.
 
-- **The ticket.** The price is the cheapest place the train sells, which is usually a seat.
-- **The accommodation without a pass.** The price is a range from the lowest bed in a shared compartment to the lowest bed in a small compartment. Each is the price of the place less the cheapest ticket, because the ticket is a separate item of the plan.
+- **The ticket.** The price is a range from the lowest bed in a shared compartment to the lowest bed in a small compartment, each with its ticket, because the ticket of a night ride holds the bed. A run that is known to have no berths gets the cheapest place the train sells, which is usually a seat.
+- **The accommodation without a pass.** The price is 0 and the item has no lookup, because the ticket already holds the bed.
 - **The accommodation with a pass.** The price is the same range of the reservation of the place. When the place with a regular ticket costs less than its reservation, the lower price counts and the note says so.
 - **Last minute fares.** The main site lists a fare for a bed in a shared compartment, with the ticket, for trains one to three weeks away. The pages read on 10 October 2026 listed 40 euro per traveller. A train within five weeks of today makes the lookup read the four pages of the site and look for a fare between its stations on its day. The fare counts as a place with its ticket, so it can be the cheapest ticket, and it can be lower than the reservation of a pass holder. Child discounts and the Interrail reservation do not apply to it. The pages also sell a private compartment for up to five travellers, which the lookup leaves out.
 

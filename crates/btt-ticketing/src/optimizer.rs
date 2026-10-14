@@ -189,6 +189,25 @@ fn scaled(price: &Price, percent: u32) -> Price {
     price
 }
 
+/// Returns the price of the accommodation of a ride whose ticket is sold with its bed.
+fn included_in_ticket_price() -> Price {
+    Price {
+        low: EuroCents(0),
+        high: EuroCents(0),
+        kind: PriceKind::Formula,
+        source: PriceSource {
+            name: "European Sleeper offers".into(),
+            note: "European Sleeper sells a ticket with its place, so a traveller without a pass \
+                   pays nothing for the accommodation on top. The price of the bed is in the \
+                   ticket."
+                .into(),
+            as_of: None,
+            page: None,
+        },
+        original: None,
+    }
+}
+
 /// Turns the fee range of a rule into a price.
 fn fee_price(rule: &ReservationRule, class: TravelClass) -> Price {
     let fee = rule.fee(class);
@@ -494,19 +513,23 @@ impl<'a> Problem<'a> {
     /// Returns the price of the accommodation of a night ride, or `None` for a ride that needs
     /// none. A pass holder pays the accommodation with its reservation and no ticket. Without a
     /// pass, the ticket holds a seat, so the accommodation is the extra over the seat. A night
-    /// train that the offers of the shop do not cover has the fee of its rule for both.
+    /// train that the offers of the shop do not cover has the fee of its rule for both. A
+    /// European Sleeper ticket is sold with its bed, so the accommodation costs nothing on top.
     pub(crate) fn accommodation_price(&self, index: usize, with_pass: bool) -> Option<Price> {
         let rule = self.night_rule(index)?;
         let ride = &self.rides[index];
-        let fitted = NightOperator::of(&ride.train_label.operator, &ride.train_label.category)
-            .and_then(|operator| {
-                self.data.night_fares.accommodation_price(
-                    operator,
-                    &ride.train_label.category,
-                    ride.distance_kilometres,
-                    with_pass,
-                )
-            });
+        let operator = NightOperator::of(&ride.train_label.operator, &ride.train_label.category);
+        if !with_pass && operator == Some(NightOperator::EuropeanSleeper) {
+            return Some(included_in_ticket_price());
+        }
+        let fitted = operator.and_then(|operator| {
+            self.data.night_fares.accommodation_price(
+                operator,
+                &ride.train_label.category,
+                ride.distance_kilometres,
+                with_pass,
+            )
+        });
         Some(fitted.unwrap_or_else(|| fee_price(rule, self.settings.class)))
     }
 
@@ -774,6 +797,10 @@ impl<'a> Problem<'a> {
                 ) else {
                     return (shop(), None);
                 };
+                // Without a pass the ticket holds the bed, and the ticket item has the live price.
+                if !with_pass {
+                    return (link, None);
+                }
                 (link, Some(search), format!("ES {number}"), None)
             }
         };

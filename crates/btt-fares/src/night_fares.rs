@@ -628,14 +628,33 @@ impl TicketPriceSource for NightTrainTickets {
             kilometres,
             NightFares::is_euronight(night.category),
         )?;
+        let (mut low, mut high) = (
+            EuroCents::from_euro(estimate.low),
+            EuroCents::from_euro(estimate.high),
+        );
+        // European Sleeper sells a ticket with its place, so the ticket of a night ride holds the
+        // bed and the ride has no accommodation to pay on top. See `NightFares::accommodation_price`.
+        let mut holds = "a seat";
+        if operator == NightOperator::EuropeanSleeper
+            && let Some(bed) = self.0.accommodation_price(
+                operator,
+                night.category,
+                night.distance_kilometres,
+                false,
+            )
+        {
+            low = EuroCents(low.0.saturating_add(bed.low.0));
+            high = EuroCents(high.0.saturating_add(bed.high.0));
+            holds = "a bed, from the lowest couchette to the lowest berth";
+        }
         Some(Price {
-            low: EuroCents::from_euro(estimate.low),
-            high: EuroCents::from_euro(estimate.high),
+            low,
+            high,
             kind: PriceKind::Range,
             source: PriceSource {
                 name: operator.offers_name().into(),
                 note: format!(
-                    "The lowest ticket for a night train, which holds a seat, as fitted to {} \
+                    "The lowest ticket for a night train, which holds {holds}, as fitted to {} \
                      offers of the booking site for night trains of the days {}. The price \
                      hardly depends on the distance and follows demand.",
                     estimate.trains,
