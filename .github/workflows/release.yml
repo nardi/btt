@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+# Pages deployment needs these permissions, and nothing else needs more than reading.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time, and a newer tag replaces an older one that is still running.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Checks
+    uses: ./.github/workflows/ci.yml
+
+  # The viewer goes live at tag time, while the release is still a draft. That way the live
+  # viewer reads the schema the new app writes before anyone can install the app. The installer
+  # jobs join this workflow later and write to the same draft release.
+  viewer:
+    name: Deploy the web viewer
+    needs: checks
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build --workspace ui/viewer
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ui/viewer/dist
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -3,13 +3,19 @@
 //! This crate has no I/O. Every public type derives `specta::Type`, so the Tauri app can export
 //! it to TypeScript.
 
+// Lets the fixtures of the integration tests, which name this crate, compile inside it.
+#[cfg(test)]
+extern crate self as btt_model;
+
 mod bounded;
 pub mod coordinates;
 pub mod edit;
 pub mod history;
 pub mod itinerary;
+pub mod link;
 pub mod place_search;
 pub mod plan;
+pub mod snapshot;
 pub mod tickets;
 pub mod time;
 pub mod traveller;
@@ -26,6 +32,7 @@ pub use itinerary::{
     OvernightLegOptions, PlaceStay, PlaceWindowOverride, SameDayStayRange, StationSearchRadius,
     TripPlace, TripPlaceId, ViaPlace,
 };
+pub use link::{SnapshotLink, SnapshotLinkError, decode_snapshot_link, encode_snapshot_link};
 pub use place_search::PlaceSearchResult;
 pub use plan::{
     AlternativeKind, ArrivalFootpath, Journey, JourneyChoice, JourneyCostParts, LegExtras, LegPlan,
@@ -33,6 +40,7 @@ pub use plan::{
     PassJourneyOption, PlanningRunId, PlanningSessionEvent, SearchedWindow, StationWay, TrainLabel,
     TrainRide, TransferAndRide, WayToStationMode,
 };
+pub use snapshot::{SNAPSHOT_SCHEMA_VERSION, SnapshotLeg, StoredSnapshot, TripSnapshot};
 pub use tickets::{
     AccommodationRequest, BookingLink, BookingLinkKind, EuroCents, EuroRange, ForeignAmount,
     LiveQuote, LiveQuoteRequest, PassOptionSummary, PassScenario, PassScenarioLeg, Price,

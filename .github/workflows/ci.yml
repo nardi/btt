@@ -3,6 +3,8 @@ name: CI
 on:
   push:
   pull_request:
+  # The release workflow runs the same checks before it publishes anything.
+  workflow_call:
 
 env:
   CARGO_TERM_COLOR: always
@@ -39,6 +41,8 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm test
+      # The viewer is a separate site, so its build is checked on its own.
+      - run: npm run build --workspace ui/viewer
 
   build:
     name: Build on ${{ matrix.os }}

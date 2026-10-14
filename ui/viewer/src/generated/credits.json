@@ -1,0 +1,235 @@
+{
+  "bundle_version": 2026093005,
+  "feeds": [
+    {
+      "license": "unknown",
+      "name": "at_Railway-Current-Reference-Data-2026",
+      "url": "https://mobilitaetsverbuende.atlassian.net/wiki/spaces/DBP/pages/185237505/Terms+of+Use"
+    },
+    {
+      "license": "unknown",
+      "name": "be_sncb",
+      "url": ""
+    },
+    {
+      "license": "CC-BY-4.0",
+      "name": "bg_bdz",
+      "url": "https://gtfs.livetransport.eu/gtfs/bdz.zip"
+    },
+    {
+      "license": "unknown",
+      "name": "ch_opentransportdataswiss26",
+      "url": "https://opentransportdata.swiss/de/terms-of-use/"
+    },
+    {
+      "license": "unknown",
+      "name": "ch_opentransportdataswiss27",
+      "url": "https://opentransportdata.swiss/de/terms-of-use/"
+    },
+    {
+      "license": "CC0-1.0",
+      "name": "cz_CZPTT",
+      "url": "https://motis.obehy.cz/get-feeds/cz-czptt-gtfs.zip"
+    },
+    {
+      "license": "CC-BY-4.0",
+      "name": "de_DELFI",
+      "url": "https://www.opendata-oepnv.de/ht/de/datensaetze/sharing?tx_vrrkit_view%5Bsharing%5D=eyJkYXRhc2V0IjoiZGV1dHNjaGxhbmR3ZWl0ZS1zb2xsZmFocnBsYW5kYXRlbi1ndGZzIn0"
+    },
+    {
+      "license": "CC-BY-4.0",
+      "name": "de_VBB",
+      "url": "https://www.vbb.de/vbbgtfs"
+    },
+    {
+      "license": "unknown",
+      "name": "dk_rejseplanen",
+      "url": "https://jbb.ghsq.de/siri/danmark"
+    },
+    {
+      "license": "CC0-1.0",
+      "name": "ee_elron",
+      "url": "https://eu-gtfs.remix.com/elron.zip"
+    },
+    {
+      "license": "CC-BY-4.0",
+      "name": "es_Cercanías-Renfe",
+      "url": "https://data.renfe.com/dataset/horarios-cercanias"
+    },
+    {
+      "license": "CC-BY-4.0",
+      "name": "es_Euskotren",
+      "url": "https://data.ctb.eus/en/dataset/horarios-servicios-euskotren"
+    },
+    {
+      "license": "CC-BY-4.0",
+      "name": "es_Ferrocarriles-de-la-Generalitat-de-Cataluña",
+      "url": "https://dadesobertes.fgc.cat/explore/dataset/trip-updates-gtfs_realtime/"
+    },
+    {
+      "license": "unknown",
+      "name": "es_Ouigo",
+      "url": ""
+    },
+    {
+      "license": "CC-BY-4.0",
+      "name": "es_RENFE-Larga-Distancia-y-AVE",
+      "url": "https://data.renfe.com/dataset/horarios-de-alta-velocidad-larga-distancia-y-media-distancia"
+    },
+    {
+      "license": "ODbL-1.0",
+      "name": "eu_european-sleeper",
+      "url": "https://jbb.ghsq.de/gtfs/eu-es.gtfs.zip"
+    },
+    {
+      "license": "CC-BY-4.0",
+      "name": "fi_digitraffic",
+      "url": "https://www.digitraffic.fi/en/railway-traffic/"
+    },
+    {
+      "license": "etalab-2.0",
+      "name": "fr_eurostar-gtfs-plan-de-transport-et-temps-reel",
+      "url": "https://transport.data.gouv.fr/datasets/eurostar-gtfs-plan-de-transport-et-temps-reel"
+    },
+    {
+      "license": "etalab-2.0",
+      "name": "fr_horaires-des-trains-trenitalia-france",
+      "url": "https://transport.data.gouv.fr/datasets/horaires-des-trains-trenitalia-france"
+    },
+    {
+      "license": "ODbL-1.0",
+      "name": "fr_horaires-sncf",
+      "url": "https://transport.data.gouv.fr/datasets/horaires-sncf"
+    },
+    {
+      "license": "unknown",
+      "name": "fr_reseau-urbain-et-interurbain-dile-de-france-mobilites",
+      "url": "https://transport.data.gouv.fr/datasets/reseau-urbain-et-interurbain-dile-de-france-mobilites"
+    },
+    {
+      "license": "unknown",
+      "name": "gb_great-britain",
+      "url": "https://transitous.org/sources-great-britain"
+    },
+    {
+      "license": "unknown",
+      "name": "gb_northern-ireland",
+      "url": "https://busmaps.com/en/license"
+    },
+    {
+      "license": "unknown",
+      "name": "gr_Hellenic-Train",
+      "url": ""
+    },
+    {
+      "license": "CC0-1.0",
+      "name": "hr_hz",
+      "url": "https://www.hzpp.hr/api/v1/repository/download/852f76d2-8df3-4957-b30b-dc4b88b1caca"
+    },
+    {
+      "license": "CC0-1.0",
+      "name": "hu_mav",
+      "url": "https://www.mavcsoport.hu/gtfs/gtfsMavMenetrend.zip"
+    },
+    {
+      "license": "CC-BY-SA-4.0",
+      "name": "ie_transport-for-ireland",
+      "url": ""
+    },
+    {
+      "license": "unknown",
+      "name": "it_italo",
+      "url": ""
+    },
+    {
+      "license": "unknown",
+      "name": "it_trenitalia",
+      "url": ""
+    },
+    {
+      "license": "unknown",
+      "name": "lt_LTG-Link",
+      "url": ""
+    },
+    {
+      "license": "CC-BY-4.0",
+      "name": "lu_administration-des-transports-publics",
+      "url": "https://data.public.lu/fr/datasets/horaires-et-arrets-des-transport-publics-gtfs/"
+    },
+    {
+      "license": "CC0-1.0",
+      "name": "lv_pieturas",
+      "url": ""
+    },
+    {
+      "license": "ODbL-1.0",
+      "name": "me_zpcg",
+      "url": ""
+    },
+    {
+      "license": "unknown",
+      "name": "mk_zr-north-macedonia",
+      "url": ""
+    },
+    {
+      "license": "CC0-1.0",
+      "name": "nl_OpenOV",
+      "url": "https://gtfs.openov.nl/LICENSE.TXT"
+    },
+    {
+      "license": "unknown",
+      "name": "no_Entur",
+      "url": ""
+    },
+    {
+      "license": "CC-BY-4.0",
+      "name": "pl_PKP-Intercity",
+      "url": "https://gtfs.kasznia.net/static/pkp-ic.zip"
+    },
+    {
+      "license": "CC-BY-4.0",
+      "name": "pl_PKP-Intercity-Germany",
+      "url": "https://kasmar00.github.io/gtfs-pkp-de/latest.zip"
+    },
+    {
+      "license": "CC-BY-4.0",
+      "name": "pl_Polish-Trains",
+      "url": "https://gtfs.kasznia.net/static/polish-trains.zip"
+    },
+    {
+      "license": "unknown",
+      "name": "pt_Comboios-de-Portugal(CP)",
+      "url": ""
+    },
+    {
+      "license": "unknown",
+      "name": "ro_railway",
+      "url": "https://data.gov.ro/base/images/logoinst/OGL-ROU-1.0.pdf"
+    },
+    {
+      "license": "unknown",
+      "name": "rs_Srbijavoz",
+      "url": ""
+    },
+    {
+      "license": "unknown",
+      "name": "se_Trafiklab",
+      "url": ""
+    },
+    {
+      "license": "CC-BY-SA-4.0",
+      "name": "si_nap",
+      "url": "https://nap.si/en/datasets_details?id=6fc3966a-5e3f-cf10-1df3-70d3af14d03d"
+    },
+    {
+      "license": "unknown",
+      "name": "sk_zsr",
+      "url": ""
+    },
+    {
+      "license": "MIT",
+      "name": "tr_tcdd",
+      "url": "https://github.com/yasinkaraaslan/tcdd-gtfs/raw/main/output/tcdd.zip"
+    }
+  ]
+}

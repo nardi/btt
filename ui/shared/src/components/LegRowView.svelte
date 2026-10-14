@@ -89,7 +89,10 @@
       ? null
       : (rides[journey.sleeping_ride] ?? null),
   );
-  const hasExplanation = $derived(journey?.cost_parts !== null && journey?.cost_parts !== undefined);
+  // A snapshot carries no cost parts, so the explanation exists only in the editable view.
+  const hasExplanation = $derived(
+    onEdit !== undefined && journey?.cost_parts !== null && journey?.cost_parts !== undefined,
+  );
   const canExpand = $derived(plan !== null || overnightOptions !== null);
 
   /**

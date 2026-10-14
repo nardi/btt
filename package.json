@@ -3,7 +3,7 @@
   "private": true,
   "license": "SEE LICENSE IN LICENSE.md",
   "type": "module",
-  "workspaces": ["ui/shared", "ui/app"],
+  "workspaces": ["ui/shared", "ui/app", "ui/viewer"],
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",

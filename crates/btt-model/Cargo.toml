@@ -9,6 +9,7 @@ license-file.workspace = true
 
 [dependencies]
 chrono.workspace = true
+flate2.workspace = true
 serde.workspace = true
 smallvec.workspace = true
 smol_str.workspace = true

@@ -129,6 +129,27 @@ export const commands = {
 	 *  Returns an error when the trip does not exist or the file cannot be written.
 	 */
 	exportProblemReport: (tripId: TripId, note: string, view: ProblemReportView) => typedError<string | null, CommandError>(__TAURI_INVOKE("export_problem_report", { tripId, note, view })),
+	/**
+	 *  Writes an open trip with the journeys the frontend shows as a link for the web viewer.
+	 * 
+	 *  The link holds the trip after the `#`, so a browser never sends it to a server. It holds no
+	 *  traveller profiles.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when the trip is not open or has more than a link can carry.
+	 */
+	shareTrip: (tripId: TripId, legs: SnapshotLeg[]) => typedError<SharedTrip, CommandError>(__TAURI_INVOKE("share_trip", { tripId, legs })),
+	/**
+	 *  Asks where to save the trip as a file and writes it there, for the viewer's open button, for
+	 *  email and for `AirDrop`. Returns the path of the saved file, or `None` when the traveller
+	 *  cancelled.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when the trip is not open or the file cannot be written.
+	 */
+	exportTripFile: (tripId: TripId, legs: SnapshotLeg[]) => typedError<string | null, CommandError>(__TAURI_INVOKE("export_trip_file", { tripId, legs })),
 };
 
 /* Types */
@@ -217,21 +238,28 @@ export type ChosenJourney = {
 /**  Errors a command returns to the frontend. */
 export type CommandError = 
 /**  No trip with this ID exists. */
-({ TripNotFound: TripId }) & { InvalidEdit?: never; PlaceSearch?: never; Storage?: never; TripNotOpen?: never } | 
+({ TripNotFound: TripId }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; Storage?: never; TripNotOpen?: never } | 
 /**  The frontend edited a trip it has not opened. */
-({ TripNotOpen: TripId }) & { InvalidEdit?: never; PlaceSearch?: never; Storage?: never; TripNotFound?: never } | 
+({ TripNotOpen: TripId }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; Storage?: never; TripNotFound?: never } | 
 /**  The edit does not fit the trip. */
-({ InvalidEdit: TripEditError }) & { PlaceSearch?: never; Storage?: never; TripNotFound?: never; TripNotOpen?: never } | 
+({ InvalidEdit: TripEditError }) & { PlaceSearch?: never; Sharing?: never; Storage?: never; TripNotFound?: never; TripNotOpen?: never } | 
 /**  Reading or writing the database failed. */
 ({ Storage: {
 	/**  Description of the failure. */
 	message: string,
-} }) & { InvalidEdit?: never; PlaceSearch?: never; TripNotFound?: never; TripNotOpen?: never } | 
+} }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; TripNotFound?: never; TripNotOpen?: never } | 
 /**  The place search service failed or could not be reached. */
 ({ PlaceSearch: {
 	/**  Description of the failure. */
 	message: string,
-} }) & { InvalidEdit?: never; Storage?: never; TripNotFound?: never; TripNotOpen?: never };
+} }) & { InvalidEdit?: never; Sharing?: never; Storage?: never; TripNotFound?: never; TripNotOpen?: never } | 
+/**  The trip has more journeys than a link can carry. */
+"TripTooLargeForLink" | 
+/**  Writing the link or the trip file failed. */
+({ Sharing: {
+	/**  Description of the failure. */
+	message: string,
+} }) & { InvalidEdit?: never; PlaceSearch?: never; Storage?: never; TripNotFound?: never; TripNotOpen?: never };
 
 /**
  *  A time window that recurs on every travel day, such as 08:00 to 12:00.
@@ -952,6 +980,16 @@ export type SearchedWindow = {
 	end: UnixTimeMinutes,
 };
 
+/**  A trip written as a link for the viewer. */
+export type SharedTrip = {
+	/**  The whole web address, with the trip after the `#`. */
+	url: string,
+	/**  Length of the address in characters. */
+	link_characters: number,
+	/**  Whether the address is long enough that some messengers cut it. */
+	long_for_messengers: boolean,
+};
+
 /**  A search on a booking site whose booking link opens its start page. */
 export type SiteSearch = {
 	/**  Code of the first station on the site. */
@@ -960,6 +998,14 @@ export type SiteSearch = {
 	destination_code: string,
 	/**  Departure of the first train on the local clock of its station, as `YYYY-MM-DDTHH:MM`. */
 	local_departure: string,
+};
+
+/**  The result for one leg of a snapshot. */
+export type SnapshotLeg = {
+	/**  Place at which the leg arrives, which identifies the leg in the itinerary. */
+	arrival_place_id: TripPlaceId,
+	/**  The journeys of the leg, or why there are none. */
+	result: LegPlanningResult,
 };
 
 /**  Largest distance from a place to a station the planner may use, from 100 m to 50 km. */
@@ -976,6 +1022,14 @@ export type StationWay = {
 	distance_meters: number,
 	/**  How the estimate assumes the traveller goes. */
 	mode: WayToStationMode,
+};
+
+/**  A snapshot as it is exported, with the schema version of its document. */
+export type StoredSnapshot = {
+	/**  Version of the document layout, which the reader checks before it reads the rest. */
+	schema_version: number,
+	/**  The snapshot itself. */
+	snapshot: TripSnapshot,
 };
 
 /**  What a strategy is. */
@@ -1384,6 +1438,32 @@ export type TripPreferences = {
 	price_weight: PriceWeight,
 	/**  How tickets are chosen. */
 	ticket_preferences: TicketPreferences,
+};
+
+/**
+ *  Everything the web viewer shows of a trip, already computed.
+ * 
+ *  The viewer needs no timetable, no prices and no planner, so the snapshot holds the chosen and
+ *  alternative journeys of every leg with their prices. It leaves out what only the desktop app
+ *  uses: traveller profiles, the cost parts of a journey, the geometry of the trains and the
+ *  options for pass days. `TripSnapshot::new` removes those, so a snapshot decoded from a link
+ *  equals the snapshot that was encoded.
+ */
+export type TripSnapshot = {
+	/**  The trip, with the places, the stays and the time windows. */
+	trip: Trip,
+	/**
+	 *  The planned legs in itinerary order. A leg that was not planned when the traveller
+	 *  shared the trip has no entry.
+	 */
+	legs: SnapshotLeg[],
+	/**  The day the legs were planned and priced, which the viewer shows at the top. */
+	planned_at: string,
+	/**
+	 *  Version of the timetable bundle the plans come from. Zero for plans from the stub
+	 *  backend.
+	 */
+	bundle_version: number,
 };
 
 /**  Short description of a trip for the trip list. */

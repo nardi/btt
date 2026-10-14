@@ -45,6 +45,15 @@ pub enum CommandError {
         /// Description of the failure.
         message: String,
     },
+    /// The trip has more journeys than a link can carry.
+    #[error("the trip is too big for a link")]
+    TripTooLargeForLink,
+    /// Writing the link or the trip file failed.
+    #[error("sharing failed: {message}")]
+    Sharing {
+        /// Description of the failure.
+        message: String,
+    },
 }
 
 impl From<btt_storage::StorageError> for CommandError {

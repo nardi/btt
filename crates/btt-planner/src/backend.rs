@@ -42,6 +42,16 @@ impl<P: JourneyPricer> LegPlanningBackend<P> {
         (LEG_PLAN_REVISION << 40) | backend
     }
 
+    /// Returns the version of the timetable bundle the backend plans with, or zero for a
+    /// backend that has none.
+    pub fn bundle_version(&self) -> u32 {
+        match self {
+            #[cfg(feature = "stub")]
+            Self::Stub(_) => 0,
+            Self::TimetableBundle(router) => router.bundle_version(),
+        }
+    }
+
     /// Plans one leg.
     ///
     /// The bundle backend searches on a blocking thread and stops early when the cancellation

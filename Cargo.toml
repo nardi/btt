@@ -25,6 +25,7 @@ chrono = { version = "0.4.45", default-features = false, features = ["std", "ser
 chrono-tz = "0.10.4"
 clap = { version = "4.6.7", features = ["derive"] }
 fixedbitset = "0.5.7"
+flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"] }
 duckdb = { version = "1.10505.0", features = ["bundled", "json", "parquet"] }
 governor = "0.10.4"
 memmap2 = "0.9.11"

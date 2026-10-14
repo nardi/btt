@@ -650,6 +650,7 @@ dependencies = [
  "btt-quotes",
  "btt-storage",
  "btt-ticketing",
+ "btt-timetable",
  "chrono",
  "rustc-hash",
  "serde",
@@ -736,6 +737,7 @@ name = "btt-model"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "flate2",
  "proptest",
  "serde",
  "serde_json",

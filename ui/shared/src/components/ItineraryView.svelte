@@ -30,8 +30,8 @@
     onSelect: (placeId: TripPlaceId | null) => void;
     /** Moves the map to a place. */
     onFocus: (placeId: TripPlaceId) => void;
-    /** Shows the setup screen. */
-    onOpenSetup: () => void;
+    /** Shows the setup screen. Missing in a read-only view, which has no setup. */
+    onOpenSetup?: () => void;
   } = $props();
 
   const viewState = $derived(source.viewState);
@@ -159,10 +159,12 @@
     <PlaceSearch searchPlaces={(query) => editable.searchPlaces(query)} onPick={addPlace} />
   {/if}
 
-  <p class="preferences-summary">
-    {preferencesSummary(trip.preferences)}
-    <button type="button" class="small" onclick={onOpenSetup}>Change in Setup</button>
-  </p>
+  {#if onOpenSetup !== undefined}
+    <p class="preferences-summary">
+      {preferencesSummary(trip.preferences)}
+      <button type="button" class="small" onclick={onOpenSetup}>Change in Setup</button>
+    </p>
+  {/if}
 </section>
 
 <style>

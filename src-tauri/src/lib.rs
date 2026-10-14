@@ -7,10 +7,11 @@ mod log_buffer;
 mod place_naming;
 mod price_learning;
 mod price_seed;
-mod pricing;
+pub mod pricing;
 mod probe;
 mod problem_report;
 mod quote_refresh;
+mod sharing;
 mod site_quotes;
 mod state;
 mod ticket_report;
@@ -31,26 +32,31 @@ pub const TYPESCRIPT_BINDINGS_PATH: &str =
 
 /// Collects the commands the frontend may call.
 pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
-    tauri_specta::Builder::<tauri::Wry>::new().commands(collect_commands![
-        commands::list_trips,
-        commands::create_trip,
-        commands::open_trip,
-        commands::close_trip,
-        commands::apply_trip_edit,
-        commands::undo_trip_edit,
-        commands::redo_trip_edit,
-        commands::add_place_at_coordinates,
-        commands::delete_trip,
-        commands::search_places,
-        commands::list_travellers,
-        commands::save_traveller,
-        commands::delete_traveller,
-        commands::plan_tickets,
-        commands::plan_pass_scenarios,
-        commands::live_journey_price,
-        commands::fetch_live_quote,
-        problem_report::export_problem_report,
-    ])
+    tauri_specta::Builder::<tauri::Wry>::new()
+        .commands(collect_commands![
+            commands::list_trips,
+            commands::create_trip,
+            commands::open_trip,
+            commands::close_trip,
+            commands::apply_trip_edit,
+            commands::undo_trip_edit,
+            commands::redo_trip_edit,
+            commands::add_place_at_coordinates,
+            commands::delete_trip,
+            commands::search_places,
+            commands::list_travellers,
+            commands::save_traveller,
+            commands::delete_traveller,
+            commands::plan_tickets,
+            commands::plan_pass_scenarios,
+            commands::live_journey_price,
+            commands::fetch_live_quote,
+            problem_report::export_problem_report,
+            sharing::share_trip,
+            sharing::export_trip_file,
+        ])
+        // The viewer reads the file of a shared trip, which no command returns.
+        .typ::<btt_model::StoredSnapshot>()
 }
 
 /// Returns the exporter for the TypeScript bindings, so the app and the bindings test write the

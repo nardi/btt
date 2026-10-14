@@ -27,6 +27,7 @@
 
   import { commandErrorMessage, TauriTripSource } from "./tauri-trip-source.svelte";
   import ProblemReportDialog from "./ProblemReportDialog.svelte";
+  import ShareDialog from "./ShareDialog.svelte";
   import TripList from "./TripList.svelte";
 
   let trips: TripSummary[] = $state([]);
@@ -35,6 +36,7 @@
   let selectedPlaceId: number | null = $state(null);
   let focusRequest: PlaceFocusRequest | null = $state(null);
   let showProblemReport = $state(false);
+  let showShare = $state(false);
   /** The screens of an open trip. A trip opens on planning. */
   type Screen = "setup" | "planning" | "tickets";
   let screen: Screen = $state("planning");
@@ -363,8 +365,16 @@
         </button>
       </div>
       <ThemeSwitch />
+      <button type="button" onclick={() => (showShare = true)}>Share</button>
       <button type="button" onclick={() => (showProblemReport = true)}>Report a problem</button>
     </header>
+    {#if showShare}
+      <ShareDialog
+        tripId={openSource.trip.id}
+        viewState={openSource.viewState}
+        onClose={() => (showShare = false)}
+      />
+    {/if}
     {#if showProblemReport}
       <ProblemReportDialog
         tripId={openSource.trip.id}

@@ -1,0 +1,16 @@
+{
+  "name": "@btt/viewer",
+  "private": true,
+  "license": "SEE LICENSE IN LICENSE.md",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "demo": "vite build && node scripts/serve-dist.mjs",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@btt/shared": "*"
+  }
+}

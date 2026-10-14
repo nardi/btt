@@ -40,5 +40,8 @@ zip.workspace = true
 sha2.workspace = true
 serde_json.workspace = true
 
+[dev-dependencies]
+btt-timetable.workspace = true
+
 [lints]
 workspace = true

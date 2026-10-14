@@ -33,6 +33,9 @@ import { SvelteMap, SvelteSet } from "svelte/reactivity";
 
 /** Turns a command error into a message for the user. */
 export function commandErrorMessage(error: CommandError): string {
+  if (error === "TripTooLargeForLink") {
+    return "This trip is too big for a link.";
+  }
   if (error.TripNotFound !== undefined) {
     return "This trip no longer exists.";
   }
@@ -44,6 +47,9 @@ export function commandErrorMessage(error: CommandError): string {
   }
   if (error.Storage !== undefined) {
     return `Saving failed: ${error.Storage.message}`;
+  }
+  if (error.Sharing !== undefined) {
+    return `Sharing failed: ${error.Sharing.message}`;
   }
   return `Place search failed: ${error.PlaceSearch.message}`;
 }
