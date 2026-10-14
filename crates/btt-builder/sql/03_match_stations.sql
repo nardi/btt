@@ -1,7 +1,7 @@
 -- Step 3: collapses platforms into stations, matches each station to the Trainline stations
 -- dataset and links stations that describe the same station. Expects the table trainline_raw
--- and the variables stopword_pattern, match_radius_meters, same_name_radius_meters,
--- accepted_similarity, uncertain_similarity and station_merge_radius_meters.
+-- and the variables stopword_pattern, match_radius_meters, code_match_radius_meters,
+-- same_name_radius_meters, accepted_similarity, uncertain_similarity and station_merge_radius_meters.
 
 -- Rewrites Cyrillic and Greek letters in a lowercase name as the Latin letters a transliteration
 -- would use, so "софия" and "sofia" compare on similar strings. Other scripts pass unchanged.
@@ -90,37 +90,49 @@ WHERE stops.latitude IS NOT NULL AND stops.longitude IS NOT NULL
 GROUP BY stops.feed_id, stops.station_key;
 
 -- First pass: official station codes. A separate equality join per scheme keeps DuckDB on hash
--- joins.
+-- joins. The Trainline uic column holds other stations' codes for about half of the German
+-- rows, so a German UIC code (which starts with 80) is matched on the db_id column instead, where
+-- the EVA number is the same as the UIC code. A code match must also lie within
+-- code_match_radius_meters, which stops a wrong code from joining two far apart stations.
 CREATE TABLE code_matches AS
 WITH coded_stations AS (
     SELECT stations.feed_id, stations.station_key, stations.station_code,
-           feed_config.station_code_scheme
+           stations.latitude, stations.longitude, feed_config.station_code_scheme
     FROM feed_stations AS stations
     JOIN feed_config USING (feed_id)
     WHERE stations.station_code IS NOT NULL AND feed_config.station_code_scheme <> 'none'
 ),
 code_candidates AS (
-    SELECT coded.feed_id, coded.station_key, trainline.trainline_station_id
+    SELECT coded.feed_id, coded.station_key, coded.latitude, coded.longitude,
+           trainline.trainline_station_id,
+           trainline.latitude AS trainline_latitude, trainline.longitude AS trainline_longitude
     FROM coded_stations AS coded
     JOIN trainline_stations AS trainline ON trainline.uic = coded.station_code
-    WHERE coded.station_code_scheme = 'uic'
+    WHERE coded.station_code_scheme = 'uic' AND NOT starts_with(coded.station_code, '80')
     UNION ALL
-    SELECT coded.feed_id, coded.station_key, trainline.trainline_station_id
+    SELECT coded.feed_id, coded.station_key, coded.latitude, coded.longitude,
+           trainline.trainline_station_id, trainline.latitude, trainline.longitude
     FROM coded_stations AS coded
     JOIN trainline_stations AS trainline ON trainline.db_id = coded.station_code
     WHERE coded.station_code_scheme = 'eva'
+       OR (coded.station_code_scheme = 'uic' AND starts_with(coded.station_code, '80'))
     UNION ALL
-    SELECT coded.feed_id, coded.station_key, trainline.trainline_station_id
+    SELECT coded.feed_id, coded.station_key, coded.latitude, coded.longitude,
+           trainline.trainline_station_id, trainline.latitude, trainline.longitude
     FROM coded_stations AS coded
     JOIN trainline_stations AS trainline ON trainline.uic8_sncf = coded.station_code
     WHERE coded.station_code_scheme = 'uic8'
     UNION ALL
-    SELECT coded.feed_id, coded.station_key, trainline.trainline_station_id
+    SELECT coded.feed_id, coded.station_key, coded.latitude, coded.longitude,
+           trainline.trainline_station_id, trainline.latitude, trainline.longitude
     FROM coded_stations AS coded
     JOIN trainline_stations AS trainline ON trainline.entur_id = coded.station_code
     WHERE coded.station_code_scheme = 'entur'
 )
-SELECT * FROM code_candidates
+SELECT feed_id, station_key, trainline_station_id
+FROM code_candidates
+WHERE haversine_meters(latitude, longitude, trainline_latitude, trainline_longitude)
+      <= getvariable('code_match_radius_meters')
 QUALIFY row_number() OVER (PARTITION BY feed_id, station_key ORDER BY trainline_station_id) = 1;
 
 -- Second pass: distance and name, for the stations the first pass left. The margins turn the

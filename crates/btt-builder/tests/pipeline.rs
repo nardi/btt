@@ -610,3 +610,83 @@ fn stations_and_trains_merge_by_location() {
     assert_eq!(bundle.pattern_stop(&merged_route, 3).station(), delta);
     assert_eq!(merged_route.trip_count, 2);
 }
+
+const CODE_CONFIG: &str = r#"
+validity_window_days = 14
+
+[[feed]]
+mirror_name = "de_TestG"
+station_code = "uic_in_stop_id"
+[feed.train_label]
+field = "trip_short_name"
+pattern = '^(?<number>\d+)$'
+category_field = "route_short_name"
+"#;
+
+/// Feed G runs train 300 from Bad Schandau to Dresden Hbf, with their UIC codes as stop IDs.
+const FEED_G: &[(&str, &str)] = &[
+    (
+        "agency.txt",
+        "agency_id,agency_name,agency_url,agency_timezone\n\
+         g,Rail G,https://example.org,Europe/Berlin\n",
+    ),
+    (
+        "routes.txt",
+        "route_id,agency_id,route_short_name,route_type\nre,g,RE,106\n",
+    ),
+    (
+        "trips.txt",
+        "route_id,service_id,trip_id,trip_short_name\nre,daily,g-300,300\n",
+    ),
+    (
+        "stops.txt",
+        "stop_id,stop_name,stop_lat,stop_lon\n\
+         8010022,Bad Schandau,50.9189,14.1389\n\
+         8010085,Dresden Hbf,51.0406,13.7320\n",
+    ),
+    (
+        "stop_times.txt",
+        "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n\
+         g-300,10:00:00,10:00:00,8010022,1\n\
+         g-300,11:00:00,11:00:00,8010085,2\n",
+    ),
+    (
+        "calendar.txt",
+        "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n\
+         daily,1,1,1,1,1,1,1,20261001,20261031\n",
+    ),
+];
+
+const TRANSITOUS_DE_CODE: &str = r#"{"sources": [
+    {"name": "TestG", "type": "http", "url": "https://example.org/g.zip",
+     "license": {"spdx-identifier": "CC0-1.0"}}
+]}"#;
+
+/// The Trainline uic column of the two German stations holds the code of another station, as it
+/// does for about half of the German rows. The row of Oberhausen-Osterfeld Süd carries the UIC
+/// code of Bad Schandau and lies far away.
+const MISLABELLED_UIC_STATIONS: &str = "\
+id;name;uic;latitude;longitude;is_city;db_id;time_zone;same_as;parent_station_id;uic8_sncf;entur_id
+1;Bad Schandau;8006006;50.918713;14.139861;f;8010022;Europe/Berlin;;;;
+2;Oberhausen-Osterfeld Süd;8010022;51.499704;6.885224;f;8004541;Europe/Berlin;;;;
+3;Dresden Hbf;8006050;51.040562;13.732038;f;8010085;Europe/Berlin;;;;
+";
+
+#[test]
+fn german_uic_codes_match_on_the_eva_number() {
+    let outcome = run_fixture_pipeline(
+        "german_codes",
+        CODE_CONFIG,
+        &[FixtureFeed {
+            files: FEED_G,
+            country_file_name: "de.json",
+            country_config: TRANSITOUS_DE_CODE,
+        }],
+        MISLABELLED_UIC_STATIONS,
+    );
+    let bundle = LoadedTimetableBundle::from_bundle(&outcome.bundle).unwrap();
+    let bad_schandau = station(&bundle, "Bad Schandau");
+    assert_eq!(bundle.station_trainline_id(bad_schandau), Some(1));
+    let dresden = station(&bundle, "Dresden Hbf");
+    assert_eq!(bundle.station_trainline_id(dresden), Some(3));
+}
