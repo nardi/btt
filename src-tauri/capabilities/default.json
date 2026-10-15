@@ -75,6 +75,45 @@
         },
         {
           "url": "https://koleo.pl/*"
+        },
+        {
+          "url": "https://booking.europeansleeper.eu/*"
+        },
+        {
+          "url": "https://www.europeansleeper.eu/*"
+        },
+        {
+          "url": "https://www.snalltaget.se/*"
+        },
+        {
+          "url": "https://regiojet.com/*"
+        },
+        {
+          "url": "https://www.eurostar.com/*"
+        },
+        {
+          "url": "https://venta.renfe.com/*"
+        },
+        {
+          "url": "https://ebilet.intercity.pl/*"
+        },
+        {
+          "url": "https://www.italotreno.com/*"
+        },
+        {
+          "url": "https://iryo.eu/*"
+        },
+        {
+          "url": "https://westbahn.at/*"
+        },
+        {
+          "url": "https://www.flixtrain.com/*"
+        },
+        {
+          "url": "https://www.leoexpress.com/*"
+        },
+        {
+          "url": "https://www.ouigo.com/*"
         }
       ]
     }
