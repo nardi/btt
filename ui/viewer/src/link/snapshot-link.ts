@@ -6,11 +6,26 @@
 import type { TripSnapshot } from "@btt/shared/bindings";
 import { SnapshotLinkError, malformed } from "./errors";
 import { inflateRaw } from "./inflate";
-import { checkCharacters, decodeDigits, fragmentAlphabet } from "./radix";
+import { loadCompactAlphabet } from "./compact-alphabet";
+import { checkCharacters, decodeDigits, decodeValues, fragmentAlphabet, qrAlphabet } from "./radix";
 import { readSnapshot } from "./snapshot-reader";
+import { loadCityDictionary } from "./cities";
+import { loadStationDictionary } from "./stations";
 
-/** The character that starts a payload written in the 78-character fragment alphabet. */
-const fragmentAlphabetMarker = "a";
+/**
+ * The first character of a payload names its alphabet and says whether the bytes are
+ * compressed. A link for a chat uses the 78 characters of a URL fragment or, when it has to be
+ * short, the 44,190 letters of the compact alphabet. A link for a QR code uses the 43 characters
+ * of its alphanumeric mode.
+ */
+const markers = {
+  a: { alphabet: fragmentAlphabet, checks: "fragment", compressed: true },
+  b: { alphabet: fragmentAlphabet, checks: "fragment", compressed: false },
+  c: { alphabet: "compact", checks: "fragment", compressed: true },
+  d: { alphabet: "compact", checks: "fragment", compressed: false },
+  Q: { alphabet: qrAlphabet, checks: "qr", compressed: true },
+  R: { alphabet: qrAlphabet, checks: "qr", compressed: false },
+} as const;
 
 /** Most characters a payload may have. A longer text is not a link the app wrote. */
 export const maximumPayloadCharacters = 32_768;
@@ -23,22 +38,58 @@ export const maximumInflatedBytes = 1 << 20;
  * `SnapshotLinkError` when the link was cut, comes from a newer version or is not a trip.
  */
 export async function decodeSnapshotLink(fragment: string): Promise<TripSnapshot> {
-  const payload = fragment.startsWith("#") ? fragment.slice(1) : fragment;
+  let payload = fragment.startsWith("#") ? fragment.slice(1) : fragment;
+  // A letter takes at most 9 characters percent-encoded, which is how a browser keeps a link.
+  if (payload.length > 9 * maximumPayloadCharacters) {
+    throw new SnapshotLinkError("too-large", "the link is longer than the viewer reads");
+  }
+  if (payload.includes("%")) {
+    try {
+      payload = decodeURIComponent(payload);
+    } catch {
+      throw malformed("the link has a damaged percent sign");
+    }
+  }
   if (payload.length > maximumPayloadCharacters) {
     throw new SnapshotLinkError("too-large", "the link is longer than the viewer reads");
   }
-  // The alphabet is ASCII, so any other character means the text is no payload.
-  if (!/^[\x21-\x7e]{4,}$/.test(payload)) {
+  if (payload.length < 4) {
+    throw malformed("the link is not a payload");
+  }
+  const marker = markers[payload[0] as keyof typeof markers];
+  if (marker === undefined) {
+    throw malformed("the alphabet is unknown");
+  }
+  // The alphabets other than the compact one are ASCII, so any other character means the text is
+  // no payload.
+  if (marker.alphabet !== "compact" && !/^[\x21-\x7e]+$/.test(payload)) {
     throw malformed("the link is not a payload");
   }
   const body = payload.slice(0, -2);
-  if (checkCharacters(body) !== payload.slice(-2)) {
+  if (checkCharacters(body, marker.checks) !== payload.slice(-2)) {
     throw new SnapshotLinkError("cut", "the link was cut or changed");
   }
-  if (!body.startsWith(fragmentAlphabetMarker)) {
-    throw malformed("the alphabet is unknown");
+  let bytes: Uint8Array;
+  if (marker.alphabet === "compact") {
+    const alphabet = await loadCompactAlphabet();
+    const values: number[] = [];
+    for (const letter of body.slice(1)) {
+      const value = alphabet.indexOf(letter);
+      if (value === undefined) {
+        throw malformed("a character is not in the alphabet");
+      }
+      values.push(value);
+    }
+    bytes = decodeValues(values, alphabet.size);
+  } else {
+    bytes = decodeDigits(body.slice(1), marker.alphabet);
   }
-  const compressed = decodeDigits(body.slice(1), fragmentAlphabet);
-  const bits = await inflateRaw(compressed, maximumInflatedBytes);
-  return readSnapshot(bits);
+  let bits = bytes;
+  if (marker.compressed) {
+    bits = await inflateRaw(bytes, maximumInflatedBytes);
+  } else if (bytes.length > maximumInflatedBytes) {
+    throw new SnapshotLinkError("too-large", "the link is larger than the viewer reads");
+  }
+  const [stations, cities] = await Promise.all([loadStationDictionary(), loadCityDictionary()]);
+  return readSnapshot(bits, stations, cities);
 }

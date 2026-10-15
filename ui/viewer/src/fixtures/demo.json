@@ -1,4 +1,5 @@
 {
+  "compact_payload": "d꼦뤴쥷ꗌ姄娢ꩺ툡㖁㭑ꔀ㯏讒ᘷ콥雓馚掍抺इ璼䆣ສ甾띷돮㰶姂敿㗌萕ꏩ뇅친丱ꌹ嵝턽魙洧㫬ᄄႁꫤ篣粠纝汥卅挥翺簟왕ᧆ칁冉甠蕞馶捊큥嫀潼鑸鑋躽ર澎氥羸軱伋鍪驖峛ᓛ嶼룭ⵚ起숩锍媋백툚锘껽惌팩뭩쨽皰틺썝ᥰ渰爍ᆅ蕘ꎦᦵ储弚㙨콖拄庁舯뷧థꛟ赢愷飅㜥锂裺五뙢喹裰ᡝ㕲뭸톕痈㡝업圁ፘ婊蹆焱첟讂戊仴ᱦꗖ닌KB",
   "document": {
     "schema_version": 1,
     "snapshot": {
@@ -145,7 +146,7 @@
                 "arrival_footpath": null,
                 "cost_parts": {
                   "arrival_window_cost": 0,
-                  "door_to_door_minutes": 578,
+                  "door_to_door_minutes": 587,
                   "minutes_outside_arrival_window": 0,
                   "night_awake_cost": 0,
                   "night_minutes_awake": 0,
@@ -214,31 +215,31 @@
                     "latitude": 52.3789,
                     "longitude": 4.9003
                   },
-                  "name": "Amsterdam Centraal",
+                  "name": "Amsterdam-Centraal",
                   "time_zone": "Europe/Amsterdam"
                 },
                 {
                   "coordinates": {
-                    "latitude": 50.1071,
-                    "longitude": 8.6638
+                    "latitude": 50.107676,
+                    "longitude": 8.664515
                   },
                   "name": "Frankfurt (Main) Hbf",
                   "time_zone": "Europe/Berlin"
                 },
                 {
                   "coordinates": {
-                    "latitude": 48.1852,
-                    "longitude": 16.3761
+                    "latitude": 48.185149,
+                    "longitude": 16.377555
                   },
                   "name": "Wien Hbf",
                   "time_zone": "Europe/Vienna"
                 },
                 {
                   "coordinates": {
-                    "latitude": 48.1742,
-                    "longitude": 16.3319
+                    "latitude": 48.2742,
+                    "longitude": 16.4519
                   },
-                  "name": "Wien Meidling",
+                  "name": "Wien Süßenbrunn Halt",
                   "time_zone": "Europe/Vienna"
                 }
               ]
@@ -308,16 +309,16 @@
               "station_table": [
                 {
                   "coordinates": {
-                    "latitude": 48.1852,
-                    "longitude": 16.3761
+                    "latitude": 48.185149,
+                    "longitude": 16.377555
                   },
                   "name": "Wien Hbf",
                   "time_zone": "Europe/Vienna"
                 },
                 {
                   "coordinates": {
-                    "latitude": 41.9009,
-                    "longitude": 12.5017
+                    "latitude": 41.900569,
+                    "longitude": 12.50202
                   },
                   "name": "Roma Termini",
                   "time_zone": "Europe/Rome"
@@ -341,11 +342,11 @@
           "Route": {
             "destination": {
               "coordinates": {
-                "latitude": 40.8518,
-                "longitude": 14.2681
+                "latitude": 40.7484,
+                "longitude": 14.4849
               },
               "id": 4,
-              "name": "Napoli",
+              "name": "Pompei Scavi",
               "station_search_radius": 5000,
               "window_override": null
             },
@@ -370,11 +371,11 @@
                 "arriving_leg_travel_mode": "Daytime",
                 "place": {
                   "coordinates": {
-                    "latitude": 48.1852,
-                    "longitude": 16.3761
+                    "latitude": 48.2084,
+                    "longitude": 16.3725
                   },
                   "id": 2,
-                  "name": "Wien",
+                  "name": "Vienna",
                   "station_search_radius": 5000,
                   "window_override": null
                 },
@@ -396,11 +397,11 @@
                 },
                 "place": {
                   "coordinates": {
-                    "latitude": 41.901,
-                    "longitude": 12.5007
+                    "latitude": 41.8933,
+                    "longitude": 12.4829
                   },
                   "id": 3,
-                  "name": "Roma",
+                  "name": "Rome",
                   "station_search_radius": 5000,
                   "window_override": null
                 },
@@ -453,5 +454,6 @@
       }
     }
   },
-  "payload": "a5Yf-D7i9tPn8ZHrl4*:Z&RP(qw9_13tE0):4,lvx=5HWB:WbTGkh(BL_.RFnnO~2I.0a4h*RpZWtKA0xw1m&FauK*MGbk_35lFAw-+yN24kpGul*p$u;P+YIt+C1@ZAjs@Ph+o*Fx1lk5hek1zRw&p6y(1o)0yUPqFQtHcq)NMdUi.Oh$IgUu1TjB!Yi6=MR&_IraENE!X:yY_)@gsMIyjm*Nvh$xaLpaq9J)XorXw)!x@Y1twE=kMXCCR_o33E1G&(uaujLVlcTZ+mOyz*(yf,@p;6_ekMnXpk+zoU@re;vZi5fc0,c7,0!aGqkX6@Bm.ei(P)QDRZ$C&8L;97wRMXWbcwAMH!bM!OgRg0zdO+*M8pn!queI$I(bp1AMUZSnLYqTK:I!y:jaoVXq*y=ziVe55odZ:rz1(zzbR2GuZCzRDcS:t)qwXaeCuFMrcoemQvnvNqYie7(VnowoET_F*ESo!CEJZs(Y=Qzf"
+  "payload": "bHSrMv)TI9pBJC9+pnyh7A_So768qXbKY9QTMF8&:QPro)8nD4)WLL:+VC-$fb9c5(fYx,x$;kc4k@fBRVmwhY*(MjEWgE(kqz$ZT+4NW7-fIXuZp)XItazncG4w5a@cSu4_9yck*lwYBQsDEB0CZh+k,j)Y+e~DCS3-QV_Yf:BJmwz~)w~QHrpsn=M6$ScR3iL$NJ&zMaaNVJ&KHnq$(z153D!Mia28RpPE8i,&@M52UB~$6mF:0:91))d&zyt,LeOCTj*K=o.ZpP:iEq4FpxF)O+Yn;j-*URWOZI8BP51=c=S1w,eN!L=7wY$-Ht6+ssD)T35_sTgTh-YCdXc3ef6nsVE",
+  "qr_payload": "R1C4RXF/.5E6PZ7AO5KLZ20GHIX3-+Z0IGV.*7R4H17C0TG0RDD0$VR2ZV..0S0REX*A+DW-USXF1FIG/ENZ/VHF1MYEU5PCB8L*ZA0OZY$XERMTD$/:8O3R7Y+3SD+40N3$JIYWOR2$H:-VVHDFPAR1XUGA:MDJYQV3M0LKS2/*BH9LE+EEWGEZEO9-TBEO*LJ2B*L9KY7N+ONPOPQ4KC43W$5N24YUUX7YP*619$WO.EP--ZL.VNEQ.UAB7$T:2NDBFAR3HJJ1KRX$YMP0KSW6XTJ1U/R7$0EXM$GN/BS7Q9BXJDI4HIXKY:E8$E9QUGMZ$3-QST+L73+7933CQYOG9C-ROQH1RGWO0KDM6WMDC0OL.O/W75FE.DA9ZLF$Q$X6Z9R$013M6RYTM9"
 }

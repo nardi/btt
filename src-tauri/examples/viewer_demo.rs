@@ -13,9 +13,9 @@ use btt_app_lib::pricing::PriceBookJourneyPricer;
 use btt_fares::{FareData, PriceBook};
 use btt_geo::TimeZoneFinder;
 use btt_model::{
-    GeoCoordinates, Itinerary, ItineraryRoute, LegPlanningResult, LegTravelMode, PlaceStay,
-    PriceWeight, SNAPSHOT_SCHEMA_VERSION, SnapshotLeg, StationSearchRadius, StoredSnapshot, Trip,
-    TripPlace, TripPlaceId, TripSnapshot, ViaPlace, encode_snapshot_link,
+    GeoCoordinates, Itinerary, ItineraryRoute, LegPlanningResult, LegTravelMode, LinkAlphabet,
+    PlaceStay, PriceWeight, SNAPSHOT_SCHEMA_VERSION, SnapshotLeg, StationSearchRadius,
+    StoredSnapshot, Trip, TripPlace, TripPlaceId, TripSnapshot, ViaPlace, encode_snapshot_link_in,
 };
 use btt_planner::{TimetableBundleRouter, leg_planning_inputs};
 use btt_timetable::LoadedTimetableBundle;
@@ -46,17 +46,17 @@ fn demo_trip(start_date: NaiveDate) -> Trip {
         via_places: vec![
             ViaPlace {
                 arriving_leg_travel_mode: LegTravelMode::Daytime,
-                place: place(2, "Zürich", 47.3779, 8.5403),
+                place: place(2, "Zurich", 47.3769, 8.5417),
                 stay: nights(1),
             },
             ViaPlace {
                 arriving_leg_travel_mode: LegTravelMode::Daytime,
-                place: place(3, "Wien", 48.1852, 16.3761),
+                place: place(3, "Vienna", 48.2084, 16.3725),
                 stay: nights(2),
             },
         ],
         final_leg_travel_mode: LegTravelMode::Overnight(btt_model::OvernightLegOptions::DEFAULT),
-        destination: place(4, "Roma", 41.901, 12.5007),
+        destination: place(4, "Rome", 41.8933, 12.4829),
     });
     trip.next_place_id = NonZeroU32::new(5).expect("five is not zero");
     trip
@@ -78,6 +78,31 @@ fn write_credits(bundle_path: &Path, output: &Path) {
     });
     let text = serde_json::to_string_pretty(&document).expect("the credits are JSON");
     std::fs::write(output.join("credits.json"), text + "\n").expect("the credits are written");
+}
+
+/// Writes the links of a snapshot in every form the viewer reads, and prints their lengths.
+///
+/// The link the app shares by default holds the chosen journeys only, so that is what
+/// `demo-link.txt` holds, and the full link with the alternatives is in its own file.
+fn write_links(output: &Path, viewer_address: &str, snapshot: &TripSnapshot) {
+    let write = |file: &str, snapshot: &TripSnapshot, alphabet: LinkAlphabet| {
+        let link = encode_snapshot_link_in(snapshot, alphabet).expect("the demo trip fits");
+        println!(
+            "{file}: {} characters from {} compressed bytes",
+            link.payload.chars().count(),
+            link.compressed_bytes
+        );
+        std::fs::write(
+            output.join(file),
+            format!("{viewer_address}#{}\n", link.payload),
+        )
+        .expect("the link is written");
+    };
+    let chosen_only = snapshot.clone().chosen_journeys_only();
+    write("demo-link.txt", &chosen_only, LinkAlphabet::Fragment);
+    write("demo-compact-link.txt", &chosen_only, LinkAlphabet::Compact);
+    write("demo-qr-link.txt", &chosen_only, LinkAlphabet::QrCode);
+    write("demo-full-link.txt", snapshot, LinkAlphabet::Fragment);
 }
 
 fn main() {
@@ -130,17 +155,7 @@ fn main() {
 
     let planned_at = chrono::Local::now().date_naive();
     let snapshot = TripSnapshot::new(&trip, &legs, planned_at, router.bundle_version());
-    let link = encode_snapshot_link(&snapshot).expect("the demo trip fits in a link");
-    println!(
-        "link: {} characters from {} compressed bytes",
-        link.payload.len(),
-        link.compressed_bytes
-    );
-    std::fs::write(
-        output.join("demo-link.txt"),
-        format!("{viewer_address}#{}\n", link.payload),
-    )
-    .expect("the link is written");
+    write_links(output, &viewer_address, &snapshot);
     let document = StoredSnapshot {
         schema_version: SNAPSHOT_SCHEMA_VERSION,
         snapshot,

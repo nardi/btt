@@ -1,12 +1,22 @@
-//! The link that carries a snapshot in the fragment of a URL.
+//! The link that carries a snapshot in the fragment of a URL, or in a QR code.
 //!
-//! The encoder writes the snapshot as a bit layout that names no fields, compresses it with raw
-//! deflate, writes the bytes as one big number in an alphabet of the 78 characters a URL fragment
-//! may hold, and ends the text with two check characters. The web viewer reads the same format.
+//! The encoder writes the snapshot as a bit layout that names no fields. It keeps the bytes as
+//! they are or compresses them with raw deflate, whichever is shorter. Then it writes them as
+//! one big number in an alphabet and ends the text with two check characters. The first
+//! character of the text names the alphabet and whether the bytes are compressed. The web viewer
+//! reads the same format.
+//!
+//! A link for a chat uses the 78 characters a URL fragment may hold, or the 44,190 letters of the
+//! compact alphabet for a shorter one. A link for a QR code uses
+//! the 43 characters that a QR code packs two to 11 bits in its alphanumeric mode, which keeps
+//! the code smaller than any byte-mode text could.
 
 mod bits;
+mod cities;
 mod codec;
+mod compact;
 mod radix;
+mod stations;
 pub mod vocabulary;
 
 use std::io::{Read, Write};
@@ -17,9 +27,6 @@ use flate2::write::DeflateEncoder;
 use thiserror::Error;
 
 use crate::snapshot::TripSnapshot;
-
-/// The character that starts a payload written in the 78-character fragment alphabet.
-pub const FRAGMENT_ALPHABET_MARKER: char = 'a';
 
 /// Most characters a payload may have. A longer text is not a link this app wrote, and reading
 /// it would take long.
@@ -48,6 +55,75 @@ pub enum SnapshotLinkError {
     TooLarge,
 }
 
+/// The alphabet a payload is written in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinkAlphabet {
+    /// The 78 characters a URL fragment may hold, for a link that people send.
+    Fragment,
+    /// The 44,190 letters of the Basic Multilingual Plane, for a link that people send and that
+    /// has to be short. Every letter carries 15.4 bits, so the link has less than half the
+    /// characters. A browser keeps it percent-encoded, which makes it longer where an app shows
+    /// it that way.
+    Compact,
+    /// The 43 characters of the alphanumeric mode of a QR code that a URL may hold.
+    QrCode,
+}
+
+impl LinkAlphabet {
+    /// Returns the letters and digits the two check characters are written in.
+    fn check_alphabet(self) -> &'static [u8] {
+        match self {
+            Self::Fragment | Self::Compact => radix::FRAGMENT_CHECK_ALPHABET,
+            Self::QrCode => radix::QR_CHECK_ALPHABET,
+        }
+    }
+
+    /// Returns the first character of a payload with this alphabet, for bytes that are
+    /// compressed or not.
+    fn marker(self, compressed: bool) -> char {
+        match (self, compressed) {
+            (Self::Fragment, true) => 'a',
+            (Self::Fragment, false) => 'b',
+            (Self::Compact, true) => 'c',
+            (Self::Compact, false) => 'd',
+            (Self::QrCode, true) => 'Q',
+            (Self::QrCode, false) => 'R',
+        }
+    }
+
+    /// Returns the alphabet and whether the bytes are compressed for the first character of a
+    /// payload.
+    fn from_marker(marker: char) -> Option<(Self, bool)> {
+        match marker {
+            'a' => Some((Self::Fragment, true)),
+            'b' => Some((Self::Fragment, false)),
+            'c' => Some((Self::Compact, true)),
+            'd' => Some((Self::Compact, false)),
+            'Q' => Some((Self::QrCode, true)),
+            'R' => Some((Self::QrCode, false)),
+            _ => None,
+        }
+    }
+
+    /// Writes bytes as digits of the alphabet.
+    fn write_digits(self, bytes: &[u8]) -> String {
+        match self {
+            Self::Fragment => radix::encode_digits(bytes, radix::FRAGMENT_ALPHABET),
+            Self::Compact => compact::encode_letters(bytes),
+            Self::QrCode => radix::encode_digits(bytes, radix::QR_ALPHABET),
+        }
+    }
+
+    /// Reads digits of the alphabet back into bytes.
+    fn read_digits(self, digits: &str) -> Result<Vec<u8>, SnapshotLinkError> {
+        match self {
+            Self::Fragment => radix::decode_digits(digits, radix::FRAGMENT_ALPHABET),
+            Self::Compact => compact::decode_letters(digits),
+            Self::QrCode => radix::decode_digits(digits, radix::QR_ALPHABET),
+        }
+    }
+}
+
 /// A snapshot written as the payload of a link.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SnapshotLink {
@@ -57,56 +133,97 @@ pub struct SnapshotLink {
     pub compressed_bytes: usize,
 }
 
-/// Writes a snapshot as the payload of a link.
+/// Writes a snapshot as the payload of a link that people send, in the fragment alphabet.
 ///
 /// # Errors
 ///
 /// Returns an error when the snapshot has more stations in one leg than a journey can point at,
 /// or when its link would be longer than the viewer reads.
 pub fn encode_snapshot_link(snapshot: &TripSnapshot) -> Result<SnapshotLink, SnapshotLinkError> {
+    encode_snapshot_link_in(snapshot, LinkAlphabet::Fragment)
+}
+
+/// Writes a snapshot as the payload of a link in an alphabet.
+///
+/// # Errors
+///
+/// Returns an error when the snapshot has more stations in one leg than a journey can point at,
+/// or when its link would be longer than the viewer reads.
+pub fn encode_snapshot_link_in(
+    snapshot: &TripSnapshot,
+    alphabet: LinkAlphabet,
+) -> Result<SnapshotLink, SnapshotLinkError> {
     let bits = codec::write_snapshot(snapshot)?;
     let mut encoder = DeflateEncoder::new(Vec::new(), Compression::best());
     encoder
         .write_all(&bits)
         .map_err(|_| SnapshotLinkError::TooLarge)?;
-    let compressed = encoder.finish().map_err(|_| SnapshotLinkError::TooLarge)?;
-    let mut payload = String::from(FRAGMENT_ALPHABET_MARKER);
-    payload.push_str(&radix::encode_digits(&compressed, radix::FRAGMENT_ALPHABET));
-    let check = radix::check_characters(&payload);
+    let deflated = encoder.finish().map_err(|_| SnapshotLinkError::TooLarge)?;
+    // Deflate adds a few bytes of its own, which a snapshot of a few hundred bytes can lose.
+    let compressed = deflated.len() < bits.len();
+    let bytes = if compressed { deflated } else { bits };
+    let mut payload = String::from(alphabet.marker(compressed));
+    payload.push_str(&alphabet.write_digits(&bytes));
+    let check = radix::check_characters(&payload, alphabet.check_alphabet());
     payload.extend(check);
-    if payload.len() > MAXIMUM_PAYLOAD_CHARACTERS {
+    if payload.chars().count() > MAXIMUM_PAYLOAD_CHARACTERS {
         return Err(SnapshotLinkError::TooLarge);
     }
     Ok(SnapshotLink {
         payload,
-        compressed_bytes: compressed.len(),
+        compressed_bytes: bytes.len(),
     })
 }
 
-/// Reads the payload of a link, with or without the `#` in front of it.
+/// Reads the payload of a link, with or without the `#` in front of it. A payload in the compact
+/// alphabet may come as a browser keeps it, with its letters percent-encoded.
 ///
 /// # Errors
 ///
 /// Returns an error when the link was cut, comes from a newer version, or is not a snapshot.
 pub fn decode_snapshot_link(payload: &str) -> Result<TripSnapshot, SnapshotLinkError> {
     let payload = payload.strip_prefix('#').unwrap_or(payload);
-    if payload.len() > MAXIMUM_PAYLOAD_CHARACTERS {
+    // A letter takes at most 4 bytes in UTF-8 and 9 in a percent-encoded text.
+    if payload.len() > 9 * MAXIMUM_PAYLOAD_CHARACTERS {
         return Err(SnapshotLinkError::TooLarge);
     }
-    // The alphabet is ASCII, so any other character means the text is no payload.
-    if !payload.is_ascii() || payload.len() < 4 {
+    let decoded;
+    let payload = if payload.contains('%') {
+        decoded = percent_decode(payload)?;
+        decoded.as_str()
+    } else {
+        payload
+    };
+    let characters: Vec<char> = payload.chars().collect();
+    if characters.len() > MAXIMUM_PAYLOAD_CHARACTERS {
+        return Err(SnapshotLinkError::TooLarge);
+    }
+    if characters.len() < 4 {
         return Err(SnapshotLinkError::Malformed("the link is not a payload"));
     }
-    let (body, check) = payload.split_at(payload.len() - 2);
-    if radix::check_characters(body).iter().collect::<String>() != check {
+    let (alphabet, compressed) = LinkAlphabet::from_marker(characters[0])
+        .ok_or(SnapshotLinkError::Malformed("the alphabet is unknown"))?;
+    let split = characters.len() - 2;
+    let body: String = characters[..split].iter().collect();
+    let check: String = characters[split..].iter().collect();
+    let expected: String = radix::check_characters(&body, alphabet.check_alphabet())
+        .iter()
+        .collect();
+    if expected != check {
         return Err(SnapshotLinkError::Cut);
     }
-    let digits = body
-        .strip_prefix(FRAGMENT_ALPHABET_MARKER)
-        .ok_or(SnapshotLinkError::Malformed("the alphabet is unknown"))?;
-    let compressed = radix::decode_digits(digits, radix::FRAGMENT_ALPHABET)?;
+    let digits: String = characters[1..split].iter().collect();
+    // Only the compact alphabet has letters outside ASCII, and the reading of the digits checks
+    // every letter against its alphabet.
+    let bytes = alphabet.read_digits(&digits)?;
+    if !compressed {
+        if bytes.len() > MAXIMUM_INFLATED_BYTES {
+            return Err(SnapshotLinkError::TooLarge);
+        }
+        return codec::read_snapshot(&bytes);
+    }
     let mut bits = Vec::new();
-    DeflateDecoder::new(compressed.as_slice())
+    DeflateDecoder::new(bytes.as_slice())
         .take(MAXIMUM_INFLATED_BYTES as u64 + 1)
         .read_to_end(&mut bits)
         .map_err(|_| SnapshotLinkError::Malformed("the data is not compressed"))?;
@@ -114,6 +231,28 @@ pub fn decode_snapshot_link(payload: &str) -> Result<TripSnapshot, SnapshotLinkE
         return Err(SnapshotLinkError::TooLarge);
     }
     codec::read_snapshot(&bits)
+}
+
+/// Reads the percent-encoded bytes of a text as UTF-8, as `decodeURIComponent` does.
+fn percent_decode(text: &str) -> Result<String, SnapshotLinkError> {
+    let bytes = text.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut position = 0;
+    while position < bytes.len() {
+        if bytes[position] == b'%' {
+            let digits = bytes
+                .get(position + 1..position + 3)
+                .and_then(|pair| std::str::from_utf8(pair).ok())
+                .and_then(|pair| u8::from_str_radix(pair, 16).ok())
+                .ok_or(SnapshotLinkError::Malformed("a percent sign has no code"))?;
+            decoded.push(digits);
+            position += 3;
+        } else {
+            decoded.push(bytes[position]);
+            position += 1;
+        }
+    }
+    String::from_utf8(decoded).map_err(|_| SnapshotLinkError::Malformed("the link is not UTF-8"))
 }
 
 #[cfg(test)]
@@ -134,9 +273,10 @@ mod tests {
         let mut encoder = DeflateEncoder::new(Vec::new(), Compression::fast());
         encoder.write_all(bytes).unwrap();
         let compressed = encoder.finish().unwrap();
-        let mut payload = String::from(FRAGMENT_ALPHABET_MARKER);
-        payload.push_str(&radix::encode_digits(&compressed, radix::FRAGMENT_ALPHABET));
-        let check = radix::check_characters(&payload);
+        let alphabet = LinkAlphabet::Fragment;
+        let mut payload = String::from(alphabet.marker(true));
+        payload.push_str(&alphabet.write_digits(&compressed));
+        let check = radix::check_characters(&payload, alphabet.check_alphabet());
         payload.extend(check);
         payload
     }

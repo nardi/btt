@@ -62,6 +62,16 @@
     <a href="https://openfreemap.org" rel="noopener noreferrer" target="_blank">OpenFreeMap</a>.
   </p>
 
+  <h2>City names</h2>
+  <p>
+    The names of the cities that a link can refer to by number come from
+    <a href="https://www.geonames.org" rel="noopener noreferrer" target="_blank">GeoNames</a>, which
+    is licensed under
+    <a href="https://creativecommons.org/licenses/by/4.0/" rel="noopener noreferrer" target="_blank"
+      >CC BY 4.0</a
+    >.
+  </p>
+
   <h2>Use of the data</h2>
   <p>
     The data is for personal and non-commercial use. Prices are estimates from the day the trip

@@ -32,7 +32,10 @@ pub use itinerary::{
     OvernightLegOptions, PlaceStay, PlaceWindowOverride, SameDayStayRange, StationSearchRadius,
     TripPlace, TripPlaceId, ViaPlace,
 };
-pub use link::{SnapshotLink, SnapshotLinkError, decode_snapshot_link, encode_snapshot_link};
+pub use link::{
+    LinkAlphabet, SnapshotLink, SnapshotLinkError, decode_snapshot_link, encode_snapshot_link,
+    encode_snapshot_link_in,
+};
 pub use place_search::PlaceSearchResult;
 pub use plan::{
     AlternativeKind, ArrivalFootpath, Journey, JourneyChoice, JourneyCostParts, LegExtras, LegPlan,

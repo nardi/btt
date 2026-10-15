@@ -7,24 +7,40 @@ import { malformed } from "./errors";
 /** The 78 characters a URL fragment may hold without percent-encoding, apart from the apostrophe. */
 export const fragmentAlphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-._~!$&()*+,;=:@";
 
-const checkAlphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+/** The 43 characters of the alphanumeric mode of a QR code that a URL may hold. */
+export const qrAlphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ$*+-./:";
+
+/** The letters and digits the two check characters of a fragment payload are written in. */
+const fragmentCheckAlphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+/** The digits and uppercase letters the two check characters of a QR payload are written in. */
+const qrCheckAlphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 const limbRange = 2 ** 32;
 
-/**
- * Reads digits of an alphabet back into the bytes the encoder wrote. The encoder puts a one
- * byte in front of the bytes so that leading zeros survive, and this removes it again.
- */
+/** Reads digits of an ASCII alphabet back into the bytes the encoder wrote. */
 export function decodeDigits(digits: string, alphabet: string): Uint8Array {
-  const radix = alphabet.length;
-  // The number as 32-bit limbs, lowest first. Each digit adds log2(radix) bits at most.
-  const limbs = new Uint32Array(Math.ceil((digits.length * Math.log2(radix)) / 32) + 2);
-  let used = 0;
+  const values: number[] = [];
   for (const character of digits) {
     const value = alphabet.indexOf(character);
     if (value < 0) {
       throw malformed("a character is not in the alphabet");
     }
+    values.push(value);
+  }
+  return decodeValues(values, alphabet.length);
+}
+
+/**
+ * Reads digits in a radix, most significant first, back into the bytes the encoder wrote. The
+ * encoder puts a one byte in front of the bytes so that leading zeros survive, and this removes
+ * it again.
+ */
+export function decodeValues(values: readonly number[], radix: number): Uint8Array {
+  // The number as 32-bit limbs, lowest first. Each digit adds log2(radix) bits at most.
+  const limbs = new Uint32Array(Math.ceil((values.length * Math.log2(radix)) / 32) + 2);
+  let used = 0;
+  for (const value of values) {
     let carry = value;
     for (let index = 0; index < used; index += 1) {
       const product = (limbs[index] ?? 0) * radix + carry;
@@ -51,15 +67,18 @@ export function decodeDigits(digits: string, alphabet: string): Uint8Array {
 }
 
 /**
- * Returns the two check characters of a text: the FNV-1a hash of its bytes reduced to 3,844
- * values and written as a letter or digit each. The text has to be ASCII.
+ * Returns the two check characters of a text: the FNV-1a hash of its bytes reduced to the square
+ * of the size of the check alphabet, written as one character of the alphabet each.
  */
-export function checkCharacters(text: string): string {
+export function checkCharacters(text: string, alphabet: "fragment" | "qr" = "fragment"): string {
+  const checkAlphabet = alphabet === "fragment" ? fragmentCheckAlphabet : qrCheckAlphabet;
   let hash = 0x811c9dc5;
-  for (let index = 0; index < text.length; index += 1) {
-    hash ^= text.charCodeAt(index);
+  // The hash runs over the UTF-8 bytes, which are the characters themselves for ASCII.
+  for (const byte of new TextEncoder().encode(text)) {
+    hash ^= byte;
     hash = Math.imul(hash, 0x01000193) >>> 0;
   }
-  const value = hash % (62 * 62);
-  return (checkAlphabet[Math.floor(value / 62)] ?? "0") + (checkAlphabet[value % 62] ?? "0");
+  const size = checkAlphabet.length;
+  const value = hash % (size * size);
+  return (checkAlphabet[Math.floor(value / size)] ?? "0") + (checkAlphabet[value % size] ?? "0");
 }

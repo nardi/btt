@@ -9,8 +9,8 @@ import type {
   AlternativeKind,
   DailyTimeWindow,
   Itinerary,
+  EuroRange,
   Journey,
-  JourneyCostParts,
   LegPlan,
   LegPlanStation,
   LegPlanningResult,
@@ -30,6 +30,8 @@ import { categories, operators, timeZones } from "../generated/vocabularies";
 import { BitReader } from "./bit-reader";
 import { SnapshotLinkError, malformed } from "./errors";
 import { snapshotCostParts, snapshotPreferences, snapshotTripId } from "./snapshot-defaults";
+import { type DictionaryCity, placeStepMicrodegrees, stepsOf } from "./cities";
+import type { DictionaryStation } from "./stations";
 
 /** The newest schema version this viewer reads. */
 export const supportedSchemaVersion = 1;
@@ -67,9 +69,29 @@ export function readSchemaVersion(bytes: Uint8Array): number {
   return new BitReader(bytes).number();
 }
 
-/** Reads a snapshot, or throws a `SnapshotLinkError`. */
-export function readSnapshot(bytes: Uint8Array): TripSnapshot {
-  return new SnapshotReader(bytes).snapshot();
+/**
+ * Reads a snapshot, or throws a `SnapshotLinkError`. The dictionary is the list of stations
+ * that the link refers to by number.
+ */
+export function readSnapshot(
+  bytes: Uint8Array,
+  dictionary: readonly DictionaryStation[],
+  cities: readonly DictionaryCity[],
+): TripSnapshot {
+  return new SnapshotReader(bytes, dictionary, cities).snapshot();
+}
+
+/**
+ * Returns the minutes from leaving the departure place to reaching the arrival place, which
+ * follow from the times of the rides and the ways before the first and after the last. The
+ * writer in Rust computes the same number. Returns `null` when the times run backwards.
+ */
+function derivedDoorToDoorMinutes(journey: Journey): number | null {
+  const lastRide = journey.later_rides.at(-1)?.ride ?? journey.first_ride;
+  const departure = journey.first_ride.departure_time - journey.access.duration;
+  const arrival =
+    lastRide.arrival_time + (journey.arrival_footpath?.way.duration ?? 0) + journey.egress.duration;
+  return arrival >= departure ? arrival - departure : null;
 }
 
 class SnapshotReader {
@@ -80,7 +102,15 @@ class SnapshotReader {
   private latitude = 0;
   private longitude = 0;
 
-  constructor(bytes: Uint8Array) {
+  /** The last place read by its name, in steps of `placeStepMicrodegrees`. */
+  private placeLatitudeSteps = 0;
+  private placeLongitudeSteps = 0;
+
+  constructor(
+    bytes: Uint8Array,
+    private readonly dictionary: readonly DictionaryStation[],
+    private readonly cities: readonly DictionaryCity[],
+  ) {
     this.bits = new BitReader(bytes);
   }
 
@@ -224,8 +254,32 @@ class SnapshotReader {
     if (id < 1 || id > 2 ** 32 - 1) {
       throw malformed("a place has no ID");
     }
-    const name = this.bits.text();
-    const coordinates = this.coordinates();
+    let name: string;
+    let latitudeSteps: number;
+    let longitudeSteps: number;
+    const line = this.bits.number();
+    if (line > 0) {
+      const city = this.cities[line - 1];
+      if (city === undefined) {
+        // A newer viewer has the city, because the dictionary only grows.
+        throw new SnapshotLinkError("newer-schema", "the link names a city that this viewer does not know");
+      }
+      name = city.name;
+      latitudeSteps = stepsOf(city.latitude) + this.bits.signedNumber();
+      longitudeSteps = stepsOf(city.longitude) + this.bits.signedNumber();
+    } else {
+      name = this.bits.text();
+      latitudeSteps = this.placeLatitudeSteps + this.bits.signedNumber();
+      longitudeSteps = this.placeLongitudeSteps + this.bits.signedNumber();
+      this.placeLatitudeSteps = latitudeSteps;
+      this.placeLongitudeSteps = longitudeSteps;
+    }
+    const latitude = latitudeSteps * placeStepMicrodegrees;
+    const longitude = longitudeSteps * placeStepMicrodegrees;
+    if (Math.abs(latitude) > maximumMicrodegreesOfLatitude || Math.abs(longitude) > maximumMicrodegreesOfLongitude) {
+      throw malformed("a coordinate is out of range");
+    }
+    const coordinates = { latitude: latitude / 1_000_000, longitude: longitude / 1_000_000 };
     const station_search_radius = this.bits.number();
     if (station_search_radius < 100 || station_search_radius > 50_000) {
       throw malformed("a search radius is out of range");
@@ -262,7 +316,8 @@ class SnapshotReader {
     if (next_place_id < 1 || next_place_id > 2 ** 32 - 1) {
       throw malformed("the next place ID is zero");
     }
-    this.resetPoint();
+    this.placeLatitudeSteps = 0;
+    this.placeLongitudeSteps = 0;
     let itinerary: Itinerary;
     switch (this.bits.bits(2)) {
       case 0:
@@ -302,6 +357,28 @@ class SnapshotReader {
   }
 
   private station(): LegPlanStation {
+    const line = this.bits.number();
+    if (line > 0) {
+      const entry = this.dictionary[line - 1];
+      if (entry === undefined) {
+        // A newer viewer has the station, because the dictionary only grows.
+        throw new SnapshotLinkError(
+          "newer-schema",
+          "the link names a station that this viewer does not know",
+        );
+      }
+      const exact = this.bits.bit();
+      const latitude = entry.latitude + (exact ? 0 : this.bits.signedNumber());
+      const longitude = entry.longitude + (exact ? 0 : this.bits.signedNumber());
+      if (Math.abs(latitude) > maximumMicrodegreesOfLatitude || Math.abs(longitude) > maximumMicrodegreesOfLongitude) {
+        throw malformed("a coordinate is out of range");
+      }
+      return {
+        name: entry.name,
+        coordinates: { latitude: latitude / 1_000_000, longitude: longitude / 1_000_000 },
+        time_zone: entry.timeZone,
+      };
+    }
     const name = this.bits.text();
     const coordinates = this.coordinates();
     const time_zone = this.vocabularyText(timeZones);
@@ -381,9 +458,9 @@ class SnapshotReader {
     if (alternative_kind === undefined) {
       throw malformed("an unknown alternative kind");
     }
-    let cost_parts: JourneyCostParts | null = null;
+    let costParts: { explicitMinutes: number | null; price: EuroRange | null } | null = null;
     if (this.bits.bit()) {
-      const door_to_door_minutes = this.bits.boundedNumber(2 ** 32 - 1, "a duration");
+      const explicitMinutes = this.bits.bit() ? null : this.bits.boundedNumber(2 ** 32 - 1, "a duration");
       let price = null;
       if (this.bits.bit()) {
         const median = this.bits.boundedNumber(2 ** 32 - 1, "a price");
@@ -396,18 +473,26 @@ class SnapshotReader {
         }
         price = { low, median, high };
       }
-      cost_parts = snapshotCostParts(door_to_door_minutes, price);
+      costParts = { explicitMinutes, price };
     }
-    return {
+    const journey: Journey = {
       access,
       first_ride,
       later_rides,
       arrival_footpath,
       egress,
       sleeping_ride,
-      cost_parts,
+      cost_parts: null,
       alternative_kind,
     };
+    if (costParts !== null) {
+      const doorToDoor = costParts.explicitMinutes ?? derivedDoorToDoorMinutes(journey);
+      if (doorToDoor === null) {
+        throw malformed("the time door to door cannot be derived");
+      }
+      journey.cost_parts = snapshotCostParts(doorToDoor, costParts.price);
+    }
+    return journey;
   }
 
   /** Reads the plan of a leg, which counts its times from `anchor`, and the time it ends at. */

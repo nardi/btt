@@ -1,7 +1,8 @@
 //! Snapshots that the link tests and the viewer fixtures share.
 
-// The fixtures list every field of the journeys they build, which takes lines.
-#![allow(clippy::too_many_lines)]
+// The fixtures list every field of the journeys they build, which takes lines, and they copy
+// coordinates from the dictionary as they are.
+#![allow(clippy::too_many_lines, clippy::unreadable_literal)]
 
 use std::num::{NonZeroU8, NonZeroU32};
 
@@ -146,7 +147,7 @@ pub fn demo_snapshot() -> TripSnapshot {
         via_places: vec![
             ViaPlace {
                 arriving_leg_travel_mode: LegTravelMode::Daytime,
-                place: place(2, "Wien", 48.1852, 16.3761),
+                place: place(2, "Vienna", 48.2084, 16.3725),
                 stay: PlaceStay::Nights(NonZeroU8::new(2).unwrap()),
             },
             ViaPlace {
@@ -157,7 +158,7 @@ pub fn demo_snapshot() -> TripSnapshot {
                         preferred: Some(BerthType::Sleeper),
                     },
                 }),
-                place: place(3, "Roma", 41.901, 12.5007),
+                place: place(3, "Rome", 41.8933, 12.4829),
                 stay: PlaceStay::SameDay {
                     stay_range_override: Some(SameDayStayRange {
                         minimum: DurationMinutes(120),
@@ -168,16 +169,18 @@ pub fn demo_snapshot() -> TripSnapshot {
             },
         ],
         final_leg_travel_mode: LegTravelMode::Daytime,
-        destination: place(4, "Napoli", 40.8518, 14.2681),
+        destination: place(4, "Pompei Scavi", 40.7484, 14.4849),
     });
     let trip = trip(itinerary);
 
     // Leg one: with a transfer in Frankfurt and a walk at the end.
     let stations_one: SmallVec<[LegPlanStation; 8]> = smallvec![
-        station("Amsterdam Centraal", 52.3789, 4.9003, "Europe/Amsterdam"),
-        station("Frankfurt (Main) Hbf", 50.1071, 8.6638, "Europe/Berlin"),
-        station("Wien Hbf", 48.1852, 16.3761, "Europe/Vienna"),
-        station("Wien Meidling", 48.1742, 16.3319, "Europe/Vienna"),
+        // A station a little off its entry in the dictionary, one that matches exactly and one the
+        // dictionary lacks.
+        station("Amsterdam-Centraal", 52.3789, 4.9003, "Europe/Amsterdam"),
+        station("Frankfurt (Main) Hbf", 50.107676, 8.664515, "Europe/Berlin"),
+        station("Wien Hbf", 48.185149, 16.377555, "Europe/Vienna"),
+        station("Wien Süßenbrunn Halt", 48.2742, 16.4519, "Europe/Vienna"),
     ];
     let ice = label("ICE", "125", "db-fernverkehr", "DB Fernverkehr AG");
     let railjet = label("RJX", "63", "oebb", "ÖBB-Personenverkehr AG");
@@ -205,7 +208,7 @@ pub fn demo_snapshot() -> TripSnapshot {
         arrival_footpath: None,
         egress: way(9, 2100),
         sleeping_ride: None,
-        cost_parts: Some(cost_parts(578, Some((9900, 12900, 15900)))),
+        cost_parts: Some(cost_parts(587, Some((9900, 12900, 15900)))),
         alternative_kind: None,
     };
     let cheaper_one = Journey {
@@ -261,8 +264,8 @@ pub fn demo_snapshot() -> TripSnapshot {
 
     // Leg two: a night train from Vienna to Rome, ridden on the third day.
     let stations_two: SmallVec<[LegPlanStation; 8]> = smallvec![
-        station("Wien Hbf", 48.1852, 16.3761, "Europe/Vienna"),
-        station("Roma Termini", 41.9009, 12.5017, "Europe/Rome"),
+        station("Wien Hbf", 48.185149, 16.377555, "Europe/Vienna"),
+        station("Roma Termini", 41.900569, 12.50202, "Europe/Rome"),
     ];
     let night = Journey {
         access: way(9, 2100),

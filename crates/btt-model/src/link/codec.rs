@@ -19,6 +19,7 @@ use uuid::Uuid;
 use super::SnapshotLinkError;
 use super::bits::{BitReader, BitWriter};
 use super::vocabulary::{self, CATEGORIES, OPERATORS, TIME_ZONES};
+use super::{cities, stations};
 use crate::coordinates::{GeoCoordinates, Latitude, Longitude};
 use crate::itinerary::{
     AcceptedBerths, BerthType, Itinerary, ItineraryRoute, LegTravelMode, OvernightLegOptions,
@@ -66,6 +67,7 @@ pub(super) fn write_snapshot(snapshot: &TripSnapshot) -> Result<Vec<u8>, Snapsho
         bits: BitWriter::default(),
         clock: 0,
         coordinates: (0, 0),
+        place_steps: (0, 0),
     };
     writer.bits.number(u64::from(SNAPSHOT_SCHEMA_VERSION));
     writer.bits.number(days_since_epoch(snapshot.planned_at)?);
@@ -133,6 +135,7 @@ pub(super) fn read_snapshot(bytes: &[u8]) -> Result<TripSnapshot, SnapshotLinkEr
         bits: BitReader::new(bytes),
         clock: 0,
         coordinates: (0, 0),
+        place_steps: (0, 0),
     };
     let schema_version = reader.bits.number_u16()?;
     if schema_version > SNAPSHOT_SCHEMA_VERSION {
@@ -209,6 +212,22 @@ fn clock_base_minutes(trip: &Trip) -> Result<i64, SnapshotLinkError> {
         * 1440)
 }
 
+/// Returns the minutes from leaving the departure place to reaching the arrival place, which
+/// follow from the times of the rides and the ways before the first and after the last. The
+/// planner computes the same number as the time door to door of the cost parts. Returns `None`
+/// when the times run backwards.
+fn derived_door_to_door_minutes(journey: &Journey) -> Option<u32> {
+    let departure =
+        i64::from(journey.first_ride.departure_time.0) - i64::from(journey.access.duration.0);
+    let footpath = journey
+        .arrival_footpath
+        .map_or(0, |footpath| i64::from(footpath.way.duration.0));
+    let arrival = i64::from(journey.last_ride().arrival_time.0)
+        + footpath
+        + i64::from(journey.egress.duration.0);
+    u32::try_from(arrival - departure).ok()
+}
+
 /// Returns whether a text is a number without leading zeros that fits in 9 digits.
 fn is_plain_number(text: &str) -> bool {
     !text.is_empty()
@@ -225,6 +244,8 @@ struct SnapshotWriter {
     clock: i64,
     /// The last point written, in microdegrees as latitude and longitude.
     coordinates: (i32, i32),
+    /// The last place written by its name, in steps of `PLACE_STEP_MICRODEGREES`.
+    place_steps: (i64, i64),
 }
 
 impl SnapshotWriter {
@@ -328,8 +349,20 @@ impl SnapshotWriter {
     /// Writes a place.
     fn place(&mut self, place: &TripPlace) {
         self.bits.number(u64::from(place.id.0.get()));
-        self.bits.text(&place.name);
-        self.coordinates(place.coordinates);
+        if let Some(found) = cities::dictionary().find(place) {
+            // The name is the city's, and the position is the difference to the city's.
+            self.bits.number(found.index as u64 + 1);
+            self.bits.signed_number(found.latitude_offset);
+            self.bits.signed_number(found.longitude_offset);
+        } else {
+            let latitude = cities::steps_of(i64::from(place.coordinates.latitude.microdegrees()));
+            let longitude = cities::steps_of(i64::from(place.coordinates.longitude.microdegrees()));
+            self.bits.number(0);
+            self.bits.text(&place.name);
+            self.bits.signed_number(latitude - self.place_steps.0);
+            self.bits.signed_number(longitude - self.place_steps.1);
+            self.place_steps = (latitude, longitude);
+        }
         self.bits
             .number(u64::from(place.station_search_radius.meters()));
         match place.window_override {
@@ -359,7 +392,7 @@ impl SnapshotWriter {
         self.window(trip.preferences.default_windows.departure);
         self.window(trip.preferences.default_windows.arrival);
         self.bits.number(u64::from(trip.next_place_id.get()));
-        self.coordinates = (0, 0);
+        self.place_steps = (0, 0);
         match &trip.itinerary {
             Itinerary::Empty => self.bits.bits(0, 2),
             Itinerary::OriginOnly(origin) => {
@@ -382,8 +415,20 @@ impl SnapshotWriter {
         Ok(())
     }
 
-    /// Writes a station of the shared table.
+    /// Writes a station of the shared table: the number of its line in the dictionary and how
+    /// far it lies from the entry, or else its name, point and time zone.
     fn station(&mut self, station: &LegPlanStation) {
+        if let Some(found) = stations::dictionary().find(station) {
+            self.bits.number(found.index as u64 + 1);
+            let exact = found.latitude_offset == 0 && found.longitude_offset == 0;
+            self.bits.bit(exact);
+            if !exact {
+                self.bits.signed_number(i64::from(found.latitude_offset));
+                self.bits.signed_number(i64::from(found.longitude_offset));
+            }
+            return;
+        }
+        self.bits.number(0);
         self.bits.text(&station.name);
         self.coordinates(station.coordinates);
         self.vocabulary_text(TIME_ZONES, &station.time_zone);
@@ -452,7 +497,13 @@ impl SnapshotWriter {
         );
         self.bits.bit(journey.cost_parts.is_some());
         if let Some(parts) = &journey.cost_parts {
-            self.bits.number(u64::from(parts.door_to_door_minutes));
+            // The time door to door follows from the times and the ways in nearly every journey,
+            // so a bit stands in for it.
+            let derived = derived_door_to_door_minutes(journey) == Some(parts.door_to_door_minutes);
+            self.bits.bit(derived);
+            if !derived {
+                self.bits.number(u64::from(parts.door_to_door_minutes));
+            }
             self.bits.bit(parts.price.is_some());
             if let Some(price) = parts.price {
                 self.bits.number(u64::from(price.median().0));
@@ -492,6 +543,8 @@ struct SnapshotReader<'a> {
     clock: i64,
     /// The last point read, in microdegrees as latitude and longitude.
     coordinates: (i32, i32),
+    /// The last place read by its name, in steps of `PLACE_STEP_MICRODEGREES`.
+    place_steps: (i64, i64),
 }
 
 impl SnapshotReader<'_> {
@@ -613,8 +666,38 @@ impl SnapshotReader<'_> {
         let id = NonZeroU32::new(self.bits.number_u32()?)
             .map(TripPlaceId)
             .ok_or(SnapshotLinkError::Malformed("a place has no ID"))?;
-        let name = SmolStr::from(self.bits.text()?);
-        let coordinates = self.coordinates()?;
+        let line = self.bits.number()?;
+        let (name, latitude_steps, longitude_steps) = if line > 0 {
+            let city = usize::try_from(line - 1)
+                .ok()
+                .and_then(|index| cities::dictionary().get(index))
+                .ok_or(SnapshotLinkError::Malformed(
+                    "a place names a city that is not in the dictionary",
+                ))?;
+            (
+                SmolStr::from(city.name),
+                city.latitude_steps() + self.bits.signed_number()?,
+                city.longitude_steps() + self.bits.signed_number()?,
+            )
+        } else {
+            let name = SmolStr::from(self.bits.text()?);
+            let latitude = self.place_steps.0 + self.bits.signed_number()?;
+            let longitude = self.place_steps.1 + self.bits.signed_number()?;
+            self.place_steps = (latitude, longitude);
+            (name, latitude, longitude)
+        };
+        let out_of_range = || SnapshotLinkError::Malformed("a coordinate is out of range");
+        let step = crate::snapshot::PLACE_STEP_MICRODEGREES;
+        let coordinates = GeoCoordinates {
+            latitude: i32::try_from(latitude_steps * step)
+                .ok()
+                .and_then(|microdegrees| Latitude::from_microdegrees(microdegrees).ok())
+                .ok_or_else(out_of_range)?,
+            longitude: i32::try_from(longitude_steps * step)
+                .ok()
+                .and_then(|microdegrees| Longitude::from_microdegrees(microdegrees).ok())
+                .ok_or_else(out_of_range)?,
+        };
         let station_search_radius = StationSearchRadius::new(self.bits.number_u16()?)
             .map_err(|_| SnapshotLinkError::Malformed("a search radius is out of range"))?;
         let window_override = match self.bits.bits(2)? {
@@ -652,7 +735,7 @@ impl SnapshotReader<'_> {
         let arrival = self.window()?;
         let next_place_id = NonZeroU32::new(self.bits.number_u32()?)
             .ok_or(SnapshotLinkError::Malformed("the next place ID is zero"))?;
-        self.coordinates = (0, 0);
+        self.place_steps = (0, 0);
         let itinerary = match self.bits.bits(2)? {
             0 => Itinerary::Empty,
             1 => Itinerary::OriginOnly(self.place()?),
@@ -698,6 +781,34 @@ impl SnapshotReader<'_> {
 
     /// Reads a station of the shared table.
     fn station(&mut self) -> Result<LegPlanStation, SnapshotLinkError> {
+        let line = self.bits.number()?;
+        if line > 0 {
+            let entry = usize::try_from(line - 1)
+                .ok()
+                .and_then(|index| stations::dictionary().get(index))
+                .ok_or(SnapshotLinkError::Malformed(
+                    "a station is not in the dictionary",
+                ))?;
+            let (latitude_offset, longitude_offset) = if self.bits.bit()? {
+                (0, 0)
+            } else {
+                (self.bits.signed_number()?, self.bits.signed_number()?)
+            };
+            let out_of_range = || SnapshotLinkError::Malformed("a coordinate is out of range");
+            let latitude = i32::try_from(i64::from(entry.latitude) + latitude_offset)
+                .map_err(|_| out_of_range())?;
+            let longitude = i32::try_from(i64::from(entry.longitude) + longitude_offset)
+                .map_err(|_| out_of_range())?;
+            return Ok(LegPlanStation {
+                name: SmolStr::from(entry.name),
+                coordinates: GeoCoordinates {
+                    latitude: Latitude::from_microdegrees(latitude).map_err(|_| out_of_range())?,
+                    longitude: Longitude::from_microdegrees(longitude)
+                        .map_err(|_| out_of_range())?,
+                },
+                time_zone: SmolStr::from(entry.time_zone),
+            });
+        }
         let name = SmolStr::from(self.bits.text()?);
         let coordinates = self.coordinates()?;
         let time_zone = self.vocabulary_text(TIME_ZONES)?;
@@ -772,6 +883,18 @@ impl SnapshotReader<'_> {
         })
     }
 
+    /// Reads a price range, which is its median and the distances from the median to both ends.
+    fn price(&mut self) -> Result<EuroRange, SnapshotLinkError> {
+        let out_of_range = || SnapshotLinkError::Malformed("a price is out of range");
+        let median = self.bits.number_u32()?;
+        let below = self.bits.number_u32()?;
+        let above = self.bits.number_u32()?;
+        let low = median.checked_sub(below).ok_or_else(out_of_range)?;
+        let high = median.checked_add(above).ok_or_else(out_of_range)?;
+        EuroRange::new(EuroCents(low), EuroCents(median), EuroCents(high))
+            .map_err(|_| out_of_range())
+    }
+
     /// Reads a journey. The clock runs on from its first time.
     fn journey(&mut self, station_count: usize) -> Result<Journey, SnapshotLinkError> {
         let access = self.way()?;
@@ -825,25 +948,38 @@ impl SnapshotReader<'_> {
             _ => return Err(SnapshotLinkError::Malformed("an unknown alternative kind")),
         };
         let cost_parts = if self.bits.bit()? {
-            let door_to_door_minutes = self.bits.number_u32()?;
+            let explicit_minutes = if self.bits.bit()? {
+                None
+            } else {
+                Some(self.bits.number_u32()?)
+            };
             let price = if self.bits.bit()? {
-                let median = self.bits.number_u32()?;
-                let below = self.bits.number_u32()?;
-                let above = self.bits.number_u32()?;
-                let low = median
-                    .checked_sub(below)
-                    .ok_or(SnapshotLinkError::Malformed("a price is out of range"))?;
-                let high = median
-                    .checked_add(above)
-                    .ok_or(SnapshotLinkError::Malformed("a price is out of range"))?;
-                Some(
-                    EuroRange::new(EuroCents(low), EuroCents(median), EuroCents(high))
-                        .map_err(|_| SnapshotLinkError::Malformed("a price is out of range"))?,
-                )
+                Some(self.price()?)
             } else {
                 None
             };
-            Some(JourneyCostParts {
+            Some((explicit_minutes, price))
+        } else {
+            None
+        };
+        let mut journey = Journey {
+            access,
+            first_ride,
+            later_rides,
+            arrival_footpath,
+            egress,
+            sleeping_ride,
+            cost_parts: None,
+            alternative_kind,
+        };
+        if let Some((explicit_minutes, price)) = cost_parts {
+            let door_to_door_minutes = match explicit_minutes {
+                Some(minutes) => minutes,
+                None => derived_door_to_door_minutes(&journey).ok_or(
+                    SnapshotLinkError::Malformed("the time door to door cannot be derived"),
+                )?,
+            };
+            journey.cost_parts = Some(JourneyCostParts {
                 door_to_door_minutes,
                 way_to_station_minutes: 0,
                 way_to_station_extra_cost: 0,
@@ -858,20 +994,9 @@ impl SnapshotReader<'_> {
                 price_cost: 0,
                 rest_of_chain_cost: 0,
                 total_cost: 0,
-            })
-        } else {
-            None
-        };
-        Ok(Journey {
-            access,
-            first_ride,
-            later_rides,
-            arrival_footpath,
-            egress,
-            sleeping_ride,
-            cost_parts,
-            alternative_kind,
-        })
+            });
+        }
+        Ok(journey)
     }
 
     /// Reads the plan of a leg. The times of the leg count from `anchor`, the time the previous

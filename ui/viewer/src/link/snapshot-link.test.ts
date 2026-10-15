@@ -24,6 +24,28 @@ describe("reading the links the encoder writes", () => {
     expect(await decodeSnapshotLink(stress.payload)).toEqual(stress.document.snapshot);
   });
 
+  it("reads the links written for a QR code", async () => {
+    expect(await decodeSnapshotLink(demo.qr_payload)).toEqual(demo.document.snapshot);
+    expect(await decodeSnapshotLink(stress.qr_payload)).toEqual(stress.document.snapshot);
+  });
+
+  it("reads the compact links, as typed and as a browser keeps them", async () => {
+    expect(await decodeSnapshotLink(demo.compact_payload)).toEqual(demo.document.snapshot);
+    expect(await decodeSnapshotLink(stress.compact_payload)).toEqual(stress.document.snapshot);
+    // A browser keeps the letters percent-encoded.
+    expect(await decodeSnapshotLink(encodeURIComponent(demo.compact_payload))).toEqual(
+      demo.document.snapshot,
+    );
+  });
+
+  it("recognises a compact link that was cut", async () => {
+    const error = await rejection(decodeSnapshotLink(demo.compact_payload.slice(0, -1)));
+    expect(error.kind).toBe("cut");
+    await rejection(decodeSnapshotLink("c%E4%BA"));
+    await rejection(decodeSnapshotLink("c%ZZZZ"));
+    await rejection(decodeSnapshotLink(`c${"x".repeat(30)}ab`));
+  });
+
   it("accepts the hash sign in front of the payload", async () => {
     expect(await decodeSnapshotLink(`#${demo.payload}`)).toEqual(demo.document.snapshot);
   });

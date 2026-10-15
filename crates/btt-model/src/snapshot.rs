@@ -7,12 +7,19 @@ use smol_str::SmolStr;
 use specta::Type;
 use uuid::Uuid;
 
-use crate::itinerary::TripPlaceId;
+use crate::coordinates::{GeoCoordinates, Latitude, Longitude};
+use crate::itinerary::{Itinerary, ItineraryRoute, TripPlace, TripPlaceId, ViaPlace};
 use crate::plan::{
     Journey, JourneyCostParts, LegPlan, LegPlanStation, LegPlanStationIndex, LegPlanningResult,
     TrainLabel, TrainRide, TransferAndRide,
 };
 use crate::trip::{Trip, TripId, TripPreferences};
+
+/// Size of the steps that a snapshot places its places in, in microdegrees, which is about 11
+/// meters. A place is a point that the traveller picked on a map or found by search, and a
+/// difference of a few meters changes neither the map nor the stations around it, but it saves
+/// a byte in every link.
+pub(crate) const PLACE_STEP_MICRODEGREES: i64 = 100;
 
 /// Schema version that `StoredSnapshot` documents written by this build carry.
 ///
@@ -113,7 +120,7 @@ fn shared_trip(trip: &Trip) -> Trip {
         id: TripId(Uuid::nil()),
         name: trip.name.clone(),
         start_date: trip.start_date,
-        itinerary: trip.itinerary.clone(),
+        itinerary: snapped_itinerary(&trip.itinerary),
         preferences: TripPreferences {
             default_windows: trip.preferences.default_windows,
             travel_class: trip.preferences.travel_class,
@@ -121,6 +128,47 @@ fn shared_trip(trip: &Trip) -> Trip {
         },
         next_place_id: trip.next_place_id,
         chosen_journeys: Vec::new(),
+    }
+}
+
+/// Returns the itinerary with every place at the nearest multiple of `PLACE_STEP_MICRODEGREES`.
+fn snapped_itinerary(itinerary: &Itinerary) -> Itinerary {
+    let snapped = |place: &TripPlace| {
+        let snap = |microdegrees: i32| {
+            let steps = (i64::from(microdegrees) + PLACE_STEP_MICRODEGREES / 2)
+                .div_euclid(PLACE_STEP_MICRODEGREES);
+            // The limits of both axes are multiples of the step, so the result stays in range.
+            i32::try_from(steps * PLACE_STEP_MICRODEGREES).unwrap_or(microdegrees)
+        };
+        let coordinates = GeoCoordinates {
+            latitude: Latitude::from_microdegrees(snap(place.coordinates.latitude.microdegrees()))
+                .unwrap_or(place.coordinates.latitude),
+            longitude: Longitude::from_microdegrees(snap(
+                place.coordinates.longitude.microdegrees(),
+            ))
+            .unwrap_or(place.coordinates.longitude),
+        };
+        TripPlace {
+            coordinates,
+            ..place.clone()
+        }
+    };
+    match itinerary {
+        Itinerary::Empty => Itinerary::Empty,
+        Itinerary::OriginOnly(origin) => Itinerary::OriginOnly(snapped(origin)),
+        Itinerary::Route(route) => Itinerary::Route(ItineraryRoute {
+            origin: snapped(&route.origin),
+            via_places: route
+                .via_places
+                .iter()
+                .map(|via_place| ViaPlace {
+                    place: snapped(&via_place.place),
+                    ..via_place.clone()
+                })
+                .collect(),
+            final_leg_travel_mode: route.final_leg_travel_mode,
+            destination: snapped(&route.destination),
+        }),
     }
 }
 

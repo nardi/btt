@@ -10,8 +10,8 @@ use std::path::PathBuf;
 
 use btt_model::link::vocabulary;
 use btt_model::{
-    SNAPSHOT_SCHEMA_VERSION, StoredSnapshot, TripSnapshot, decode_snapshot_link,
-    encode_snapshot_link,
+    LinkAlphabet, SNAPSHOT_SCHEMA_VERSION, StoredSnapshot, TripSnapshot, decode_snapshot_link,
+    encode_snapshot_link, encode_snapshot_link_in,
 };
 use common::{demo_snapshot, stress_snapshot};
 
@@ -45,8 +45,12 @@ fn check_or_write_fixture(relative_path: &str, snapshot: &TripSnapshot, pretty: 
     let path = viewer_source(relative_path);
     if updating() {
         let link = encode_snapshot_link(snapshot).unwrap();
+        let qr_link = encode_snapshot_link_in(snapshot, LinkAlphabet::QrCode).unwrap();
+        let compact_link = encode_snapshot_link_in(snapshot, LinkAlphabet::Compact).unwrap();
         let fixture = serde_json::json!({
             "payload": link.payload,
+            "qr_payload": qr_link.payload,
+            "compact_payload": compact_link.payload,
             "document": document_of(snapshot),
         });
         let mut text = if pretty {
@@ -67,6 +71,18 @@ fn check_or_write_fixture(relative_path: &str, snapshot: &TripSnapshot, pretty: 
     let payload = committed["payload"].as_str().expect(&advice);
     assert_eq!(
         decode_snapshot_link(payload).expect(&advice),
+        *snapshot,
+        "{advice}"
+    );
+    let qr_payload = committed["qr_payload"].as_str().expect(&advice);
+    assert_eq!(
+        decode_snapshot_link(qr_payload).expect(&advice),
+        *snapshot,
+        "{advice}"
+    );
+    let compact_payload = committed["compact_payload"].as_str().expect(&advice);
+    assert_eq!(
+        decode_snapshot_link(compact_payload).expect(&advice),
         *snapshot,
         "{advice}"
     );

@@ -2,9 +2,12 @@
 
 mod common;
 
+use std::fmt::Write as _;
+
 use btt_model::{
-    GeoCoordinates, LegPlanStation, LegPlanningResult, SNAPSHOT_SCHEMA_VERSION, SnapshotLinkError,
-    StoredSnapshot, TripSnapshot, decode_snapshot_link, encode_snapshot_link,
+    GeoCoordinates, LegPlanStation, LegPlanningResult, LinkAlphabet, SNAPSHOT_SCHEMA_VERSION,
+    SnapshotLinkError, StoredSnapshot, TripSnapshot, decode_snapshot_link, encode_snapshot_link,
+    encode_snapshot_link_in,
 };
 use common::{demo_snapshot, stress_snapshot};
 
@@ -151,4 +154,148 @@ fn a_snapshot_of_the_chosen_journeys_is_smaller_and_still_reads() {
     let chosen_link = encode_snapshot_link(&chosen).unwrap();
     assert!(chosen_link.payload.len() < full_link.payload.len());
     assert_eq!(decode_snapshot_link(&chosen_link.payload).unwrap(), chosen);
+}
+
+#[test]
+fn a_link_for_a_qr_code_uses_only_the_characters_of_its_mode() {
+    let qr_characters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ$*+-./:";
+    for snapshot in [demo_snapshot(), stress_snapshot()] {
+        let link = encode_snapshot_link_in(&snapshot, LinkAlphabet::QrCode).unwrap();
+        assert!(
+            link.payload
+                .chars()
+                .all(|character| qr_characters.contains(character)),
+            "{}",
+            link.payload
+        );
+        assert_eq!(decode_snapshot_link(&link.payload).unwrap(), snapshot);
+    }
+}
+
+#[test]
+fn a_qr_link_is_shorter_in_bits_than_a_fragment_link_is_in_bytes() {
+    // The alphanumeric mode of a QR code spends 5.5 bits on a character, and the byte mode a
+    // fragment link needs spends 8.
+    let chosen = demo_snapshot().chosen_journeys_only();
+    let fragment = encode_snapshot_link(&chosen).unwrap();
+    let qr = encode_snapshot_link_in(&chosen, LinkAlphabet::QrCode).unwrap();
+    let fragment_bits = fragment.payload.len() * 8;
+    let qr_bits = (qr.payload.len() * 11).div_ceil(2);
+    assert!(qr_bits < fragment_bits, "{qr_bits} against {fragment_bits}");
+}
+
+#[test]
+fn a_cut_qr_link_is_recognised_as_cut() {
+    let link = encode_snapshot_link_in(&demo_snapshot(), LinkAlphabet::QrCode)
+        .unwrap()
+        .payload;
+    assert_eq!(
+        decode_snapshot_link(&link[..link.len() - 1]),
+        Err(SnapshotLinkError::Cut)
+    );
+}
+
+#[test]
+fn a_dictionary_station_costs_less_than_a_literal_one() {
+    // The demo trip has three stations from the dictionary and one that the dictionary lacks.
+    let with_dictionary = encode_snapshot_link(&demo_snapshot()).unwrap();
+    let mut literal = demo_snapshot();
+    for leg in &mut literal.legs {
+        if let LegPlanningResult::Found(plan) = &mut leg.result {
+            for station in &mut plan.station_table {
+                // A name that no dictionary has, so the station travels as a literal.
+                station.name = format!("{} (test)", station.name).into();
+            }
+        }
+    }
+    let literal_link = encode_snapshot_link(&literal).unwrap();
+    assert!(with_dictionary.compressed_bytes + 50 < literal_link.compressed_bytes);
+    assert_eq!(
+        decode_snapshot_link(&literal_link.payload).unwrap(),
+        literal
+    );
+}
+
+#[test]
+fn places_sit_on_a_grid_of_eleven_meters() {
+    for snapshot in [demo_snapshot(), stress_snapshot()] {
+        for place in snapshot.trip.itinerary.trip_places() {
+            assert_eq!(place.coordinates.latitude.microdegrees() % 100, 0);
+            assert_eq!(place.coordinates.longitude.microdegrees() % 100, 0);
+        }
+    }
+}
+
+#[test]
+fn a_place_with_the_name_of_a_city_costs_less_than_one_without() {
+    let snapshot = demo_snapshot();
+    let with_cities = encode_snapshot_link(&snapshot).unwrap();
+    // The demo trip names Amsterdam, Vienna and Rome, which the city dictionary has, and a place
+    // that it lacks. A suffix takes the cities out of the dictionary.
+    let mut renamed = snapshot.clone();
+    if let btt_model::Itinerary::Route(route) = &mut renamed.trip.itinerary {
+        route.origin.name = format!("{} (test)", route.origin.name).into();
+        for via_place in &mut route.via_places {
+            via_place.place.name = format!("{} (test)", via_place.place.name).into();
+        }
+    }
+    let literal = encode_snapshot_link(&renamed).unwrap();
+    assert!(with_cities.compressed_bytes + 20 < literal.compressed_bytes);
+    assert_eq!(decode_snapshot_link(&literal.payload).unwrap(), renamed);
+}
+
+#[test]
+fn a_compact_link_has_far_fewer_characters_and_reads_back() {
+    for snapshot in [demo_snapshot(), stress_snapshot()] {
+        let fragment = encode_snapshot_link(&snapshot).unwrap();
+        let compact = encode_snapshot_link_in(&snapshot, LinkAlphabet::Compact).unwrap();
+        assert!(compact.payload.chars().count() * 2 < fragment.payload.len());
+        // Every letter but the marker and the check characters is one UTF-16 unit.
+        assert_eq!(
+            compact.payload.encode_utf16().count(),
+            compact.payload.chars().count()
+        );
+        assert_eq!(decode_snapshot_link(&compact.payload).unwrap(), snapshot);
+    }
+}
+
+#[test]
+fn a_compact_link_reads_back_as_a_browser_keeps_it() {
+    let snapshot = demo_snapshot();
+    let compact = encode_snapshot_link_in(&snapshot, LinkAlphabet::Compact).unwrap();
+    let mut percent_encoded = String::new();
+    for character in compact.payload.chars() {
+        if character.is_ascii() {
+            percent_encoded.push(character);
+        } else {
+            let mut buffer = [0; 4];
+            for byte in character.encode_utf8(&mut buffer).bytes() {
+                write!(percent_encoded, "%{byte:02X}").unwrap();
+            }
+        }
+    }
+    assert!(percent_encoded.len() > compact.payload.len());
+    assert_eq!(decode_snapshot_link(&percent_encoded).unwrap(), snapshot);
+}
+
+#[test]
+fn a_cut_or_damaged_compact_link_is_recognised() {
+    let link = encode_snapshot_link_in(&demo_snapshot(), LinkAlphabet::Compact)
+        .unwrap()
+        .payload;
+    let characters: Vec<char> = link.chars().collect();
+    for cut in 1..=3 {
+        let shortened: String = characters[..characters.len() - cut].iter().collect();
+        assert_eq!(
+            decode_snapshot_link(&shortened),
+            Err(SnapshotLinkError::Cut)
+        );
+    }
+    // A letter that is no letter of the alphabet is no payload, and does not panic.
+    let mut changed = characters.clone();
+    changed[10] = 'x';
+    let changed: String = changed.into_iter().collect();
+    assert!(decode_snapshot_link(&changed).is_err());
+    assert!(decode_snapshot_link("c%E4%BA").is_err());
+    assert!(decode_snapshot_link("c%ZZZZ").is_err());
 }
