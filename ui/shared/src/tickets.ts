@@ -56,22 +56,26 @@ export function formatEstimate(range: EuroRange): string {
 }
 
 /**
- * Formats the price of a planned journey for a small slot. A live price is exact and shows as
- * one amount. Every other price is an estimate and shows as a range or with a tilde. Returns
- * `null` when the journey has no price.
+ * Formats the price of a planned journey for a small slot. A live price with one amount shows as
+ * that amount. A live price that still has a range, because a ticket of the journey has no live
+ * price or the site gave a range, shows as the range. Every estimate shows as a range or with a
+ * tilde. Returns `null` when the journey has no price.
  */
 export function formatJourneyPrice(price: EuroRange | null | undefined, live: boolean): string | null {
   if (price === null || price === undefined) {
     return null;
   }
-  return live ? formatEuro(price.median) : formatEstimate(price);
+  return live && price.low === price.high ? formatEuro(price.median) : formatEstimate(price);
 }
 
 /** Says where the price of a planned journey comes from, for the tooltip of its slot. */
 export function describeJourneyPrice(price: EuroRange, live: boolean): string {
-  return live
+  if (!live) {
+    return `An estimate from the price model, about ${formatEuro(price.median)}.`;
+  }
+  return price.low === price.high
     ? "A live price from the booking site."
-    : `An estimate from the price model, about ${formatEuro(price.median)}.`;
+    : "Live prices from the booking sites where they exist, and estimates for the other tickets.";
 }
 
 /**

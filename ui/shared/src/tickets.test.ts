@@ -198,6 +198,10 @@ describe("formatJourneyPrice", () => {
     expect(formatJourneyPrice({ low: 4799, median: 4799, high: 4799 }, true)).toBe("€47.99");
   });
 
+  it("keeps the range of a live price that is not one amount", () => {
+    expect(formatJourneyPrice(range, true)).toBe("€39 to €61");
+  });
+
   it("never shows an estimate as an exact amount", () => {
     expect(formatJourneyPrice(range, false)).toBe("€39 to €61");
     expect(formatJourneyPrice({ low: 4800, median: 4800, high: 4800 }, false)).toBe("~€48");
@@ -209,7 +213,12 @@ describe("formatJourneyPrice", () => {
   });
 
   it("names the source of the price for its tooltip", () => {
-    expect(describeJourneyPrice(range, true)).toBe("A live price from the booking site.");
+    expect(describeJourneyPrice({ low: 4800, median: 4800, high: 4800 }, true)).toBe(
+      "A live price from the booking site.",
+    );
+    expect(describeJourneyPrice(range, true)).toBe(
+      "Live prices from the booking sites where they exist, and estimates for the other tickets.",
+    );
     expect(describeJourneyPrice(range, false)).toBe("An estimate from the price model, about €48.");
   });
 });
