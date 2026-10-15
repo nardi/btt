@@ -25,6 +25,7 @@ pub use pricing::{
     JourneyPricer, NoPrice, PriceMode, RidePassRow, RidePassTable, RidePriceClass, RidePriceRow,
     RidePriceTable,
 };
+pub use ride_path::REGIONAL_CATEGORIES;
 pub use session::{
     DEFAULT_PLANNING_DEBOUNCE, LegResultStore, NoLegResultStore, PlanningEventSink,
     TripPlanningSession,

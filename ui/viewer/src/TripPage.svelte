@@ -7,6 +7,8 @@
   import type { PlaceFocusRequest } from "@btt/shared/map-features";
   import { onMount } from "svelte";
 
+  import { loadRailGraph, type RailGraph } from "./rail/rail-graph";
+  import { withRidePaths } from "./rail/ride-paths";
   import { snapshotTripSource } from "./viewer-trip-source";
 
   let { snapshot }: { snapshot: TripSnapshot } = $props();
@@ -16,7 +18,19 @@
 
   type Tab = "itinerary" | "map";
 
-  const source = $derived(snapshotTripSource(snapshot));
+  /** The graph of the rails, which the map needs to draw the rides along the tracks. */
+  let railGraph: RailGraph | null = $state.raw(null);
+  /**
+   * Names the trip for the map, which moves to the places of a trip once. A snapshot has no ID, so
+   * every trip that the page opens gets its own, and the graph arriving does not change it.
+   */
+  const tripId = $derived.by(() => {
+    void snapshot;
+    return crypto.randomUUID();
+  });
+  const source = $derived(
+    snapshotTripSource(railGraph === null ? snapshot : withRidePaths(snapshot, railGraph), tripId),
+  );
   let tab: Tab = $state("itinerary");
   const narrowQuery = `(max-width: ${narrowScreenWidth}px)`;
   // The first render already knows the width, so a phone never mounts the map next to the list
@@ -30,6 +44,16 @@
     const update = (event: MediaQueryListEvent) => (narrow = event.matches);
     query.addEventListener("change", update);
     return () => query.removeEventListener("change", update);
+  });
+
+  // The graph loads when the map first shows, so a phone that only reads the itinerary never
+  // fetches it. Without the graph, or when it fails to load, the map draws straight lines.
+  $effect(() => {
+    if ((!narrow || tab === "map") && railGraph === null) {
+      loadRailGraph()
+        .then((graph) => (railGraph = graph))
+        .catch(() => undefined);
+    }
   });
 
   // A new trip opens on the itinerary with nothing selected.

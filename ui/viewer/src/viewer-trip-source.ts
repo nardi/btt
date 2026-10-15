@@ -7,8 +7,11 @@ import type { TripPlaceId, TripSnapshot } from "@btt/shared/bindings";
  * Returns the source that shows a snapshot. Every leg of the snapshot is in its final state,
  * so nothing is ever pending. A leg that the snapshot has no entry for was not planned when the
  * traveller shared the trip, which the viewer shows as a leg without a journey.
+ *
+ * A snapshot has no trip ID, so the trip of the source gets `tripId`, which tells the map one
+ * trip from another.
  */
-export function snapshotTripSource(snapshot: TripSnapshot): TripSource {
+export function snapshotTripSource(snapshot: TripSnapshot, tripId: string = snapshot.trip.id): TripSource {
   const legStates = new Map<TripPlaceId, LegViewState>();
   for (const leg of snapshot.legs) {
     const { Found: legPlan, NoJourneyFound: reason } = leg.result;
@@ -26,7 +29,7 @@ export function snapshotTripSource(snapshot: TripSnapshot): TripSource {
   return {
     kind: "readonly",
     viewState: {
-      trip: snapshot.trip,
+      trip: { ...snapshot.trip, id: tripId },
       legStatesByArrivalPlace: legStates,
       nearbyDaysByArrivalPlace: new Map(),
       notices: [],

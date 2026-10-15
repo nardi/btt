@@ -12,33 +12,8 @@
 
 use std::collections::HashSet;
 
+use btt_planner::REGIONAL_CATEGORIES;
 use btt_timetable::{BundleTripIndex, LoadedTimetableBundle, RaptorRouteIndex};
-
-/// Categories of trains that serve a region and not a country, which the ranking leaves out.
-const REGIONAL_CATEGORIES: [&str; 22] = [
-    "S",
-    "R",
-    "RB",
-    "RE",
-    "REX",
-    "IRE",
-    "TER",
-    "TE",
-    "Os",
-    "L",
-    "U",
-    "X",
-    "Bus",
-    "IC Bus",
-    "Zug",
-    "Train",
-    "Regionalzug",
-    "RegioExpress",
-    "Tog",
-    "Regionaltog",
-    "STUB",
-    "FLX",
-];
 
 fn main() {
     let mut arguments = std::env::args().skip(1);

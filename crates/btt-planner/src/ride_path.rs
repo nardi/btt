@@ -8,6 +8,33 @@ use btt_model::GeoCoordinates;
 use btt_timetable::{BundleStationIndex, LoadedTimetableBundle, RaptorRouteIndex};
 use rustc_hash::FxHashMap;
 
+/// Categories of trains that serve a region and not a country. The ranking of stations leaves
+/// them out, and a hop of the rail graph that only they run on is not a long-distance hop.
+pub const REGIONAL_CATEGORIES: [&str; 22] = [
+    "S",
+    "R",
+    "RB",
+    "RE",
+    "REX",
+    "IRE",
+    "TER",
+    "TE",
+    "Os",
+    "L",
+    "U",
+    "X",
+    "Bus",
+    "IC Bus",
+    "Zug",
+    "Train",
+    "Regionalzug",
+    "RegioExpress",
+    "Tog",
+    "Regionaltog",
+    "STUB",
+    "FLX",
+];
+
 /// Hops shorter than this keep the plain curve between their two stops.
 const SHORTEST_SEARCHED_HOP_METERS: u32 = 8_000;
 
@@ -233,52 +260,117 @@ mod tests {
             .collect()
     }
 
-    #[test]
-    fn a_fast_hop_passes_the_stations_of_the_regional_line() {
-        // A regional line stops every 5 km from station 0 to station 6, and a fast train runs
-        // from station 0 to station 6 directly.
-        let coordinates = stations_at_kilometers(&[0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0]);
-        let hops = vec![(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (0, 6)];
-        let graph = StationHopGraph::from_hops(coordinates.clone(), hops);
-        let passed = graph.passed_station_coordinates(BundleStationIndex(0), BundleStationIndex(6));
-        // Points closer than 2 km to the one before are dropped, which keeps all of these.
-        assert_eq!(passed, coordinates[1..6]);
+    /// A graph, a hop and the stations the hop passes. The web viewer runs the same search, and
+    /// reads these cases from `ui/viewer/src/fixtures/hop-paths.json`.
+    struct HopCase {
+        name: &'static str,
+        coordinates: Vec<GeoCoordinates>,
+        hops: Vec<(u32, u32)>,
+        from: u32,
+        to: u32,
+        passed: Vec<GeoCoordinates>,
+    }
+
+    /// Returns the cases of the tests below.
+    fn hop_cases() -> Vec<HopCase> {
+        let regional = stations_at_kilometers(&[0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0]);
+        let fast = stations_at_kilometers(&[0.0, 30.0, 60.0, 90.0]);
+        let mut detour = stations_at_kilometers(&[0.0, 15.0, 30.0]);
+        detour[1] = GeoCoordinates::from_degrees(50.18, 7.0 + 15.0 / 71.7).unwrap();
+        let long_edge = stations_at_kilometers(&[0.0, 20.0, 30.0]);
+        vec![
+            // A regional line stops every 5 km from station 0 to station 6, and a fast train runs
+            // from station 0 to station 6 directly. Points closer than 2 km to the one before are
+            // dropped by the caller, which keeps all of these.
+            HopCase {
+                name: "a fast hop passes the stations of the regional line",
+                hops: vec![(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (0, 6)],
+                from: 0,
+                to: 6,
+                passed: regional[1..6].to_vec(),
+                coordinates: regional,
+            },
+            // Only fast trains run here, stopping every 30 km, which is above the regional limit
+            // but below half of the 90 km hop.
+            HopCase {
+                name: "a high-speed hop passes the stations of other fast trains",
+                hops: vec![(0, 1), (1, 2), (2, 3), (0, 3)],
+                from: 0,
+                to: 3,
+                passed: fast[1..3].to_vec(),
+                coordinates: fast,
+            },
+            // The only other way from 0 to 2 goes 20 km north, far more than 15% longer.
+            HopCase {
+                name: "a path with a long detour is rejected",
+                hops: vec![(0, 1), (1, 2), (0, 2)],
+                from: 0,
+                to: 2,
+                passed: Vec::new(),
+                coordinates: detour,
+            },
+            // Station 1 lies on the straight line, but its edge from station 0 is 20 km long,
+            // which is more than half of the 30 km hop.
+            HopCase {
+                name: "edges longer than half the hop are skipped",
+                hops: vec![(0, 1), (1, 2), (0, 2)],
+                from: 0,
+                to: 2,
+                passed: Vec::new(),
+                coordinates: long_edge,
+            },
+        ]
     }
 
     #[test]
-    fn a_high_speed_hop_passes_the_stations_of_other_fast_trains() {
-        // Only fast trains run here, stopping every 30 km, which is above the regional limit
-        // but below half of the 90 km hop.
-        let coordinates = stations_at_kilometers(&[0.0, 30.0, 60.0, 90.0]);
-        let graph =
-            StationHopGraph::from_hops(coordinates.clone(), vec![(0, 1), (1, 2), (2, 3), (0, 3)]);
-        let passed = graph.passed_station_coordinates(BundleStationIndex(0), BundleStationIndex(3));
-        assert_eq!(passed, coordinates[1..3]);
+    fn the_cases_of_the_hop_search_give_their_stations() {
+        for case in hop_cases() {
+            let graph = StationHopGraph::from_hops(case.coordinates.clone(), case.hops.clone());
+            let passed = graph.passed_station_coordinates(
+                BundleStationIndex(case.from),
+                BundleStationIndex(case.to),
+            );
+            assert_eq!(passed, case.passed, "{}", case.name);
+        }
     }
 
+    /// Checks the cases that the web viewer reads against the ones above, or writes them when
+    /// `UPDATE_VIEWER_FIXTURES` is set.
     #[test]
-    fn a_path_with_a_long_detour_is_rejected() {
-        // The only other way from 0 to 2 goes 20 km north, far more than 15% longer.
-        let mut coordinates = stations_at_kilometers(&[0.0, 15.0, 30.0]);
-        coordinates[1] = GeoCoordinates::from_degrees(50.18, 7.0 + 15.0 / 71.7).unwrap();
-        let graph = StationHopGraph::from_hops(coordinates, vec![(0, 1), (1, 2), (0, 2)]);
-        assert!(
-            graph
-                .passed_station_coordinates(BundleStationIndex(0), BundleStationIndex(2))
-                .is_empty()
+    fn the_hop_cases_of_the_viewer_are_current() {
+        let degrees = |points: &[GeoCoordinates]| -> Vec<[f64; 2]> {
+            points
+                .iter()
+                .map(|point| [point.latitude.degrees(), point.longitude.degrees()])
+                .collect()
+        };
+        let fresh = serde_json::Value::Array(
+            hop_cases()
+                .iter()
+                .map(|case| {
+                    serde_json::json!({
+                        "name": case.name,
+                        "coordinates": degrees(&case.coordinates),
+                        "hops": case.hops,
+                        "from": case.from,
+                        "to": case.to,
+                        "passed": degrees(&case.passed),
+                    })
+                })
+                .collect(),
         );
-    }
-
-    #[test]
-    fn edges_longer_than_half_the_hop_are_skipped() {
-        // Station 1 lies on the straight line, but its edge from station 0 is 20 km long, which
-        // is more than half of the 30 km hop.
-        let coordinates = stations_at_kilometers(&[0.0, 20.0, 30.0]);
-        let graph = StationHopGraph::from_hops(coordinates, vec![(0, 1), (1, 2), (0, 2)]);
-        assert!(
-            graph
-                .passed_station_coordinates(BundleStationIndex(0), BundleStationIndex(2))
-                .is_empty()
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../ui/viewer/src/fixtures/hop-paths.json");
+        if std::env::var_os("UPDATE_VIEWER_FIXTURES").is_some() {
+            std::fs::write(&path, serde_json::to_string_pretty(&fresh).unwrap() + "\n").unwrap();
+            return;
+        }
+        let committed: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap_or_default())
+                .unwrap_or_default();
+        assert_eq!(
+            committed, fresh,
+            "ui/viewer/src/fixtures/hop-paths.json is out of date. Run `UPDATE_VIEWER_FIXTURES=1 cargo test -p btt-planner the_hop_cases`."
         );
     }
 }
