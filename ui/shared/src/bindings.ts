@@ -133,13 +133,16 @@ export const commands = {
 	 *  Writes an open trip with the journeys the frontend shows as a link for the web viewer.
 	 * 
 	 *  The link holds the trip after the `#`, so a browser never sends it to a server. It holds no
-	 *  traveller profiles.
+	 *  traveller profiles. It holds the chosen journey of every leg, and the alternatives too when
+	 *  `include_alternatives` is set, which makes the link about three times as long. A `compact`
+	 *  link is written in a bigger alphabet and has less than half the characters, but a browser
+	 *  keeps it percent-encoded, so an app that shows it that way shows a longer link.
 	 * 
 	 *  # Errors
 	 * 
 	 *  Returns an error when the trip is not open or has more than a link can carry.
 	 */
-	shareTrip: (tripId: TripId, legs: SnapshotLeg[]) => typedError<SharedTrip, CommandError>(__TAURI_INVOKE("share_trip", { tripId, legs })),
+	shareTrip: (tripId: TripId, legs: SnapshotLeg[], includeAlternatives: boolean, compact: boolean) => typedError<SharedTrip, CommandError>(__TAURI_INVOKE("share_trip", { tripId, legs, includeAlternatives, compact })),
 	/**
 	 *  Asks where to save the trip as a file and writes it there, for the viewer's open button, for
 	 *  email and for `AirDrop`. Returns the path of the saved file, or `None` when the traveller
@@ -919,6 +922,14 @@ export type ProblemReportView = {
 	map_zoom: number | null,
 };
 
+/**  What a QR code holds: the web address of the viewer and the trip. */
+export type QrText = {
+	/**  The web address of the viewer with the `#`, which goes in a segment of bytes. */
+	address: string,
+	/**  The trip, which goes in a segment of alphanumeric characters. */
+	payload: string,
+};
+
 /**  One train of a run, as the price model reads it. */
 export type RideDescription = {
 	/**  The operator as the app names it, such as `db-fernverkehr`. Empty when not known. */
@@ -988,6 +999,12 @@ export type SharedTrip = {
 	link_characters: number,
 	/**  Whether the address is long enough that some messengers cut it. */
 	long_for_messengers: boolean,
+	/**
+	 *  The same trip as the text of a QR code, written in the alphabet of the alphanumeric mode of
+	 *  a QR code, which keeps the code smaller than the link would. `None` when the trip is too
+	 *  big for it.
+	 */
+	qr: QrText | null,
 };
 
 /**  A search on a booking site whose booking link opens its start page. */

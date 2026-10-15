@@ -1,5 +1,6 @@
 <script lang="ts">
-  // The viewer: reads the trip from the link or from a trip file and shows it read-only.
+  // The viewer: reads the trip from the link, from a trip file, from a picture of its QR code or
+  // from the camera, and shows it read-only.
   import type { TripSnapshot } from "@btt/shared/bindings";
   import ThemeSwitch from "@btt/shared/components/ThemeSwitch.svelte";
   import { onMount } from "svelte";
@@ -8,6 +9,8 @@
   import { SnapshotLinkError } from "./link/errors";
   import { parseSnapshotFile } from "./link/snapshot-file";
   import { decodeSnapshotLink } from "./link/snapshot-link";
+  import { readQrCodeFromImage, tripPayloadOfQr } from "./qr/qr-reader";
+  import QrScanner from "./qr/QrScanner.svelte";
   import TripPage from "./TripPage.svelte";
 
   /** What the page shows in its main area. */
@@ -19,6 +22,7 @@
 
   let content: Content = $state({ phase: "welcome" });
   let showAbout = $state(false);
+  let showScanner = $state(false);
   let fileInput: HTMLInputElement | undefined = $state();
 
   /** Reads the trip from the fragment of the address, which is empty when the page has no trip. */
@@ -36,7 +40,15 @@
     }
   }
 
-  /** Reads a trip file the traveller picked. */
+  /** Opens the trip of a payload that a QR code held, and puts it in the address. */
+  async function openPayload(payload: string) {
+    showScanner = false;
+    showAbout = false;
+    history.replaceState(null, "", `#${payload}`);
+    await openFragment();
+  }
+
+  /** Reads a file the traveller picked: a trip file, or a picture of the QR code of a trip. */
   async function openFile(event: Event & { currentTarget: HTMLInputElement }) {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = "";
@@ -45,6 +57,22 @@
     }
     content = { phase: "loading" };
     try {
+      if (file.type.startsWith("image/")) {
+        const text = await readQrCodeFromImage(file);
+        const payload = text === null ? null : tripPayloadOfQr(text);
+        if (payload === null) {
+          content = {
+            phase: "failed",
+            error: new SnapshotLinkError(
+              "malformed",
+              text === null ? "no QR code in the picture" : "the QR code is no trip",
+            ),
+          };
+          return;
+        }
+        await openPayload(payload);
+        return;
+      }
       content = { phase: "trip", snapshot: parseSnapshotFile(await file.text()) };
       showAbout = false;
     } catch (error) {
@@ -75,7 +103,10 @@
       case "too-large":
         return "This link is larger than this page reads, so it is not a trip link from BigTrainTrip.";
       default:
-        return "This link does not hold a trip from BigTrainTrip. Check that you copied the whole link.";
+        return (
+          "This does not hold a trip from BigTrainTrip. Check that you copied the whole link, " +
+          "or that the picture shows the whole QR code."
+        );
     }
   }
 
@@ -111,7 +142,8 @@
       {/if}
     </div>
     <div class="actions">
-      <button type="button" onclick={() => fileInput?.click()}>Open a trip file</button>
+      <button type="button" onclick={() => (showScanner = true)}>Scan a QR code</button>
+      <button type="button" onclick={() => fileInput?.click()}>Open a file</button>
       <button type="button" onclick={() => (showAbout = !showAbout)} aria-pressed={showAbout}>About</button>
       <ThemeSwitch />
     </div>
@@ -119,12 +151,16 @@
       bind:this={fileInput}
       class="file-input"
       type="file"
-      accept=".btt,application/json"
+      accept=".btt,application/json,image/*"
       onchange={openFile}
       tabindex="-1"
       aria-hidden="true"
     />
   </header>
+
+  {#if showScanner}
+    <QrScanner onPayload={(payload) => void openPayload(payload)} onClose={() => (showScanner = false)} />
+  {/if}
 
   {#if showAbout}
     <AboutPage onClose={() => (showAbout = false)} />
@@ -146,8 +182,9 @@
     <section class="welcome">
       <h1>A trip planned in BigTrainTrip</h1>
       <p>
-        Open the link someone sent you, and the trip shows up here. You can also open a trip file with
-        the button above. Nothing you open leaves your device, apart from the map tiles.
+        Open the link someone sent you, and the trip shows up here. You can also scan the QR code of
+        a trip with the camera, open a picture of the code, or open a trip file, with the buttons
+        above. Nothing you open leaves your device, apart from the map tiles.
       </p>
     </section>
   {/if}

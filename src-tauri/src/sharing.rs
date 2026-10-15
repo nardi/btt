@@ -6,8 +6,8 @@
 use std::path::PathBuf;
 
 use btt_model::{
-    SNAPSHOT_SCHEMA_VERSION, SnapshotLeg, SnapshotLinkError, StoredSnapshot, TripId, TripSnapshot,
-    encode_snapshot_link,
+    LinkAlphabet, SNAPSHOT_SCHEMA_VERSION, SnapshotLeg, SnapshotLinkError, StoredSnapshot, TripId,
+    TripSnapshot, encode_snapshot_link_in,
 };
 use serde::Serialize;
 use specta::Type;
@@ -36,6 +36,19 @@ pub struct SharedTrip {
     pub link_characters: u32,
     /// Whether the address is long enough that some messengers cut it.
     pub long_for_messengers: bool,
+    /// The same trip as the text of a QR code, written in the alphabet of the alphanumeric mode of
+    /// a QR code, which keeps the code smaller than the link would. `None` when the trip is too
+    /// big for it.
+    pub qr: Option<QrText>,
+}
+
+/// What a QR code holds: the web address of the viewer and the trip.
+#[derive(Debug, Clone, Serialize, Type)]
+pub struct QrText {
+    /// The web address of the viewer with the `#`, which goes in a segment of bytes.
+    pub address: String,
+    /// The trip, which goes in a segment of alphanumeric characters.
+    pub payload: String,
 }
 
 /// Builds the snapshot of an open trip, from the legs as the frontend shows them.
@@ -60,7 +73,10 @@ fn snapshot_of_open_trip(
 /// Writes an open trip with the journeys the frontend shows as a link for the web viewer.
 ///
 /// The link holds the trip after the `#`, so a browser never sends it to a server. It holds no
-/// traveller profiles.
+/// traveller profiles. It holds the chosen journey of every leg, and the alternatives too when
+/// `include_alternatives` is set, which makes the link about three times as long. A `compact`
+/// link is written in a bigger alphabet and has less than half the characters, but a browser
+/// keeps it percent-encoded, so an app that shows it that way shows a longer link.
 ///
 /// # Errors
 ///
@@ -71,20 +87,38 @@ pub fn share_trip(
     state: State<'_, AppState>,
     trip_id: TripId,
     legs: Vec<SnapshotLeg>,
+    include_alternatives: bool,
+    compact: bool,
 ) -> Result<SharedTrip, CommandError> {
-    let snapshot = snapshot_of_open_trip(&state, trip_id, &legs)?;
-    let link = encode_snapshot_link(&snapshot).map_err(|error| match error {
-        SnapshotLinkError::TooLarge => CommandError::TripTooLargeForLink,
-        other => CommandError::Sharing {
-            message: other.to_string(),
-        },
-    })?;
+    let mut snapshot = snapshot_of_open_trip(&state, trip_id, &legs)?;
+    if !include_alternatives {
+        snapshot = snapshot.chosen_journeys_only();
+    }
+    let write = |alphabet| {
+        encode_snapshot_link_in(&snapshot, alphabet).map_err(|error| match error {
+            SnapshotLinkError::TooLarge => CommandError::TripTooLargeForLink,
+            other => CommandError::Sharing {
+                message: other.to_string(),
+            },
+        })
+    };
+    let alphabet = if compact {
+        LinkAlphabet::Compact
+    } else {
+        LinkAlphabet::Fragment
+    };
+    let link = write(alphabet)?;
+    let qr_link = write(LinkAlphabet::QrCode).ok();
     let url = format!("{VIEWER_URL}#{}", link.payload);
-    let link_characters = u32::try_from(url.len()).unwrap_or(u32::MAX);
+    let link_characters = u32::try_from(url.chars().count()).unwrap_or(u32::MAX);
     Ok(SharedTrip {
-        long_for_messengers: url.len() > LONG_LINK_CHARACTERS,
+        long_for_messengers: url.chars().count() > LONG_LINK_CHARACTERS,
         url,
         link_characters,
+        qr: qr_link.map(|qr_link| QrText {
+            address: format!("{VIEWER_URL}#"),
+            payload: qr_link.payload,
+        }),
     })
 }
 
