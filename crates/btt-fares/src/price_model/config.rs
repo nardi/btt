@@ -87,6 +87,26 @@ pub(crate) struct Spread {
     pub category: f64,
     /// Of the surcharge of a run that crosses a border.
     pub border: f64,
+    /// Of the global base fare term. A spread of 0 leaves the term out.
+    #[serde(default)]
+    pub base: f64,
+    /// Of the base fare term of a country. A spread of 0 leaves the term out.
+    #[serde(default)]
+    pub country_base: f64,
+    /// Of the bend of a country's distance curve. A spread of 0 leaves the term out.
+    #[serde(default)]
+    pub country_curve: f64,
+    /// Of the offset of a category in one country, shared by its operators. A spread of 0
+    /// leaves the term out.
+    #[serde(default)]
+    pub country_category: f64,
+    /// Of the border surcharge as a base fare that fades with the distance. A spread of 0
+    /// leaves the term out.
+    #[serde(default)]
+    pub border_base: f64,
+    /// Of the border surcharge of one operator. A spread of 0 leaves the term out.
+    #[serde(default)]
+    pub border_operator: f64,
 }
 
 /// The prior of the noise of a single fare around the model.
@@ -96,6 +116,15 @@ pub(crate) struct NoisePrior {
     pub standard_deviation: f64,
     /// Number of observations the prior counts as.
     pub prior_weight: f64,
+    /// Number of observations that the noise of a kind of train in every country counts as in
+    /// the noise of that kind in one country. A weight of 0 leaves the level out, and the
+    /// country's noise then shrinks towards the prior.
+    #[serde(default)]
+    pub kind_weight: f64,
+    /// Number of observations that the noise of a kind of train in a country counts as in the
+    /// noise of an operator. A weight of 0 leaves the level out.
+    #[serde(default)]
+    pub operator_weight: f64,
 }
 
 /// Prior means of the kind offsets.

@@ -18,8 +18,8 @@ use smol_str::SmolStr;
 
 use crate::FareDataError;
 use crate::price_book::{RideFacts, TicketPriceSource};
+use config::ModelConfig;
 pub use config::TrainKind;
-use config::{ModelConfig, NoisePrior};
 use posterior::Posterior;
 
 /// Live prices below this many euro are left out, because their logarithm says nothing about
@@ -55,6 +55,18 @@ enum Feature {
     Category(SmolStr, SmolStr),
     /// The surcharge of a run that crosses a border.
     Border,
+    /// The base fare that all tariffs share, as a term that fades with the distance.
+    Base,
+    /// The base fare of a country's tariffs.
+    CountryBase(SmolStr),
+    /// The bend of a country's distance curve.
+    CountryCurve(SmolStr),
+    /// The offset of a category in one country, shared by the operators that run it.
+    CountryCategory(SmolStr, SmolStr),
+    /// The border surcharge as a base fare that fades with the distance.
+    BorderBase,
+    /// The border surcharge of one operator.
+    BorderOperator(SmolStr),
 }
 
 /// What the model reads from a run of trains.
@@ -74,7 +86,18 @@ struct RunSummary<'a> {
     crosses_border: bool,
 }
 
-/// The running estimate of the noise of one kind of train in one country.
+/// A group of runs that shares an estimate of the noise.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum NoiseGroup {
+    /// The runs of one kind of train in every country.
+    Kind(TrainKind),
+    /// The runs of one kind of train in one country, empty when not known.
+    CountryKind(SmolStr, TrainKind),
+    /// The runs of one operator.
+    Operator(SmolStr),
+}
+
+/// The running estimate of the noise of one group of runs.
 #[derive(Debug, Clone, Copy, Default)]
 struct NoiseEstimate {
     /// The sum of the squared residuals that the noise explains.
@@ -84,11 +107,10 @@ struct NoiseEstimate {
 }
 
 impl NoiseEstimate {
-    /// Returns the variance of the log price, a mean of the prior and the residuals.
-    fn variance(self, prior: &NoisePrior) -> f64 {
-        let prior_variance = prior.standard_deviation * prior.standard_deviation;
-        (prior.prior_weight * prior_variance + self.squared_residuals)
-            / (prior.prior_weight + self.weight)
+    /// Returns the variance of the log price, a mean of a prior variance that counts as
+    /// `prior_weight` observations and the residuals.
+    fn variance(self, prior_variance: f64, prior_weight: f64) -> f64 {
+        (prior_weight * prior_variance + self.squared_residuals) / (prior_weight + self.weight)
     }
 }
 
@@ -126,7 +148,7 @@ pub struct PriceModel {
     observation_counts: Vec<u32>,
     /// The noise of each kind of train in each country. Countries differ a lot here, from the
     /// fixed fares of the Netherlands to the saver and zone fares of Switzerland.
-    noise: HashMap<(SmolStr, TrainKind), NoiseEstimate>,
+    noise: HashMap<NoiseGroup, NoiseEstimate>,
     /// The day the posterior holds for, which is the day of the latest observation or later.
     current_day: Option<NaiveDate>,
     /// The number of standard deviations from the median to each end of the price range.
@@ -160,6 +182,16 @@ impl PriceModel {
     /// Returns an error when a file does not parse or holds an impossible value.
     pub fn prior() -> Result<Self, FareDataError> {
         Self::from_files(crate::PRICE_MODEL_TOML, crate::OPERATORS_TOML)
+    }
+
+    /// Builds the model at its prior from the text of a `price_model.toml` and the compiled-in
+    /// operators, without the seed observations. The examples compare configurations with it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the text does not parse or holds an impossible value.
+    pub fn with_config(config_text: &str) -> Result<Self, FareDataError> {
+        Self::from_files(config_text, crate::OPERATORS_TOML)
     }
 
     /// Builds the model from the compiled-in files and learns from the seed observations.
@@ -268,6 +300,12 @@ impl PriceModel {
             Feature::CountryKind(..) => (0.0, spread.country_kind),
             Feature::Category(..) => (0.0, spread.category),
             Feature::Border => (0.0, spread.border),
+            Feature::Base => (0.0, spread.base),
+            Feature::CountryBase(_) => (0.0, spread.country_base),
+            Feature::CountryCurve(_) => (0.0, spread.country_curve),
+            Feature::CountryCategory(..) => (0.0, spread.country_category),
+            Feature::BorderBase => (0.0, spread.border_base),
+            Feature::BorderOperator(_) => (0.0, spread.border_operator),
         }
     }
 
@@ -277,24 +315,31 @@ impl PriceModel {
         let distance = ((summary.kilometres.max(0.0) + shift)
             / (self.config.reference_kilometres + shift))
             .ln();
+        // The log price of `base + rate × km` lies above that of `rate × km` by about
+        // `base / (rate × km)`, so a term in the inverse of the distance stands in for a base
+        // fare. It is 1 at 5 km and fades to 0.1 at 95 km.
+        let base = base_term(summary.kilometres);
         let mut features = vec![
             (Feature::Intercept, 1.0),
             (Feature::Slope, distance),
+            (Feature::Base, base),
             (Feature::Kind(summary.kind), 1.0),
             (Feature::KindSlope(summary.kind), distance),
         ];
         if let Some(country) = &summary.country {
             features.push((Feature::Country(country.clone()), 1.0));
             features.push((Feature::CountrySlope(country.clone()), distance));
+            features.push((Feature::CountryBase(country.clone()), base));
+            features.push((Feature::CountryCurve(country.clone()), distance * distance));
             features.push((Feature::CountryKind(country.clone(), summary.kind), 1.0));
+            features.push((
+                Feature::CountryCategory(country.clone(), summary.category.clone()),
+                1.0,
+            ));
         }
         if !summary.operator.is_empty() {
             features.push((Feature::Operator(summary.operator.into()), 1.0));
             features.push((Feature::OperatorSlope(summary.operator.into()), distance));
-            // The log price of `base + rate × km` lies above that of `rate × km` by about
-            // `base / (rate × km)`, so a term in the inverse of the distance stands in for the
-            // base fare. It is 1 at 5 km and fades to 0.1 at 95 km.
-            let base = 10.0 / (summary.kilometres.max(0.0) + 5.0);
             features.push((Feature::OperatorBase(summary.operator.into()), base));
             features.push((
                 Feature::OperatorCurve(summary.operator.into()),
@@ -307,8 +352,39 @@ impl PriceModel {
         }
         if summary.crosses_border {
             features.push((Feature::Border, 1.0));
+            features.push((Feature::BorderBase, base));
+            if !summary.operator.is_empty() {
+                features.push((Feature::BorderOperator(summary.operator.into()), 1.0));
+            }
         }
+        // A term with a spread of 0 is left out of the model.
+        features.retain(|(feature, _)| self.prior_of(feature).1 > 0.0);
         features
+    }
+
+    /// Returns the noise variance of a run's log price. The estimate of each group shrinks
+    /// towards the one of the wider group above it: the operator towards its kind of train in
+    /// its country, that towards the kind of train in every country, and that towards the
+    /// prior. A level with a weight of 0 is left out.
+    fn noise_variance(&self, summary: &RunSummary<'_>) -> f64 {
+        let prior = &self.config.noise;
+        let estimate = |group: NoiseGroup| self.noise.get(&group).copied().unwrap_or_default();
+        let mut variance = prior.standard_deviation * prior.standard_deviation;
+        let mut weight = prior.prior_weight;
+        if prior.kind_weight > 0.0 {
+            variance = estimate(NoiseGroup::Kind(summary.kind)).variance(variance, weight);
+            weight = prior.kind_weight;
+        }
+        variance = estimate(NoiseGroup::CountryKind(
+            summary.country.clone().unwrap_or_default(),
+            summary.kind,
+        ))
+        .variance(variance, weight);
+        if prior.operator_weight > 0.0 && !summary.operator.is_empty() {
+            variance = estimate(NoiseGroup::Operator(summary.operator.into()))
+                .variance(variance, prior.operator_weight);
+        }
+        variance
     }
 
     /// Returns the number of observations behind a term.
@@ -336,12 +412,7 @@ impl PriceModel {
             }
         }
         let (known_mean, known_variance) = self.posterior.moments(&known);
-        let noise_variance = self
-            .noise
-            .get(&noise_key(&summary))
-            .copied()
-            .unwrap_or_default()
-            .variance(&self.config.noise);
+        let noise_variance = self.noise_variance(&summary);
         let mean = known_mean + prior_mean;
         let spread =
             (known_variance + prior_variance + noise_variance).sqrt() * self.interval_half_width;
@@ -452,7 +523,8 @@ impl PriceModel {
         let Some(summary) = self.run_summary(&rides) else {
             return false;
         };
-        let key = noise_key(&summary);
+        let groups = noise_groups(&summary);
+        let noise_variance = self.noise_variance(&summary);
         let features = self.features_of(&summary);
         self.advance_to(observation.looked_up_on);
         let sparse: Vec<(usize, f64)> = features
@@ -461,12 +533,6 @@ impl PriceModel {
             .collect();
         let log_price = euro.ln();
         let (predicted, parameter_variance) = self.posterior.moments(&sparse);
-        let noise_variance = self
-            .noise
-            .get(&key)
-            .copied()
-            .unwrap_or_default()
-            .variance(&self.config.noise);
         let residual = log_price - predicted;
         // The largest squared residual that counts in full.
         let limit = self.config.outlier_limit.powi(2) * (noise_variance + parameter_variance);
@@ -486,9 +552,11 @@ impl PriceModel {
         let (updated, updated_variance) = self.posterior.moments(&sparse);
         let leverage = (updated_variance / effective_variance).min(0.95);
         let noise_part = (log_price - updated).powi(2) / (1.0 - leverage);
-        let noise = self.noise.entry(key).or_default();
-        noise.squared_residuals += noise_part.min(limit);
-        noise.weight += 1.0;
+        for group in groups {
+            let noise = self.noise.entry(group).or_default();
+            noise.squared_residuals += noise_part.min(limit);
+            noise.weight += 1.0;
+        }
         for &(index, _) in &sparse {
             self.observation_counts[index] += 1;
         }
@@ -496,10 +564,22 @@ impl PriceModel {
     }
 }
 
-/// Returns the key of the noise estimate of a run: its country, empty when not known, and its
-/// kind of train.
-fn noise_key(summary: &RunSummary<'_>) -> (SmolStr, TrainKind) {
-    (summary.country.clone().unwrap_or_default(), summary.kind)
+/// Returns the value of the base fare terms for a distance in kilometres, which is 1 at 5 km
+/// and fades to 0.1 at 95 km.
+fn base_term(kilometres: f64) -> f64 {
+    10.0 / (kilometres.max(0.0) + 5.0)
+}
+
+/// Returns the groups whose noise estimates a run feeds.
+fn noise_groups(summary: &RunSummary<'_>) -> Vec<NoiseGroup> {
+    let mut groups = vec![
+        NoiseGroup::Kind(summary.kind),
+        NoiseGroup::CountryKind(summary.country.clone().unwrap_or_default(), summary.kind),
+    ];
+    if !summary.operator.is_empty() {
+        groups.push(NoiseGroup::Operator(summary.operator.into()));
+    }
+    groups
 }
 
 /// Returns a number of live prices in words, such as "1 live price" or "12 live prices".
@@ -636,28 +716,27 @@ impl PriceModel {
         country: Option<&str>,
     ) -> crate::price_table::PriceRow {
         let kind = self.config.kind_of(operator, category, offers_berths);
+        let category: SmolStr = category.to_uppercase().into();
         let mut constant = self.mean_of(&Feature::Intercept) + self.mean_of(&Feature::Kind(kind));
         let mut distance = self.mean_of(&Feature::Slope) + self.mean_of(&Feature::KindSlope(kind));
+        let mut curve = 0.0;
+        let mut base = self.mean_of(&Feature::Base);
         if let Some(code) = country {
             constant += self.mean_of(&Feature::Country(code.into()))
-                + self.mean_of(&Feature::CountryKind(code.into(), kind));
+                + self.mean_of(&Feature::CountryKind(code.into(), kind))
+                + self.mean_of(&Feature::CountryCategory(code.into(), category.clone()));
             distance += self.mean_of(&Feature::CountrySlope(code.into()));
+            curve += self.mean_of(&Feature::CountryCurve(code.into()));
+            base += self.mean_of(&Feature::CountryBase(code.into()));
         }
         // The model gives an operator without a name no terms of its own.
-        let (curve, base) = if operator.is_empty() {
-            (0.0, 0.0)
-        } else {
+        if !operator.is_empty() {
             constant += self.mean_of(&Feature::Operator(operator.into()))
-                + self.mean_of(&Feature::Category(
-                    operator.into(),
-                    category.to_uppercase().into(),
-                ));
+                + self.mean_of(&Feature::Category(operator.into(), category));
             distance += self.mean_of(&Feature::OperatorSlope(operator.into()));
-            (
-                self.mean_of(&Feature::OperatorCurve(operator.into())),
-                self.mean_of(&Feature::OperatorBase(operator.into())),
-            )
-        };
+            curve += self.mean_of(&Feature::OperatorCurve(operator.into()));
+            base += self.mean_of(&Feature::OperatorBase(operator.into()));
+        }
         crate::price_table::PriceRow {
             constant: row_f32(constant),
             distance: row_f32(distance),

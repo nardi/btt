@@ -7,7 +7,9 @@
 #
 # where the global, country, operator and kind terms each have an intercept and a slope on the
 # distance `u = log((km + shift) / (reference + shift))`. The intercepts are the log price at the
-# reference distance. This file holds the prior of every term. The app starts from it, replays
+# reference distance. Countries and operators also have a base fare term and a bend in `u`, and
+# a category has an offset for its operator and one for its country. The values of the spreads
+# and the noise come from `cargo run --release -p btt-fares --example price_tuning`. This file holds the prior of every term. The app starts from it, replays
 # the observations in `price_seed.jsonl` and then the live prices it has seen itself.
 
 # Days after which an observation counts half.
@@ -15,17 +17,22 @@ half_life_days = 182.0
 # Share of fares that the price range should hold.
 interval_share = 0.8
 # Residuals beyond this many standard deviations count less, as if the noise were larger.
-outlier_limit = 3.0
+outlier_limit = 2.1
 # The shift in kilometres for a country without one of its own. It stands in for a base fee.
-default_shift_kilometres = 10.0
+default_shift_kilometres = 14.0
 # The distance at which the intercepts hold, in kilometres.
 reference_kilometres = 100.0
 
 # The noise of a single fare around the model, as a standard deviation of the log price. The
-# prior weight is the number of observations the prior counts as.
+# noise of a kind of train in every country starts from it, and the prior weight is the number of
+# observations it counts as. The noise of that kind in one country starts from the kind's noise
+# with the kind weight, and the noise of an operator starts from its country's with the operator
+# weight.
 [noise]
 standard_deviation = 0.3
 prior_weight = 20.0
+kind_weight = 10.0
+operator_weight = 10.0
 
 # The level that every country starts from: the price per kilometre of a slope of 1, so
 # `euro_per_kilometre × (km + shift)`. This is a lowest fare between a saver fare and a regional
@@ -33,24 +40,33 @@ prior_weight = 20.0
 [global]
 euro_per_kilometre = 0.11
 slope = 1.0
-intercept_standard_deviation = 0.2
-slope_standard_deviation = 0.05
+intercept_standard_deviation = 0.05
+slope_standard_deviation = 0.025
 
 # Prior standard deviations of the offsets on the log price. A value of 0.2 lets a term move the
 # price by about 20 percent before the data have to argue for more. Every prediction adds up the
-# spreads of its terms, so they also set how wide the range is before any observation.
+# spreads of its terms, so they also set how wide the range is before any observation. A spread
+# of 0 leaves the term out of the model.
 [spread]
 country = 0.35
-country_slope = 0.1
-operator = 0.15
+country_slope = 0.14
+country_base = 0.07
+country_curve = 0.14
+operator = 0.21
 operator_slope = 0.1
 operator_base = 0.3
 operator_curve = 0.1
 kind = 0.2
 kind_slope = 0.05
-country_kind = 0.1
-category = 0.1
-border = 0.2
+country_kind = 0.2
+category = 0.14
+country_category = 0.4
+base = 0.05
+# The border surcharge has no fixed part. It is a base fare that fades with the distance, because
+# a short trip across a border costs about as much as a long one, and an offset per operator.
+border = 0.0
+border_base = 1.0
+border_operator = 0.42
 
 # Prior means of the kind offsets, as a share on the log price. They are rough and the seed run
 # replaces them.
