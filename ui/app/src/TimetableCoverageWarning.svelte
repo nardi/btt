@@ -7,11 +7,11 @@
 
   let {
     gaps,
-    lastDepartureDate,
+    lastDate,
   }: {
     gaps: OperatorGap[];
-    /** The day the last leg of the trip departs, as `YYYY-MM-DD`. */
-    lastDepartureDate: string;
+    /** The day the trip reaches its destination, as `YYYY-MM-DD`. */
+    lastDate: string;
   } = $props();
 
   /** Whether the pointer or the keyboard focus is on the mark or the list. */
@@ -63,7 +63,7 @@
     <div class="anchor">
       <div class="panel" role="dialog" aria-label="Operators without train data">
         <p>
-          Some operators have no train data up to {formatDateWithYear(lastDepartureDate)}, the last
+          Some operators have no train data up to {formatDateWithYear(lastDate)}, the last
           day of this trip.
         </p>
         <ul>

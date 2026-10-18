@@ -17,6 +17,7 @@ import type {
   TripHistoryState,
   TripPlaceId,
 } from "./bindings";
+import { plannedArrivalDate } from "./itinerary";
 import { legPlanWithLivePrices } from "./live-ranking";
 import { legPlanOnPass, passOptionOfLeg, type PassScenarioState } from "./scenarios";
 
@@ -77,6 +78,21 @@ export type TripSource =
       readonly kind: "readonly";
       readonly viewState: TripViewState;
     };
+
+/**
+ * Returns the date each planned leg arrives on, by arrival place. The journeys of the picked
+ * pass scenario decide the dates, like they decide the legs.
+ */
+export function plannedArrivalDates(viewState: TripViewState): Map<TripPlaceId, string> {
+  const dates = new Map<TripPlaceId, string>();
+  for (const placeId of viewState.legStatesByArrivalPlace.keys()) {
+    const legState = legViewState(viewState, placeId);
+    if (legState.status === "found") {
+      dates.set(placeId, plannedArrivalDate(legState.legPlan));
+    }
+  }
+  return dates;
+}
 
 /**
  * Returns the plan state of a leg, which is pending until the planner reports. A leg that rides

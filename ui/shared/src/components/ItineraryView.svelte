@@ -8,9 +8,9 @@
     TripPreferences,
   } from "../bindings";
   import { formatMinutesOfDay } from "../format";
-  import { itineraryRows, legLine, plannedArrivalDate, storedJourneyChoice, tripPlaces } from "../itinerary";
+  import { itineraryRows, legLine, storedJourneyChoice, tripPlaces } from "../itinerary";
   import { staggerDelay } from "../motion";
-  import { legViewState, type TripSource } from "../trip-source";
+  import { legViewState, plannedArrivalDates, type TripSource } from "../trip-source";
   import LegRowView from "./LegRowView.svelte";
   import PlaceRowView from "./PlaceRowView.svelte";
   import PlaceSearch from "./PlaceSearch.svelte";
@@ -36,16 +36,7 @@
 
   const viewState = $derived(source.viewState);
   const trip = $derived(viewState.trip);
-  // The journeys of the picked pass scenario decide the dates, like they decide the legs.
-  const plannedArrivalDates = $derived(
-    new Map(
-      [...viewState.legStatesByArrivalPlace.keys()].flatMap((placeId) => {
-        const legState = legViewState(viewState, placeId);
-        return legState.status === "found" ? [[placeId, plannedArrivalDate(legState.legPlan)] as const] : [];
-      }),
-    ),
-  );
-  const rows = $derived(itineraryRows(trip, plannedArrivalDates));
+  const rows = $derived(itineraryRows(trip, plannedArrivalDates(viewState)));
   const editable = $derived(source.kind === "editable" ? source : null);
   const onEdit = $derived(
     editable === null ? undefined : (edit: TripEdit) => void editable.applyEdit(edit),

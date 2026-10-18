@@ -21,9 +21,9 @@
   import ThemeSwitch from "@btt/shared/components/ThemeSwitch.svelte";
   import Icon from "@btt/shared/components/Icon.svelte";
   import { itineraryRows, legLine, type LegLine } from "@btt/shared/itinerary";
-  import { lastDepartureDate, operatorGaps } from "@btt/shared/timetable-coverage";
+  import { operatorGaps, tripLastDate } from "@btt/shared/timetable-coverage";
   import { liveQuoteKey } from "@btt/shared/tickets";
-  import { legViewState } from "@btt/shared/trip-source";
+  import { legViewState, plannedArrivalDates } from "@btt/shared/trip-source";
   import type { PlaceFocusRequest } from "@btt/shared/map-features";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { onMount } from "svelte";
@@ -47,11 +47,13 @@
   let showTimetable = $state(false);
   /** The operators whose trains stop before the end of the timetable the planner uses. */
   let operatorEnds: OperatorEndDate[] = $state([]);
-  /** The operators with no trains on the last day of the open trip. */
-  const gaps = $derived.by(() => {
+  /** The day the open trip reaches its destination, by the plan where there is one. */
+  const tripEnd = $derived.by(() => {
     const source = openSource;
-    return source === null ? [] : operatorGaps(operatorEnds, source.trip);
+    return source === null ? null : tripLastDate(source.trip, plannedArrivalDates(source));
   });
+  /** The operators with no trains on the last day of the open trip. */
+  const gaps = $derived(tripEnd === null ? [] : operatorGaps(operatorEnds, tripEnd));
   /** The screens of an open trip. A trip opens on planning. */
   type Screen = "setup" | "planning" | "tickets";
   let screen: Screen = $state("planning");
@@ -413,8 +415,8 @@
           }}
         />
       </label>
-      {#if gaps.length > 0}
-        <TimetableCoverageWarning {gaps} lastDepartureDate={lastDepartureDate(openSource.trip)} />
+      {#if gaps.length > 0 && tripEnd !== null}
+        <TimetableCoverageWarning {gaps} lastDate={tripEnd} />
       {/if}
       <div class="history-buttons">
         <button
