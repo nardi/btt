@@ -228,7 +228,10 @@ fn never_boards_where_boarding_is_not_allowed() {
         &[0],
     );
     let bundle = network.build();
-    assert!(search(&bundle, &[candidate(b, 0)], &[candidate(c, 0)], 600, 640).is_empty());
+    assert_eq!(
+        search(&bundle, &[candidate(b, 0)], &[candidate(c, 0)], 600, 640),
+        Vec::new()
+    );
     assert_eq!(
         search(&bundle, &[candidate(a, 0)], &[candidate(b, 0)], 590, 610).len(),
         1

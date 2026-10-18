@@ -730,7 +730,7 @@ mod tests {
         assert!((found[0].prices["NON-FLEX"] - 114.9).abs() < 1e-9);
         assert!((found[0].prices["SEMI-FLEX"] - 134.9).abs() < 1e-9);
         assert_eq!(found[2].name, "Comfort compartment for 2 passengers");
-        assert!(parse_night_offers(&json!({})).is_empty());
+        assert_eq!(parse_night_offers(&json!({})), Vec::new());
     }
 
     #[test]
@@ -795,7 +795,7 @@ mod tests {
     #[test]
     fn a_pass_holder_asks_with_the_interrail_card() {
         assert_eq!(passengers(true)[0]["cards"][0]["cardId"], 2391);
-        assert!(passengers(false)[0]["cards"].as_array().unwrap().is_empty());
+        assert_eq!(passengers(false)[0]["cards"], json!([]));
     }
 
     #[test]

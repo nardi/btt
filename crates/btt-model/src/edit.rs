@@ -678,7 +678,7 @@ mod tests {
             new_index: 2,
         })
         .unwrap();
-        assert!(trip.chosen_journeys.is_empty());
+        assert_eq!(trip.chosen_journeys, Vec::new());
     }
 
     #[test]

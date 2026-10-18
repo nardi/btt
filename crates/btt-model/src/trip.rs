@@ -442,7 +442,7 @@ mod summary_route_tests {
         trip.itinerary = Itinerary::OriginOnly(place(1, "Amsterdam", 52.3789, 4.9003));
         assert_eq!(trip.summary_route().len(), 1);
         trip.itinerary = Itinerary::Empty;
-        assert!(trip.summary_route().is_empty());
+        assert_eq!(trip.summary_route(), Vec::new());
     }
 }
 

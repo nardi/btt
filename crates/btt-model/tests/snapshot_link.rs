@@ -52,7 +52,7 @@ fn a_snapshot_survives_the_json_of_the_file() {
 fn the_snapshot_holds_nothing_about_travellers() {
     let snapshot = demo_snapshot();
     assert!(snapshot.trip.preferences.traveller_ids.is_empty());
-    assert!(snapshot.trip.chosen_journeys.is_empty());
+    assert_eq!(snapshot.trip.chosen_journeys, Vec::new());
     assert!(snapshot.trip.id.0.is_nil());
 }
 

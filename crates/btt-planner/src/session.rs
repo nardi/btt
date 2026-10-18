@@ -774,8 +774,8 @@ mod tests {
                 break;
             }
         }
-        assert!(replanned_places(&events).is_empty());
-        assert!(planned_places(&events).is_empty());
+        assert_eq!(replanned_places(&events), Vec::new());
+        assert_eq!(planned_places(&events), Vec::new());
         let extras: Vec<_> = events
             .iter()
             .filter_map(|event| match event {
