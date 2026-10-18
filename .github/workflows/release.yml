@@ -4,29 +4,99 @@ on:
   push:
     tags: ["v*"]
 
-# Pages deployment needs these permissions, and nothing else needs more than reading.
+# Jobs that need more than reading ask for it themselves.
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-# One deployment at a time, and a newer tag replaces an older one that is still running.
-concurrency:
-  group: pages
-  cancel-in-progress: true
 
 jobs:
+  # A tag that differs from the Cargo version stops the run before anything is built.
+  tag:
+    name: Check the tag against the version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare the tag with the workspace version
+        run: |
+          # The first line that starts with `version =` is the one in `[workspace.package]`.
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "The tag $GITHUB_REF_NAME does not match the version v$version in Cargo.toml."
+            exit 1
+          fi
+
   checks:
     name: Checks
+    needs: tag
     uses: ./.github/workflows/ci.yml
 
+  # The installer jobs all upload to one draft, so it is created once here. Letting each of them
+  # create it would produce a draft per platform.
+  draft:
+    name: Create the draft release
+    needs: checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      release_id: ${{ steps.create.outputs.release_id }}
+    steps:
+      - id: create
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release_id=$(gh api "repos/$GITHUB_REPOSITORY/releases" \
+            -f tag_name="$GITHUB_REF_NAME" \
+            -f name="BigTrainTrip $GITHUB_REF_NAME" \
+            -f body="Draft. Smoke test the installers, write the notes and publish." \
+            -F draft=true \
+            --jq .id)
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+
+  installers:
+    name: Installer for ${{ matrix.os }}
+    needs: draft
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system libraries for Tauri
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libssl-dev \
+            libayatana-appindicator3-dev librsvg2-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          releaseId: ${{ needs.draft.outputs.release_id }}
+
   # The viewer goes live at tag time, while the release is still a draft. That way the live
-  # viewer reads the schema the new app writes before anyone can install the app. The installer
-  # jobs join this workflow later and write to the same draft release.
+  # viewer reads the schema the new app writes before anyone can install the app.
   viewer:
     name: Deploy the web viewer
     needs: checks
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    # One deployment at a time, and a newer tag replaces an older one that is still running.
+    concurrency:
+      group: pages
+      cancel-in-progress: true
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

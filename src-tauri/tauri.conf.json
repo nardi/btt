@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "BigTrainTrip",
-  "version": "0.1.0",
   "identifier": "nl.nardilam.btt",
   "build": {
     "beforeDevCommand": "npm run dev --workspace ui/app",
