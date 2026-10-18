@@ -1,5 +1,6 @@
 //! The operators of trains, recognised from the agency names of the timetable feeds.
 
+use chrono::NaiveDate;
 use regex::Regex;
 use serde::Deserialize;
 use smol_str::SmolStr;
@@ -12,6 +13,10 @@ const OPERATORS_TOML: &str = include_str!("../../../data/operators.toml");
 struct RawRule {
     /// The name the app uses for the operator.
     id: String,
+    /// The name the app shows to the traveller.
+    name: String,
+    /// The country of the operator's home network, as an ISO 3166 code.
+    country: String,
     /// The pattern of the agency names of its trains.
     agency: String,
     /// The pattern of the categories of its trains, when the rule is for some of them only.
@@ -29,10 +34,27 @@ struct RawRules {
 struct OperatorRule {
     /// The name the app uses for the operator.
     id: SmolStr,
+    /// The name the app shows to the traveller.
+    name: SmolStr,
+    /// The country of the operator's home network.
+    country: SmolStr,
     /// Matches the agency names of its trains.
     agency: Regex,
     /// Matches the categories of its trains, when the rule is for some of them only.
     category: Option<Regex>,
+}
+
+/// The last day on which a listed operator has trains in a bundle.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OperatorEnd {
+    /// The name the app uses for the operator.
+    pub id: SmolStr,
+    /// The name the app shows to the traveller.
+    pub name: SmolStr,
+    /// The country of the operator's home network.
+    pub country: SmolStr,
+    /// The last day on which one of the operator's trains departs from its first stop.
+    pub last_departure_date: NaiveDate,
 }
 
 /// Tells the operator of a train from its agency and category.
@@ -55,6 +77,8 @@ impl OperatorTable {
             .into_iter()
             .map(|rule| OperatorRule {
                 id: rule.id.into(),
+                name: rule.name.into(),
+                country: rule.country.into(),
                 agency: Regex::new(&rule.agency).expect("agency patterns are valid"),
                 category: rule
                     .category
@@ -62,6 +86,15 @@ impl OperatorTable {
             })
             .collect();
         Self { rules }
+    }
+
+    /// Returns the name and country of a listed operator, or `None` for an operator that only
+    /// has its agency name.
+    pub fn details_of(&self, id: &str) -> Option<(&str, &str)> {
+        self.rules
+            .iter()
+            .find(|rule| rule.id == id)
+            .map(|rule| (rule.name.as_str(), rule.country.as_str()))
     }
 
     /// Returns the operator of a train. A train that no rule matches gets its agency name,

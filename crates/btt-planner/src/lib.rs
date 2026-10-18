@@ -6,7 +6,7 @@ mod chain;
 mod cost_model;
 pub mod explanation;
 pub mod input;
-mod operators;
+pub mod operators;
 mod pricing;
 mod ride_path;
 pub mod scoring;
@@ -21,6 +21,7 @@ pub use input::{
     IdentifiedLegInput, LegCacheKey, LegChainInput, LegEndpoint, LegPlanningInput, SameDayStop,
     leg_chain_inputs, leg_planning_inputs,
 };
+pub use operators::OperatorEnd;
 pub use pricing::{
     JourneyPricer, NoPrice, PriceMode, RidePassRow, RidePassTable, RidePriceClass, RidePriceRow,
     RidePriceTable,

@@ -3,11 +3,13 @@
 use std::sync::Arc;
 
 use btt_model::{LegExtras, LegPlan, LegPlanningResult, NoJourneyReason};
+use chrono::NaiveDate;
 use tokio_util::sync::CancellationToken;
 
 use crate::bundle_router::TimetableBundleRouter;
 use crate::explanation::LegExplanation;
 use crate::input::{LegChainInput, LegPlanningInput};
+use crate::operators::OperatorEnd;
 use crate::pricing::{JourneyPricer, NoPrice};
 #[cfg(test)]
 use crate::stub::StubBackend;
@@ -49,6 +51,26 @@ impl<P: JourneyPricer> LegPlanningBackend<P> {
             #[cfg(test)]
             Self::Stub(_) => 0,
             Self::TimetableBundle(router) => router.bundle_version(),
+        }
+    }
+
+    /// Returns the first and last day, both inclusive, that the timetable covers. A backend
+    /// without a timetable has no limit.
+    pub fn validity_window(&self) -> Option<(NaiveDate, NaiveDate)> {
+        match self {
+            #[cfg(test)]
+            Self::Stub(_) => None,
+            Self::TimetableBundle(router) => Some(router.validity_window()),
+        }
+    }
+
+    /// Returns the listed operators that have no trains on the last days of the timetable, or
+    /// nothing for a backend without a timetable.
+    pub fn operator_ends(&self) -> &[OperatorEnd] {
+        match self {
+            #[cfg(test)]
+            Self::Stub(_) => &[],
+            Self::TimetableBundle(router) => router.operator_ends(),
         }
     }
 

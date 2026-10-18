@@ -51,6 +51,10 @@ export function commandErrorMessage(error: CommandError): string {
   if (error.Sharing !== undefined) {
     return `Sharing failed: ${error.Sharing.message}`;
   }
+  if (error.StartDateOutsideTimetable !== undefined) {
+    const { first, last } = error.StartDateOutsideTimetable;
+    return `The timetable only covers ${first} to ${last}.`;
+  }
   if (error.Timetable !== undefined) {
     return `Timetable failed: ${error.Timetable.message}`;
   }

@@ -60,6 +60,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             sharing::export_trip_file,
             timetable_updates::timetable_status,
             timetable_updates::check_timetable,
+            timetable_updates::operator_end_dates,
             timetable_updates::download_timetable,
             timetable_updates::set_timetable_checks,
             timetable_updates::restart_app,

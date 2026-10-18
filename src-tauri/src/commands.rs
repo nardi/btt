@@ -54,6 +54,14 @@ pub enum CommandError {
         /// Description of the failure.
         message: String,
     },
+    /// The start date of a trip lies outside the days the timetable covers.
+    #[error("the timetable covers {first} to {last}")]
+    StartDateOutsideTimetable {
+        /// First day the timetable covers.
+        first: NaiveDate,
+        /// Last day the timetable covers.
+        last: NaiveDate,
+    },
     /// Downloading or installing a timetable failed.
     #[error("timetable download failed: {message}")]
     Timetable {
@@ -85,6 +93,7 @@ pub fn create_trip(
     name: SmolStr,
     start_date: NaiveDate,
 ) -> Result<Trip, CommandError> {
+    state.check_start_date(start_date)?;
     let trip = Trip::new(name, start_date);
     state.storage.save_trip(&trip)?;
     Ok(trip)

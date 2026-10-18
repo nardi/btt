@@ -8,11 +8,17 @@
 
   let {
     trips,
+    firstDate,
+    lastDate,
     onCreate,
     onOpen,
     onDelete,
   }: {
     trips: TripSummary[];
+    /** The first day the timetable covers as `YYYY-MM-DD`, or `null` when the app has none. */
+    firstDate: string | null;
+    /** The last day the timetable covers as `YYYY-MM-DD`, or `null` when the app has none. */
+    lastDate: string | null;
     onCreate: (name: string, startDate: string) => void;
     onOpen: (tripId: TripId) => void;
     onDelete: (tripId: TripId) => void;
@@ -25,8 +31,23 @@
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
   }
 
+  /** Moves a date into the days the timetable covers. ISO dates compare in date order. */
+  function clampToTimetable(date: string): string {
+    if (lastDate !== null && date > lastDate) {
+      return lastDate;
+    }
+    if (firstDate !== null && date < firstDate) {
+      return firstDate;
+    }
+    return date;
+  }
+
   let newTripName = $state("");
   let newTripStartDate = $state(dateInTwoWeeks());
+  // The timetable can arrive after this list shows, so the date follows the days it covers.
+  $effect(() => {
+    newTripStartDate = clampToTimetable(newTripStartDate);
+  });
 
   function create(event: SubmitEvent) {
     event.preventDefault();
@@ -45,7 +66,13 @@
   </div>
   <form class="new-trip" onsubmit={create}>
     <input type="text" placeholder="Name of a new trip" bind:value={newTripName} required />
-    <input type="date" bind:value={newTripStartDate} required />
+    <input
+      type="date"
+      bind:value={newTripStartDate}
+      min={firstDate}
+      max={lastDate}
+      required
+    />
     <button type="submit" class="primary with-icon">
       <Icon name="plus" />
       Create trip

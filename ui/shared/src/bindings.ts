@@ -163,6 +163,11 @@ export const commands = {
 	 */
 	checkTimetable: () => typedError<TimetableStatus, CommandError>(__TAURI_INVOKE("check_timetable")),
 	/**
+	 *  Returns the listed operators whose trains stop before the timetable does, ordered by name.
+	 *  The list is empty when the app has no timetable.
+	 */
+	operatorEndDates: () => __TAURI_INVOKE<OperatorEndDate[]>("operator_end_dates"),
+	/**
 	 *  Downloads the newest timetable and reports its progress through `progress`. The planner uses
 	 *  it after the next start of the app.
 	 * 
@@ -277,33 +282,40 @@ export type ChosenJourney = {
 /**  Errors a command returns to the frontend. */
 export type CommandError = 
 /**  No trip with this ID exists. */
-({ TripNotFound: TripId }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; Storage?: never; Timetable?: never; TripNotOpen?: never } | 
+({ TripNotFound: TripId }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripNotOpen?: never } | 
 /**  The frontend edited a trip it has not opened. */
-({ TripNotOpen: TripId }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; Storage?: never; Timetable?: never; TripNotFound?: never } | 
+({ TripNotOpen: TripId }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripNotFound?: never } | 
 /**  The edit does not fit the trip. */
-({ InvalidEdit: TripEditError }) & { PlaceSearch?: never; Sharing?: never; Storage?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
+({ InvalidEdit: TripEditError }) & { PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
 /**  Reading or writing the database failed. */
 ({ Storage: {
 	/**  Description of the failure. */
 	message: string,
-} }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
+} }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
 /**  The place search service failed or could not be reached. */
 ({ PlaceSearch: {
 	/**  Description of the failure. */
 	message: string,
-} }) & { InvalidEdit?: never; Sharing?: never; Storage?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
+} }) & { InvalidEdit?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
 /**  The trip has more journeys than a link can carry. */
 "TripTooLargeForLink" | 
 /**  Writing the link or the trip file failed. */
 ({ Sharing: {
 	/**  Description of the failure. */
 	message: string,
-} }) & { InvalidEdit?: never; PlaceSearch?: never; Storage?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
+} }) & { InvalidEdit?: never; PlaceSearch?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
+/**  The start date of a trip lies outside the days the timetable covers. */
+({ StartDateOutsideTimetable: {
+	/**  First day the timetable covers. */
+	first: string,
+	/**  Last day the timetable covers. */
+	last: string,
+} }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; Storage?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
 /**  Downloading or installing a timetable failed. */
 ({ Timetable: {
 	/**  Description of the failure. */
 	message: string,
-} }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; Storage?: never; TripNotFound?: never; TripNotOpen?: never };
+} }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; TripNotFound?: never; TripNotOpen?: never };
 
 /**
  *  A time window that recurs on every travel day, such as 08:00 to 12:00.
@@ -718,6 +730,16 @@ export type NoJourneyReason =
 "BackendUnavailable" | 
 /**  The travel date lies outside the days the timetable covers. */
 "TravelDateOutsideTimetable";
+
+/**  A listed operator whose trains stop before the end of the timetable. */
+export type OperatorEndDate = {
+	/**  The name the app shows to the traveller. */
+	name: string,
+	/**  The country of the operator's home network, as an ISO 3166 code. */
+	country: string,
+	/**  The last day on which one of the operator's trains departs from its first stop. */
+	last_departure_date: string,
+};
 
 /**
  *  Options for a leg that includes one night train. The traveller sleeps on a train with

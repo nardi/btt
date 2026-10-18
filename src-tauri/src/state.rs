@@ -17,6 +17,7 @@ use btt_quotes::QuoteStore;
 use btt_quotes::sbb::SbbService;
 use btt_storage::Storage;
 use btt_timetable::manifest::last_valid_day;
+use chrono::NaiveDate;
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 use tauri::ipc::Channel;
@@ -306,6 +307,25 @@ impl AppState {
             })
     }
 
+    /// Checks that a start date lies in the days the timetable covers.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the date is before the first or after the last day of the
+    /// timetable. An app without a timetable accepts every date.
+    pub fn check_start_date(&self, start_date: NaiveDate) -> Result<(), CommandError> {
+        match self
+            .planning_backend
+            .as_ref()
+            .and_then(|backend| backend.validity_window())
+        {
+            Some((first, last)) if start_date < first || start_date > last => {
+                Err(CommandError::StartDateOutsideTimetable { first, last })
+            }
+            _ => Ok(()),
+        }
+    }
+
     /// Starts a planning session for a trip and registers it as open. Replaces an earlier
     /// session for the same trip, for example after the frontend reloaded.
     ///
@@ -348,6 +368,9 @@ impl AppState {
         trip_id: TripId,
         edit: TripEdit,
     ) -> Result<TripEditOutcome, CommandError> {
+        if let TripEdit::SetStartDate(start_date) = &edit {
+            self.check_start_date(*start_date)?;
+        }
         let mut open_trips = self.open_trips();
         let open_trip = open_trips
             .get_mut(&trip_id)

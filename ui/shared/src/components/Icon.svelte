@@ -15,7 +15,8 @@
     | "plus"
     | "retry"
     | "back"
-    | "close";
+    | "close"
+    | "warning";
 
   /** The drawing of one icon. */
   interface IconShape {
@@ -60,6 +61,7 @@
     retry: { paths: ["M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5"] },
     back: { paths: ["M19 12H5M11 6l-6 6 6 6"] },
     close: { paths: ["M6 6l12 12M18 6L6 18"] },
+    warning: { paths: ["M12 3.5l9.5 16.5h-19z", "M12 10v4.5M12 17.2v.3"] },
   };
 </script>
 

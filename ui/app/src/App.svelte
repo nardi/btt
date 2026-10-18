@@ -6,6 +6,7 @@
     type Traveller,
     type TravellerId,
     type LiveQuote,
+    type OperatorEndDate,
     type TicketItem,
     type TicketLeg,
     type TicketPlan,
@@ -20,6 +21,7 @@
   import ThemeSwitch from "@btt/shared/components/ThemeSwitch.svelte";
   import Icon from "@btt/shared/components/Icon.svelte";
   import { itineraryRows, legLine, type LegLine } from "@btt/shared/itinerary";
+  import { lastDepartureDate, operatorGaps } from "@btt/shared/timetable-coverage";
   import { liveQuoteKey } from "@btt/shared/tickets";
   import { legViewState } from "@btt/shared/trip-source";
   import type { PlaceFocusRequest } from "@btt/shared/map-features";
@@ -29,6 +31,7 @@
   import { commandErrorMessage, TauriTripSource } from "./tauri-trip-source.svelte";
   import ProblemReportDialog from "./ProblemReportDialog.svelte";
   import ShareDialog from "./ShareDialog.svelte";
+  import TimetableCoverageWarning from "./TimetableCoverageWarning.svelte";
   import TimetableDialog from "./TimetableDialog.svelte";
   import TripList from "./TripList.svelte";
 
@@ -42,6 +45,13 @@
   /** What the app knows about its timetable, or `null` until the backend answered. */
   let timetableStatus: TimetableStatus | null = $state(null);
   let showTimetable = $state(false);
+  /** The operators whose trains stop before the end of the timetable the planner uses. */
+  let operatorEnds: OperatorEndDate[] = $state([]);
+  /** The operators with no trains on the last day of the open trip. */
+  const gaps = $derived.by(() => {
+    const source = openSource;
+    return source === null ? [] : operatorGaps(operatorEnds, source.trip);
+  });
   /** The screens of an open trip. A trip opens on planning. */
   type Screen = "setup" | "planning" | "tickets";
   let screen: Screen = $state("planning");
@@ -308,6 +318,7 @@
    */
   async function startTimetableUpdates() {
     timetableStatus = await commands.timetableStatus();
+    operatorEnds = await commands.operatorEndDates();
     // Without a timetable the app cannot plan, so it looks for one even when checks are off.
     if (!timetableStatus.checks_enabled && timetableStatus.installed !== null) {
       return;
@@ -357,7 +368,11 @@
         <button type="button" onclick={() => (showTimetable = true)}>Timetable</button>
       </p>
     {/if}
-    <TripList {trips} onCreate={createTrip} onOpen={openTrip} onDelete={deleteTrip} />
+    <TripList
+      {trips}
+      firstDate={timetableStatus?.installed?.valid_from ?? null}
+      lastDate={timetableStatus?.installed?.valid_until ?? null}
+      onCreate={createTrip} onOpen={openTrip} onDelete={deleteTrip} />
   {:else}
     <header class="trip-header">
       <button type="button" class="with-icon" onclick={closeTrip}>
@@ -377,13 +392,23 @@
           type="date"
           class="numbers"
           value={openSource.trip.start_date}
-          onchange={(event) => {
-            if (event.currentTarget.value !== "") {
-              void openSource?.applyEdit({ SetStartDate: event.currentTarget.value });
+          min={timetableStatus?.installed?.valid_from}
+          max={timetableStatus?.installed?.valid_until}
+          onchange={async (event) => {
+            const input = event.currentTarget;
+            if (input.value !== "") {
+              await openSource?.applyEdit({ SetStartDate: input.value });
+            }
+            // A date the timetable does not cover is refused, and the field shows the old one.
+            if (openSource !== null) {
+              input.value = openSource.trip.start_date;
             }
           }}
         />
       </label>
+      {#if gaps.length > 0}
+        <TimetableCoverageWarning {gaps} lastDepartureDate={lastDepartureDate(openSource.trip)} />
+      {/if}
       <div class="history-buttons">
         <button
           type="button"

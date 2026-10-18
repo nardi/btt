@@ -574,6 +574,39 @@ fn checks_enabled(state: &AppState) -> bool {
         .is_none_or(|value| value != "false")
 }
 
+/// A listed operator whose trains stop before the end of the timetable.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+pub struct OperatorEndDate {
+    /// The name the app shows to the traveller.
+    pub name: String,
+    /// The country of the operator's home network, as an ISO 3166 code.
+    pub country: String,
+    /// The last day on which one of the operator's trains departs from its first stop.
+    pub last_departure_date: NaiveDate,
+}
+
+/// Returns the listed operators whose trains stop before the timetable does, ordered by name.
+/// The list is empty when the app has no timetable.
+#[tauri::command]
+#[specta::specta]
+pub fn operator_end_dates(state: State<'_, AppState>) -> Vec<OperatorEndDate> {
+    state
+        .planning_backend
+        .as_ref()
+        .map(|backend| {
+            backend
+                .operator_ends()
+                .iter()
+                .map(|end| OperatorEndDate {
+                    name: end.name.to_string(),
+                    country: end.country.to_string(),
+                    last_departure_date: end.last_departure_date,
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// Returns what the app knows about its timetable, without any request.
 #[tauri::command]
 #[specta::specta]

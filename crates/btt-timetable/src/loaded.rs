@@ -327,6 +327,36 @@ impl LoadedTimetableBundle {
         )
     }
 
+    /// Returns the category, number and agency of every train label, in label order.
+    pub fn train_labels(&self) -> impl Iterator<Item = (&str, &str, &str)> + '_ {
+        self.archived().train_labels.iter().map(|label| {
+            (
+                self.pooled(label.category),
+                self.pooled(label.number),
+                self.pooled(label.agency),
+            )
+        })
+    }
+
+    /// Returns, for every train label in label order, the last day of the validity window on which
+    /// a trip with that label departs from its first stop. The entry is `None` when no trip with
+    /// the label runs on any day.
+    pub fn last_departure_day_by_train_label(&self) -> Vec<Option<u16>> {
+        let archived = self.archived();
+        let last_day_by_calendar: Vec<Option<u16>> = archived
+            .distinct_service_days
+            .iter()
+            .map(|days| days.to_native().last_day())
+            .collect();
+        let mut last_days = vec![None; archived.train_labels.len()];
+        for trip in archived.trips.iter() {
+            let calendar = trip.service_days.to_native().as_usize();
+            let label = trip.train_label.to_native().as_usize();
+            last_days[label] = last_days[label].max(last_day_by_calendar[calendar]);
+        }
+        last_days
+    }
+
     /// Returns whether a trip's train has couchettes or sleepers.
     pub fn trip_offers_berths(&self, trip: BundleTripIndex) -> bool {
         let archived = self.archived();

@@ -2,7 +2,7 @@
 
 use std::num::NonZeroU8;
 use std::path::Path;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
 use btt_geo::{TimeZoneFinder, local_time_to_unix_minutes};
 use btt_model::{
@@ -21,7 +21,9 @@ use btt_timetable::{
     StationIndex,
 };
 use chrono::NaiveDate;
+use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
+use smol_str::SmolStr;
 
 mod fare_samples;
 
@@ -31,7 +33,7 @@ use crate::chain::{ChainJourney, ChainStay, chain_through_costs};
 use crate::cost_model::LegCostModel;
 use crate::explanation::{CandidateExplanation, LegExplanation, RankedJourneyExplanation};
 use crate::input::{LegChainInput, LegEndpoint, LegPlanningInput, SameDayStop};
-use crate::operators::OperatorTable;
+use crate::operators::{OperatorEnd, OperatorTable};
 use crate::pricing::{JourneyPricer, NoPrice, PriceMode, RidePrices};
 use crate::ride_path::StationHopGraph;
 use crate::scoring::{
@@ -129,6 +131,9 @@ pub struct TimetableBundleRouter<P: JourneyPricer = NoPrice> {
     spare_search_buffers: Mutex<Vec<CostSearchBuffers>>,
     /// Tells the operator of a train from its agency and category.
     operators: OperatorTable,
+    /// The listed operators whose trains end before the bundle does. Computed on first use,
+    /// because it reads every trip of the bundle.
+    operator_ends: OnceLock<Vec<OperatorEnd>>,
     /// Prices a journey, which the plan shows next to the journey's time.
     pricer: P,
     /// The prices of rides, which the search adds to the cost. `None` when the pricer knows
@@ -191,9 +196,53 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             routes_with_berths,
             spare_search_buffers: Mutex::new(Vec::new()),
             operators,
+            operator_ends: OnceLock::new(),
             pricer,
             ride_prices,
         }
+    }
+
+    /// Returns the first and last day of the bundle's validity window, both inclusive.
+    pub fn validity_window(&self) -> (NaiveDate, NaiveDate) {
+        let first = self.validity_start();
+        let last = first + chrono::Days::new(u64::from(self.validity_days().saturating_sub(1)));
+        (first, last)
+    }
+
+    /// Returns the listed operators that have no trains on the last days of the bundle, with the
+    /// last day each has trains. An operator whose trains run until the end of the bundle is
+    /// left out, and so is every operator that `data/operators.toml` does not list.
+    pub fn operator_ends(&self) -> &[OperatorEnd] {
+        self.operator_ends.get_or_init(|| {
+            let start = self.bundle.validity_start();
+            let last_window_day = self.bundle.validity_days().saturating_sub(1);
+            // Every train label has one operator, so the regular expressions run once per
+            // distinct agency and category instead of once per trip.
+            let last_days = self.bundle.last_departure_day_by_train_label();
+            let mut last_day_by_operator: FxHashMap<SmolStr, u16> = FxHashMap::default();
+            for ((category, _number, agency), last_day) in self.bundle.train_labels().zip(last_days)
+            {
+                let Some(last_day) = last_day else { continue };
+                let operator = self.operators.operator_of(agency, category);
+                let entry = last_day_by_operator.entry(operator).or_insert(last_day);
+                *entry = (*entry).max(last_day);
+            }
+            let mut ends: Vec<OperatorEnd> = last_day_by_operator
+                .into_iter()
+                .filter(|&(_, last_day)| last_day < last_window_day)
+                .filter_map(|(id, last_day)| {
+                    let (name, country) = self.operators.details_of(&id)?;
+                    Some(OperatorEnd {
+                        name: name.into(),
+                        country: country.into(),
+                        last_departure_date: start + chrono::Days::new(u64::from(last_day)),
+                        id,
+                    })
+                })
+                .collect();
+            ends.sort_by(|left, right| left.name.cmp(&right.name));
+            ends
+        })
     }
 
     /// Returns the version of the bundle's data.
@@ -2151,6 +2200,82 @@ mod tests {
             },
         });
         LoadedTimetableBundle::from_bundle(&builder.build().unwrap()).unwrap()
+    }
+
+    /// A bundle of five days where DB Fernverkehr runs until the second day, Eurostar runs on
+    /// the last day and an agency that no rule lists runs on the first day only.
+    fn bundle_with_ending_operators() -> LoadedTimetableBundle {
+        let mut builder =
+            BundleBuilder::new(NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(), 5, 1).unwrap();
+        for (name, latitude) in [("S0", 50.0), ("S1", 50.05)] {
+            builder
+                .add_station(StationInput {
+                    name: name.into(),
+                    coordinates: GeoCoordinates::from_degrees(latitude, 8.0).unwrap(),
+                    time_zone: "Europe/Berlin".into(),
+                    trainline_station_id: None,
+                })
+                .unwrap();
+        }
+        let mut add_train = |agency: &str, days: &[u16]| {
+            let mut service_days = ServiceDayBitset::default();
+            for &day in days {
+                service_days.insert(day);
+            }
+            let stop = |station, time| TripStopInput {
+                station: BundleStationIndex(station),
+                arrival: time,
+                departure: time,
+                boarding_allowed: true,
+                alighting_allowed: true,
+            };
+            builder.add_trip(TripInput {
+                stops: vec![stop(0, 480), stop(1, 505)],
+                service_days,
+                train_label: TrainLabelInput {
+                    category: "ICE".into(),
+                    number: "1".into(),
+                    agency: agency.into(),
+                    offers_berths: false,
+                },
+            });
+        };
+        add_train("DB Fernverkehr AG", &[0, 1]);
+        add_train("Eurostar", &[0, 4]);
+        add_train("Obscure Rail", &[0]);
+        LoadedTimetableBundle::from_bundle(&builder.build().unwrap()).unwrap()
+    }
+
+    #[test]
+    fn operator_ends_lists_listed_operators_that_stop_before_the_bundle_does() {
+        let router = TimetableBundleRouter::from_loaded(
+            bundle_with_ending_operators(),
+            Arc::new(TimeZoneFinder::new()),
+            NoPrice,
+        );
+        let ends = router.operator_ends();
+        assert_eq!(ends.len(), 1);
+        assert_eq!(ends[0].name, "DB Fernverkehr");
+        assert_eq!(
+            ends[0].last_departure_date,
+            NaiveDate::from_ymd_opt(2026, 10, 2).unwrap()
+        );
+    }
+
+    #[test]
+    fn validity_window_is_inclusive_of_the_last_day() {
+        let router = TimetableBundleRouter::from_loaded(
+            bundle_with_ending_operators(),
+            Arc::new(TimeZoneFinder::new()),
+            NoPrice,
+        );
+        assert_eq!(
+            router.validity_window(),
+            (
+                NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(),
+                NaiveDate::from_ymd_opt(2026, 10, 5).unwrap()
+            )
+        );
     }
 
     /// The leg between the outer stations of the bundle, inside wide windows. The search

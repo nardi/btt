@@ -123,6 +123,18 @@ impl ServiceDayBitset {
     pub const fn is_empty(self) -> bool {
         self.0[0] == 0 && self.0[1] == 0
     }
+
+    /// Returns the highest day that is set, or `None` when no day is set.
+    pub fn last_day(self) -> Option<u16> {
+        let (word, first_day_of_word) = if self.0[1] == 0 {
+            (self.0[0], 0)
+        } else {
+            (self.0[1], 64)
+        };
+        // The highest set bit of the word is the base 2 logarithm rounded down.
+        let day = first_day_of_word + word.checked_ilog2()?;
+        u16::try_from(day).ok()
+    }
 }
 
 impl ArchivedServiceDayBitset {
@@ -355,6 +367,20 @@ pub struct TimetableBundle {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn last_day_is_the_highest_set_bit_of_either_word() {
+        let mut days = ServiceDayBitset::default();
+        assert_eq!(days.last_day(), None);
+        days.insert(0);
+        assert_eq!(days.last_day(), Some(0));
+        days.insert(63);
+        assert_eq!(days.last_day(), Some(63));
+        days.insert(64);
+        assert_eq!(days.last_day(), Some(64));
+        days.insert(127);
+        assert_eq!(days.last_day(), Some(127));
+    }
 
     #[test]
     fn packed_pattern_stop_keeps_station_and_flags() {
