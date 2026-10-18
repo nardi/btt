@@ -9,7 +9,7 @@ use crate::bundle_router::TimetableBundleRouter;
 use crate::explanation::LegExplanation;
 use crate::input::{LegChainInput, LegPlanningInput};
 use crate::pricing::{JourneyPricer, NoPrice};
-#[cfg(feature = "stub")]
+#[cfg(test)]
 use crate::stub::StubBackend;
 
 /// Revision of the planner's results. Cached results are `postcard` bytes, which don't
@@ -20,8 +20,8 @@ const LEG_PLAN_REVISION: u64 = 21;
 /// Plans single legs. An enum instead of a trait object, because the set of backends is fixed
 /// at compile time.
 pub enum LegPlanningBackend<P: JourneyPricer = NoPrice> {
-    /// Invents one direct train per leg from the straight-line distance.
-    #[cfg(feature = "stub")]
+    /// Invents one direct train per leg from the straight-line distance. Only tests use it.
+    #[cfg(test)]
     Stub(StubBackend),
     /// Searches journeys with RAPTOR on a timetable bundle.
     TimetableBundle(Arc<TimetableBundleRouter<P>>),
@@ -35,7 +35,7 @@ impl<P: JourneyPricer> LegPlanningBackend<P> {
     /// planner are never read back either.
     pub fn cache_namespace(&self) -> u64 {
         let backend = match self {
-            #[cfg(feature = "stub")]
+            #[cfg(test)]
             Self::Stub(_) => 1,
             Self::TimetableBundle(router) => (2 << 32) | u64::from(router.bundle_version()),
         };
@@ -46,7 +46,7 @@ impl<P: JourneyPricer> LegPlanningBackend<P> {
     /// backend that has none.
     pub fn bundle_version(&self) -> u32 {
         match self {
-            #[cfg(feature = "stub")]
+            #[cfg(test)]
             Self::Stub(_) => 0,
             Self::TimetableBundle(router) => router.bundle_version(),
         }
@@ -62,7 +62,7 @@ impl<P: JourneyPricer> LegPlanningBackend<P> {
         cancellation: &CancellationToken,
     ) -> LegPlanningResult {
         match self {
-            #[cfg(feature = "stub")]
+            #[cfg(test)]
             Self::Stub(stub) => {
                 // The stub answers in microseconds, so it never needs to stop early.
                 let _ = cancellation;
@@ -96,7 +96,7 @@ impl<P: JourneyPricer> LegPlanningBackend<P> {
         cancellation: &CancellationToken,
     ) -> LegExtras {
         match self {
-            #[cfg(feature = "stub")]
+            #[cfg(test)]
             Self::Stub(_) => {
                 let _ = (input, with_pass_options, cancellation);
                 plan.extras_without_changes()
@@ -125,7 +125,7 @@ impl<P: JourneyPricer> LegPlanningBackend<P> {
         cancellation: &CancellationToken,
     ) -> Vec<LegPlanningResult> {
         match self {
-            #[cfg(feature = "stub")]
+            #[cfg(test)]
             Self::Stub(stub) => {
                 let _ = cancellation;
                 chain
@@ -156,7 +156,7 @@ impl<P: JourneyPricer> LegPlanningBackend<P> {
     /// explain beyond its result.
     pub async fn explain_leg(&self, input: &LegPlanningInput) -> LegExplanation {
         match self {
-            #[cfg(feature = "stub")]
+            #[cfg(test)]
             Self::Stub(stub) => LegExplanation::without_search(stub.plan_leg(input)),
             Self::TimetableBundle(router) => {
                 let router = Arc::clone(router);
@@ -175,7 +175,7 @@ impl<P: JourneyPricer> LegPlanningBackend<P> {
     /// Returns a short name of the backend, for problem reports.
     pub fn kind_name(&self) -> &'static str {
         match self {
-            #[cfg(feature = "stub")]
+            #[cfg(test)]
             Self::Stub(_) => "stub",
             Self::TimetableBundle(_) => "timetable bundle",
         }

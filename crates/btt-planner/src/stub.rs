@@ -1,6 +1,7 @@
 //! A backend that invents one direct train per leg from the straight-line distance.
 //!
-//! It lets the whole pipeline from edit to plan run before any timetable data exists.
+//! Tests of the planning session use it to run the pipeline from edit to plan without a
+//! timetable bundle. The app itself always plans with a bundle.
 
 use std::sync::Arc;
 

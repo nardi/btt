@@ -11,8 +11,8 @@ mod pricing;
 mod ride_path;
 pub mod scoring;
 pub mod session;
-#[cfg(feature = "stub")]
-pub mod stub;
+#[cfg(test)]
+mod stub;
 
 pub use backend::LegPlanningBackend;
 pub use bundle_router::{FareSampleRide, TimetableBundleRouter};
@@ -30,5 +30,3 @@ pub use session::{
     DEFAULT_PLANNING_DEBOUNCE, LegResultStore, NoLegResultStore, PlanningEventSink,
     TripPlanningSession,
 };
-#[cfg(feature = "stub")]
-pub use stub::StubBackend;
