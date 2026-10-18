@@ -1,0 +1,123 @@
+name: Timetable
+
+on:
+  # Monday morning, so a bundle exists before the week's trips are planned.
+  schedule:
+    - cron: "0 5 * * 1"
+  # A new feed or a fix can publish without waiting for Monday.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One run at a time, so a manual run during the Monday build cannot race with it when both
+# replace the manifest. A run that is already going finishes first.
+concurrency:
+  group: timetable
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  GH_TOKEN: ${{ github.token }}
+  # Releases tagged `timetable-<version>` hold one bundle each. The release `timetable-index`
+  # holds the manifest of the bundles that are still valid.
+  INDEX_TAG: timetable-index
+
+jobs:
+  bundle:
+    name: Build and publish a bundle
+    runs-on: ubuntu-latest
+    # A feed download that stalls should fail the run instead of holding the runner.
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      # The runner starts with about 14 GB of free disk, and the release build, the feeds and the
+      # working database together come close to it. These preinstalled toolchains are unused.
+      - name: Free disk space
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      # Every week starts from the cache of the week before, and the builder skips the feeds
+      # that did not change since.
+      - id: week
+        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: build-cache/feeds
+          key: feeds-${{ steps.week.outputs.week }}
+          restore-keys: feeds-
+
+      - name: Build the bundle
+        run: |
+          cargo run --release -p btt-builder -- \
+            --memory-limit 8GB \
+            --download-base-url "https://github.com/$GITHUB_REPOSITORY/releases/download"
+
+      - name: Publish the bundle
+        id: publish
+        run: |
+          output=build-cache/output
+          entry=$(ls "$output"/timetable-*.json)
+          version=$(jq -r .version "$entry")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          gh release create "timetable-$version" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --latest=false \
+            --title "Timetable $version" \
+            --notes "Timetable bundle $version. The app downloads it by itself, see the report for the feeds in it." \
+            "$output/timetable-$version.bundle.zst" \
+            "$output/timetable-$version.bundle.zst.sha256" \
+            "$output/report.md"
+
+      # The release with the manifest is created on the first run. Later runs only replace the
+      # file in it.
+      - name: Update the manifest
+        run: |
+          if ! gh release view "$INDEX_TAG" > /dev/null 2>&1; then
+            gh release create "$INDEX_TAG" \
+              --target "$GITHUB_SHA" \
+              --prerelease \
+              --latest=false \
+              --title "Timetable index" \
+              --notes "Holds timetable.json, the list of timetable bundles that can be downloaded. The workflow replaces it every week."
+          fi
+
+          # A download that fails stops the run. Only a manifest that was never uploaded starts
+          # the list from nothing, because an empty list would also delete the live bundles.
+          has_manifest=$(gh release view "$INDEX_TAG" --json assets \
+            --jq '[.assets[].name] | index("timetable.json") != null')
+          if [ "$has_manifest" = true ]; then
+            gh release download "$INDEX_TAG" --pattern timetable.json --output previous.json
+          else
+            echo '{"bundles": []}' > previous.json
+          fi
+
+          # The new entry joins the live ones, and the three newest that still cover today stay.
+          today=$(date -u +%F)
+          jq --slurpfile entry build-cache/output/timetable-*.json --arg today "$today" '
+            .bundles = (
+              ([$entry[0]] + [.bundles[] | select(.version != $entry[0].version)])
+              | map(select(.valid_until >= $today))
+              | sort_by(.version)
+              | reverse
+              | .[0:3]
+            )
+          ' previous.json > timetable.json
+          cat timetable.json
+          gh release upload "$INDEX_TAG" timetable.json --clobber
+
+      # A bundle that left the manifest is not downloaded anymore, so its release can go.
+      - name: Delete the releases of old bundles
+        run: |
+          kept=$(jq -r '.bundles[].version' timetable.json)
+          gh release list --limit 200 --json tagName --jq '.[].tagName' \
+            | grep -E '^timetable-[0-9]+$' \
+            | while read -r tag; do
+                if ! echo "$kept" | grep -qx "${tag#timetable-}"; then
+                  gh release delete "$tag" --cleanup-tag --yes
+                fi
+              done
