@@ -294,6 +294,33 @@ impl Storage {
         Ok(deleted_rows > 0)
     }
 
+    /// Returns the value of a setting, or `None` when it was never saved.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the query fails.
+    pub fn setting(&self, setting_key: &str) -> Result<Option<String>, StorageError> {
+        Ok(self
+            .connection()
+            .prepare_cached("SELECT setting_value FROM settings WHERE setting_key = ?1")?
+            .query_row(params![setting_key], |row| row.get(0))
+            .optional()?)
+    }
+
+    /// Saves the value of a setting, replacing an earlier one.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the query fails.
+    pub fn set_setting(&self, setting_key: &str, setting_value: &str) -> Result<(), StorageError> {
+        self.connection()
+            .prepare_cached(
+                "INSERT OR REPLACE INTO settings (setting_key, setting_value) VALUES (?1, ?2)",
+            )?
+            .execute(params![setting_key, setting_value])?;
+        Ok(())
+    }
+
     /// Returns a document fetched from a booking site, if it was saved at most `max_age_seconds`
     /// ago.
     ///
@@ -556,6 +583,15 @@ mod tests {
     }
 
     #[test]
+    fn a_setting_is_none_until_saved_and_then_replaced_by_each_save() {
+        let storage = Storage::open_in_memory().unwrap();
+        assert_eq!(storage.setting("example").unwrap(), None);
+        storage.set_setting("example", "one").unwrap();
+        storage.set_setting("example", "two").unwrap();
+        assert_eq!(storage.setting("example").unwrap().as_deref(), Some("two"));
+    }
+
+    #[test]
     fn saved_trips_load_and_list() {
         let storage = Storage::open_in_memory().unwrap();
         let trip = example_trip();
@@ -608,7 +644,7 @@ mod tests {
             .unwrap();
         let storage = Storage::from_connection(connection).unwrap();
         storage.store_quote("key", "one").unwrap();
-        assert!(storage.list_travellers().unwrap().is_empty());
+        assert_eq!(storage.list_travellers().unwrap(), Vec::new());
     }
 
     #[test]

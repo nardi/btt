@@ -20,9 +20,13 @@ btt-geo.workspace = true
 btt-model.workspace = true
 btt-planner.workspace = true
 btt-quotes.workspace = true
+btt-timetable.workspace = true
 btt-storage.workspace = true
 btt-ticketing.workspace = true
 chrono.workspace = true
+reqwest.workspace = true
+semver.workspace = true
+zstd.workspace = true
 rustc-hash.workspace = true
 serde.workspace = true
 smol_str.workspace = true
@@ -39,9 +43,6 @@ tracing-subscriber.workspace = true
 zip.workspace = true
 sha2.workspace = true
 serde_json.workspace = true
-
-[dev-dependencies]
-btt-timetable.workspace = true
 
 [lints]
 workspace = true

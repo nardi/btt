@@ -9,6 +9,7 @@
     type TicketItem,
     type TicketLeg,
     type TicketPlan,
+    type TimetableStatus,
     type TripId,
     type TripSummary,
   } from "@btt/shared/bindings";
@@ -28,6 +29,7 @@
   import { commandErrorMessage, TauriTripSource } from "./tauri-trip-source.svelte";
   import ProblemReportDialog from "./ProblemReportDialog.svelte";
   import ShareDialog from "./ShareDialog.svelte";
+  import TimetableDialog from "./TimetableDialog.svelte";
   import TripList from "./TripList.svelte";
 
   let trips: TripSummary[] = $state([]);
@@ -37,6 +39,9 @@
   let focusRequest: PlaceFocusRequest | null = $state(null);
   let showProblemReport = $state(false);
   let showShare = $state(false);
+  /** What the app knows about its timetable, or `null` until the backend answered. */
+  let timetableStatus: TimetableStatus | null = $state(null);
+  let showTimetable = $state(false);
   /** The screens of an open trip. A trip opens on planning. */
   type Screen = "setup" | "planning" | "tickets";
   let screen: Screen = $state("planning");
@@ -297,20 +302,61 @@
     }
   }
 
+  /**
+   * Reads the timetable status and opens the dialog when the app has no timetable. Then checks
+   * the server if the traveller allows it, and opens the dialog for a newer timetable.
+   */
+  async function startTimetableUpdates() {
+    timetableStatus = await commands.timetableStatus();
+    // Without a timetable the app cannot plan, so it looks for one even when checks are off.
+    if (!timetableStatus.checks_enabled && timetableStatus.installed !== null) {
+      return;
+    }
+    const checked = await commands.checkTimetable();
+    if (checked.status === "ok") {
+      timetableStatus = checked.data;
+      const { installed, available } = checked.data;
+      if (available?.newer && available.readable && installed !== null) {
+        showTimetable = true;
+      }
+    }
+  }
+
   onMount(() => {
     void refreshTrips();
     void refreshTravellers();
+    void startTimetableUpdates();
   });
 </script>
 
 <svelte:window onkeydown={handleHistoryShortcut} />
 
 <main class:trip-open={openSource !== null}>
+  {#if timetableStatus !== null && (showTimetable || timetableStatus.installed === null)}
+    <TimetableDialog
+      status={timetableStatus}
+      onStatus={(status) => (timetableStatus = status)}
+      onClose={() => (showTimetable = false)}
+    />
+  {/if}
+
   {#if errorMessage !== null}
     <p class="error" role="alert">{errorMessage}</p>
   {/if}
 
   {#if openSource === null}
+    {#if timetableStatus !== null && !showTimetable && (timetableStatus.installed?.running_out || timetableStatus.restart_needed)}
+      <p class="notice">
+        {#if timetableStatus.restart_needed}
+          A new timetable is ready and needs a restart.
+        {:else if timetableStatus.installed !== null && timetableStatus.installed.days_left < 0}
+          The timetable has expired.
+        {:else}
+          The timetable ends in {timetableStatus.installed?.days_left} days.
+        {/if}
+        <button type="button" onclick={() => (showTimetable = true)}>Timetable</button>
+      </p>
+    {/if}
     <TripList {trips} onCreate={createTrip} onOpen={openTrip} onDelete={deleteTrip} />
   {:else}
     <header class="trip-header">
@@ -560,5 +606,13 @@
   .error {
     margin: 0;
     color: var(--color-danger);
+  }
+
+  .notice {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0;
+    color: var(--color-text-muted);
   }
 </style>

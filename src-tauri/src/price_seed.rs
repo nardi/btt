@@ -98,7 +98,8 @@ pub fn start(app: &AppHandle) {
 /// exits the app.
 async fn run_seed(app: AppHandle, path: std::ffi::OsString) {
     let state = app.state::<AppState>();
-    let LegPlanningBackend::TimetableBundle(router) = state.planning_backend.as_ref() else {
+    let Some(LegPlanningBackend::TimetableBundle(router)) = state.planning_backend.as_deref()
+    else {
         tracing::error!("the seed run needs a timetable bundle");
         app.exit(1);
         return;

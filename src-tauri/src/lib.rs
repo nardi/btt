@@ -15,6 +15,7 @@ mod sharing;
 mod site_quotes;
 mod state;
 mod ticket_report;
+mod timetable_updates;
 mod webview_quotes;
 
 use btt_storage::Storage;
@@ -29,6 +30,9 @@ use crate::state::AppState;
 /// Path of the generated TypeScript bindings, relative to this crate.
 pub const TYPESCRIPT_BINDINGS_PATH: &str =
     concat!(env!("CARGO_MANIFEST_DIR"), "/../ui/shared/src/bindings.ts");
+
+/// Environment variable that replaces the app data directory, for development.
+const DATA_DIRECTORY_VARIABLE: &str = "BTT_DATA_DIRECTORY";
 
 /// Collects the commands the frontend may call.
 pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
@@ -54,6 +58,11 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             problem_report::export_problem_report,
             sharing::share_trip,
             sharing::export_trip_file,
+            timetable_updates::timetable_status,
+            timetable_updates::check_timetable,
+            timetable_updates::download_timetable,
+            timetable_updates::set_timetable_checks,
+            timetable_updates::restart_app,
         ])
         // The viewer reads the file of a shared trip, which no command returns.
         .typ::<btt_model::StoredSnapshot>()
@@ -100,7 +109,13 @@ pub fn run() {
         .invoke_handler(specta_builder.invoke_handler())
         .setup(move |app| {
             specta_builder.mount_events(app);
-            let data_directory = app.path().app_data_dir()?;
+            // A development override lets a test start with no timetable and no trips, without
+            // touching the real data. It must be an absolute path, because the working directory
+            // of the app differs between `tauri dev` and an installed app.
+            let data_directory = match std::env::var_os(DATA_DIRECTORY_VARIABLE) {
+                Some(path) => std::path::PathBuf::from(path),
+                None => app.path().app_data_dir()?,
+            };
             std::fs::create_dir_all(&data_directory)?;
             let storage = Storage::open(&data_directory.join("btt.sqlite3"))?;
             let state = AppState::new(

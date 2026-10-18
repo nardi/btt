@@ -51,6 +51,9 @@ export function commandErrorMessage(error: CommandError): string {
   if (error.Sharing !== undefined) {
     return `Sharing failed: ${error.Sharing.message}`;
   }
+  if (error.Timetable !== undefined) {
+    return `Timetable failed: ${error.Timetable.message}`;
+  }
   return `Place search failed: ${error.PlaceSearch.message}`;
 }
 

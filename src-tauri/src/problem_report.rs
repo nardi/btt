@@ -122,7 +122,8 @@ pub async fn export_problem_report(
         return Ok(None);
     };
 
-    let namespace = state.planning_backend.cache_namespace();
+    let planning_backend = state.planning_backend()?;
+    let namespace = planning_backend.cache_namespace();
     let chains = leg_chain_inputs(&trip);
     let mut legs = Vec::new();
     for chain in &chains {
@@ -130,7 +131,7 @@ pub async fn export_problem_report(
             let cache_key = chain.leg_cache_key(namespace, index);
             legs.push(ReportedLeg {
                 stored_result: state.storage.cached_leg_result(cache_key.0)?,
-                explanation: state.planning_backend.explain_leg(&identified.input).await,
+                explanation: planning_backend.explain_leg(&identified.input).await,
                 input: identified.input.clone(),
                 cache_key: cache_key.0,
             });
@@ -141,7 +142,7 @@ pub async fn export_problem_report(
         created_at: chrono::Local::now().to_rfc3339(),
         app_version: env!("CARGO_PKG_VERSION"),
         operating_system: std::env::consts::OS,
-        backend: state.planning_backend.kind_name(),
+        backend: planning_backend.kind_name(),
         bundle: state.bundle_path.as_deref().and_then(bundle_summary),
     };
     let tickets = TicketsReport {

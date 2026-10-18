@@ -153,6 +153,26 @@ export const commands = {
 	 *  Returns an error when the trip is not open or the file cannot be written.
 	 */
 	exportTripFile: (tripId: TripId, legs: SnapshotLeg[]) => typedError<string | null, CommandError>(__TAURI_INVOKE("export_trip_file", { tripId, legs })),
+	/**  Returns what the app knows about its timetable, without any request. */
+	timetableStatus: () => __TAURI_INVOKE<TimetableStatus>("timetable_status"),
+	/**
+	 *  Asks the server for the list of timetables and returns the status with the answer. A failed
+	 *  request does not fail the command. The status carries the reason instead.
+	 * 
+	 *  Async, so the request does not block the window.
+	 */
+	checkTimetable: () => typedError<TimetableStatus, CommandError>(__TAURI_INVOKE("check_timetable")),
+	/**
+	 *  Downloads the newest timetable and reports its progress through `progress`. The planner uses
+	 *  it after the next start of the app.
+	 * 
+	 *  Async, so the download does not block the window.
+	 */
+	downloadTimetable: (progress: Channel<DownloadProgress>) => typedError<TimetableStatus, CommandError>(__TAURI_INVOKE("download_timetable", { progress })),
+	/**  Turns the check for a newer timetable on startup on or off. */
+	setTimetableChecks: (enabled: boolean) => typedError<null, CommandError>(__TAURI_INVOKE("set_timetable_checks", { enabled })),
+	/**  Restarts the app, so the planner loads a timetable that was just downloaded. */
+	restartApp: () => __TAURI_INVOKE<void>("restart_app"),
 };
 
 /* Types */
@@ -201,6 +221,22 @@ export type ArrivalFootpath = {
 	way: StationWay,
 };
 
+/**  The newest bundle on the server, as the frontend shows it. */
+export type AvailableTimetable = {
+	/**  Version of the data as `yyyymmddNN`. */
+	version: number,
+	/**  Last day the bundle covers, inclusive. */
+	valid_until: string,
+	/**  Size of the download in bytes. */
+	size_bytes: number,
+	/**  Whether this is newer than the installed bundle, or whether none is installed. */
+	newer: boolean,
+	/**  Whether this app can read the bundle. */
+	readable: boolean,
+	/**  The oldest app version that reads the bundle. */
+	minimum_app_version: string,
+};
+
 /**  Kind of berth on a night train. */
 export type BerthType = 
 /**  A bunk in a shared compartment of four or six. */
@@ -241,28 +277,33 @@ export type ChosenJourney = {
 /**  Errors a command returns to the frontend. */
 export type CommandError = 
 /**  No trip with this ID exists. */
-({ TripNotFound: TripId }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; Storage?: never; TripNotOpen?: never } | 
+({ TripNotFound: TripId }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; Storage?: never; Timetable?: never; TripNotOpen?: never } | 
 /**  The frontend edited a trip it has not opened. */
-({ TripNotOpen: TripId }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; Storage?: never; TripNotFound?: never } | 
+({ TripNotOpen: TripId }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; Storage?: never; Timetable?: never; TripNotFound?: never } | 
 /**  The edit does not fit the trip. */
-({ InvalidEdit: TripEditError }) & { PlaceSearch?: never; Sharing?: never; Storage?: never; TripNotFound?: never; TripNotOpen?: never } | 
+({ InvalidEdit: TripEditError }) & { PlaceSearch?: never; Sharing?: never; Storage?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
 /**  Reading or writing the database failed. */
 ({ Storage: {
 	/**  Description of the failure. */
 	message: string,
-} }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; TripNotFound?: never; TripNotOpen?: never } | 
+} }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
 /**  The place search service failed or could not be reached. */
 ({ PlaceSearch: {
 	/**  Description of the failure. */
 	message: string,
-} }) & { InvalidEdit?: never; Sharing?: never; Storage?: never; TripNotFound?: never; TripNotOpen?: never } | 
+} }) & { InvalidEdit?: never; Sharing?: never; Storage?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
 /**  The trip has more journeys than a link can carry. */
 "TripTooLargeForLink" | 
 /**  Writing the link or the trip file failed. */
 ({ Sharing: {
 	/**  Description of the failure. */
 	message: string,
-} }) & { InvalidEdit?: never; PlaceSearch?: never; Storage?: never; TripNotFound?: never; TripNotOpen?: never };
+} }) & { InvalidEdit?: never; PlaceSearch?: never; Storage?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
+/**  Downloading or installing a timetable failed. */
+({ Timetable: {
+	/**  Description of the failure. */
+	message: string,
+} }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; Storage?: never; TripNotFound?: never; TripNotOpen?: never };
 
 /**
  *  A time window that recurs on every travel day, such as 08:00 to 12:00.
@@ -295,6 +336,23 @@ export type DiscountCard =
 "OebbVorteilscard" | 
 /**  SNCF Carte Avantage. */
 "SncfAvantage";
+
+/**  How far a download has come. */
+export type DownloadProgress = {
+	/**  The step the download is in. */
+	stage: DownloadStage,
+	/**  Bytes received so far. */
+	received_bytes: number,
+	/**  Bytes the download has in total. */
+	total_bytes: number,
+};
+
+/**  The step of a download. */
+export type DownloadStage = 
+/**  Bytes are arriving from the server. */
+"Downloading" | 
+/**  The download is complete and is being unpacked and checked. */
+"Unpacking";
 
 /**  A length of time in whole minutes, up to 65,535, which is about 45 days. */
 export type DurationMinutes = number;
@@ -345,6 +403,20 @@ export type GeoCoordinates = {
 	latitude: Latitude,
 	/**  East-west position. */
 	longitude: Longitude,
+};
+
+/**  The bundle the planner uses, as the frontend shows it. */
+export type InstalledTimetable = {
+	/**  Version of the data as `yyyymmddNN`. */
+	version: number,
+	/**  First day the bundle covers. */
+	valid_from: string,
+	/**  Last day the bundle covers, inclusive. */
+	valid_until: string,
+	/**  Days from today to the last day. Negative once the bundle has expired. */
+	days_left: number,
+	/**  Whether `days_left` is low enough to warn about. */
+	running_out: boolean,
 };
 
 /**  How the planner treats trains the Interrail pass does not cover. */
@@ -1172,6 +1244,23 @@ export type TicketStrategy = {
 	covers: number[][],
 	/**  Things the traveller should know, such as rides that no ticket was priced for. */
 	notes: string[],
+};
+
+/**  What the app knows about its timetable and the ones on the server. */
+export type TimetableStatus = {
+	/**  The bundle the planner uses, or `None` when the app plans without one. */
+	installed: InstalledTimetable | null,
+	/**
+	 *  The newest bundle on the server. `None` until a check succeeds, or when the server lists
+	 *  no valid bundle.
+	 */
+	available: AvailableTimetable | null,
+	/**  Whether the app checks for a newer timetable on startup. */
+	checks_enabled: boolean,
+	/**  Whether a timetable was downloaded that the planner will only use after a restart. */
+	restart_needed: boolean,
+	/**  Why the last check failed, if it did. */
+	check_error: string | null,
 };
 
 /**  How a train is shown to the traveller, such as "ICE 27". */

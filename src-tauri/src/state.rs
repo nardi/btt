@@ -11,11 +11,12 @@ use btt_model::{
 };
 use btt_planner::{
     DEFAULT_PLANNING_DEBOUNCE, LegCacheKey, LegPlanningBackend, LegResultStore, PlanningEventSink,
-    StubBackend, TimetableBundleRouter, TripPlanningSession,
+    TimetableBundleRouter, TripPlanningSession,
 };
 use btt_quotes::QuoteStore;
 use btt_quotes::sbb::SbbService;
 use btt_storage::Storage;
+use btt_timetable::manifest::last_valid_day;
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 use tauri::ipc::Channel;
@@ -25,6 +26,9 @@ use crate::log_buffer::RecentLogLines;
 use crate::place_naming::{has_provisional_name, provisional_place_name};
 use crate::pricing::PriceBookJourneyPricer;
 use crate::ticket_report::{LiveQuoteLogEntry, TicketPlanRecord};
+use crate::timetable_updates::{
+    InstalledBundle, KEPT_BUNDLE_FILES, TimetableUpdates, prune_bundles,
+};
 
 /// `User-Agent` for requests to public services, which ask clients to identify themselves.
 const USER_AGENT: &str = concat!(
@@ -102,8 +106,9 @@ pub struct OpenTrip {
 pub struct AppState {
     /// The app's database, shared with the planning sessions.
     pub storage: Arc<Storage>,
-    /// Plans single legs for every planning session.
-    pub planning_backend: Arc<LegPlanningBackend<PriceBookJourneyPricer>>,
+    /// Plans single legs for every planning session. `None` until a timetable bundle is
+    /// installed and the app restarted, and then no trip can open.
+    pub planning_backend: Option<Arc<LegPlanningBackend<PriceBookJourneyPricer>>>,
     /// Searches places by name and position.
     pub photon: PhotonClient,
     /// The pass list, reservation rules and price model for tickets, shared with the planner's
@@ -135,6 +140,10 @@ pub struct AppState {
     pub exchange_rate_service: Option<btt_quotes::ecb::ExchangeRateService>,
     /// The timetable bundle the planner loaded, if any.
     pub bundle_path: Option<PathBuf>,
+    /// Facts about that bundle, for the timetable status.
+    pub installed_bundle: Option<InstalledBundle>,
+    /// Checks for newer timetable bundles and downloads them.
+    pub timetable_updates: TimetableUpdates,
     /// The most recent log lines, for problem reports.
     pub recent_log_lines: RecentLogLines,
     /// Language for place names, as a two-letter code.
@@ -151,8 +160,8 @@ pub struct AppState {
 impl AppState {
     /// Creates the shared state around an opened database.
     ///
-    /// Plans with the timetable bundle `find_bundle` returns, or with the stub backend when
-    /// there is none or it fails to load.
+    /// Plans with the timetable bundle `find_bundle` returns. Without one, or when it fails to
+    /// load, the app starts without a planning backend and asks for a download.
     ///
     /// # Errors
     ///
@@ -170,31 +179,31 @@ impl AppState {
         let fare_data = Arc::new(FareData::bundled().expect("the bundled fare data is valid"));
         let price_book = Arc::new(PriceBook::from_data(&fare_data));
         let pricer = PriceBookJourneyPricer::new(Arc::clone(&fare_data), Arc::clone(&price_book));
-        let bundle_path = find_bundle(data_directory);
-        let bundle_router = bundle_path.clone().and_then(|path| {
-            match TimetableBundleRouter::open(&path, Arc::clone(&time_zone_finder), pricer) {
-                Ok(router) => {
-                    tracing::info!(path = %path.display(), version = router.bundle_version(), "planning with a timetable bundle");
-                    Some(router)
+        let timetable_updates = TimetableUpdates::new(data_directory, USER_AGENT)?;
+        // Nothing has mapped a bundle yet, so old files can go. This must run before the bundle
+        // loads, because Windows refuses to delete a mapped file.
+        if let Err(error) = prune_bundles(timetable_updates.bundles_directory(), KEPT_BUNDLE_FILES)
+        {
+            tracing::warn!(%error, "could not remove old timetable bundles");
+        }
+        let OpenedBundle {
+            path: bundle_path,
+            installed: installed_bundle,
+            router: bundle_router,
+        } = open_bundle(data_directory, &time_zone_finder, pricer);
+        let planning_backend = bundle_router
+            .map(|router| Arc::new(LegPlanningBackend::TimetableBundle(Arc::new(router))));
+        if let Some(backend) = &planning_backend {
+            // Legs planned with another bundle version can never match again.
+            match storage.delete_leg_results_outside(backend.cache_namespace()) {
+                Ok(0) => {}
+                Ok(deleted) => {
+                    tracing::info!(deleted, "removed planned legs of an older timetable");
                 }
-                Err(error) => {
-                    tracing::warn!(path = %path.display(), %error, "the timetable bundle failed to load");
-                    None
-                }
+                Err(error) => tracing::warn!(%error, "could not clean up planned legs"),
             }
-        });
-        let planning_backend = Arc::new(if let Some(router) = bundle_router {
-            LegPlanningBackend::TimetableBundle(Arc::new(router))
         } else {
-            tracing::info!("no timetable bundle, planning with made-up trains");
-            LegPlanningBackend::Stub(StubBackend::new(time_zone_finder))
-        });
-        // Legs planned with another bundle version or backend can never match again.
-        let namespace = planning_backend.cache_namespace();
-        match storage.delete_leg_results_outside(namespace) {
-            Ok(0) => {}
-            Ok(deleted) => tracing::info!(deleted, "removed planned legs of an older timetable"),
-            Err(error) => tracing::warn!(%error, "could not clean up planned legs"),
+            tracing::info!("no timetable bundle, the app asks for a download");
         }
         // The data files are compiled in and a test in `btt-fares` loads them, so this cannot fail.
         let storage = Arc::new(storage);
@@ -250,6 +259,8 @@ impl AppState {
             planning_backend,
             photon: PhotonClient::new(PUBLIC_PHOTON_BASE_URL, USER_AGENT)?,
             bundle_path,
+            installed_bundle,
+            timetable_updates,
             recent_log_lines,
             // Place names come in English until the app has a language setting.
             language: "en".into(),
@@ -280,11 +291,34 @@ impl AppState {
             .unwrap_or_else(PoisonError::into_inner)
     }
 
+    /// Returns the backend that plans legs.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the app has no timetable bundle.
+    pub fn planning_backend(
+        &self,
+    ) -> Result<&Arc<LegPlanningBackend<PriceBookJourneyPricer>>, CommandError> {
+        self.planning_backend
+            .as_ref()
+            .ok_or_else(|| CommandError::Timetable {
+                message: "the app has no timetable, download one first".to_owned(),
+            })
+    }
+
     /// Starts a planning session for a trip and registers it as open. Replaces an earlier
     /// session for the same trip, for example after the frontend reloaded.
-    pub fn open_trip(&self, trip: Trip, events: Channel<PlanningSessionEvent>) {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the app has no timetable bundle.
+    pub fn open_trip(
+        &self,
+        trip: Trip,
+        events: Channel<PlanningSessionEvent>,
+    ) -> Result<(), CommandError> {
         let planning_session = TripPlanningSession::with_result_store(
-            Arc::clone(&self.planning_backend),
+            Arc::clone(self.planning_backend()?),
             ChannelEventSink(events),
             StorageLegResultStore(Arc::clone(&self.storage)),
             DEFAULT_PLANNING_DEBOUNCE,
@@ -298,6 +332,7 @@ impl AppState {
                 history: TripHistory::default(),
             },
         );
+        Ok(())
     }
 
     /// Applies an edit from the frontend to an open trip, saves it and replans.
@@ -424,6 +459,56 @@ impl AppState {
         open_trip.trip = trip.clone();
         open_trip.planning_session.trip_changed_elsewhere(trip);
         Ok(())
+    }
+}
+
+/// The timetable bundle the app found at startup and what came of loading it.
+struct OpenedBundle {
+    /// The file `find_bundle` picked, if there is one.
+    path: Option<PathBuf>,
+    /// Facts about the bundle, when it loaded.
+    installed: Option<InstalledBundle>,
+    /// The router over the bundle, when it loaded.
+    router: Option<TimetableBundleRouter<PriceBookJourneyPricer>>,
+}
+
+/// Finds the timetable bundle to plan with and loads it. A bundle that fails to load is logged
+/// and treated as missing, so the app starts and offers to download a new one.
+fn open_bundle(
+    data_directory: &Path,
+    time_zone_finder: &Arc<TimeZoneFinder>,
+    pricer: PriceBookJourneyPricer,
+) -> OpenedBundle {
+    let path = find_bundle(data_directory);
+    let Some(bundle_path) = &path else {
+        return OpenedBundle {
+            path,
+            installed: None,
+            router: None,
+        };
+    };
+    match TimetableBundleRouter::open(bundle_path, Arc::clone(time_zone_finder), pricer) {
+        Ok(router) => {
+            tracing::info!(path = %bundle_path.display(), version = router.bundle_version(), "planning with a timetable bundle");
+            let installed = Some(InstalledBundle {
+                version: router.bundle_version(),
+                valid_from: router.validity_start(),
+                valid_until: last_valid_day(router.validity_start(), router.validity_days()),
+            });
+            OpenedBundle {
+                path,
+                installed,
+                router: Some(router),
+            }
+        }
+        Err(error) => {
+            tracing::warn!(path = %bundle_path.display(), %error, "the timetable bundle failed to load");
+            OpenedBundle {
+                path,
+                installed: None,
+                router: None,
+            }
+        }
     }
 }
 

@@ -4,7 +4,7 @@ import demo from "../fixtures/demo.json";
 import { decodeSnapshotLink } from "../link/snapshot-link";
 import { readQrCode, tripPayloadOfQr } from "./qr-reader";
 
-const address = "https://nardilam.github.io/btt/#";
+const address = "https://nardi.github.io/btt/#";
 
 describe("reading a QR code that holds a trip", () => {
   it("reads the code the app draws, and the trip in it", async () => {

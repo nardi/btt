@@ -201,6 +201,16 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
         self.bundle.bundle_version()
     }
 
+    /// Returns the first day the bundle covers.
+    pub fn validity_start(&self) -> NaiveDate {
+        self.bundle.validity_start()
+    }
+
+    /// Returns the number of days the bundle covers, counted from its first day.
+    pub fn validity_days(&self) -> u16 {
+        self.bundle.validity_days()
+    }
+
     /// Plans one leg, without the searches of `plan_extras`, so the result arrives as soon as
     /// the leg's own search is done. `should_stop` lets a newer planning run cancel the search.
     pub fn plan_leg(
@@ -2392,7 +2402,7 @@ mod tests {
                 .collect::<Vec<_>>()
         };
         let by_time = planned_leg(pricer, PriceWeight::TIME_FIRST, 480);
-        assert!(ranked(&by_time).is_empty());
+        assert_eq!(ranked(&by_time), Vec::<String>::new());
         let by_price = planned_leg(pricer, PriceWeight::FRUGAL, 480);
         assert_eq!(ranked(&by_price), ["ICE"]);
     }

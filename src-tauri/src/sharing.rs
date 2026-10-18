@@ -18,7 +18,7 @@ use crate::commands::{CommandError, today_utc};
 use crate::state::AppState;
 
 /// Web address of the viewer, which GitHub Pages serves from the repository.
-const VIEWER_URL: &str = "https://nardilam.github.io/btt/";
+const VIEWER_URL: &str = "https://nardi.github.io/btt/";
 
 /// Link length in characters above which some messengers cut the link.
 const LONG_LINK_CHARACTERS: usize = 8 * 1024;
@@ -66,7 +66,7 @@ fn snapshot_of_open_trip(
         &trip,
         legs,
         today_utc(),
-        state.planning_backend.bundle_version(),
+        state.planning_backend()?.bundle_version(),
     ))
 }
 

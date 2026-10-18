@@ -54,6 +54,12 @@ pub enum CommandError {
         /// Description of the failure.
         message: String,
     },
+    /// Downloading or installing a timetable failed.
+    #[error("timetable download failed: {message}")]
+    Timetable {
+        /// Description of the failure.
+        message: String,
+    },
 }
 
 impl From<btt_storage::StorageError> for CommandError {
@@ -98,7 +104,7 @@ pub async fn open_trip(
         .storage
         .load_trip(trip_id)?
         .ok_or(CommandError::TripNotFound(trip_id))?;
-    state.open_trip(trip.clone(), events);
+    state.open_trip(trip.clone(), events)?;
     Ok(trip)
 }
 
