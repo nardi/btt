@@ -85,6 +85,17 @@ export function formatDate(isoDate: string): string {
   }).format(new Date(`${isoDate}T00:00:00Z`));
 }
 
+/** Formats a `YYYY-MM-DD` date with its year, such as `Thu 1 Oct 2026`. */
+export function formatDateWithYear(isoDate: string): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${isoDate}T00:00:00Z`));
+}
+
 /** Formats a distance, such as `800 m`, `2.5 km` or `12 km`. */
 export function formatDistance(meters: number): string {
   if (meters < 1000) {

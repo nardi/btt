@@ -7,7 +7,7 @@
     type DownloadProgress,
     type TimetableStatus,
   } from "@btt/shared/bindings";
-  import { formatDate } from "@btt/shared/format";
+  import { formatDateWithYear } from "@btt/shared/format";
   import { Channel } from "@tauri-apps/api/core";
 
   import { commandErrorMessage } from "./tauri-trip-source.svelte";
@@ -84,56 +84,50 @@
 
 <div class="backdrop" role="presentation">
   <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="timetable-title">
-    {#if status.restart_needed}
-      <h2 id="timetable-title">Timetable downloaded</h2>
-      <p>The app plans with the new timetable after it restarts.</p>
-    {:else if status.installed === null}
+    {#if status.installed === null}
       <h2 id="timetable-title">Timetable needed</h2>
       <p>
-        Planning a journey needs the train timetables of Europe. The app does not ship with them,
-        which keeps the app small and lets the timetables stay up to date. The app cannot plan a
-        trip until it has them.
+        To plan a trip, the app needs to download a timetable file containing the latest train
+        timetables for all European operators.
       </p>
     {:else if status.installed.days_left < 0}
       <h2 id="timetable-title">Timetable expired</h2>
       <p>
-        The timetable ended on {formatDate(status.installed.valid_until)}. The app finds no
+        The timetable ended on {formatDateWithYear(status.installed.valid_until)}. The app finds no
         journeys on later days.
       </p>
     {:else}
       <h2 id="timetable-title">Timetable update</h2>
       <p>
-        The installed timetable covers {formatDate(status.installed.valid_from)} to {formatDate(
+        The installed timetable covers {formatDateWithYear(status.installed.valid_from)} to {formatDateWithYear(
           status.installed.valid_until,
         )}.
       </p>
     {/if}
 
-    {#if !status.restart_needed}
-      {#if status.available === null}
-        {#if status.check_error !== null}
-          <p class="message" role="alert">
-            The app could not reach the timetable server. Check the internet connection and try
-            again. {status.check_error}
-          </p>
-        {:else if !status.checks_enabled}
-          <p class="message">The app does not check for timetables on its own.</p>
-        {:else}
-          <p class="message">Looking for the newest timetable…</p>
-        {/if}
-      {:else if !status.available.readable}
-        <p class="message">
-          The newest timetable needs app version {status.available.minimum_app_version} or newer.
-          Update the app to download it.
+    {#if status.available === null}
+      {#if status.check_error !== null}
+        <p class="message" role="alert">
+          The app could not reach the timetable server. Check the internet connection and try
+          again. {status.check_error}
         </p>
-      {:else if status.available.newer}
-        <p>
-          The newest timetable covers until {formatDate(status.available.valid_until)}. The
-          download is {formatBytes(status.available.size_bytes)}.
-        </p>
+      {:else if !status.checks_enabled}
+        <p class="message">The app does not check for timetables on its own.</p>
       {:else}
-        <p class="message">The installed timetable is the newest.</p>
+        <p class="message">Looking for the newest timetable…</p>
       {/if}
+    {:else if !status.available.readable}
+      <p class="message">
+        The newest timetable needs app version {status.available.minimum_app_version} or newer.
+        Update the app to download it.
+      </p>
+    {:else if status.available.newer}
+      <p>
+        The newest timetable covers until {formatDateWithYear(status.available.valid_until)}. The
+        download is {formatBytes(status.available.size_bytes)}.
+      </p>
+    {:else}
+      <p class="message">The installed timetable is the newest.</p>
     {/if}
 
     {#if downloading}
@@ -166,32 +160,23 @@
     {/if}
 
     <div class="actions">
-      {#if status.restart_needed}
-        {#if !required}
-          <button type="button" onclick={onClose}>Later</button>
-        {/if}
-        <button type="button" class="primary" onclick={() => void commands.restartApp()}>
-          Restart now
+      {#if !required}
+        <button type="button" disabled={downloading} onclick={onClose}>Close</button>
+      {/if}
+      {#if status.available === null}
+        <button type="button" disabled={checking} onclick={() => void check()}>
+          {checking ? "Checking…" : status.check_error !== null ? "Try again" : "Check now"}
         </button>
-      {:else}
-        {#if !required}
-          <button type="button" disabled={downloading} onclick={onClose}>Close</button>
-        {/if}
-        {#if status.available === null}
-          <button type="button" disabled={checking} onclick={() => void check()}>
-            {checking ? "Checking…" : status.check_error !== null ? "Try again" : "Check now"}
-          </button>
-        {:else if status.available.readable && status.available.newer}
-          <button type="button" class="primary" disabled={downloading} onclick={() => void download()}>
-            {#if downloading}
-              Downloading…
-            {:else if message !== null}
-              Try again
-            {:else}
-              Download {formatBytes(status.available.size_bytes)}
-            {/if}
-          </button>
-        {/if}
+      {:else if status.available.readable && status.available.newer}
+        <button type="button" class="primary" disabled={downloading} onclick={() => void download()}>
+          {#if downloading}
+            Downloading…
+          {:else if message !== null}
+            Try again
+          {:else}
+            Download {formatBytes(status.available.size_bytes)}
+          {/if}
+        </button>
       {/if}
     </div>
   </div>

@@ -25,9 +25,9 @@ describe("operatorGaps", () => {
       [end("SNCF", "2026-10-02"), end("DB", "2026-09-30"), end("ÖBB", "2026-10-03")],
       amsterdamViennaRome(),
     );
-    expect(gaps.map((gap) => [gap.name, gap.runsAtStart])).toEqual([
-      ["DB", false],
-      ["SNCF", true],
+    expect(gaps.map((gap) => [gap.name, gap.lastDepartureDate])).toEqual([
+      ["DB", "2026-09-30"],
+      ["SNCF", "2026-10-02"],
     ]);
   });
 

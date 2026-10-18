@@ -28,7 +28,7 @@ use crate::place_naming::{has_provisional_name, provisional_place_name};
 use crate::pricing::PriceBookJourneyPricer;
 use crate::ticket_report::{LiveQuoteLogEntry, TicketPlanRecord};
 use crate::timetable_updates::{
-    InstalledBundle, KEPT_BUNDLE_FILES, TimetableUpdates, prune_bundles,
+    InstalledBundle, KEPT_BUNDLE_FILES, TimetableUpdates, bundle_file_name, prune_bundles,
 };
 
 /// `User-Agent` for requests to public services, which ask clients to identify themselves.
@@ -103,13 +103,26 @@ pub struct OpenTrip {
     pub history: TripHistory,
 }
 
+/// The timetable bundle the planner uses, with the backend that plans on it.
+#[derive(Default)]
+struct ActiveTimetable {
+    /// Plans single legs for every planning session. `None` while the app has no timetable
+    /// bundle, and then no trip can open.
+    backend: Option<Arc<LegPlanningBackend<PriceBookJourneyPricer>>>,
+    /// Facts about the bundle, for the timetable status.
+    installed: Option<InstalledBundle>,
+    /// The file of the bundle.
+    path: Option<PathBuf>,
+}
+
 /// Everything the commands share.
 pub struct AppState {
     /// The app's database, shared with the planning sessions.
     pub storage: Arc<Storage>,
-    /// Plans single legs for every planning session. `None` until a timetable bundle is
-    /// installed and the app restarted, and then no trip can open.
-    pub planning_backend: Option<Arc<LegPlanningBackend<PriceBookJourneyPricer>>>,
+    /// The timetable the planner uses. A download replaces it while the app runs.
+    active_timetable: Mutex<ActiveTimetable>,
+    /// Finds the time zone of places, shared by every router the app loads.
+    time_zone_finder: Arc<TimeZoneFinder>,
     /// Searches places by name and position.
     pub photon: PhotonClient,
     /// The pass list, reservation rules and price model for tickets, shared with the planner's
@@ -139,10 +152,6 @@ pub struct AppState {
     /// Fetches the ECB reference rates. `None` when its HTTP client could not be built, and
     /// then the fixed rates of the fare data convert prices.
     pub exchange_rate_service: Option<btt_quotes::ecb::ExchangeRateService>,
-    /// The timetable bundle the planner loaded, if any.
-    pub bundle_path: Option<PathBuf>,
-    /// Facts about that bundle, for the timetable status.
-    pub installed_bundle: Option<InstalledBundle>,
     /// Checks for newer timetable bundles and downloads them.
     pub timetable_updates: TimetableUpdates,
     /// The most recent log lines, for problem reports.
@@ -195,14 +204,7 @@ impl AppState {
         let planning_backend = bundle_router
             .map(|router| Arc::new(LegPlanningBackend::TimetableBundle(Arc::new(router))));
         if let Some(backend) = &planning_backend {
-            // Legs planned with another bundle version can never match again.
-            match storage.delete_leg_results_outside(backend.cache_namespace()) {
-                Ok(0) => {}
-                Ok(deleted) => {
-                    tracing::info!(deleted, "removed planned legs of an older timetable");
-                }
-                Err(error) => tracing::warn!(%error, "could not clean up planned legs"),
-            }
+            remove_stale_legs(&storage, backend);
         } else {
             tracing::info!("no timetable bundle, the app asks for a download");
         }
@@ -257,10 +259,13 @@ impl AppState {
             site_services,
             exchange_rate_service,
             storage,
-            planning_backend,
+            active_timetable: Mutex::new(ActiveTimetable {
+                backend: planning_backend,
+                installed: installed_bundle,
+                path: bundle_path,
+            }),
+            time_zone_finder,
             photon: PhotonClient::new(PUBLIC_PHOTON_BASE_URL, USER_AGENT)?,
-            bundle_path,
-            installed_bundle,
             timetable_updates,
             recent_log_lines,
             // Place names come in English until the app has a language setting.
@@ -299,12 +304,82 @@ impl AppState {
     /// Returns an error when the app has no timetable bundle.
     pub fn planning_backend(
         &self,
-    ) -> Result<&Arc<LegPlanningBackend<PriceBookJourneyPricer>>, CommandError> {
-        self.planning_backend
-            .as_ref()
+    ) -> Result<Arc<LegPlanningBackend<PriceBookJourneyPricer>>, CommandError> {
+        self.current_backend()
             .ok_or_else(|| CommandError::Timetable {
                 message: "the app has no timetable, download one first".to_owned(),
             })
+    }
+
+    /// Locks the active timetable. Every section that holds the lock replaces whole values, so
+    /// a poisoned lock is still consistent.
+    fn active_timetable(&self) -> MutexGuard<'_, ActiveTimetable> {
+        self.active_timetable
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Returns the backend that plans legs, or `None` while the app has no timetable.
+    pub fn current_backend(&self) -> Option<Arc<LegPlanningBackend<PriceBookJourneyPricer>>> {
+        self.active_timetable().backend.clone()
+    }
+
+    /// Returns the facts about the bundle the planner uses, for the timetable status.
+    pub fn installed_bundle(&self) -> Option<InstalledBundle> {
+        self.active_timetable().installed.clone()
+    }
+
+    /// Returns the file of the bundle the planner uses.
+    pub fn bundle_path(&self) -> Option<PathBuf> {
+        self.active_timetable().path.clone()
+    }
+
+    /// Makes the planner use the downloaded bundle of a version, unless it is not newer than the
+    /// one in use.
+    ///
+    /// Trips that are open keep planning on the bundle they opened with, and the trips opened
+    /// after this call use the new one. The old bundle stays mapped until the last of those
+    /// trips closes, so its file is never deleted here.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the file does not load.
+    pub async fn activate_bundle(&self, version: u32) -> Result<(), CommandError> {
+        if self
+            .installed_bundle()
+            .is_some_and(|installed| installed.version >= version)
+        {
+            return Ok(());
+        }
+        let path = self
+            .timetable_updates
+            .bundles_directory()
+            .join(bundle_file_name(version));
+        let time_zone_finder = Arc::clone(&self.time_zone_finder);
+        let pricer =
+            PriceBookJourneyPricer::new(Arc::clone(&self.fare_data), Arc::clone(&self.price_book));
+        let path_to_open = path.clone();
+        // Building the indexes of a bundle takes seconds, so it stays off the async threads.
+        let router = tokio::task::spawn_blocking(move || {
+            TimetableBundleRouter::open(&path_to_open, time_zone_finder, pricer)
+        })
+        .await
+        .map_err(|error| CommandError::Timetable {
+            message: error.to_string(),
+        })?
+        .map_err(|error| CommandError::Timetable {
+            message: error.to_string(),
+        })?;
+        tracing::info!(path = %path.display(), version = router.bundle_version(), "planning with a downloaded timetable bundle");
+        let installed = installed_bundle_of(&router);
+        let backend = Arc::new(LegPlanningBackend::TimetableBundle(Arc::new(router)));
+        remove_stale_legs(&self.storage, &backend);
+        *self.active_timetable() = ActiveTimetable {
+            backend: Some(backend),
+            installed: Some(installed),
+            path: Some(path),
+        };
+        Ok(())
     }
 
     /// Checks that a start date lies in the days the timetable covers.
@@ -315,8 +390,7 @@ impl AppState {
     /// timetable. An app without a timetable accepts every date.
     pub fn check_start_date(&self, start_date: NaiveDate) -> Result<(), CommandError> {
         match self
-            .planning_backend
-            .as_ref()
+            .current_backend()
             .and_then(|backend| backend.validity_window())
         {
             Some((first, last)) if start_date < first || start_date > last => {
@@ -338,7 +412,7 @@ impl AppState {
         events: Channel<PlanningSessionEvent>,
     ) -> Result<(), CommandError> {
         let planning_session = TripPlanningSession::with_result_store(
-            Arc::clone(self.planning_backend()?),
+            self.planning_backend()?,
             ChannelEventSink(events),
             StorageLegResultStore(Arc::clone(&self.storage)),
             DEFAULT_PLANNING_DEBOUNCE,
@@ -495,6 +569,25 @@ struct OpenedBundle {
     router: Option<TimetableBundleRouter<PriceBookJourneyPricer>>,
 }
 
+/// Returns the facts about the bundle a router plans on.
+fn installed_bundle_of(router: &TimetableBundleRouter<PriceBookJourneyPricer>) -> InstalledBundle {
+    InstalledBundle {
+        version: router.bundle_version(),
+        valid_from: router.validity_start(),
+        valid_until: last_valid_day(router.validity_start(), router.validity_days()),
+    }
+}
+
+/// Deletes the planned legs of other bundle versions than the backend's, which can never match
+/// again.
+fn remove_stale_legs(storage: &Storage, backend: &LegPlanningBackend<PriceBookJourneyPricer>) {
+    match storage.delete_leg_results_outside(backend.cache_namespace()) {
+        Ok(0) => {}
+        Ok(deleted) => tracing::info!(deleted, "removed planned legs of an older timetable"),
+        Err(error) => tracing::warn!(%error, "could not clean up planned legs"),
+    }
+}
+
 /// Finds the timetable bundle to plan with and loads it. A bundle that fails to load is logged
 /// and treated as missing, so the app starts and offers to download a new one.
 fn open_bundle(
@@ -513,11 +606,7 @@ fn open_bundle(
     match TimetableBundleRouter::open(bundle_path, Arc::clone(time_zone_finder), pricer) {
         Ok(router) => {
             tracing::info!(path = %bundle_path.display(), version = router.bundle_version(), "planning with a timetable bundle");
-            let installed = Some(InstalledBundle {
-                version: router.bundle_version(),
-                valid_from: router.validity_start(),
-                valid_until: last_valid_day(router.validity_start(), router.validity_days()),
-            });
+            let installed = Some(installed_bundle_of(&router));
             OpenedBundle {
                 path,
                 installed,

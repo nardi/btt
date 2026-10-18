@@ -312,6 +312,15 @@
     }
   }
 
+  /** Keeps the new status, and reads the operator end dates again when the timetable changed. */
+  async function updateTimetableStatus(status: TimetableStatus) {
+    const changed = status.installed?.version !== timetableStatus?.installed?.version;
+    timetableStatus = status;
+    if (changed) {
+      operatorEnds = await commands.operatorEndDates();
+    }
+  }
+
   /**
    * Reads the timetable status and opens the dialog when the app has no timetable. Then checks
    * the server if the traveller allows it, and opens the dialog for a newer timetable.
@@ -346,7 +355,7 @@
   {#if timetableStatus !== null && (showTimetable || timetableStatus.installed === null)}
     <TimetableDialog
       status={timetableStatus}
-      onStatus={(status) => (timetableStatus = status)}
+      onStatus={updateTimetableStatus}
       onClose={() => (showTimetable = false)}
     />
   {/if}
@@ -356,11 +365,9 @@
   {/if}
 
   {#if openSource === null}
-    {#if timetableStatus !== null && !showTimetable && (timetableStatus.installed?.running_out || timetableStatus.restart_needed)}
+    {#if timetableStatus !== null && !showTimetable && timetableStatus.installed?.running_out}
       <p class="notice">
-        {#if timetableStatus.restart_needed}
-          A new timetable is ready and needs a restart.
-        {:else if timetableStatus.installed !== null && timetableStatus.installed.days_left < 0}
+        {#if timetableStatus.installed !== null && timetableStatus.installed.days_left < 0}
           The timetable has expired.
         {:else}
           The timetable ends in {timetableStatus.installed?.days_left} days.

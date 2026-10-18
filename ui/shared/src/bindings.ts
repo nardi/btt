@@ -169,15 +169,13 @@ export const commands = {
 	operatorEndDates: () => __TAURI_INVOKE<OperatorEndDate[]>("operator_end_dates"),
 	/**
 	 *  Downloads the newest timetable and reports its progress through `progress`. The planner uses
-	 *  it after the next start of the app.
+	 *  it for the trips that open afterwards.
 	 * 
 	 *  Async, so the download does not block the window.
 	 */
 	downloadTimetable: (progress: Channel<DownloadProgress>) => typedError<TimetableStatus, CommandError>(__TAURI_INVOKE("download_timetable", { progress })),
 	/**  Turns the check for a newer timetable on startup on or off. */
 	setTimetableChecks: (enabled: boolean) => typedError<null, CommandError>(__TAURI_INVOKE("set_timetable_checks", { enabled })),
-	/**  Restarts the app, so the planner loads a timetable that was just downloaded. */
-	restartApp: () => __TAURI_INVOKE<void>("restart_app"),
 };
 
 /* Types */
@@ -1279,8 +1277,6 @@ export type TimetableStatus = {
 	available: AvailableTimetable | null,
 	/**  Whether the app checks for a newer timetable on startup. */
 	checks_enabled: boolean,
-	/**  Whether a timetable was downloaded that the planner will only use after a restart. */
-	restart_needed: boolean,
 	/**  Why the last check failed, if it did. */
 	check_error: string | null,
 };

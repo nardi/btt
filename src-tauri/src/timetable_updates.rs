@@ -22,8 +22,8 @@ use semver::Version;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use specta::Type;
+use tauri::State;
 use tauri::ipc::Channel;
-use tauri::{AppHandle, State};
 use thiserror::Error;
 
 use crate::commands::{CommandError, today_utc};
@@ -144,8 +144,6 @@ pub struct TimetableStatus {
     pub available: Option<AvailableTimetable>,
     /// Whether the app checks for a newer timetable on startup.
     pub checks_enabled: bool,
-    /// Whether a timetable was downloaded that the planner will only use after a restart.
-    pub restart_needed: bool,
     /// Why the last check failed, if it did.
     pub check_error: Option<String>,
 }
@@ -222,14 +220,10 @@ pub fn build_status(
             readable: app_can_read(entry, inputs.app_version),
             minimum_app_version: entry.minimum_app_version.clone(),
         });
-    let restart_needed = inputs
-        .downloaded_version
-        .is_some_and(|downloaded| installed.is_none_or(|bundle| downloaded > bundle.version));
     TimetableStatus {
         installed: installed_status,
         available,
         checks_enabled: inputs.checks_enabled,
-        restart_needed,
         check_error: inputs.check_error.map(str::to_owned),
     }
 }
@@ -243,8 +237,6 @@ pub struct StatusInputs<'a> {
     pub app_version: &'a str,
     /// Whether the check on startup is on.
     pub checks_enabled: bool,
-    /// Version of a bundle downloaded during this run, if any.
-    pub downloaded_version: Option<u32>,
     /// Why the last check failed, if it did.
     pub check_error: Option<&'a str>,
 }
@@ -426,8 +418,6 @@ struct UpdateSession {
     manifest: Option<TimetableManifest>,
     /// Why the last check failed, if it did.
     check_error: Option<String>,
-    /// Version of a bundle downloaded during this run.
-    downloaded_version: Option<u32>,
     /// Whether a download is running.
     downloading: bool,
 }
@@ -502,7 +492,7 @@ impl TimetableUpdates {
         }
     }
 
-    /// Downloads and installs the newest bundle of the last check.
+    /// Downloads and installs the newest bundle of the last check, and returns its version.
     ///
     /// # Errors
     ///
@@ -513,7 +503,7 @@ impl TimetableUpdates {
         today: NaiveDate,
         app_version: &str,
         progress: &mut impl FnMut(DownloadProgress),
-    ) -> Result<(), TimetableUpdateError> {
+    ) -> Result<u32, TimetableUpdateError> {
         let entry = {
             let mut session = self.session();
             if session.downloading {
@@ -535,10 +525,7 @@ impl TimetableUpdates {
             download_bundle(&self.http_client, &entry, &self.bundles_directory, progress).await;
         let mut session = self.session();
         session.downloading = false;
-        if result.is_ok() {
-            session.downloaded_version = Some(entry.version);
-        }
-        result.map(|_| ())
+        result.map(|_| entry.version)
     }
 
     /// Returns what the app knows about its timetable.
@@ -556,7 +543,6 @@ impl TimetableUpdates {
                 today,
                 app_version: env!("CARGO_PKG_VERSION"),
                 checks_enabled,
-                downloaded_version: session.downloaded_version,
                 check_error: session.check_error.as_deref(),
             },
         )
@@ -591,8 +577,7 @@ pub struct OperatorEndDate {
 #[specta::specta]
 pub fn operator_end_dates(state: State<'_, AppState>) -> Vec<OperatorEndDate> {
     state
-        .planning_backend
-        .as_ref()
+        .current_backend()
         .map(|backend| {
             backend
                 .operator_ends()
@@ -612,7 +597,7 @@ pub fn operator_end_dates(state: State<'_, AppState>) -> Vec<OperatorEndDate> {
 #[specta::specta]
 pub fn timetable_status(state: State<'_, AppState>) -> TimetableStatus {
     state.timetable_updates.status(
-        state.installed_bundle.as_ref(),
+        state.installed_bundle().as_ref(),
         checks_enabled(&state),
         today_utc(),
     )
@@ -630,7 +615,7 @@ pub async fn check_timetable(state: State<'_, AppState>) -> Result<TimetableStat
 }
 
 /// Downloads the newest timetable and reports its progress through `progress`. The planner uses
-/// it after the next start of the app.
+/// it for the trips that open afterwards.
 ///
 /// Async, so the download does not block the window.
 #[tauri::command]
@@ -639,7 +624,7 @@ pub async fn download_timetable(
     state: State<'_, AppState>,
     progress: Channel<DownloadProgress>,
 ) -> Result<TimetableStatus, CommandError> {
-    state
+    let version = state
         .timetable_updates
         .download_newest(today_utc(), env!("CARGO_PKG_VERSION"), &mut |update| {
             // The channel only fails when the window has closed, and then nobody needs the update.
@@ -649,6 +634,7 @@ pub async fn download_timetable(
         .map_err(|error| CommandError::Timetable {
             message: error.to_string(),
         })?;
+    state.activate_bundle(version).await?;
     Ok(timetable_status(state))
 }
 
@@ -660,13 +646,6 @@ pub fn set_timetable_checks(state: State<'_, AppState>, enabled: bool) -> Result
         .storage
         .set_setting(CHECKS_SETTING_KEY, if enabled { "true" } else { "false" })?;
     Ok(())
-}
-
-/// Restarts the app, so the planner loads a timetable that was just downloaded.
-#[tauri::command]
-#[specta::specta]
-pub fn restart_app(app: AppHandle) {
-    app.restart();
 }
 
 #[cfg(test)]
@@ -710,7 +689,6 @@ mod tests {
             today,
             app_version: "0.1.0",
             checks_enabled: true,
-            downloaded_version: None,
             check_error: None,
         }
     }
@@ -795,20 +773,6 @@ mod tests {
         let available = status.available.unwrap();
         assert!(!available.readable);
         assert_eq!(available.minimum_app_version, "9.0.0");
-    }
-
-    #[test]
-    fn a_download_that_the_planner_has_not_loaded_needs_a_restart() {
-        let installed = InstalledBundle {
-            version: 5,
-            valid_from: date(2026, 10, 1),
-            valid_until: date(2027, 1, 1),
-        };
-        let mut status_inputs = inputs(date(2026, 10, 18));
-        assert!(!build_status(Some(&installed), None, status_inputs).restart_needed);
-        status_inputs.downloaded_version = Some(6);
-        assert!(build_status(Some(&installed), None, status_inputs).restart_needed);
-        assert!(build_status(None, None, status_inputs).restart_needed);
     }
 
     #[test]
@@ -1121,15 +1085,13 @@ mod tests {
         let before = updates.status(None, true, today);
         assert!(before.check_error.is_none());
         assert!(before.available.as_ref().unwrap().newer);
-        assert!(!before.restart_needed);
 
-        updates
+        let version = updates
             .download_newest(today, "0.1.0", &mut |_| {})
             .await
             .unwrap();
 
-        let after = updates.status(None, true, today);
-        assert!(after.restart_needed);
+        assert_eq!(version, 2_026_101_801);
         assert_eq!(
             files_in(updates.bundles_directory()),
             ["timetable-2026101801.bundle"]

@@ -143,7 +143,7 @@ pub async fn export_problem_report(
         app_version: env!("CARGO_PKG_VERSION"),
         operating_system: std::env::consts::OS,
         backend: planning_backend.kind_name(),
-        bundle: state.bundle_path.as_deref().and_then(bundle_summary),
+        bundle: state.bundle_path().as_deref().and_then(bundle_summary),
     };
     let tickets = TicketsReport {
         price_model_observations: state.fare_data.price_model.read().observation_count(),

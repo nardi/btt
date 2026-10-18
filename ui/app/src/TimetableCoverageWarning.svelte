@@ -1,7 +1,7 @@
 <script lang="ts">
   // A warning mark next to the start date, which lists the operators with no trains on the days
-  // of the trip.
-  import { formatDate } from "@btt/shared/format";
+  // of the trip. Hovering or focusing the mark opens the list, and a click keeps it open.
+  import { formatDateWithYear } from "@btt/shared/format";
   import Icon from "@btt/shared/components/Icon.svelte";
   import type { OperatorGap } from "@btt/shared/timetable-coverage";
 
@@ -14,52 +14,67 @@
     lastDepartureDate: string;
   } = $props();
 
-  let open = $state(false);
+  /** Whether the pointer or the keyboard focus is on the mark or the list. */
+  let attended = $state(false);
+  /** Whether a click keeps the list open. */
+  let pinned = $state(false);
   let container: HTMLElement | undefined = $state();
 
+  const open = $derived(attended || pinned);
   const summary = $derived(
-    `${gaps.length === 1 ? "1 operator has" : `${gaps.length} operators have`} no trains on all days of this trip`,
+    `${gaps.length === 1 ? "1 operator has" : `${gaps.length} operators have`} no train data for all days of this trip`,
   );
 
   function closeOnOutsideClick(event: MouseEvent) {
-    if (open && container !== undefined && !container.contains(event.target as Node)) {
-      open = false;
+    if (pinned && container !== undefined && !container.contains(event.target as Node)) {
+      pinned = false;
     }
   }
 
   function closeOnEscape(event: KeyboardEvent) {
-    if (open && event.key === "Escape") {
-      open = false;
+    if (event.key === "Escape") {
+      pinned = false;
+      attended = false;
     }
   }
 </script>
 
 <svelte:window onclick={closeOnOutsideClick} onkeydown={closeOnEscape} />
 
-<span class="coverage-warning" bind:this={container}>
+<span
+  class="coverage-warning"
+  bind:this={container}
+  role="presentation"
+  onmouseenter={() => (attended = true)}
+  onmouseleave={() => (attended = false)}
+  onfocusin={() => (attended = true)}
+  onfocusout={() => (attended = false)}
+>
   <button
     type="button"
     class="icon-button warning"
     aria-label={summary}
     aria-expanded={open}
-    title={summary}
-    onclick={() => (open = !open)}
+    onclick={() => (pinned = !pinned)}
   >
     <Icon name="warning" />
   </button>
   {#if open}
-    <div class="panel" role="dialog" aria-label="Operators without trains">
-      <p>No train data for these operators on {formatDate(lastDepartureDate)}, the last day of the trip.</p>
-      <ul>
-        {#each gaps as gap (gap.name)}
-          <li>
-            <span class="name">{gap.name}</span>
-            <span class="detail">
-              {gap.runsAtStart ? `until ${formatDate(gap.lastDepartureDate)}` : "none on the trip days"}
-            </span>
-          </li>
-        {/each}
-      </ul>
+    <div class="anchor">
+      <div class="panel" role="dialog" aria-label="Operators without train data">
+        <p>
+          Some operators have no train data up to {formatDateWithYear(lastDepartureDate)}, the last
+          day of this trip.
+        </p>
+        <ul>
+          {#each gaps as gap (gap.name)}
+            <li>
+              <span class="name">{gap.name}</span>
+              <span class="detail">until {formatDateWithYear(gap.lastDepartureDate)}</span>
+            </li>
+          {/each}
+        </ul>
+      </div>
     </div>
   {/if}
 </span>
@@ -74,13 +89,18 @@
     color: var(--color-notice);
   }
 
-  .panel {
+  /* Holds the gap below the mark, so the pointer can move onto the list without leaving. */
+  .anchor {
     position: absolute;
-    top: calc(100% + var(--space-1));
+    top: 100%;
     left: 0;
     z-index: 20;
+    padding-top: var(--space-1);
+  }
+
+  .panel {
     width: max-content;
-    max-width: min(22rem, 90vw);
+    max-width: min(24rem, 90vw);
     padding: var(--space-3);
     border: 1px solid var(--color-border);
     border-radius: 8px;
@@ -107,5 +127,6 @@
 
   .detail {
     color: var(--color-text-muted);
+    white-space: nowrap;
   }
 </style>

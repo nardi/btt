@@ -63,7 +63,6 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             timetable_updates::operator_end_dates,
             timetable_updates::download_timetable,
             timetable_updates::set_timetable_checks,
-            timetable_updates::restart_app,
         ])
         // The viewer reads the file of a shared trip, which no command returns.
         .typ::<btt_model::StoredSnapshot>()
