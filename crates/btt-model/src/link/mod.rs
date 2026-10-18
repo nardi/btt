@@ -255,17 +255,20 @@ fn percent_decode(text: &str) -> Result<String, SnapshotLinkError> {
     String::from_utf8(decoded).map_err(|_| SnapshotLinkError::Malformed("the link is not UTF-8"))
 }
 
+// The fixtures of the integration tests, which name this crate by its package name. The module
+// is declared here and not inside `tests`, because an inline module adds a directory to the
+// path, and that directory does not exist.
+#[cfg(test)]
+#[path = "../../tests/common/mod.rs"]
+#[allow(dead_code)]
+mod fixtures;
+
 #[cfg(test)]
 mod tests {
     use proptest::prelude::*;
 
     use super::*;
     use crate::link::bits::BitWriter;
-
-    // The fixtures of the integration tests, which name this crate by its package name.
-    #[path = "../../../tests/common/mod.rs"]
-    #[allow(dead_code)]
-    mod fixtures;
 
     /// Wraps bytes as a payload the way the encoder does, so the checks of the outer layers pass
     /// and the bytes themselves meet the reader.
@@ -330,7 +333,7 @@ mod tests {
             flips in proptest::collection::vec((any::<prop::sample::Index>(), 0..8u32), 1..8),
             cut in any::<prop::sample::Index>(),
         ) {
-            let snapshot = fixtures::demo_snapshot();
+            let snapshot = super::fixtures::demo_snapshot();
             let mut bits = codec::write_snapshot(&snapshot).unwrap();
             for (index, bit) in flips {
                 let position = index.index(bits.len());
