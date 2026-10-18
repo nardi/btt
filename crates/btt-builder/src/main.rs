@@ -10,7 +10,7 @@ use btt_builder::download::{
     Downloader, TRAINLINE_STATIONS_URL, TRANSITOUS_FEED_CONFIG_URL, TRANSITOUS_MIRROR_URL,
 };
 use btt_builder::load::ValidityWindow;
-use btt_builder::{BuildError, FeedInput, PipelineInputs, assemble, report, run_pipeline};
+use btt_builder::{BuildError, FeedInput, PipelineInputs, assemble, publish, report, run_pipeline};
 use btt_timetable::LoadedTimetableBundle;
 use chrono::{Datelike, NaiveDate, Utc};
 use clap::Parser;
@@ -43,6 +43,11 @@ struct Arguments {
     /// programs need the memory. The default is 10GB.
     #[arg(long)]
     memory_limit: Option<String>,
+    /// Compresses the bundle and writes its checksum and manifest entry next to it. The value is
+    /// the address that holds the bundle releases, such as
+    /// `https://github.com/owner/btt/releases/download`.
+    #[arg(long)]
+    download_base_url: Option<String>,
 }
 
 fn main() -> ExitCode {
@@ -139,7 +144,7 @@ fn build(arguments: &Arguments) -> Result<(), BuildError> {
     // Reading the file back checks it with the same validation the app runs.
     let loaded = LoadedTimetableBundle::open(&bundle_path)?;
     let bundle_file_bytes = u64::try_from(loaded.byte_size()).unwrap_or(u64::MAX);
-    drop(loaded);
+    let cached_reuses = downloader.cached_reuses();
     let config_feeds: Vec<_> = inputs.feeds.iter().map(|feed| feed.config).collect();
     report::write_report(
         &database,
@@ -147,8 +152,16 @@ fn build(arguments: &Arguments) -> Result<(), BuildError> {
         &outcome.merge_counts,
         &outcome.bundle,
         bundle_file_bytes,
+        &cached_reuses,
         &arguments.output_directory,
     )?;
+    if let Some(download_base_url) = &arguments.download_base_url {
+        let published = publish::write_published_files(&bundle_path, &loaded, download_base_url)?;
+        tracing::info!(
+            compressed_bundle = %published.compressed_bundle.display(),
+            "compressed the bundle"
+        );
+    }
     drop(database);
     if !arguments.keep_work_db {
         std::fs::remove_file(&database_path)?;

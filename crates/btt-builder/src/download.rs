@@ -1,5 +1,6 @@
 //! Downloads feeds, their Transitous configuration and the Trainline station list into a cache.
 
+use std::cell::RefCell;
 use std::fs;
 use std::io::{self, Seek};
 use std::path::{Path, PathBuf};
@@ -45,12 +46,23 @@ pub enum DownloadError {
     },
 }
 
+/// A file the builder used from the cache without getting the newest version.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CachedReuse {
+    /// The URL of the file.
+    pub url: String,
+    /// Why the newest version was not used.
+    pub reason: String,
+}
+
 /// Downloads files into a cache directory and skips files that have not changed.
 pub struct Downloader {
     /// HTTP client with the builder's user agent.
     http_client: reqwest::blocking::Client,
     /// Directory that holds the cached files.
     cache_directory: PathBuf,
+    /// The files used from the cache after a failed check or download, in the order of use.
+    cached_reuses: RefCell<Vec<CachedReuse>>,
 }
 
 impl Downloader {
@@ -77,6 +89,7 @@ impl Downloader {
         Ok(Self {
             http_client,
             cache_directory,
+            cached_reuses: RefCell::new(Vec::new()),
         })
     }
 
@@ -104,6 +117,7 @@ impl Downloader {
                 // Without a way to compare, a copy that exists is used as is.
                 Err(error) => {
                     tracing::warn!(url, %error, "could not check for a newer version, using the cache");
+                    self.note_cached_reuse(url, "the check for a newer version failed", error);
                     return Ok(path);
                 }
                 Ok(_) => {}
@@ -116,6 +130,7 @@ impl Downloader {
             // An older copy still builds a bundle, which beats no bundle at all.
             Err(error) if path.exists() => {
                 tracing::warn!(url, %error, "could not download the newer version, using the cache");
+                self.note_cached_reuse(url, "the download of the newer version failed", &error);
                 return Ok(path);
             }
             Err(error) => return Err(error),
@@ -124,6 +139,19 @@ impl Downloader {
             write_file(&stamp_path, remote.as_bytes())?;
         }
         Ok(path)
+    }
+
+    /// Returns the files that were used from the cache without a confirmed newest version.
+    pub fn cached_reuses(&self) -> Vec<CachedReuse> {
+        self.cached_reuses.borrow().clone()
+    }
+
+    /// Remembers that a file came from the cache although the newest version was wanted.
+    fn note_cached_reuse(&self, url: &str, reason: &str, error: &dyn std::fmt::Display) {
+        self.cached_reuses.borrow_mut().push(CachedReuse {
+            url: url.to_owned(),
+            reason: format!("{reason}: {error}"),
+        });
     }
 
     /// Returns the `Last-Modified` header of a URL, or its `ETag` when the server sends no date.

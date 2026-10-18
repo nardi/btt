@@ -6,6 +6,7 @@
 pub mod builder;
 pub mod format;
 pub mod loaded;
+pub mod manifest;
 pub mod station_index;
 
 pub use builder::{

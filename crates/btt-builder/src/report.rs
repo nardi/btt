@@ -14,6 +14,7 @@ use crate::BuildError;
 use crate::config::FeedConfig;
 use crate::database::{WorkDatabase, sql_string};
 use crate::dedup::MergeCounts;
+use crate::download::CachedReuse;
 
 /// Most uncertain station matches the report lists.
 const LISTED_UNCERTAIN_MATCHES: i64 = 300;
@@ -40,6 +41,7 @@ pub fn write_report(
     merge_counts: &MergeCounts,
     bundle: &TimetableBundle,
     bundle_file_bytes: u64,
+    cached_reuses: &[CachedReuse],
     output_directory: &Path,
 ) -> Result<Vec<BuildStatistic>, BuildError> {
     let mut statistics = feed_statistics(database, feeds)?;
@@ -55,7 +57,9 @@ pub fn write_report(
     }
     statistics.extend(bundle_statistics(bundle, bundle_file_bytes));
 
-    let mut markdown = String::from("# Timetable build report\n\n## Statistics\n\n");
+    let mut markdown = String::from("# Timetable build report\n\n");
+    markdown.push_str(&cached_reuses_section(cached_reuses));
+    markdown.push_str("## Statistics\n\n");
     markdown.push_str("| Scope | Statistic | Value |\n|---|---|---:|\n");
     for statistic in &statistics {
         let _ = writeln!(
@@ -73,6 +77,25 @@ pub fn write_report(
         &output_directory.join("build_statistics.parquet"),
     )?;
     Ok(statistics)
+}
+
+/// Lists the downloads that came from the cache, so a stale feed shows in the report. The
+/// section is empty when every download is up to date.
+fn cached_reuses_section(cached_reuses: &[CachedReuse]) -> String {
+    if cached_reuses.is_empty() {
+        return String::new();
+    }
+    let mut section = String::from(
+        "## Stale downloads\n\n\
+         These files could not be checked or downloaded, so the build used the copy in the cache. \
+         The bundle can miss changes made after that copy.\n\n\
+         | File | Reason |\n|---|---|\n",
+    );
+    for reuse in cached_reuses {
+        let _ = writeln!(section, "| {} | {} |", reuse.url, reuse.reason);
+    }
+    section.push('\n');
+    section
 }
 
 /// Counts routes, trips, stop times, station matches and joined stations per feed.
@@ -276,4 +299,22 @@ fn write_statistics_parquet(
 /// Converts a count to a statistic value. Counts never come near `i64::MAX`.
 fn to_statistic(count: usize) -> i64 {
     i64::try_from(count).unwrap_or(i64::MAX)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_stale_downloads_section_lists_each_file_and_vanishes_without_any() {
+        assert_eq!(cached_reuses_section(&[]), "");
+        let section = cached_reuses_section(&[CachedReuse {
+            url: "https://example.org/feed.gtfs.zip".to_owned(),
+            reason: "the check for a newer version failed: timed out".to_owned(),
+        }]);
+        assert!(section.starts_with("## Stale downloads"));
+        assert!(section.contains(
+            "| https://example.org/feed.gtfs.zip | the check for a newer version failed: timed out |"
+        ));
+    }
 }

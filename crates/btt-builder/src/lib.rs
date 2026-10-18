@@ -12,6 +12,7 @@ pub mod download;
 pub mod feed_archive;
 pub mod load;
 pub mod netex;
+pub mod publish;
 pub mod report;
 pub mod resolve;
 pub mod stations;

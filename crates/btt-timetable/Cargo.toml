@@ -14,8 +14,12 @@ memmap2.workspace = true
 rkyv.workspace = true
 rstar.workspace = true
 rustc-hash.workspace = true
+serde.workspace = true
 smallvec.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
 
 [lints]
 workspace = true
