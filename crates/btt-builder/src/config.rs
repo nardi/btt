@@ -45,6 +45,14 @@ pub enum ConfigError {
         /// Why the pattern failed.
         source: regex::Error,
     },
+    /// A line of the vagonWEB train dictionary cannot be read.
+    #[error("line {line} of the vagonWEB train dictionary is malformed: {reason}")]
+    TrainDictionary {
+        /// Line number, counting from 1.
+        line: usize,
+        /// What is wrong with the line.
+        reason: &'static str,
+    },
     /// The validity window is empty or too long.
     #[error("validity_window_days must be between 1 and 128, not {0}")]
     InvalidValidityWindow(u16),

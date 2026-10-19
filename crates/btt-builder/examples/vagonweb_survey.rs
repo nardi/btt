@@ -9,7 +9,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use btt_builder::layout_pages::{SitemapIndex, parse_sitemap};
+use btt_builder::layout_pages::{TrainDictionary, parse_sitemap};
 use btt_timetable::LoadedTimetableBundle;
 
 /// Fewest trains a category and agency need to appear in the survey.
@@ -25,7 +25,7 @@ fn main() {
             &std::fs::read_to_string(path).expect("a readable sitemap"),
         ));
     }
-    let index = SitemapIndex::new(trains);
+    let index = TrainDictionary::new(trains);
     println!("{} train pages", index.train_count());
 
     // Pages by number, so each train number finds the pairs that have a page for it.

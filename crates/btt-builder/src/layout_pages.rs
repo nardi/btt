@@ -1,10 +1,14 @@
 //! Finds, for each train label of a bundle, the page on vagonWEB that shows the layout of the
 //! train, the order of its coaches.
 //!
-//! The site publishes the list of its train pages as sitemaps for crawlers. The builder reads
-//! them once per build and matches every train label against them. It never requests a train
-//! page, so a build makes a few requests and links only to pages that are known to exist.
+//! The address of a train page is fixed by the operator, category, number and year of the train.
+//! The numbers of the trains that have a page follow no rule, and the site answers a train
+//! without a page with an empty page and the status 200. So the builder links only to the pages
+//! of a dictionary of known trains. The dictionary file `data/vagonweb-trains.txt` is made from
+//! the sitemaps of the site that list its train pages, by the example `vagonweb_dictionary`.
+//! A build reads the file and makes no request to the site.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::LazyLock;
 
@@ -21,15 +25,16 @@ use crate::config::ConfigError;
 use crate::dedup::train_number_key;
 
 /// Addresses of the sitemaps that list the train pages of the current timetable year. The site
-/// splits the list in two files because a sitemap holds at most 40,000 addresses.
+/// splits the list in two files because a sitemap holds at most 40,000 addresses. They are the
+/// source of the dictionary file.
 pub const VAGONWEB_TRAIN_SITEMAP_URLS: [&str; 2] = [
     "https://www.vagonweb.cz/sitemap-razeni.xml",
     "https://www.vagonweb.cz/sitemap-razeni2.xml",
 ];
 
-/// One train page in a sitemap.
+/// One train page of the site.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SitemapTrain {
+pub struct TrainPage {
     /// Code of the operator or country, such as "DB" or "ÖBB".
     pub operator: SmolStr,
     /// Category, such as "ICE".
@@ -46,7 +51,7 @@ static LOCATION_PATTERN: LazyLock<Regex> =
 
 /// Reads the train pages out of the text of a sitemap. Entries that are not train pages and
 /// entries without all of the operator, category, number and year are skipped.
-pub fn parse_sitemap(text: &str) -> Vec<SitemapTrain> {
+pub fn parse_sitemap(text: &str) -> Vec<TrainPage> {
     LOCATION_PATTERN
         .captures_iter(text)
         .filter_map(|captures| train_of_address(&captures[1]))
@@ -55,7 +60,7 @@ pub fn parse_sitemap(text: &str) -> Vec<SitemapTrain> {
 
 /// Reads a train page address such as
 /// `https://www.vagonweb.cz/razeni/vlak.php?zeme=%C3%96BB&amp;kategorie=RJ&amp;cislo=60&amp;rok=2026`.
-fn train_of_address(address: &str) -> Option<SitemapTrain> {
+fn train_of_address(address: &str) -> Option<TrainPage> {
     let (path, query) = address.split_once('?')?;
     if !path.ends_with("/razeni/vlak.php") {
         return None;
@@ -74,12 +79,43 @@ fn train_of_address(address: &str) -> Option<SitemapTrain> {
             _ => {}
         }
     }
-    Some(SitemapTrain {
+    Some(TrainPage {
         operator: operator.filter(|operator| !operator.is_empty())?,
         category: category.filter(|category| !category.is_empty())?,
         number: number.filter(|number| !number.is_empty())?,
         year: year?,
     })
+}
+
+/// Comment lines at the top of a dictionary file.
+const DICTIONARY_HEADER: &str = "\
+# The train pages of vagonWEB that the builder may link to, made from its sitemaps by the example
+# `vagonweb_dictionary` of `btt-builder`. Do not edit by hand.
+#
+# Each line holds the trains of one operator, category and year, separated by tabs. The fields
+# are the operator, the category, the year and then the train numbers. A number is written as
+# `first-last` when the page of every number between them exists.
+";
+
+/// Most numbers a range in a dictionary file may span, which stops a typo from making a
+/// dictionary of millions of trains.
+const MAXIMUM_RANGE: u32 = 100_000;
+
+/// Reads a field such as `120-129` as the first and last number of the range. Returns `None`
+/// for anything else, including a plain number.
+fn range_of_numbers(field: &str) -> Option<(u32, u32)> {
+    let (first, last) = field.split_once('-')?;
+    let (first, last) = (first.parse().ok()?, last.parse().ok()?);
+    (first <= last).then_some((first, last))
+}
+
+/// Writes a run of consecutive numbers as one number or as a range.
+fn format_run((first, last): (u32, u32)) -> String {
+    if first == last {
+        first.to_string()
+    } else {
+        format!("{first}-{last}")
+    }
 }
 
 /// A page of the site and the timetable year it belongs to.
@@ -91,12 +127,12 @@ struct KnownPage {
     year: u16,
 }
 
-/// Every page of the site that the builder may link to, found from the train pages.
+/// The dictionary of known trains, with every page of the site that the builder may link to.
 ///
 /// Categories are looked up without regard to case, because feeds write `rj` where the site
 /// writes `RJ`.
 #[derive(Debug, Default)]
-pub struct SitemapIndex {
+pub struct TrainDictionary {
     /// The page of each train, by operator, category in lower case and number.
     trains: FxHashMap<(SmolStr, SmolStr, SmolStr), KnownPage>,
     /// The operators that have a page for a category in lower case and a number.
@@ -107,9 +143,9 @@ pub struct SitemapIndex {
     operator_lists: FxHashMap<SmolStr, u16>,
 }
 
-impl SitemapIndex {
-    /// Builds the index from train pages.
-    pub fn new(trains: impl IntoIterator<Item = SitemapTrain>) -> Self {
+impl TrainDictionary {
+    /// Builds the dictionary from train pages.
+    pub fn new(trains: impl IntoIterator<Item = TrainPage>) -> Self {
         let mut index = Self::default();
         for train in trains {
             let category_key = SmolStr::new(train.category.to_lowercase());
@@ -152,7 +188,7 @@ impl SitemapIndex {
         self.trains.len()
     }
 
-    /// Returns every train page as operator, category, number and year.
+    /// Returns every train page as operator, category, number and year, in no set order.
     pub fn trains(&self) -> impl Iterator<Item = (&str, &str, &str, u16)> + '_ {
         self.trains.iter().map(|((operator, _, number), page)| {
             (
@@ -162,6 +198,122 @@ impl SitemapIndex {
                 page.year,
             )
         })
+    }
+
+    /// Reads the dictionary file.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the file cannot be read or a line is malformed.
+    pub fn read(path: &Path) -> Result<Self, ConfigError> {
+        let text = std::fs::read_to_string(path).map_err(|source| ConfigError::Read {
+            path: path.display().to_string(),
+            source,
+        })?;
+        Self::from_text(&text)
+    }
+
+    /// Parses the text of a dictionary file, see [`TrainDictionary::to_text`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when a line is malformed.
+    pub fn from_text(text: &str) -> Result<Self, ConfigError> {
+        let mut trains = Vec::new();
+        for (position, line) in text.lines().enumerate() {
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            let malformed = |reason| ConfigError::TrainDictionary {
+                line: position + 1,
+                reason,
+            };
+            let mut fields = line.split('\t');
+            let (Some(operator), Some(category), Some(year)) =
+                (fields.next(), fields.next(), fields.next())
+            else {
+                return Err(malformed("expected an operator, category and year"));
+            };
+            if operator.is_empty() || category.is_empty() {
+                return Err(malformed("the operator and category must not be empty"));
+            }
+            let year: u16 = year
+                .parse()
+                .map_err(|_| malformed("the year is no number"))?;
+            for field in fields {
+                let numbers: Vec<SmolStr> = match range_of_numbers(field) {
+                    Some((first, last)) if last - first <= MAXIMUM_RANGE => (first..=last)
+                        .map(|n| SmolStr::new(n.to_string()))
+                        .collect(),
+                    Some(_) => return Err(malformed("a range of numbers is too long")),
+                    None => vec![SmolStr::new(field)],
+                };
+                trains.extend(numbers.into_iter().map(|number| TrainPage {
+                    operator: SmolStr::new(operator),
+                    category: SmolStr::new(category),
+                    number,
+                    year,
+                }));
+            }
+        }
+        Ok(Self::new(trains))
+    }
+
+    /// Writes the dictionary as the text of a dictionary file.
+    ///
+    /// Lines starting with `#` are comments. Every other line holds the trains of one operator,
+    /// category and year, separated by tabs. The first three fields are the operator, the
+    /// category and the year. Each field after that is a train number, or a range of numbers
+    /// such as `120-129`. The lines and the numbers are sorted, so a new dictionary differs from
+    /// an old one only where the site changed.
+    pub fn to_text(&self) -> String {
+        let mut groups: BTreeMap<(&str, &str, u16), Vec<&str>> = BTreeMap::new();
+        for (operator, category, number, year) in self.trains() {
+            // A name that reads as a range would come back as several trains.
+            if range_of_numbers(number).is_some() || number.contains(['\t', '\n']) {
+                continue;
+            }
+            groups
+                .entry((operator, category, year))
+                .or_default()
+                .push(number);
+        }
+        let mut text = String::from(DICTIONARY_HEADER);
+        for ((operator, category, year), mut numbers) in groups {
+            // The numbers that are plain integers come first, in numeric order, so they form
+            // ranges. The names come after them in text order.
+            numbers.sort_by_key(|number| {
+                (
+                    number.parse::<u32>().ok().map_or((1_u8, 0), |n| (0, n)),
+                    *number,
+                )
+            });
+            let mut fields = vec![operator.to_owned(), category.to_owned(), year.to_string()];
+            let mut run: Option<(u32, u32)> = None;
+            for number in numbers {
+                let integer = number.parse::<u32>().ok();
+                match (integer, run) {
+                    (Some(next), Some((first, last))) if last.checked_add(1) == Some(next) => {
+                        run = Some((first, next));
+                    }
+                    (_, previous) => {
+                        if let Some(previous) = previous {
+                            fields.push(format_run(previous));
+                        }
+                        run = integer.map(|integer| (integer, integer));
+                        if integer.is_none() {
+                            fields.push(number.to_owned());
+                        }
+                    }
+                }
+            }
+            if let Some(run) = run {
+                fields.push(format_run(run));
+            }
+            text.push_str(&fields.join("\t"));
+            text.push('\n');
+        }
+        text
     }
 
     /// Returns the best page for a train of a known operator and category, trying each of the
@@ -368,7 +520,7 @@ impl LayoutRules {
     /// Returns the best page for a train label, or `None` when no rule covers the agency.
     pub fn find_page(
         &self,
-        index: &SitemapIndex,
+        index: &TrainDictionary,
         category: &str,
         number: &str,
         agency: &str,
@@ -422,7 +574,7 @@ pub struct CategoryMatches {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LayoutPageReport {
     /// Train pages in the sitemaps.
-    pub sitemap_trains: usize,
+    pub known_trains: usize,
     /// Distinct pages that labels refer to.
     pub pages: usize,
     /// The matches by category, the categories with the most labels first.
@@ -466,7 +618,7 @@ fn pooled_text(pool: &str, string: PooledString) -> &str {
 pub fn attach_layout_pages(
     bundle: &mut TimetableBundle,
     rules: &LayoutRules,
-    index: &SitemapIndex,
+    index: &TrainDictionary,
 ) -> LayoutPageReport {
     let matches: Vec<(String, Option<LayoutPageMatch>)> = bundle
         .train_labels
@@ -542,7 +694,7 @@ pub fn attach_layout_pages(
             .then_with(|| left.category.cmp(&right.category))
     });
     LayoutPageReport {
-        sitemap_trains: index.train_count(),
+        known_trains: index.train_count(),
         pages: page_count,
         categories,
     }
@@ -586,7 +738,7 @@ operator = "SBB"
 "#;
 
     fn page_of(category: &str, number: &str, agency: &str) -> Option<LayoutPageMatch> {
-        let index = SitemapIndex::new(parse_sitemap(SITEMAP));
+        let index = TrainDictionary::new(parse_sitemap(SITEMAP));
         LayoutRules::parse(RULES)
             .unwrap()
             .find_page(&index, category, number, agency)
@@ -710,6 +862,60 @@ operator = "SBB"
     #[test]
     fn gives_no_page_to_an_agency_without_a_rule() {
         assert_eq!(page_of("ICE", "71", "Unknown Railways"), None);
+    }
+
+    /// Returns the trains of a dictionary as sorted tuples.
+    fn sorted_trains(dictionary: &TrainDictionary) -> Vec<(String, String, String, u16)> {
+        let mut trains: Vec<_> = dictionary
+            .trains()
+            .map(|(operator, category, number, year)| {
+                (operator.into(), category.into(), number.into(), year)
+            })
+            .collect();
+        trains.sort();
+        trains
+    }
+
+    #[test]
+    fn writes_consecutive_numbers_as_ranges() {
+        let dictionary = TrainDictionary::new(
+            ["8", "9", "10", "12", "Bavorský expres", "7000"].map(|number| TrainPage {
+                operator: "ČD".into(),
+                category: "Ex".into(),
+                number: number.into(),
+                year: 2026,
+            }),
+        );
+        let text = dictionary.to_text();
+        assert!(text.ends_with("ČD\tEx\t2026\t8-10\t12\t7000\tBavorský expres\n"));
+    }
+
+    #[test]
+    fn reads_back_the_dictionary_it_wrote() {
+        let original = TrainDictionary::new(parse_sitemap(SITEMAP));
+        let copy = TrainDictionary::from_text(&original.to_text()).unwrap();
+        assert_eq!(sorted_trains(&copy), sorted_trains(&original));
+    }
+
+    #[test]
+    fn reports_the_line_of_a_malformed_dictionary() {
+        let result = TrainDictionary::from_text("# Header\nDB\tICE\n");
+        assert!(matches!(
+            result,
+            Err(ConfigError::TrainDictionary { line: 2, .. })
+        ));
+        let result = TrainDictionary::from_text("DB\tICE\t2026\t1-9999999\n");
+        assert!(matches!(
+            result,
+            Err(ConfigError::TrainDictionary { line: 1, .. })
+        ));
+    }
+
+    #[test]
+    fn reads_the_dictionary_file_of_the_repository() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/vagonweb-trains.txt");
+        let dictionary = TrainDictionary::read(&path).unwrap();
+        assert!(dictionary.train_count() > 10_000);
     }
 
     #[test]

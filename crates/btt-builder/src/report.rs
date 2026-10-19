@@ -99,10 +99,10 @@ pub fn write_report(
 fn layout_pages_section(report: &LayoutPageReport) -> String {
     let mut section = format!(
         "\n## vagonWEB links\n\n\
-         The sitemaps list {} train pages, and the labels refer to {} distinct pages.\n\n\
+         The dictionary lists {} train pages, and the labels refer to {} distinct pages.\n\n\
          | Category | Labels | Train page | Other operator | Category list | Operator list |\n\
          |---|---:|---:|---:|---:|---:|\n",
-        report.sitemap_trains, report.pages
+        report.known_trains, report.pages
     );
     for category in report.categories.iter().take(LISTED_LAYOUT_CATEGORIES) {
         let _ = writeln!(

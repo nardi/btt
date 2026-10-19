@@ -8,10 +8,10 @@
 #
 # The category on vagonWEB is the category of the timetable, unless the rule gives
 # `vagonweb_category`. Category patterns ignore case. A rule only decides the names to look for.
-# The builder links to a page only when the sitemap of the site lists it.
+# The builder links to a page only when the dictionary `data/vagonweb-trains.txt` lists it.
 #
 # The example `vagonweb_survey` of `btt-builder` compares the labels of a bundle with the
-# sitemap and proposes the pairs for new rules.
+# sitemaps and proposes the pairs for new rules.
 
 # Categories whose numbers name the same train in every country, so a page of another operator
 # with the same category and number is the same train. The link then says it is approximate.
