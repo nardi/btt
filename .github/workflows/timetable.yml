@@ -50,6 +50,19 @@ jobs:
           key: feeds-${{ steps.week.outputs.week }}
           restore-keys: feeds-
 
+      # The builder counts the builds of one day from the bundles in its output directory, and
+      # the runner starts with an empty one. An empty file per bundle already released today
+      # makes the next build take the next version instead of failing on an existing tag.
+      - name: Reserve the versions released today
+        run: |
+          mkdir -p build-cache/output
+          prefix="timetable-$(date -u +%Y%m%d)"
+          gh release list --limit 200 --json tagName --jq '.[].tagName' \
+            | grep -E "^${prefix}[0-9]{2}$" \
+            | while read -r tag; do
+                touch "build-cache/output/$tag.bundle"
+              done
+
       - name: Build the bundle
         run: |
           cargo run --release -p btt-builder -- \
