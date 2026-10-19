@@ -168,6 +168,11 @@ export const commands = {
 	 */
 	operatorEndDates: () => __TAURI_INVOKE<OperatorEndDate[]>("operator_end_dates"),
 	/**
+	 *  Returns the feeds of the timetable the planner uses, ordered by name, for the about screen.
+	 *  The list is empty when the app has no timetable.
+	 */
+	timetableFeeds: () => __TAURI_INVOKE<FeedCredit[]>("timetable_feeds"),
+	/**
 	 *  Downloads the newest timetable and reports its progress through `progress`. The planner uses
 	 *  it for the trips that open afterwards.
 	 * 
@@ -393,6 +398,16 @@ export type FareType =
 "Flexible" | 
 /**  The cheaper ticket that ties the traveller to one train. */
 "Saver";
+
+/**  A timetable feed that the planner's bundle was built from. */
+export type FeedCredit = {
+	/**  The name of the feed, such as `de_DELFI`. */
+	name: string,
+	/**  The license of the feed, or `unknown` when its publisher states none. */
+	license: string,
+	/**  The address of the feed or its terms, or an empty text when none is known. */
+	url: string,
+};
 
 /**  An amount in a currency other than the euro. */
 export type ForeignAmount = {

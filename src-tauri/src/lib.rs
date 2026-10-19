@@ -61,6 +61,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             timetable_updates::timetable_status,
             timetable_updates::check_timetable,
             timetable_updates::operator_end_dates,
+            timetable_updates::timetable_feeds,
             timetable_updates::download_timetable,
             timetable_updates::set_timetable_checks,
         ])

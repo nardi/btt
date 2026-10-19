@@ -54,6 +54,16 @@ impl<P: JourneyPricer> LegPlanningBackend<P> {
         }
     }
 
+    /// Returns the feeds that went into the timetable as name, license and address, or nothing
+    /// for a backend without a timetable.
+    pub fn feed_attributions(&self) -> Vec<(&str, &str, &str)> {
+        match self {
+            #[cfg(test)]
+            Self::Stub(_) => Vec::new(),
+            Self::TimetableBundle(router) => router.feed_attributions().collect(),
+        }
+    }
+
     /// Returns the first and last day, both inclusive, that the timetable covers. A backend
     /// without a timetable has no limit.
     pub fn validity_window(&self) -> Option<(NaiveDate, NaiveDate)> {

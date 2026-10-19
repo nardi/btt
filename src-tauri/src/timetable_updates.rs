@@ -592,6 +592,40 @@ pub fn operator_end_dates(state: State<'_, AppState>) -> Vec<OperatorEndDate> {
         .unwrap_or_default()
 }
 
+/// A timetable feed that the planner's bundle was built from.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+pub struct FeedCredit {
+    /// The name of the feed, such as `de_DELFI`.
+    pub name: String,
+    /// The license of the feed, or `unknown` when its publisher states none.
+    pub license: String,
+    /// The address of the feed or its terms, or an empty text when none is known.
+    pub url: String,
+}
+
+/// Returns the feeds of the timetable the planner uses, ordered by name, for the about screen.
+/// The list is empty when the app has no timetable.
+#[tauri::command]
+#[specta::specta]
+pub fn timetable_feeds(state: State<'_, AppState>) -> Vec<FeedCredit> {
+    let mut feeds: Vec<FeedCredit> = state
+        .current_backend()
+        .map(|backend| {
+            backend
+                .feed_attributions()
+                .into_iter()
+                .map(|(name, license, url)| FeedCredit {
+                    name: name.to_owned(),
+                    license: license.to_owned(),
+                    url: url.to_owned(),
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    feeds.sort_by(|left, right| left.name.cmp(&right.name));
+    feeds
+}
+
 /// Returns what the app knows about its timetable, without any request.
 #[tauri::command]
 #[specta::specta]

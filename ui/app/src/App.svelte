@@ -29,6 +29,7 @@
   import { onMount } from "svelte";
 
   import { commandErrorMessage, TauriTripSource } from "./tauri-trip-source.svelte";
+  import AboutPage from "./AboutPage.svelte";
   import ProblemReportDialog from "./ProblemReportDialog.svelte";
   import ShareDialog from "./ShareDialog.svelte";
   import TimetableCoverageWarning from "./TimetableCoverageWarning.svelte";
@@ -45,6 +46,8 @@
   /** What the app knows about its timetable, or `null` until the backend answered. */
   let timetableStatus: TimetableStatus | null = $state(null);
   let showTimetable = $state(false);
+  /** Whether the about screen replaces the trip list or the open trip. */
+  let showAbout = $state(false);
   /** The operators whose trains stop before the end of the timetable the planner uses. */
   let operatorEnds: OperatorEndDate[] = $state([]);
   /** The day the open trip reaches its destination, by the plan where there is one. */
@@ -353,7 +356,7 @@
 
 <svelte:window onkeydown={handleHistoryShortcut} />
 
-<main class:trip-open={openSource !== null}>
+<main class:trip-open={openSource !== null && !showAbout}>
   {#if timetableStatus !== null && (showTimetable || timetableStatus.installed === null)}
     <TimetableDialog
       status={timetableStatus}
@@ -366,7 +369,9 @@
     <p class="error" role="alert">{errorMessage}</p>
   {/if}
 
-  {#if openSource === null}
+  {#if showAbout}
+    <AboutPage onClose={() => (showAbout = false)} />
+  {:else if openSource === null}
     {#if timetableStatus !== null && !showTimetable && timetableStatus.installed?.running_out}
       <p class="notice">
         {#if timetableStatus.installed !== null && timetableStatus.installed.days_left < 0}
@@ -381,7 +386,7 @@
       {trips}
       firstDate={timetableStatus?.installed?.valid_from ?? null}
       lastDate={timetableStatus?.installed?.valid_until ?? null}
-      onCreate={createTrip} onOpen={openTrip} onDelete={deleteTrip} />
+      onCreate={createTrip} onOpen={openTrip} onDelete={deleteTrip} onAbout={() => (showAbout = true)} />
   {:else}
     <header class="trip-header">
       <button type="button" class="with-icon" onclick={closeTrip}>
@@ -447,6 +452,7 @@
       <ThemeSwitch />
       <button type="button" onclick={() => (showShare = true)}>Share</button>
       <button type="button" onclick={() => (showProblemReport = true)}>Report a problem</button>
+      <button type="button" onclick={() => (showAbout = true)}>About</button>
     </header>
     {#if showShare}
       <ShareDialog

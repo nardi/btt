@@ -13,6 +13,7 @@
     onCreate,
     onOpen,
     onDelete,
+    onAbout,
   }: {
     trips: TripSummary[];
     /** The first day the timetable covers as `YYYY-MM-DD`, or `null` when the app has none. */
@@ -22,6 +23,8 @@
     onCreate: (name: string, startDate: string) => void;
     onOpen: (tripId: TripId) => void;
     onDelete: (tripId: TripId) => void;
+    /** Opens the about screen. */
+    onAbout: () => void;
   } = $props();
 
   /** Returns the date two weeks from today, a typical planning horizon. */
@@ -62,7 +65,10 @@
 <section class="trip-list">
   <div class="title-row">
     <h1>Trips</h1>
-    <ThemeSwitch />
+    <div class="title-actions">
+      <button type="button" onclick={onAbout}>About</button>
+      <ThemeSwitch />
+    </div>
   </div>
   <form class="new-trip" onsubmit={create}>
     <input type="text" placeholder="Name of a new trip" bind:value={newTripName} required />
@@ -123,6 +129,12 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+  }
+
+  .title-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
   }
 
   h1 {

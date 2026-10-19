@@ -245,6 +245,11 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
         })
     }
 
+    /// Returns the feeds that went into the bundle as name, license and address.
+    pub fn feed_attributions(&self) -> impl Iterator<Item = (&str, &str, &str)> + '_ {
+        self.bundle.feed_attributions()
+    }
+
     /// Returns the version of the bundle's data.
     pub fn bundle_version(&self) -> u32 {
         self.bundle.bundle_version()
