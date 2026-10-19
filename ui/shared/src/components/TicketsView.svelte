@@ -18,6 +18,7 @@
     type LivePrices,
     priceKindDescription,
     priceKindLabel,
+    layoutLinkTitle,
     ridesByDate,
     ticketColour,
   } from "../tickets";
@@ -143,6 +144,17 @@
                   label={`${ride.train_label.category} ${ride.train_label.number}`}
                   colour={legLines.get(ride.leg_arrival_place_id)?.colour ?? "var(--color-text-muted)"}
                 />
+                {#each ride.layout_links ?? [] as link (link.url)}
+                  <button
+                    type="button"
+                    class="icon-button layout-link"
+                    aria-label={layoutLinkTitle(link.kind)}
+                    title={layoutLinkTitle(link.kind)}
+                    onclick={() => onOpenLink(link.url)}
+                  >
+                    <Icon name="coaches" size={14} />
+                  </button>
+                {/each}
                 <span class="chips">
                   {#each selected.covers[index] ?? [] as ticketId (ticketId)}
                     {@const ticket = selected.items.find((item) => item.id === ticketId)}
@@ -314,6 +326,13 @@
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
+  }
+
+  /* Smaller than other icon buttons, so the train chip stays the main thing in the row. */
+  .layout-link {
+    width: 24px;
+    height: 24px;
+    color: var(--color-text-muted);
   }
 
   .route {

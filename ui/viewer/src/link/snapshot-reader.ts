@@ -419,6 +419,7 @@ class SnapshotReader {
       offers_berths,
       intermediate_station_coordinates: [],
       path_coordinates: [],
+      layout_links: [],
     };
   }
 

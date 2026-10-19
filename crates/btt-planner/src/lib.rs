@@ -6,6 +6,7 @@ mod chain;
 mod cost_model;
 pub mod explanation;
 pub mod input;
+mod layout_links;
 pub mod operators;
 mod pricing;
 mod ride_path;

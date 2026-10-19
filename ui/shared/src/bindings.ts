@@ -569,6 +569,32 @@ export type JourneyCostParts = {
  */
 export type Latitude = number;
 
+/**  A link to a page that shows the layout of a train, the order of its coaches. */
+export type LayoutLink = {
+	/**  The site the page is on. */
+	source: LayoutLinkSource,
+	/**  What the page is about. */
+	kind: LayoutLinkKind,
+	/**  The address of the page. */
+	url: string,
+};
+
+/**  What a layout link leads to. */
+export type LayoutLinkKind = 
+/**  The page of the train itself. */
+"Train" | 
+/**  The page of a train with the same category and number but another operator. */
+"ApproximateTrain" | 
+/**  The list of the trains of one category and operator. */
+"CategoryList" | 
+/**  The list of the trains of one operator. */
+"OperatorList";
+
+/**  The site a layout link leads to. */
+export type LayoutLinkSource = 
+/**  vagonWEB, at `https://www.vagonweb.cz`. */
+"Vagonweb";
+
 /**
  *  What the planner finds about a leg after its main plan, with searches at other weights and
  *  on the days of a pass. The planner delivers the main plan first, because these searches
@@ -1248,6 +1274,8 @@ export type TicketRide = {
 	time_zone: string,
 	/**  Whether the train has berths. */
 	offers_berths: boolean,
+	/**  Pages that show the layout of the train, the best first. */
+	layout_links?: LayoutLink[],
 };
 
 /**  A way to cover every ride of the trip. */
@@ -1321,6 +1349,11 @@ export type TrainRide = {
 	 *  without it, in which case the stops describe the line.
 	 */
 	path_coordinates?: GeoCoordinates[],
+	/**
+	 *  Pages that show the layout of the train, the best first. Empty when the timetable
+	 *  knows none, and in plans stored without them.
+	 */
+	layout_links?: LayoutLink[],
 };
 
 /**  A transfer from the previous ride, followed by the next ride. */

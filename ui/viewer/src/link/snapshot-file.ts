@@ -11,6 +11,7 @@ import type {
   GeoCoordinates,
   Itinerary,
   Journey,
+  LayoutLink,
   LegPlan,
   LegPlanStation,
   LegPlanningResult,
@@ -125,6 +126,9 @@ const trainLabel: Parser<TrainLabel> = object<TrainLabel>({
 /** Leaves out the geometry of a train, which a snapshot does not carry. */
 const noCoordinates: Parser<GeoCoordinates[]> = () => [];
 
+/** Leaves out the layout links of a train, which a snapshot does not carry. */
+const noLayoutLinks: Parser<LayoutLink[]> = () => [];
+
 const ride: Parser<TrainRide> = object<TrainRide>({
   boarding_station: stationIndex,
   departure_time: unsigned32,
@@ -134,6 +138,7 @@ const ride: Parser<TrainRide> = object<TrainRide>({
   offers_berths: boolean,
   intermediate_station_coordinates: noCoordinates,
   path_coordinates: noCoordinates,
+  layout_links: noLayoutLinks,
 });
 
 const laterRide: Parser<TransferAndRide> = object<TransferAndRide>({ transfer_duration: minutes, ride });

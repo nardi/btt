@@ -114,6 +114,9 @@
         },
         {
           "url": "https://www.ouigo.com/*"
+        },
+        {
+          "url": "https://www.vagonweb.cz/*"
         }
       ]
     }

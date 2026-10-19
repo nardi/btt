@@ -38,10 +38,11 @@ pub use link::{
 };
 pub use place_search::PlaceSearchResult;
 pub use plan::{
-    AlternativeKind, ArrivalFootpath, Journey, JourneyChoice, JourneyCostParts, LegExtras, LegPlan,
-    LegPlanStation, LegPlanStationIndex, LegPlanningResult, NearbyDaySuggestion, NoJourneyReason,
-    PassJourneyOption, PlanningRunId, PlanningSessionEvent, SearchedWindow, StationWay, TrainLabel,
-    TrainRide, TransferAndRide, WayToStationMode,
+    AlternativeKind, ArrivalFootpath, Journey, JourneyChoice, JourneyCostParts, LayoutLink,
+    LayoutLinkKind, LayoutLinkSource, LegExtras, LegPlan, LegPlanStation, LegPlanStationIndex,
+    LegPlanningResult, NearbyDaySuggestion, NoJourneyReason, PassJourneyOption, PlanningRunId,
+    PlanningSessionEvent, SearchedWindow, StationWay, TrainLabel, TrainRide, TransferAndRide,
+    WayToStationMode,
 };
 pub use snapshot::{SNAPSHOT_SCHEMA_VERSION, SnapshotLeg, StoredSnapshot, TripSnapshot};
 pub use tickets::{

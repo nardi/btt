@@ -233,12 +233,13 @@ fn drop_unused_stations(plan: &mut LegPlan) {
     plan.station_table = kept;
 }
 
-/// Returns a journey as the snapshot keeps it: without the geometry of its trains, without the
-/// agency of its trains and with only the door-to-door time and the price of its cost parts.
+/// Returns a journey as the snapshot keeps it: without the geometry of its trains, without their
+/// layout links, without the agency of its trains and with only the door-to-door time and the price of its cost parts.
 fn shared_journey(journey: &Journey) -> Journey {
     let shared_ride = |ride: &TrainRide| TrainRide {
         intermediate_station_coordinates: SmallVec::new(),
         path_coordinates: Vec::new(),
+        layout_links: Vec::new(),
         train_label: TrainLabel {
             agency: SmolStr::default(),
             ..ride.train_label.clone()

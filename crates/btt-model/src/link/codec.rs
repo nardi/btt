@@ -880,6 +880,7 @@ impl SnapshotReader<'_> {
             offers_berths,
             intermediate_station_coordinates: SmallVec::new(),
             path_coordinates: Vec::new(),
+            layout_links: Vec::new(),
         })
     }
 

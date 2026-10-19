@@ -787,6 +787,7 @@ mod tests {
                         GeoCoordinates::from_degrees(50.5, 7.5).unwrap()
                     ],
                     path_coordinates: Vec::new(),
+                    layout_links: Vec::new(),
                 },
                 later_rides: smallvec::SmallVec::new(),
                 arrival_footpath: None,

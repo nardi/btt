@@ -7,7 +7,7 @@ use specta::Type;
 use thiserror::Error;
 
 use crate::itinerary::TripPlaceId;
-use crate::plan::TrainLabel;
+use crate::plan::{LayoutLink, TrainLabel};
 use crate::time::UnixTimeMinutes;
 use crate::trip::{PassDays, TravelClass};
 
@@ -404,6 +404,9 @@ pub struct TicketRide {
     pub time_zone: SmolStr,
     /// Whether the train has berths.
     pub offers_berths: bool,
+    /// Pages that show the layout of the train, the best first.
+    #[serde(default)]
+    pub layout_links: Vec<LayoutLink>,
 }
 
 /// The tickets a trip needs for one traveller.

@@ -1632,9 +1632,10 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
                 path_coordinates.push(self.bundle.station_coordinates(to));
             }
         }
+        let departure_time = UnixTimeMinutes(self.bundle_start_unix_minutes + ride.departure.0);
         Some(TrainRide {
             boarding_station: stations.index_of(&self.bundle, ride.boarding_station)?,
-            departure_time: UnixTimeMinutes(self.bundle_start_unix_minutes + ride.departure.0),
+            departure_time,
             alighting_station: stations.index_of(&self.bundle, ride.alighting_station)?,
             arrival_time: UnixTimeMinutes(self.bundle_start_unix_minutes + ride.arrival.0),
             train_label: TrainLabel {
@@ -1646,6 +1647,10 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             offers_berths: self.bundle.trip_offers_berths(ride.trip),
             intermediate_station_coordinates,
             path_coordinates,
+            layout_links: crate::layout_links::layout_links(
+                self.bundle.trip_layout_page(ride.trip),
+                departure_time,
+            ),
         })
     }
 }

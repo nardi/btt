@@ -53,6 +53,7 @@ pub fn plan_tickets(request: &TicketRequest<'_>, data: &FareData, book: &PriceBo
             arrival_time: ride.arrival_time,
             time_zone: ride.time_zone.clone(),
             offers_berths: ride.offers_berths,
+            layout_links: ride.layout_links.clone(),
         })
         .collect();
     let mut notes: Vec<SmolStr> = Vec::new();

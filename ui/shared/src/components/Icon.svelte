@@ -16,7 +16,8 @@
     | "retry"
     | "back"
     | "close"
-    | "warning";
+    | "warning"
+    | "coaches";
 
   /** The drawing of one icon. */
   interface IconShape {
@@ -62,6 +63,7 @@
     back: { paths: ["M19 12H5M11 6l-6 6 6 6"] },
     close: { paths: ["M6 6l12 12M18 6L6 18"] },
     warning: { paths: ["M12 3.5l9.5 16.5h-19z", "M12 10v4.5M12 17.2v.3"] },
+    coaches: { paths: ["M2.5 7h8.5v9H2.5z", "M13 7h8.5v9H13z", "M11 11.5h2"] },
   };
 </script>
 

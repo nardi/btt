@@ -15,6 +15,7 @@ import {
   formatTotal,
   isLiveFailed,
   isLiveUnavailable,
+  layoutLinkTitle,
   liveQuoteKey,
   livePriceOf,
   ridesByDate,
@@ -236,5 +237,14 @@ describe("estimated prices of tickets", () => {
     expect(formatPrice({ low: 4800, high: 4800, kind: "Live", source, original: null })).toBe("€48");
     expect(formatPrice({ low: 4800, high: 4800, kind: "Formula", source, original: null })).toBe("€48");
     expect(formatTotal({ low: 9000, high: 12000, kind: "Range" })).toBe("€90 to €120");
+  });
+});
+
+describe("layoutLinkTitle", () => {
+  it("names the page a layout link leads to", () => {
+    expect(layoutLinkTitle("Train")).toBe("Train layout on vagonWEB");
+    expect(layoutLinkTitle("ApproximateTrain")).toContain("another operator's train");
+    expect(layoutLinkTitle("CategoryList")).toContain("category");
+    expect(layoutLinkTitle("OperatorList")).toContain("operator");
   });
 });

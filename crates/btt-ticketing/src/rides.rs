@@ -2,7 +2,8 @@
 
 use btt_fares::country_of_time_zone;
 use btt_model::{
-    GeoCoordinates, Journey, LegPlanStation, TrainLabel, TrainRide, TripPlaceId, UnixTimeMinutes,
+    GeoCoordinates, Journey, LayoutLink, LegPlanStation, TrainLabel, TrainRide, TripPlaceId,
+    UnixTimeMinutes,
 };
 use chrono::{DateTime, NaiveDate, NaiveTime};
 use chrono_tz::Tz;
@@ -43,6 +44,8 @@ pub struct RideInput {
     pub distance_kilometres: f64,
     /// Whether the train has berths.
     pub offers_berths: bool,
+    /// Pages that show the layout of the train.
+    pub layout_links: Vec<LayoutLink>,
 }
 
 /// Returns the local date and time of day of a moment in a time zone, or `None` for an unknown
@@ -136,6 +139,7 @@ pub fn ride_input(
         to_country: country_of_time_zone(&to.time_zone).map(Into::into),
         distance_kilometres: ride_distance_kilometres(ride, stations),
         offers_berths: ride.offers_berths,
+        layout_links: ride.layout_links.clone(),
     })
 }
 
@@ -186,6 +190,7 @@ mod tests {
             offers_berths: false,
             intermediate_station_coordinates: std::iter::empty().collect(),
             path_coordinates: vec![point(5.2), point(5.3)],
+            layout_links: Vec::new(),
         };
         let whole = point(5.0).haversine_distance_meters(point(5.4)) / 1000.0;
         // The line covers only the middle, and the ends still count.

@@ -2,6 +2,7 @@
 
 import type {
   EuroCents,
+  LayoutLinkKind,
   EuroRange,
   LiveQuote,
   Price,
@@ -96,6 +97,20 @@ export function formatPrice(price: Price): string {
 /** Formats the total of a strategy as a range, or with a tilde when it is one estimated amount. */
 export function formatTotal(total: PriceTotal): string {
   return formatKnownPrice(total.low, total.high, total.kind);
+}
+
+/** Says what a layout link leads to, for its tooltip and its accessible name. */
+export function layoutLinkTitle(kind: LayoutLinkKind): string {
+  switch (kind) {
+    case "Train":
+      return "Train layout on vagonWEB";
+    case "ApproximateTrain":
+      return "Layout of another operator's train with this number, on vagonWEB";
+    case "CategoryList":
+      return "Trains of this category on vagonWEB";
+    case "OperatorList":
+      return "Trains of this operator on vagonWEB";
+  }
 }
 
 /** Names a kind of price for its badge. */

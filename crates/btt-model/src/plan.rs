@@ -45,6 +45,37 @@ pub struct TrainLabel {
     pub agency: SmolStr,
 }
 
+/// The site a layout link leads to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub enum LayoutLinkSource {
+    /// vagonWEB, at `https://www.vagonweb.cz`.
+    Vagonweb,
+}
+
+/// What a layout link leads to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub enum LayoutLinkKind {
+    /// The page of the train itself.
+    Train,
+    /// The page of a train with the same category and number but another operator.
+    ApproximateTrain,
+    /// The list of the trains of one category and operator.
+    CategoryList,
+    /// The list of the trains of one operator.
+    OperatorList,
+}
+
+/// A link to a page that shows the layout of a train, the order of its coaches.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub struct LayoutLink {
+    /// The site the page is on.
+    pub source: LayoutLinkSource,
+    /// What the page is about.
+    pub kind: LayoutLinkKind,
+    /// The address of the page.
+    pub url: String,
+}
+
 /// One train ridden from boarding to alighting.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
 pub struct TrainRide {
@@ -68,6 +99,10 @@ pub struct TrainRide {
     /// without it, in which case the stops describe the line.
     #[serde(default)]
     pub path_coordinates: Vec<GeoCoordinates>,
+    /// Pages that show the layout of the train, the best first. Empty when the timetable
+    /// knows none, and in plans stored without them.
+    #[serde(default)]
+    pub layout_links: Vec<LayoutLink>,
 }
 
 /// A transfer from the previous ride, followed by the next ride.

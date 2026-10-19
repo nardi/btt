@@ -55,6 +55,7 @@ fn ride(
         to_country: Some(countries.1.into()),
         distance_kilometres: kilometres,
         offers_berths,
+        layout_links: Vec::new(),
     }
 }
 
@@ -993,6 +994,7 @@ fn connected_journey(
         offers_berths,
         intermediate_station_coordinates: SmallVec::new(),
         path_coordinates: vec![stations[usize::from(from)].coordinates],
+        layout_links: Vec::new(),
     };
     let journey = Journey {
         access: station_way(),

@@ -86,6 +86,7 @@ impl StubBackend {
                 offers_berths,
                 intermediate_station_coordinates: SmallVec::new(),
                 path_coordinates: Vec::new(),
+                layout_links: Vec::new(),
             },
             later_rides: SmallVec::new(),
             arrival_footpath: None,
