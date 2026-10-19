@@ -1,0 +1,275 @@
+# How the train labels of the timetable map to the train pages of vagonWEB.
+#
+# vagonWEB names a train by an operator code, a category and a number, such as `DB`, `ICE` and
+# `71`. Each rule below gives the operator code of the trains whose agency matches `agency` and,
+# when the rule has one, whose category matches `category`. Rules are tried in order and the
+# first that matches wins, so a rule with a category comes before the general rule of the same
+# agency. A train that no rule matches gets no link.
+#
+# The category on vagonWEB is the category of the timetable, unless the rule gives
+# `vagonweb_category`. Category patterns ignore case. A rule only decides the names to look for.
+# The builder links to a page only when the sitemap of the site lists it.
+#
+# The example `vagonweb_survey` of `btt-builder` compares the labels of a bundle with the
+# sitemap and proposes the pairs for new rules.
+
+# Categories whose numbers name the same train in every country, so a page of another operator
+# with the same category and number is the same train. The link then says it is approximate.
+approximate_categories = ["EC", "ECE", "EN", "ICE", "NJ", "RJ", "RJX", "TGV"]
+
+# Austria.
+[[rule]]
+agency = '^(OEBB|Österreichische Bundesbahnen|ÖBB)'
+operator = "ÖBB"
+category = '^S$'
+vagonweb_category = "SB"
+
+[[rule]]
+agency = '^(OEBB|Österreichische Bundesbahnen|ÖBB)'
+operator = "ÖBB"
+
+# Germany.
+[[rule]]
+agency = '^(DB[ -]|Deutsche Bahn)'
+operator = "DB"
+
+[[rule]]
+agency = '^(Ostdeutsche Eisenbahn|ODEG)'
+operator = "ODEG"
+
+[[rule]]
+agency = '^Eurobahn'
+operator = "ERB"
+
+[[rule]]
+agency = '^Mitteldeutsche Regiobahn'
+operator = "MRB"
+
+[[rule]]
+agency = '^VIAS Rail'
+operator = "VIAS"
+
+[[rule]]
+agency = '^NEB Niederbarnimer'
+operator = "NEB"
+
+[[rule]]
+agency = '^National Express'
+operator = "NXG"
+
+# Switzerland.
+[[rule]]
+agency = '^(Schweizerische Bundesbahnen|SBB)'
+operator = "SBB"
+
+# France. The French feed names TER regions as agencies and runs the brands of SNCF under them.
+[[rule]]
+agency = '^(SNCF|CFF$|TMR SA$)'
+operator = "SNCF"
+category = '^TGV INOUI$'
+vagonweb_category = "TGV"
+
+[[rule]]
+agency = '^(SNCF|CFF$|TMR SA$)'
+operator = "SNCF"
+category = '^OUIGO'
+vagonweb_category = "OUIGO"
+
+[[rule]]
+agency = '^(SNCF|CFF$|TMR SA$)'
+operator = "SNCF"
+category = '^INTERCITES de nuit$'
+vagonweb_category = "ICN"
+
+[[rule]]
+agency = '^(SNCF|CFF$|TMR SA$)'
+operator = "SNCF"
+category = '^INTERCITES$'
+vagonweb_category = "IC"
+
+[[rule]]
+agency = '^(SNCF|CFF$|TMR SA$)'
+operator = "SNCF"
+
+# Belgium and the Netherlands.
+[[rule]]
+agency = '^NMBS/SNCB'
+operator = "SNCB"
+category = '^S\d+$'
+vagonweb_category = "S"
+
+[[rule]]
+agency = '^NMBS/SNCB'
+operator = "SNCB"
+
+[[rule]]
+agency = '^NS$'
+operator = "NS"
+category = '^Intercity$'
+vagonweb_category = "IC"
+
+[[rule]]
+agency = '^NS$'
+operator = "NS"
+category = '^Sprinter$'
+vagonweb_category = "SPR"
+
+[[rule]]
+agency = '^NS$'
+operator = "NS"
+category = '^Eurocity Direct$'
+vagonweb_category = "ECD"
+
+[[rule]]
+agency = '^NS International'
+operator = "NSI"
+
+# Italy.
+[[rule]]
+agency = '^(TRENITALIA|Trenitalia)$'
+operator = "TI"
+category = '^REG$'
+vagonweb_category = "R"
+
+[[rule]]
+agency = '^(TRENITALIA|Trenitalia)$'
+operator = "TI"
+
+# Czechia and Slovakia.
+[[rule]]
+agency = '^(České dráhy|Ceske Drahy)'
+operator = "ČD"
+
+[[rule]]
+agency = '^Železničná spoločnosť Slovensko'
+operator = "ZSSK"
+
+[[rule]]
+agency = '^RegioJet'
+operator = "RJ"
+
+[[rule]]
+agency = '^Leo Express Slovensko'
+operator = "LESK"
+
+[[rule]]
+agency = '^Leo Express'
+operator = "LE"
+
+[[rule]]
+agency = '^ARRIVA vlaky'
+operator = "ARV"
+
+[[rule]]
+agency = '^Die Länderbahn CZ'
+operator = "DLB"
+
+[[rule]]
+agency = '^GW Train Regio'
+operator = "GWTR"
+
+[[rule]]
+agency = '^KŽC Doprava'
+operator = "KŽC"
+
+# Poland.
+[[rule]]
+agency = '^PKP Intercity'
+operator = "PKPIC"
+
+[[rule]]
+agency = '^PolRegio'
+operator = "PREG"
+vagonweb_category = "R"
+
+[[rule]]
+agency = '^Koleje Mazowieckie'
+operator = "KM"
+vagonweb_category = "Os"
+
+[[rule]]
+agency = '^Koleje Dolnośląskie'
+operator = "KD"
+vagonweb_category = "Os"
+
+[[rule]]
+agency = '^Koleje Śląskie'
+operator = "KŚ"
+vagonweb_category = "Os"
+
+[[rule]]
+agency = '^Koleje Wielkopolskie'
+operator = "KW"
+vagonweb_category = "Os"
+
+[[rule]]
+agency = '^Koleje Małopolskie'
+operator = "KMŁ"
+vagonweb_category = "Os"
+
+[[rule]]
+agency = '^Łódzka Kolej Aglomeracyjna'
+operator = "ŁKA"
+vagonweb_category = "Ł"
+
+[[rule]]
+agency = '^SKM Warszawa'
+operator = "SKMWA"
+vagonweb_category = "Os"
+
+[[rule]]
+agency = '^PKP SKM Trójmiasto'
+operator = "SKMT"
+vagonweb_category = "SKM"
+
+# Hungary, Croatia, Romania, Slovenia, Portugal and Serbia.
+[[rule]]
+agency = '^MÁV$'
+operator = "MÁV"
+
+[[rule]]
+agency = '^(GYSEV|Raaberbahn)'
+operator = "GySEV"
+
+[[rule]]
+agency = '^HŽ Putnicki prijevoz'
+operator = "HŽPP"
+category = '^HŽ$'
+vagonweb_category = "P"
+
+[[rule]]
+agency = '^HŽ Putnicki prijevoz'
+operator = "HŽPP"
+
+[[rule]]
+agency = '^CFR Călători'
+operator = "CFR"
+
+[[rule]]
+agency = '^Regio Călători'
+operator = "RCBV"
+
+[[rule]]
+agency = '^InterRegional Călători'
+operator = "IRC"
+
+[[rule]]
+agency = '^Transferoviar'
+operator = "TFC"
+
+[[rule]]
+agency = '^SŽ - Potniški'
+operator = "SŽ"
+
+[[rule]]
+agency = '^CP - Comboios'
+operator = "CP"
+
+[[rule]]
+agency = '^Srbija Voz'
+operator = "SV"
+
+# Sweden.
+[[rule]]
+agency = '^Snälltåget'
+operator = "SNALL"

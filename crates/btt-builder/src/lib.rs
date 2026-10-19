@@ -10,6 +10,7 @@ pub mod database;
 pub mod dedup;
 pub mod download;
 pub mod feed_archive;
+pub mod layout_pages;
 pub mod load;
 pub mod netex;
 pub mod publish;

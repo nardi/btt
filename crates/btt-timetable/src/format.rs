@@ -9,7 +9,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 
 /// Changes whenever the layout of `TimetableBundle` changes, so an app never reads a bundle it
 /// does not understand.
-pub const BUNDLE_FORMAT_VERSION: u32 = 2;
+pub const BUNDLE_FORMAT_VERSION: u32 = 3;
 
 /// Marks the start of every bundle file.
 pub const BUNDLE_MAGIC: [u8; 8] = *b"BTTBUNDL";
@@ -75,6 +75,11 @@ bundle_index! {
 bundle_index! {
     /// Points into `TimetableBundle::train_labels`.
     TrainLabelIndex
+}
+
+bundle_index! {
+    /// Points into `TimetableBundle::layout_pages`.
+    LayoutPageIndex
 }
 
 /// Points into `TimetableBundle::time_zone_names`.
@@ -292,6 +297,39 @@ pub struct BundleTrainLabel {
     pub agency: PooledString,
     /// Whether the train has couchettes or sleepers.
     pub offers_berths: bool,
+    /// The page that shows the layout of the train, if the builder found one.
+    pub layout_page: Option<LayoutPageIndex>,
+}
+
+/// What a page that shows the layout of a train is about.
+#[derive(Archive, Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[rkyv(derive(Debug, Clone, Copy, PartialEq, Eq))]
+pub enum LayoutPageKind {
+    /// The page of the train itself.
+    Train,
+    /// The page of a train with the same category and number but another operator.
+    ApproximateTrain,
+    /// The list of the trains of one category and operator.
+    CategoryList,
+    /// The list of the trains of one operator.
+    OperatorList,
+}
+
+/// A page of a site that shows the layout of trains, as the site names its parts. The planner
+/// builds the address of the page from it.
+#[derive(Archive, Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[rkyv(derive(Debug, Clone, Copy))]
+pub struct BundleLayoutPage {
+    /// What the page is about.
+    pub kind: LayoutPageKind,
+    /// Code of the operator or country on the site, such as "DB".
+    pub operator: PooledString,
+    /// Category on the site, such as "ICE". Empty for the list of an operator.
+    pub category: PooledString,
+    /// Train number on the site. Empty for lists.
+    pub number: PooledString,
+    /// Timetable year of the page, such as 2026.
+    pub year: u16,
 }
 
 /// Source and license of a feed that went into the bundle.
@@ -358,6 +396,8 @@ pub struct TimetableBundle {
     pub distinct_service_days: Vec<ServiceDayBitset>,
     /// Each distinct train label once.
     pub train_labels: Vec<BundleTrainLabel>,
+    /// Each page that shows the layout of trains once, for the labels that refer to one.
+    pub layout_pages: Vec<BundleLayoutPage>,
     /// Text of every `PooledString`.
     pub string_pool: String,
     /// Feeds that went into the bundle.

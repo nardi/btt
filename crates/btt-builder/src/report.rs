@@ -15,9 +15,13 @@ use crate::config::FeedConfig;
 use crate::database::{WorkDatabase, sql_string};
 use crate::dedup::MergeCounts;
 use crate::download::CachedReuse;
+use crate::layout_pages::LayoutPageReport;
 
 /// Most uncertain station matches the report lists.
 const LISTED_UNCERTAIN_MATCHES: i64 = 300;
+
+/// Most categories the vagonWEB section lists, the ones with the most train labels.
+const LISTED_LAYOUT_CATEGORIES: usize = 120;
 
 /// One number of the build, such as the trips of a feed.
 #[derive(Debug, Clone, PartialEq)]
@@ -28,6 +32,14 @@ pub struct BuildStatistic {
     pub statistic: String,
     /// The number.
     pub value: i64,
+}
+
+/// Parts of the build that the report describes besides the database and the bundle.
+pub struct ReportSections<'build> {
+    /// Downloads that came from the cache.
+    pub cached_reuses: &'build [CachedReuse],
+    /// What the matching of vagonWEB pages did, when it ran.
+    pub layout_pages: Option<&'build LayoutPageReport>,
 }
 
 /// Collects the statistics of a build and writes the report files.
@@ -41,7 +53,7 @@ pub fn write_report(
     merge_counts: &MergeCounts,
     bundle: &TimetableBundle,
     bundle_file_bytes: u64,
-    cached_reuses: &[CachedReuse],
+    sections: &ReportSections<'_>,
     output_directory: &Path,
 ) -> Result<Vec<BuildStatistic>, BuildError> {
     let mut statistics = feed_statistics(database, feeds)?;
@@ -58,7 +70,7 @@ pub fn write_report(
     statistics.extend(bundle_statistics(bundle, bundle_file_bytes));
 
     let mut markdown = String::from("# Timetable build report\n\n");
-    markdown.push_str(&cached_reuses_section(cached_reuses));
+    markdown.push_str(&cached_reuses_section(sections.cached_reuses));
     markdown.push_str("## Statistics\n\n");
     markdown.push_str("| Scope | Statistic | Value |\n|---|---|---:|\n");
     for statistic in &statistics {
@@ -67,6 +79,9 @@ pub fn write_report(
             "| {} | {} | {} |",
             statistic.scope, statistic.statistic, statistic.value
         );
+    }
+    if let Some(layout_pages) = sections.layout_pages {
+        markdown.push_str(&layout_pages_section(layout_pages));
     }
     markdown.push_str(&uncertain_matches_section(database)?);
     std::fs::write(output_directory.join("report.md"), markdown)?;
@@ -77,6 +92,31 @@ pub fn write_report(
         &output_directory.join("build_statistics.parquet"),
     )?;
     Ok(statistics)
+}
+
+/// Describes which train labels got a link to vagonWEB, by category. A category with many labels
+/// and no train pages points at a missing rule in `data/vagonweb.toml`.
+fn layout_pages_section(report: &LayoutPageReport) -> String {
+    let mut section = format!(
+        "\n## vagonWEB links\n\n\
+         The sitemaps list {} train pages, and the labels refer to {} distinct pages.\n\n\
+         | Category | Labels | Train page | Other operator | Category list | Operator list |\n\
+         |---|---:|---:|---:|---:|---:|\n",
+        report.sitemap_trains, report.pages
+    );
+    for category in report.categories.iter().take(LISTED_LAYOUT_CATEGORIES) {
+        let _ = writeln!(
+            section,
+            "| {} | {} | {} | {} | {} | {} |",
+            category.category,
+            category.labels,
+            category.train,
+            category.approximate,
+            category.category_list,
+            category.operator_list
+        );
+    }
+    section
 }
 
 /// Lists the downloads that came from the cache, so a stale feed shows in the report. The

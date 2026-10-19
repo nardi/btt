@@ -14,9 +14,9 @@ pub use builder::{
     TripInput, TripStopInput,
 };
 pub use format::{
-    BundleStationIndex, BundleTripIndex, Footpath, MinutesSinceServiceDateUtc, PackedPatternStop,
-    RaptorRoute, RaptorRouteIndex, RouteStopPosition, ServiceDayBitset, StopEventTimes,
-    TimetableBundle,
+    BundleStationIndex, BundleTripIndex, Footpath, LayoutPageKind, MinutesSinceServiceDateUtc,
+    PackedPatternStop, RaptorRoute, RaptorRouteIndex, RouteStopPosition, ServiceDayBitset,
+    StopEventTimes, TimetableBundle,
 };
-pub use loaded::{BundleLoadError, LoadedTimetableBundle};
+pub use loaded::{BundleLoadError, LayoutPage, LoadedTimetableBundle};
 pub use station_index::{NearbyStation, StationIndex};

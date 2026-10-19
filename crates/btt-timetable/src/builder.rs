@@ -264,6 +264,7 @@ impl BundleBuilder {
             stop_events: tables.stop_events,
             distinct_service_days: tables.distinct_service_days,
             train_labels: tables.train_labels,
+            layout_pages: Vec::new(),
             string_pool: tables.strings.text,
             feed_attributions,
         })
@@ -588,6 +589,7 @@ impl<'input> BundleTables<'input> {
             number: self.strings.intern(&label.number)?,
             agency: self.strings.intern(&label.agency)?,
             offers_berths: label.offers_berths,
+            layout_page: None,
         });
         self.train_label_indices.insert(label, index);
         Ok(index)

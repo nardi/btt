@@ -1,9 +1,10 @@
 //! Downloads feeds, their Transitous configuration and the Trainline station list into a cache.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::fs;
 use std::io::{self, Seek};
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use thiserror::Error;
 
@@ -63,6 +64,10 @@ pub struct Downloader {
     cache_directory: PathBuf,
     /// The files used from the cache after a failed check or download, in the order of use.
     cached_reuses: RefCell<Vec<CachedReuse>>,
+    /// Shortest time between the start of two requests, which a site sets with a crawl delay.
+    request_gap: Duration,
+    /// When the last request started.
+    last_request: Cell<Option<Instant>>,
 }
 
 impl Downloader {
@@ -72,6 +77,19 @@ impl Downloader {
     ///
     /// Returns an error when the directory cannot be created or the HTTP client fails to build.
     pub fn new(cache_directory: PathBuf) -> Result<Self, DownloadError> {
+        Self::with_request_gap(cache_directory, Duration::ZERO)
+    }
+
+    /// Creates a downloader that waits at least `request_gap` between the start of two
+    /// requests, for a site that asks for a crawl delay in its `robots.txt`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the directory cannot be created or the HTTP client fails to build.
+    pub fn with_request_gap(
+        cache_directory: PathBuf,
+        request_gap: Duration,
+    ) -> Result<Self, DownloadError> {
         fs::create_dir_all(&cache_directory).map_err(|source| DownloadError::Write {
             path: cache_directory.display().to_string(),
             source,
@@ -90,7 +108,22 @@ impl Downloader {
             http_client,
             cache_directory,
             cached_reuses: RefCell::new(Vec::new()),
+            request_gap,
+            last_request: Cell::new(None),
         })
+    }
+
+    /// Waits until `request_gap` has passed since the last request started, then records the
+    /// start of a new one.
+    fn wait_for_turn(&self) {
+        let remaining = self
+            .last_request
+            .get()
+            .and_then(|last| self.request_gap.checked_sub(last.elapsed()));
+        if let Some(remaining) = remaining {
+            std::thread::sleep(remaining);
+        }
+        self.last_request.set(Some(Instant::now()));
     }
 
     /// Returns the cached copy of a URL, downloading it when it is missing or the server has a
@@ -156,6 +189,7 @@ impl Downloader {
 
     /// Returns the `Last-Modified` header of a URL, or its `ETag` when the server sends no date.
     fn remote_version_stamp(&self, url: &str) -> Result<Option<String>, reqwest::Error> {
+        self.wait_for_turn();
         let response = self.http_client.head(url).send()?.error_for_status()?;
         Ok(response
             .headers()
@@ -190,6 +224,7 @@ impl Downloader {
         let mut received_bytes: u64 = 0;
         let mut attempt = 1;
         loop {
+            self.wait_for_turn();
             let mut request = self.http_client.get(url);
             if received_bytes > 0 {
                 request =

@@ -2,18 +2,24 @@
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use btt_builder::config::{BuilderConfig, FeedFormat};
 use btt_builder::database::WorkDatabase;
 use btt_builder::download::{
     Downloader, TRAINLINE_STATIONS_URL, TRANSITOUS_FEED_CONFIG_URL, TRANSITOUS_MIRROR_URL,
 };
+use btt_builder::layout_pages::{
+    LayoutRules, SitemapIndex, VAGONWEB_TRAIN_SITEMAP_URLS, attach_layout_pages, parse_sitemap,
+};
 use btt_builder::load::ValidityWindow;
 use btt_builder::{BuildError, FeedInput, PipelineInputs, assemble, publish, report, run_pipeline};
 use btt_timetable::LoadedTimetableBundle;
 use chrono::{Datelike, NaiveDate, Utc};
 use clap::Parser;
+
+/// Pause between requests to vagonWEB, which asks for 15 seconds in its robots.txt.
+const VAGONWEB_REQUEST_GAP: Duration = Duration::from_secs(15);
 
 /// Builds a BTT timetable bundle from the GTFS feeds in the configuration.
 #[derive(Debug, Parser)]
@@ -24,6 +30,12 @@ struct Arguments {
     /// Words to strip from station names before matching.
     #[arg(long, default_value = "data/station_name_stopwords.toml")]
     stopwords: PathBuf,
+    /// How train labels map to the train pages of vagonWEB.
+    #[arg(long, default_value = "data/vagonweb.toml")]
+    vagonweb_rules: PathBuf,
+    /// Leaves out the links to vagonWEB, so the build does not download its sitemaps.
+    #[arg(long)]
+    no_vagonweb: bool,
     /// Directory for downloads, the working database and unpacked feed files.
     #[arg(long, default_value = "build-cache")]
     cache_directory: PathBuf,
@@ -83,30 +95,13 @@ fn build(arguments: &Arguments) -> Result<(), BuildError> {
     let bundle_version = next_bundle_version(&arguments.output_directory, first_version_of_day);
 
     let downloader = Downloader::new(arguments.cache_directory.join("feeds"))?;
-    let mut feeds = Vec::with_capacity(config.feeds.len());
-    for feed in &config.feeds {
-        let extension = match feed.format {
-            FeedFormat::Gtfs => "gtfs",
-            FeedFormat::Netex => "netex",
-        };
-        let zip_name = format!("{}.{extension}.zip", feed.mirror_name);
-        let url = feed
-            .source_url
-            .clone()
-            .unwrap_or_else(|| format!("{TRANSITOUS_MIRROR_URL}/{zip_name}"));
-        let zip_path = downloader.fetch(&url, &zip_name)?;
-        let country_file = format!("{}.json", feed.country());
-        let country_config_path = downloader.fetch(
-            &format!("{TRANSITOUS_FEED_CONFIG_URL}/{country_file}"),
-            &format!("transitous-{country_file}"),
-        )?;
-        feeds.push(FeedInput {
-            config: feed,
-            zip_path,
-            country_config_path,
-        });
-    }
+    let feeds = download_feeds(&downloader, &config)?;
     let trainline_stations_csv = downloader.fetch(TRAINLINE_STATIONS_URL, "stations.csv")?;
+    let layout_page_sources = if arguments.no_vagonweb {
+        None
+    } else {
+        read_layout_page_sources(arguments)?
+    };
 
     let work_directory = arguments.cache_directory.join("work");
     std::fs::create_dir_all(&work_directory)?;
@@ -134,7 +129,10 @@ fn build(arguments: &Arguments) -> Result<(), BuildError> {
         window,
         bundle_version,
     };
-    let outcome = run_pipeline(&database, &inputs)?;
+    let mut outcome = run_pipeline(&database, &inputs)?;
+    let layout_page_report = layout_page_sources
+        .as_ref()
+        .map(|(rules, index)| attach_layout_pages(&mut outcome.bundle, rules, index));
 
     let bundle_path = arguments
         .output_directory
@@ -152,7 +150,10 @@ fn build(arguments: &Arguments) -> Result<(), BuildError> {
         &outcome.merge_counts,
         &outcome.bundle,
         bundle_file_bytes,
-        &cached_reuses,
+        &report::ReportSections {
+            cached_reuses: &cached_reuses,
+            layout_pages: layout_page_report.as_ref(),
+        },
         &arguments.output_directory,
     )?;
     if let Some(download_base_url) = &arguments.download_base_url {
@@ -173,6 +174,65 @@ fn build(arguments: &Arguments) -> Result<(), BuildError> {
         "build finished"
     );
     Ok(())
+}
+
+/// Downloads the ZIP of every configured feed and the Transitous configuration of its country.
+fn download_feeds<'config>(
+    downloader: &Downloader,
+    config: &'config BuilderConfig,
+) -> Result<Vec<FeedInput<'config>>, BuildError> {
+    let mut feeds = Vec::with_capacity(config.feeds.len());
+    for feed in &config.feeds {
+        let extension = match feed.format {
+            FeedFormat::Gtfs => "gtfs",
+            FeedFormat::Netex => "netex",
+        };
+        let zip_name = format!("{}.{extension}.zip", feed.mirror_name);
+        let url = feed
+            .source_url
+            .clone()
+            .unwrap_or_else(|| format!("{TRANSITOUS_MIRROR_URL}/{zip_name}"));
+        let zip_path = downloader.fetch(&url, &zip_name)?;
+        let country_file = format!("{}.json", feed.country());
+        let country_config_path = downloader.fetch(
+            &format!("{TRANSITOUS_FEED_CONFIG_URL}/{country_file}"),
+            &format!("transitous-{country_file}"),
+        )?;
+        feeds.push(FeedInput {
+            config: feed,
+            zip_path,
+            country_config_path,
+        });
+    }
+    Ok(feeds)
+}
+
+/// Reads the rules for the train pages of vagonWEB and downloads its sitemaps. Returns `None`
+/// when a sitemap is unavailable, because a bundle without the links is better than no bundle.
+fn read_layout_page_sources(
+    arguments: &Arguments,
+) -> Result<Option<(LayoutRules, SitemapIndex)>, BuildError> {
+    let rules = LayoutRules::read(&arguments.vagonweb_rules)?;
+    // The site asks for a pause between requests, which this downloader keeps.
+    let downloader = Downloader::with_request_gap(
+        arguments.cache_directory.join("vagonweb"),
+        VAGONWEB_REQUEST_GAP,
+    )?;
+    let mut trains = Vec::new();
+    for (position, url) in VAGONWEB_TRAIN_SITEMAP_URLS.iter().enumerate() {
+        let text = downloader
+            .fetch(url, &format!("sitemap-{position}.xml"))
+            .map_err(|error| error.to_string())
+            .and_then(|path| std::fs::read_to_string(path).map_err(|error| error.to_string()));
+        match text {
+            Ok(text) => trains.extend(parse_sitemap(&text)),
+            Err(error) => {
+                tracing::warn!(url, %error, "no vagonWEB sitemap, building without layout links");
+                return Ok(None);
+            }
+        }
+    }
+    Ok(Some((rules, SitemapIndex::new(trains))))
 }
 
 /// Returns the version for a new bundle built on a day: `first_version_of_day` plus one more

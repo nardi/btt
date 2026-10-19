@@ -307,7 +307,7 @@ const BERTH_LINK_TOLERANCE_MINUTES: i32 = 10;
 /// codeshared night trains with a leading 4 or 6 on a five-digit number, such as 60470 for
 /// Nightjet 470. The merge doesn't use this key, because such numbers also mark portions of
 /// one night train, such as Nightjet 421 to Innsbruck and 40421 to Vienna.
-fn train_number_key(train_number: &str) -> &str {
+pub(crate) fn train_number_key(train_number: &str) -> &str {
     let is_prefixed = train_number.len() == 5
         && train_number.bytes().all(|byte| byte.is_ascii_digit())
         && matches!(train_number.as_bytes()[0], b'4' | b'6');

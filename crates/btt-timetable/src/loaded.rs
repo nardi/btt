@@ -12,11 +12,27 @@ use thiserror::Error;
 
 use crate::format::{
     ArchivedBundleStation, ArchivedFeedAttribution, ArchivedFootpath, ArchivedIndex,
-    ArchivedPooledString, ArchivedRouteStopPosition, ArchivedTimetableBundle,
-    BUNDLE_FORMAT_VERSION, BUNDLE_MAGIC, BundleStationIndex, BundleTripIndex, Footpath,
-    MinutesSinceServiceDateUtc, PackedPatternStop, RaptorRoute, RaptorRouteIndex,
-    RouteStopPosition, ServiceDayBitset, StopEventTimes, TimetableBundle,
+    ArchivedLayoutPageKind, ArchivedPooledString, ArchivedRouteStopPosition,
+    ArchivedTimetableBundle, BUNDLE_FORMAT_VERSION, BUNDLE_MAGIC, BundleStationIndex,
+    BundleTripIndex, Footpath, LayoutPageKind, MinutesSinceServiceDateUtc, PackedPatternStop,
+    RaptorRoute, RaptorRouteIndex, RouteStopPosition, ServiceDayBitset, StopEventTimes,
+    TimetableBundle,
 };
+
+/// A page that shows the layout of a train, read from a bundle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LayoutPage<'bundle> {
+    /// What the page is about.
+    pub kind: LayoutPageKind,
+    /// Code of the operator or country on the site, such as "DB".
+    pub operator: &'bundle str,
+    /// Category on the site, such as "ICE". Empty for the list of an operator.
+    pub category: &'bundle str,
+    /// Train number on the site. Empty for lists.
+    pub number: &'bundle str,
+    /// Timetable year of the page, such as 2026.
+    pub year: u16,
+}
 
 /// Errors from loading a bundle.
 #[derive(Debug, Error)]
@@ -355,6 +371,31 @@ impl LoadedTimetableBundle {
             last_days[label] = last_days[label].max(last_day_by_calendar[calendar]);
         }
         last_days
+    }
+
+    /// Returns the page that shows the layout of a trip's train, if the bundle has one.
+    pub fn trip_layout_page(&self, trip: BundleTripIndex) -> Option<LayoutPage<'_>> {
+        let archived = self.archived();
+        let label_index = archived.trips[trip.as_usize()].train_label.to_native();
+        let page_index = archived.train_labels[label_index.as_usize()]
+            .layout_page
+            .as_ref()?
+            .to_native();
+        // The index comes from the builder, but the archive check does not compare it with the
+        // length of the list, so a damaged bundle gets no page instead of a panic.
+        let page = archived.layout_pages.get(page_index.as_usize())?;
+        Some(LayoutPage {
+            kind: match page.kind {
+                ArchivedLayoutPageKind::Train => LayoutPageKind::Train,
+                ArchivedLayoutPageKind::ApproximateTrain => LayoutPageKind::ApproximateTrain,
+                ArchivedLayoutPageKind::CategoryList => LayoutPageKind::CategoryList,
+                ArchivedLayoutPageKind::OperatorList => LayoutPageKind::OperatorList,
+            },
+            operator: self.pooled(page.operator),
+            category: self.pooled(page.category),
+            number: self.pooled(page.number),
+            year: page.year.to_native(),
+        })
     }
 
     /// Returns whether a trip's train has couchettes or sleepers.

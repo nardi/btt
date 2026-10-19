@@ -37,6 +37,14 @@ pub enum ConfigError {
     /// A train label pattern has no `number` group.
     #[error("the train label pattern of feed {0} has no `number` group")]
     MissingNumberGroup(String),
+    /// The agency pattern or a category pattern of a vagonWEB rule does not compile.
+    #[error("invalid pattern in the vagonWEB rule for agency {agency}: {source}")]
+    LayoutRulePattern {
+        /// The agency pattern of the rule.
+        agency: String,
+        /// Why the pattern failed.
+        source: regex::Error,
+    },
     /// The validity window is empty or too long.
     #[error("validity_window_days must be between 1 and 128, not {0}")]
     InvalidValidityWindow(u16),
