@@ -4,7 +4,9 @@
 //! longitude in microdegrees and time zone, separated by tabs. The web viewer reads the same file.
 //! A link names a station by its line, so lines are only ever appended, and a station that the
 //! dictionary lacks travels as a literal. The example `station_dictionary` of `btt-planner` writes
-//! the file from a timetable bundle.
+//! the file from a timetable bundle. The file holds every station that a train of the bundle can
+//! board or alight at, with the busiest stations first. A station that a later bundle adds
+//! travels as a literal until the example appends it.
 
 use std::collections::HashMap;
 use std::sync::OnceLock;

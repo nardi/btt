@@ -1,14 +1,18 @@
 //! Writes the dictionary of stations that links and the web viewer share.
 //!
 //! Run with `cargo run --release -p btt-planner --example station_dictionary -- <bundle>
-//! <dictionary file> <station count>`. The dictionary file holds one station per line as its
+//! <dictionary file> [station count]`. The dictionary file holds one station per line as its
 //! name, latitude and longitude in microdegrees and time zone, separated by tabs. The tool keeps
 //! the lines the file already has, in their order, because a link refers to a station by its
-//! line. It then appends the busiest stations of the bundle that the file lacks, until the file
-//! has the station count.
+//! line. It then appends the stations of the bundle that the file lacks, until the file has the
+//! station count. Without a station count it appends all of them.
 //!
-//! The busiest stations are the ones the most trains of long-distance categories stop at. Local
-//! trains would otherwise rank every suburban station above a border station.
+//! Every station that a train can board or alight at is a candidate, because the planner can
+//! name any of them in a journey. The stations the most trains of long-distance categories stop
+//! at come first, and the stations with only local trains follow, ranked by their trains. A
+//! link spends fewer bits on an entry early in the file, so the order puts the stations that
+//! journeys use the most at the front. Local trains would otherwise rank every suburban station
+//! above a border station.
 
 use std::collections::HashSet;
 
@@ -19,17 +23,16 @@ fn main() {
     let mut arguments = std::env::args().skip(1);
     let bundle_path = arguments.next().expect("pass the bundle");
     let dictionary_path = arguments.next().expect("pass the dictionary file");
-    let wanted: usize = arguments
-        .next()
-        .expect("pass the number of stations")
-        .parse()
-        .expect("the number of stations is a number");
+    let wanted: usize = arguments.next().map_or(usize::MAX, |count| {
+        count.parse().expect("the number of stations is a number")
+    });
 
     let bundle = LoadedTimetableBundle::open(bundle_path.as_ref()).expect("the bundle opens");
     let station_count = bundle.station_count();
 
-    // Count the long-distance trips that stop at each station.
-    let mut trips_at_station = vec![0_u32; station_count];
+    // Count the trips of each kind that stop at each station.
+    let mut long_distance_trips = vec![0_u32; station_count];
+    let mut local_trips = vec![0_u32; station_count];
     for route_index in 0..bundle.route_count() {
         let route = bundle.route(RaptorRouteIndex(
             u32::try_from(route_index).expect("route indices fit in u32"),
@@ -38,9 +41,11 @@ fn main() {
             continue;
         }
         let (category, _, _) = bundle.trip_train_label(BundleTripIndex(route.first_trip_index));
-        if REGIONAL_CATEGORIES.contains(&category) {
-            continue;
-        }
+        let trips_at_station = if REGIONAL_CATEGORIES.contains(&category) {
+            &mut local_trips
+        } else {
+            &mut long_distance_trips
+        };
         for position in 0..route.stop_count {
             let stop = bundle.pattern_stop(&route, position);
             if stop.boarding_allowed() || stop.alighting_allowed() {
@@ -52,18 +57,26 @@ fn main() {
     let mut lines: Vec<String> = std::fs::read_to_string(&dictionary_path)
         .map(|text| text.lines().map(str::to_owned).collect())
         .unwrap_or_default();
-    let known: HashSet<String> = lines.iter().cloned().collect();
+    let mut known: HashSet<String> = lines.iter().cloned().collect();
     let mut ranked: Vec<usize> = (0..station_count)
-        .filter(|index| trips_at_station[*index] > 0)
+        .filter(|index| long_distance_trips[*index] > 0 || local_trips[*index] > 0)
         .collect();
-    ranked.sort_by_key(|index| std::cmp::Reverse(trips_at_station[*index]));
+    ranked.sort_by_key(|index| {
+        (
+            std::cmp::Reverse(long_distance_trips[*index]),
+            std::cmp::Reverse(local_trips[*index]),
+        )
+    });
     println!(
-        "{} stations, {} with long-distance trains, {} lines in the file",
+        "{} stations, {} with trains, {} with long-distance trains, {} lines in the file",
         station_count,
         ranked.len(),
+        long_distance_trips
+            .iter()
+            .filter(|trips| **trips > 0)
+            .count(),
         lines.len()
     );
-    let mut known = known;
     for index in ranked {
         if lines.len() >= wanted {
             break;
