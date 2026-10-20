@@ -1,0 +1,39 @@
+name: Viewer
+
+on:
+  # The release workflow deploys the viewer at tag time. This run deploys it from any branch
+  # without a release.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy the web viewer
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    # This is the same group as the release workflow, so the two never deploy at once.
+    concurrency:
+      group: pages
+      cancel-in-progress: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build --workspace ui/viewer
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ui/viewer/dist
+      - id: deployment
+        uses: actions/deploy-pages@v4
