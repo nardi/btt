@@ -14,7 +14,8 @@ use crate::itinerary::{
     TripPlace, TripPlaceId, ViaPlace,
 };
 use crate::plan::JourneyChoice;
-use crate::trip::{ChosenJourney, Trip, TripPreferences};
+use crate::time::DurationMinutes;
+use crate::trip::{ChosenJourney, LegTransferOverride, Trip, TripPreferences};
 
 /// Largest number of places in one itinerary.
 pub const MAXIMUM_PLACE_COUNT: usize = 255;
@@ -115,6 +116,14 @@ pub enum TripEdit {
         /// several train labels and would make every edit as large.
         choice: Option<Box<JourneyChoice>>,
     },
+    /// Sets the minimum transfer time of the leg that arrives at a place, or goes back to the
+    /// trip-wide time.
+    SetLegMinimumTransferTime {
+        /// Place at which the leg arrives.
+        arrival_place_id: TripPlaceId,
+        /// The leg's own minimum transfer time, or `None` for the trip-wide time.
+        minimum_transfer_time: Option<DurationMinutes>,
+    },
 }
 
 impl TripEdit {
@@ -174,6 +183,20 @@ impl TripEdit {
                 choice: None,
             } => format!(
                 "Use the planner's journey to {}",
+                place_name(arrival_place_id)
+            ),
+            Self::SetLegMinimumTransferTime {
+                arrival_place_id,
+                minimum_transfer_time: Some(_),
+            } => format!(
+                "Change the transfer time to {}",
+                place_name(arrival_place_id)
+            ),
+            Self::SetLegMinimumTransferTime {
+                arrival_place_id,
+                minimum_transfer_time: None,
+            } => format!(
+                "Use the default transfer time to {}",
                 place_name(arrival_place_id)
             ),
         };
@@ -343,11 +366,32 @@ impl Trip {
                 }
                 Ok(TripEditNotices::new())
             }
+            TripEdit::SetLegMinimumTransferTime {
+                arrival_place_id,
+                minimum_transfer_time,
+            } => {
+                let layout = ItineraryLayout::from_itinerary(&self.itinerary);
+                let index = layout.index_of(arrival_place_id)?;
+                let Some(previous_index) = index.checked_sub(1) else {
+                    return Err(TripEditError::PlaceHasNoArrivingLeg(arrival_place_id));
+                };
+                let departure_place_id = layout.places[previous_index].id;
+                self.leg_transfer_overrides
+                    .retain(|leg| leg.arrival_place_id != arrival_place_id);
+                if let Some(minimum_transfer_time) = minimum_transfer_time {
+                    self.leg_transfer_overrides.push(LegTransferOverride {
+                        departure_place_id,
+                        arrival_place_id,
+                        minimum_transfer_time,
+                    });
+                }
+                Ok(TripEditNotices::new())
+            }
         }
     }
 
-    /// Drops the journey choices of legs that no longer exist, such as after a reorder that
-    /// separated their two places.
+    /// Drops the journey choices and transfer time overrides of legs that no longer exist, such
+    /// as after a reorder that separated their two places.
     fn drop_choices_of_missing_legs(&mut self) {
         let legs: SmallVec<[(TripPlaceId, TripPlaceId); 16]> = self
             .itinerary
@@ -356,6 +400,8 @@ impl Trip {
             .collect();
         self.chosen_journeys
             .retain(|chosen| legs.contains(&(chosen.departure_place_id, chosen.arrival_place_id)));
+        self.leg_transfer_overrides
+            .retain(|leg| legs.contains(&(leg.departure_place_id, leg.arrival_place_id)));
     }
 
     /// Adds a place at the requested position and assigns it the next free ID.
@@ -679,6 +725,69 @@ mod tests {
         })
         .unwrap();
         assert_eq!(trip.chosen_journeys, Vec::new());
+    }
+
+    #[test]
+    fn a_transfer_time_override_applies_to_its_leg_only() {
+        let mut trip = trip_with_places(&[AMSTERDAM, BERLIN, VIENNA]);
+        let amsterdam = id_of(&trip, "Amsterdam");
+        let berlin = id_of(&trip, "Berlin");
+        let vienna = id_of(&trip, "Vienna");
+        let default = trip.preferences.minimum_transfer_time;
+        trip.apply_edit(TripEdit::SetLegMinimumTransferTime {
+            arrival_place_id: berlin,
+            minimum_transfer_time: Some(DurationMinutes(25)),
+        })
+        .unwrap();
+        assert_eq!(
+            trip.minimum_transfer_time_of_leg(amsterdam, berlin),
+            DurationMinutes(25)
+        );
+        assert_eq!(trip.minimum_transfer_time_of_leg(berlin, vienna), default);
+
+        // A second override for the same leg replaces the first.
+        trip.apply_edit(TripEdit::SetLegMinimumTransferTime {
+            arrival_place_id: berlin,
+            minimum_transfer_time: Some(DurationMinutes(5)),
+        })
+        .unwrap();
+        assert_eq!(trip.leg_transfer_overrides.len(), 1);
+
+        // Moving Berlin to the end removes the leg, and its override with it.
+        trip.apply_edit(TripEdit::ReorderPlace {
+            place_id: berlin,
+            new_index: 2,
+        })
+        .unwrap();
+        assert_eq!(trip.leg_transfer_overrides, Vec::new());
+    }
+
+    #[test]
+    fn clearing_a_transfer_time_override_restores_the_trip_wide_time() {
+        let mut trip = trip_with_places(&[AMSTERDAM, BERLIN]);
+        let amsterdam = id_of(&trip, "Amsterdam");
+        let berlin = id_of(&trip, "Berlin");
+        trip.apply_edit(TripEdit::SetLegMinimumTransferTime {
+            arrival_place_id: berlin,
+            minimum_transfer_time: Some(DurationMinutes(25)),
+        })
+        .unwrap();
+        trip.apply_edit(TripEdit::SetLegMinimumTransferTime {
+            arrival_place_id: berlin,
+            minimum_transfer_time: None,
+        })
+        .unwrap();
+        assert_eq!(
+            trip.minimum_transfer_time_of_leg(amsterdam, berlin),
+            trip.preferences.minimum_transfer_time
+        );
+        assert_eq!(
+            trip.apply_edit(TripEdit::SetLegMinimumTransferTime {
+                arrival_place_id: amsterdam,
+                minimum_transfer_time: None,
+            }),
+            Err(TripEditError::PlaceHasNoArrivingLeg(amsterdam))
+        );
     }
 
     #[test]

@@ -128,6 +128,7 @@ fn shared_trip(trip: &Trip) -> Trip {
         },
         next_place_id: trip.next_place_id,
         chosen_journeys: Vec::new(),
+        leg_transfer_overrides: Vec::new(),
     }
 }
 

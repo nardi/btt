@@ -310,6 +310,22 @@ pub struct Trip {
     /// Journeys the traveller picked instead of the planner's pick, at most one per leg.
     #[serde(default)]
     pub chosen_journeys: Vec<ChosenJourney>,
+    /// Legs whose minimum transfer time differs from the trip-wide one, at most one per leg.
+    #[serde(default)]
+    pub leg_transfer_overrides: Vec<LegTransferOverride>,
+}
+
+/// A minimum transfer time for the leg between two places, which replaces the trip-wide
+/// `minimum_transfer_time` for that leg. A reorder that separates the two places drops it,
+/// because that leg no longer exists.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub struct LegTransferOverride {
+    /// Place the leg leaves from.
+    pub departure_place_id: TripPlaceId,
+    /// Place the leg arrives at.
+    pub arrival_place_id: TripPlaceId,
+    /// Shortest time allowed between two trains on this leg.
+    pub minimum_transfer_time: DurationMinutes,
 }
 
 /// A journey the traveller picked for the leg between two places. A reorder that separates the
@@ -335,7 +351,26 @@ impl Trip {
             preferences: TripPreferences::default(),
             next_place_id: NonZeroU32::MIN,
             chosen_journeys: Vec::new(),
+            leg_transfer_overrides: Vec::new(),
         }
+    }
+
+    /// Returns the minimum transfer time that applies to the leg between two places, which is
+    /// the override of that leg when it has one and the trip-wide time otherwise.
+    pub fn minimum_transfer_time_of_leg(
+        &self,
+        departure_place_id: TripPlaceId,
+        arrival_place_id: TripPlaceId,
+    ) -> DurationMinutes {
+        self.leg_transfer_overrides
+            .iter()
+            .find(|leg| {
+                leg.departure_place_id == departure_place_id
+                    && leg.arrival_place_id == arrival_place_id
+            })
+            .map_or(self.preferences.minimum_transfer_time, |leg| {
+                leg.minimum_transfer_time
+            })
     }
 
     /// Returns the places of the trip in travel order, for the small map of the trip list.

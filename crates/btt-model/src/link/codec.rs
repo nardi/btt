@@ -776,6 +776,7 @@ impl SnapshotReader<'_> {
             },
             next_place_id,
             chosen_journeys: Vec::new(),
+            leg_transfer_overrides: Vec::new(),
         })
     }
 

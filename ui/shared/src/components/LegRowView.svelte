@@ -51,6 +51,8 @@
     legState,
     legLine,
     storedChoice,
+    storedTransferTime,
+    defaultTransferTime,
     nearbyDay,
     livePrices,
     onEdit,
@@ -64,6 +66,10 @@
     legLine: LegLine;
     /** The journey the traveller picked for this leg, or `null` for the default pick. */
     storedChoice: JourneyChoice | null;
+    /** Minutes the traveller set as the minimum transfer time of this leg, or `null` for the trip's. */
+    storedTransferTime: number | null;
+    /** Minimum transfer time of the whole trip in minutes, which the leg uses without its own. */
+    defaultTransferTime: number;
     /** A much better day before or after the leg's date, or `null`. */
     nearbyDay: NearbyDaySuggestion | null;
     /** Live prices of journeys from the booking sites, by `journeyKey`. */
@@ -140,6 +146,21 @@
             trains: journeyRides(picked).map((ride) => ride.train_label),
           };
     onEdit?.({ ChooseJourney: { arrival_place_id: leg.arrivalPlace.id, choice } });
+  }
+
+  /** Sets the minimum transfer time of this leg, or goes back to the trip's time with `null`. */
+  function setTransferTime(minutes: number | null) {
+    onEdit?.({
+      SetLegMinimumTransferTime: { arrival_place_id: leg.arrivalPlace.id, minimum_transfer_time: minutes },
+    });
+  }
+
+  /** Sets the transfer time from the input, ignoring text that is not a number of minutes. */
+  function setTransferTimeFromInput(text: string) {
+    const minutes = Number.parseInt(text, 10);
+    if (Number.isFinite(minutes)) {
+      setTransferTime(Math.min(120, Math.max(0, minutes)));
+    }
   }
 
   /** Options a leg gets when the user first turns on the night train. */
@@ -429,6 +450,31 @@
       {/if}
     {/if}
 
+    {#if expanded && (onEdit !== undefined || storedTransferTime !== null)}
+      <!-- Every leg can change how much time it needs between two trains. -->
+      <div class="settings" transition:slide={expandTransition()}>
+        <h4>Transfers</h4>
+        <label>
+          <span class="label">Minimum transfer</span>
+          <input
+            type="number"
+            class="numbers"
+            min="0"
+            max="120"
+            value={storedTransferTime ?? defaultTransferTime}
+            disabled={onEdit === undefined}
+            onchange={(event) => setTransferTimeFromInput(event.currentTarget.value)}
+          />
+          <span class="hint">minutes</span>
+          {#if storedTransferTime !== null && onEdit !== undefined}
+            <button type="button" class="small" onclick={() => setTransferTime(null)}>
+              Use default
+            </button>
+          {/if}
+        </label>
+      </div>
+    {/if}
+
     {#if expanded && overnightOptions !== null}
       <!-- The settings of the night train sit in their own panel, apart from the journey and
            its properties. -->
@@ -647,7 +693,7 @@
     color: var(--color-night);
   }
 
-  /* The settings of a night train, in a tinted panel of their own. */
+  /* The settings of a leg, such as its night train, in a tinted panel of their own. */
   .settings {
     display: flex;
     flex-direction: column;
@@ -673,6 +719,10 @@
 
   .label {
     min-width: 7em;
+    color: var(--color-text-muted);
+  }
+
+  .hint {
     color: var(--color-text-muted);
   }
 </style>

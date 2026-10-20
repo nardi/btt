@@ -120,7 +120,8 @@ pub fn leg_planning_inputs(trip: &Trip) -> SmallVec<[IdentifiedLegInput; 16]> {
                 },
                 departure_date,
                 travel_mode: *leg.travel_mode,
-                minimum_transfer_time: preferences.minimum_transfer_time,
+                minimum_transfer_time: trip
+                    .minimum_transfer_time_of_leg(leg.departure_place.id, leg.arrival_place.id),
                 pass_policy: preferences.pass_policy,
                 transfer_aversion: preferences.transfer_aversion,
                 price_weight: preferences.price_weight,
@@ -295,6 +296,27 @@ pub(crate) mod tests {
         let after = cache_keys(&trip);
         assert_ne!(after[0], before[0]);
         assert_eq!(after[1..], before[1..]);
+    }
+
+    #[test]
+    fn a_transfer_time_override_changes_only_its_leg() {
+        let mut trip = trip_with_places(&FOUR_CITIES);
+        let before = cache_keys(&trip);
+        trip.apply_edit(TripEdit::SetLegMinimumTransferTime {
+            arrival_place_id: place_id(&trip, 2),
+            minimum_transfer_time: Some(DurationMinutes(30)),
+        })
+        .unwrap();
+        let inputs = leg_planning_inputs(&trip);
+        assert_eq!(inputs[1].input.minimum_transfer_time, DurationMinutes(30));
+        assert_eq!(
+            inputs[0].input.minimum_transfer_time,
+            trip.preferences.minimum_transfer_time
+        );
+        let after = cache_keys(&trip);
+        assert_eq!(after[0], before[0]);
+        assert_ne!(after[1], before[1]);
+        assert_eq!(after[2], before[2]);
     }
 
     #[test]

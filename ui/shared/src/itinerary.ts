@@ -234,6 +234,18 @@ export function storedJourneyChoice(trip: Trip, leg: LegRow): JourneyChoice | nu
   return chosen?.choice ?? null;
 }
 
+/**
+ * Returns the minimum transfer time the traveller set for a leg, in minutes, or `null` when the
+ * leg uses the trip-wide time.
+ */
+export function storedTransferTime(trip: Trip, leg: LegRow): number | null {
+  const override = (trip.leg_transfer_overrides ?? []).find(
+    (candidate) =>
+      candidate.departure_place_id === leg.departurePlace.id && candidate.arrival_place_id === leg.arrivalPlace.id,
+  );
+  return override?.minimum_transfer_time ?? null;
+}
+
 /** Returns the rides of a journey in travel order. */
 export function journeyRides(journey: Journey): TrainRide[] {
   return [journey.first_ride, ...journey.later_rides.map((later) => later.ride)];

@@ -244,6 +244,7 @@ const trip: Parser<TripSnapshot["trip"]> = (value, path) => {
     preferences: snapshotPreferences(kept.preferences.default_windows, kept.preferences.travel_class),
     next_place_id: kept.next_place_id,
     chosen_journeys: [],
+    leg_transfer_overrides: [],
   };
 };
 

@@ -424,6 +424,7 @@
             ]
           }
         },
+        "leg_transfer_overrides": [],
         "name": "Vienna and Rome",
         "next_place_id": 10,
         "preferences": {

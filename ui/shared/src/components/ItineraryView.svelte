@@ -8,7 +8,7 @@
     TripPreferences,
   } from "../bindings";
   import { formatMinutesOfDay } from "../format";
-  import { itineraryRows, legLine, storedJourneyChoice, tripPlaces } from "../itinerary";
+  import { itineraryRows, legLine, storedJourneyChoice, storedTransferTime, tripPlaces } from "../itinerary";
   import { staggerDelay } from "../motion";
   import { legViewState, plannedArrivalDates, type TripSource } from "../trip-source";
   import LegRowView from "./LegRowView.svelte";
@@ -151,6 +151,8 @@
           legLine={legLine(leg.travelMode, index)}
           nearbyDay={viewState.nearbyDaysByArrivalPlace.get(leg.arrivalPlace.id) ?? null}
           storedChoice={storedJourneyChoice(trip, leg)}
+          storedTransferTime={storedTransferTime(trip, leg)}
+          defaultTransferTime={trip.preferences.minimum_transfer_time}
           livePrices={viewState.livePricesByJourney}
           {onEdit}
           onAddStop={editable === null ? undefined : () => toggleStopSearch(leg.arrivalPlace.id)}

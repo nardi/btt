@@ -352,6 +352,7 @@ class SnapshotReader {
       preferences: snapshotPreferences({ departure, arrival }, travel_class),
       next_place_id,
       chosen_journeys: [],
+      leg_transfer_overrides: [],
     };
     return { trip, startDays };
   }
