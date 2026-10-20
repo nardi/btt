@@ -134,15 +134,19 @@ export const commands = {
 	 * 
 	 *  The link holds the trip after the `#`, so a browser never sends it to a server. It holds no
 	 *  traveller profiles. It holds the chosen journey of every leg, and the alternatives too when
-	 *  `include_alternatives` is set, which makes the link about three times as long. A `compact`
-	 *  link is written in a bigger alphabet and has less than half the characters, but a browser
-	 *  keeps it percent-encoded, so an app that shows it that way shows a longer link.
+	 *  `include_alternatives` is set, which makes the link about three times as long. It holds the
+	 *  price estimates of the journeys unless `include_prices` is unset, which makes the link a little
+	 *  shorter. It holds the names of the places unless `name_places_by_station` is set, which leaves
+	 *  out the names that the city dictionary cannot shorten, and the viewer then names those places
+	 *  by their nearest station. A `compact` link is written in a bigger alphabet and has less than
+	 *  half the characters, but a browser keeps it percent-encoded, so an app that shows it that way
+	 *  shows a longer link.
 	 * 
 	 *  # Errors
 	 * 
 	 *  Returns an error when the trip is not open or has more than a link can carry.
 	 */
-	shareTrip: (tripId: TripId, legs: SnapshotLeg[], includeAlternatives: boolean, compact: boolean) => typedError<SharedTrip, CommandError>(__TAURI_INVOKE("share_trip", { tripId, legs, includeAlternatives, compact })),
+	shareTrip: (tripId: TripId, legs: SnapshotLeg[], includeAlternatives: boolean, includePrices: boolean, namePlacesByStation: boolean, compact: boolean) => typedError<SharedTrip, CommandError>(__TAURI_INVOKE("share_trip", { tripId, legs, includeAlternatives, includePrices, namePlacesByStation, compact })),
 	/**
 	 *  Asks where to save the trip as a file and writes it there, for the viewer's open button, for
 	 *  email and for `AirDrop`. Returns the path of the saved file, or `None` when the traveller

@@ -5,9 +5,9 @@ mod common;
 use std::fmt::Write as _;
 
 use btt_model::{
-    GeoCoordinates, LegPlanStation, LegPlanningResult, LinkAlphabet, SNAPSHOT_SCHEMA_VERSION,
-    SnapshotLinkError, StoredSnapshot, TripSnapshot, decode_snapshot_link, encode_snapshot_link,
-    encode_snapshot_link_in,
+    GeoCoordinates, Itinerary, LegPlanStation, LegPlanningResult, LinkAlphabet,
+    SNAPSHOT_SCHEMA_VERSION, SnapshotLinkError, StoredSnapshot, TripSnapshot, decode_snapshot_link,
+    encode_snapshot_link, encode_snapshot_link_in,
 };
 use common::{demo_snapshot, stress_snapshot};
 
@@ -157,6 +157,29 @@ fn a_snapshot_of_the_chosen_journeys_is_smaller_and_still_reads() {
 }
 
 #[test]
+fn a_snapshot_without_prices_is_smaller_and_still_reads() {
+    for full in [demo_snapshot(), stress_snapshot()] {
+        let unpriced = full.clone().without_prices();
+        for leg in &unpriced.legs {
+            if let LegPlanningResult::Found(plan) = &leg.result {
+                let journeys =
+                    std::iter::once(&plan.chosen_journey).chain(&plan.alternative_journeys);
+                for journey in journeys {
+                    assert!(journey.cost_parts.is_none_or(|parts| parts.price.is_none()));
+                }
+            }
+        }
+        let full_link = encode_snapshot_link(&full).unwrap();
+        let unpriced_link = encode_snapshot_link(&unpriced).unwrap();
+        assert!(unpriced_link.payload.len() < full_link.payload.len());
+        assert_eq!(
+            decode_snapshot_link(&unpriced_link.payload).unwrap(),
+            unpriced
+        );
+    }
+}
+
+#[test]
 fn a_link_for_a_qr_code_uses_only_the_characters_of_its_mode() {
     let qr_characters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ$*+-./:";
     for snapshot in [demo_snapshot(), stress_snapshot()] {
@@ -298,4 +321,49 @@ fn a_cut_or_damaged_compact_link_is_recognised() {
     assert!(decode_snapshot_link(&changed).is_err());
     assert!(decode_snapshot_link("c%E4%BA").is_err());
     assert!(decode_snapshot_link("c%ZZZZ").is_err());
+}
+
+/// Returns the names of the places of a snapshot in travel order.
+fn place_names(snapshot: &TripSnapshot) -> Vec<String> {
+    match &snapshot.trip.itinerary {
+        Itinerary::Empty => Vec::new(),
+        Itinerary::OriginOnly(origin) => vec![origin.name.to_string()],
+        Itinerary::Route(route) => std::iter::once(&route.origin)
+            .chain(route.via_places.iter().map(|via_place| &via_place.place))
+            .chain(std::iter::once(&route.destination))
+            .map(|place| place.name.to_string())
+            .collect(),
+    }
+}
+
+#[test]
+fn a_snapshot_without_place_names_keeps_the_cities_and_is_smaller() {
+    for full in [demo_snapshot(), stress_snapshot()] {
+        let nameless = full.clone().without_place_names();
+        let full_names = place_names(&full);
+        let nameless_names = place_names(&nameless);
+        assert_eq!(full_names.len(), nameless_names.len());
+        // A place keeps its name or loses all of it.
+        for (kept, shortened) in full_names.iter().zip(&nameless_names) {
+            assert!(shortened == kept || shortened.is_empty());
+        }
+        // The first place of both snapshots is a city of the dictionary.
+        assert_eq!(nameless_names[0], "Amsterdam");
+        // Both snapshots have a place that is not, such as "Pompei Scavi" or "Köln".
+        assert!(nameless_names.iter().any(String::is_empty));
+        let full_link = encode_snapshot_link(&full).unwrap();
+        let nameless_link = encode_snapshot_link(&nameless).unwrap();
+        assert!(nameless_link.payload.len() < full_link.payload.len());
+        assert_eq!(
+            decode_snapshot_link(&nameless_link.payload).unwrap(),
+            nameless
+        );
+    }
+}
+
+#[test]
+fn a_snapshot_without_stations_keeps_its_place_names() {
+    let mut snapshot = demo_snapshot();
+    snapshot.legs.clear();
+    assert_eq!(snapshot.clone().without_place_names(), snapshot);
 }

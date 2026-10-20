@@ -69,6 +69,12 @@ pub(super) struct CityDictionary {
     positions_by_name: HashMap<&'static str, Vec<usize>>,
 }
 
+/// Returns whether a link writes the name of a place as a line of the dictionary, which is
+/// shorter than the name itself.
+pub(crate) fn names_a_city(place: &TripPlace) -> bool {
+    dictionary().find(place).is_some()
+}
+
 /// Returns the dictionary, which is parsed on first use.
 pub(super) fn dictionary() -> &'static CityDictionary {
     static DICTIONARY: OnceLock<CityDictionary> = OnceLock::new();

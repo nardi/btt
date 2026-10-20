@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use crate::coordinates::{GeoCoordinates, Latitude, Longitude};
 use crate::itinerary::{Itinerary, ItineraryRoute, TripPlace, TripPlaceId, ViaPlace};
+use crate::link::names_a_city;
 use crate::plan::{
     Journey, JourneyCostParts, LegPlan, LegPlanStation, LegPlanStationIndex, LegPlanningResult,
     TrainLabel, TrainRide, TransferAndRide,
@@ -106,6 +107,56 @@ impl TripSnapshot {
             if let LegPlanningResult::Found(plan) = &mut leg.result {
                 plan.alternative_journeys.clear();
                 drop_unused_stations(plan);
+            }
+        }
+        self
+    }
+
+    /// Returns the snapshot without the price of any journey, which makes the link a little
+    /// smaller. The viewer shows no price where there is none.
+    #[must_use]
+    pub fn without_prices(mut self) -> Self {
+        for leg in &mut self.legs {
+            if let LegPlanningResult::Found(plan) = &mut leg.result {
+                let journeys =
+                    std::iter::once(&mut plan.chosen_journey).chain(&mut plan.alternative_journeys);
+                for journey in journeys {
+                    if let Some(parts) = &mut journey.cost_parts {
+                        parts.price = None;
+                        parts.price_cost = 0;
+                    }
+                }
+            }
+        }
+        self
+    }
+
+    /// Returns the snapshot with the name of a place left empty where the viewer can name the
+    /// place by its nearest station, which makes the link smaller. A place whose name is a city
+    /// of the dictionary keeps it, because a link writes such a name in a few bits. Nothing
+    /// changes when no leg has stations to name a place by.
+    #[must_use]
+    pub fn without_place_names(mut self) -> Self {
+        let has_stations = self.legs.iter().any(|leg| {
+            matches!(&leg.result, LegPlanningResult::Found(plan) if !plan.station_table.is_empty())
+        });
+        if !has_stations {
+            return self;
+        }
+        let blank = |place: &mut TripPlace| {
+            if !names_a_city(place) {
+                place.name = SmolStr::default();
+            }
+        };
+        match &mut self.trip.itinerary {
+            Itinerary::Empty => {}
+            Itinerary::OriginOnly(origin) => blank(origin),
+            Itinerary::Route(route) => {
+                blank(&mut route.origin);
+                for via_place in &mut route.via_places {
+                    blank(&mut via_place.place);
+                }
+                blank(&mut route.destination);
             }
         }
         self

@@ -28,6 +28,13 @@
 
   /** Whether the link holds the alternative journeys of every leg, which make it longer. */
   let includeAlternatives = $state(false);
+  /** Whether the link holds the price estimates of the journeys, which make it longer. */
+  let includePrices = $state(true);
+  /**
+   * Whether the link leaves out the names of places that the city dictionary cannot shorten,
+   * and the viewer names them by their nearest station.
+   */
+  let namePlacesByStation = $state(false);
   /** Whether the link is written in the big alphabet, which has less than half the characters. */
   let compact = $state(true);
 
@@ -59,7 +66,14 @@
     }
     requestNumber += 1;
     const thisRequest = requestNumber;
-    const result = await commands.shareTrip(tripId, shared.legs, includeAlternatives, compact);
+    const result = await commands.shareTrip(
+      tripId,
+      shared.legs,
+      includeAlternatives,
+      includePrices,
+      namePlacesByStation,
+      compact,
+    );
     if (thisRequest !== requestNumber) {
       return;
     }
@@ -131,8 +145,9 @@
     <h2 id="share-title">Share this trip</h2>
     <p>
       Anyone with the link, the QR code or the file can read the whole trip: the places, the dates
-      and the journeys with their prices. They hold no traveller names or ages. The link carries
-      the trip after the # sign, which browsers never send to a server.
+      and the journeys. The link and the QR code can leave out the price estimates and the names of
+      the places, but the file always holds them. None of them holds traveller names or ages. The link carries the trip
+      after the # sign, which browsers never send to a server.
     </p>
 
     {#if shared.unfinishedLegs === 0}
@@ -149,6 +164,19 @@
             onchange={() => void writeLink()}
           />
           Include the alternative journeys of every leg. The link gets about three times as long.
+        </label>
+        <label class="option">
+          <input type="checkbox" bind:checked={includePrices} onchange={() => void writeLink()} />
+          Include the price estimates. Leaving them out makes the link and the QR code smaller.
+        </label>
+        <label class="option">
+          <input
+            type="checkbox"
+            bind:checked={namePlacesByStation}
+            onchange={() => void writeLink()}
+          />
+          Name the places by their nearest station. Places that have the name of a well-known city
+          keep it, because that is shorter.
         </label>
       </div>
     {/if}

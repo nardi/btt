@@ -13,6 +13,7 @@
 
 mod bits;
 mod cities;
+pub(crate) use cities::names_a_city;
 mod codec;
 mod compact;
 mod radix;

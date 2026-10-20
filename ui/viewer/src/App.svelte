@@ -2,6 +2,7 @@
   // The viewer: reads the trip from the link, from a trip file, from a picture of its QR code or
   // from the camera, and shows it read-only.
   import type { TripSnapshot } from "@btt/shared/bindings";
+  import Logo from "@btt/shared/components/Logo.svelte";
   import ThemeSwitch from "@btt/shared/components/ThemeSwitch.svelte";
   import { onMount } from "svelte";
 
@@ -11,6 +12,8 @@
   import { decodeSnapshotLink } from "./link/snapshot-link";
   import { readQrCodeFromImage, tripPayloadOfQr } from "./qr/qr-reader";
   import QrScanner from "./qr/QrScanner.svelte";
+  import { nameEmptyPlacesByStation } from "./place-names";
+  import { snapshotHasPrices } from "./snapshot-prices";
   import TripPage from "./TripPage.svelte";
 
   /** What the page shows in its main area. */
@@ -34,7 +37,7 @@
     }
     content = { phase: "loading" };
     try {
-      content = { phase: "trip", snapshot: await decodeSnapshotLink(fragment) };
+      content = { phase: "trip", snapshot: nameEmptyPlacesByStation(await decodeSnapshotLink(fragment)) };
     } catch (error) {
       content = { phase: "failed", error: asLinkError(error) };
     }
@@ -73,7 +76,7 @@
         await openPayload(payload);
         return;
       }
-      content = { phase: "trip", snapshot: parseSnapshotFile(await file.text()) };
+      content = { phase: "trip", snapshot: nameEmptyPlacesByStation(parseSnapshotFile(await file.text())) };
       showAbout = false;
     } catch (error) {
       content = { phase: "failed", error: asLinkError(error) };
@@ -136,7 +139,7 @@
 <main class:trip-open={content.phase === "trip" && !showAbout}>
   <header>
     <div class="title">
-      <span class="brand">BigTrainTrip</span>
+      <Logo height={40} />
       {#if content.phase === "trip"}
         <h1 class="trip-name">{content.snapshot.trip.name}</h1>
       {/if}
@@ -166,7 +169,9 @@
     <AboutPage onClose={() => (showAbout = false)} />
   {:else if content.phase === "trip"}
     <p class="planned">
-      Planned on {formatDay(content.snapshot.planned_at)}. Prices are estimates as of that day.
+      Planned on {formatDay(content.snapshot.planned_at)}.{snapshotHasPrices(content.snapshot)
+        ? " Prices are estimates as of that day."
+        : ""}
     </p>
     <TripPage snapshot={content.snapshot} />
   {:else if content.phase === "loading"}
@@ -217,16 +222,9 @@
 
   .title {
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    gap: var(--space-4);
     min-width: 0;
-  }
-
-  .brand {
-    color: var(--color-text-muted);
-    font-size: var(--text-caption);
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
   }
 
   .trip-name {

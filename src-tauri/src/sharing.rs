@@ -74,13 +74,19 @@ fn snapshot_of_open_trip(
 ///
 /// The link holds the trip after the `#`, so a browser never sends it to a server. It holds no
 /// traveller profiles. It holds the chosen journey of every leg, and the alternatives too when
-/// `include_alternatives` is set, which makes the link about three times as long. A `compact`
-/// link is written in a bigger alphabet and has less than half the characters, but a browser
-/// keeps it percent-encoded, so an app that shows it that way shows a longer link.
+/// `include_alternatives` is set, which makes the link about three times as long. It holds the
+/// price estimates of the journeys unless `include_prices` is unset, which makes the link a little
+/// shorter. It holds the names of the places unless `name_places_by_station` is set, which leaves
+/// out the names that the city dictionary cannot shorten, and the viewer then names those places
+/// by their nearest station. A `compact` link is written in a bigger alphabet and has less than
+/// half the characters, but a browser keeps it percent-encoded, so an app that shows it that way
+/// shows a longer link.
 ///
 /// # Errors
 ///
 /// Returns an error when the trip is not open or has more than a link can carry.
+// Each flag is one checkbox of the share dialog, so a struct would only rename them.
+#[allow(clippy::fn_params_excessive_bools)]
 #[tauri::command]
 #[specta::specta]
 pub fn share_trip(
@@ -88,11 +94,19 @@ pub fn share_trip(
     trip_id: TripId,
     legs: Vec<SnapshotLeg>,
     include_alternatives: bool,
+    include_prices: bool,
+    name_places_by_station: bool,
     compact: bool,
 ) -> Result<SharedTrip, CommandError> {
     let mut snapshot = snapshot_of_open_trip(&state, trip_id, &legs)?;
     if !include_alternatives {
         snapshot = snapshot.chosen_journeys_only();
+    }
+    if !include_prices {
+        snapshot = snapshot.without_prices();
+    }
+    if name_places_by_station {
+        snapshot = snapshot.without_place_names();
     }
     let write = |alphabet| {
         encode_snapshot_link_in(&snapshot, alphabet).map_err(|error| match error {
