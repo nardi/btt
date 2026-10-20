@@ -1,8 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <rect width="1024" height="1024" rx="224" fill="#1f4e79"/>
-  <rect x="272" y="200" width="480" height="520" rx="96" fill="#ffffff"/>
-  <rect x="332" y="272" width="360" height="200" rx="32" fill="#1f4e79"/>
-  <circle cx="392" cy="592" r="48" fill="#1f4e79"/>
-  <circle cx="632" cy="592" r="48" fill="#1f4e79"/>
-  <path d="M352 720 L272 840 M672 720 L752 840" stroke="#ffffff" stroke-width="56" stroke-linecap="round"/>
+  <rect width="1024" height="1024" rx="224" fill="#2456c8"/>
+  <!-- The b of the logo, with a window for a counter. The skew and the offset center it. -->
+  <g transform="translate(512 512) scale(6.63) translate(-32.65 -62.25) skewX(-10)" fill="none" stroke="#ffffff" stroke-width="17" stroke-linejoin="round">
+    <path d="M26 20V104.5M26 44H58Q70 44 70 56V84Q70 96 58 96H26"/>
+  </g>
 </svg>

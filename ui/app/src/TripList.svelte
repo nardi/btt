@@ -5,6 +5,7 @@
   import Icon from "@btt/shared/components/Icon.svelte";
   import TripRouteMap from "@btt/shared/components/TripRouteMap.svelte";
   import ThemeSwitch from "@btt/shared/components/ThemeSwitch.svelte";
+  import Logo from "@btt/shared/components/Logo.svelte";
 
   let {
     trips,
@@ -64,7 +65,7 @@
 
 <section class="trip-list">
   <div class="title-row">
-    <h1>Trips</h1>
+    <Logo height={48} />
     <div class="title-actions">
       <button type="button" onclick={onAbout}>About</button>
       <ThemeSwitch />
@@ -135,12 +136,6 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
-  }
-
-  h1 {
-    margin: 0;
-    font-size: 1.75rem;
-    font-weight: 700;
   }
 
   .new-trip {
