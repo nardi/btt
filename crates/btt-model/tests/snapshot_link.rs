@@ -5,9 +5,9 @@ mod common;
 use std::fmt::Write as _;
 
 use btt_model::{
-    GeoCoordinates, Itinerary, LegPlanStation, LegPlanningResult, LinkAlphabet,
-    SNAPSHOT_SCHEMA_VERSION, SnapshotLinkError, StoredSnapshot, TripSnapshot, decode_snapshot_link,
-    encode_snapshot_link, encode_snapshot_link_in,
+    GeoCoordinates, Itinerary, LegPlanStation, LegPlanningResult, LinkAlphabet, PlaceStay,
+    SNAPSHOT_SCHEMA_VERSION, SnapshotLinkError, StoredSnapshot, TrainLabel, TripPreferences,
+    TripSnapshot, decode_snapshot_link, encode_snapshot_link, encode_snapshot_link_in,
 };
 use common::{demo_snapshot, stress_snapshot};
 
@@ -366,4 +366,62 @@ fn a_snapshot_without_stations_keeps_its_place_names() {
     let mut snapshot = demo_snapshot();
     snapshot.legs.clear();
     assert_eq!(snapshot.clone().without_place_names(), snapshot);
+}
+
+/// Sets the train of the first ride of the demo trip.
+fn demo_with_first_train(operator: &str, category: &str, number: &str) -> TripSnapshot {
+    let mut snapshot = demo_snapshot();
+    let Some(LegPlanningResult::Found(plan)) = snapshot.legs.first_mut().map(|leg| &mut leg.result)
+    else {
+        panic!("the first leg of the demo trip has journeys");
+    };
+    plan.chosen_journey.first_ride.train_label = TrainLabel {
+        category: category.into(),
+        number: number.into(),
+        operator: operator.into(),
+        agency: "".into(),
+    };
+    snapshot
+}
+
+#[test]
+fn a_dictionary_train_costs_less_than_a_literal_one() {
+    let first_line = include_str!("../data/trains.tsv").lines().next().unwrap();
+    let fields: Vec<&str> = first_line.split('\t').collect();
+    let [operator, category, number] = fields[..] else {
+        panic!("a line of the dictionary has three fields");
+    };
+    let in_dictionary = demo_with_first_train(operator, category, number);
+    // A number with a letter in it is no train of the dictionary, and no plain number either.
+    let literal = demo_with_first_train(operator, category, &format!("{number}x"));
+    let dictionary_link = encode_snapshot_link(&in_dictionary).unwrap();
+    let literal_link = encode_snapshot_link(&literal).unwrap();
+    assert!(dictionary_link.compressed_bytes < literal_link.compressed_bytes);
+    assert_eq!(
+        decode_snapshot_link(&dictionary_link.payload).unwrap(),
+        in_dictionary
+    );
+    assert_eq!(
+        decode_snapshot_link(&literal_link.payload).unwrap(),
+        literal
+    );
+}
+
+#[test]
+fn a_snapshot_keeps_no_settings_that_only_steer_the_planner() {
+    let snapshot = demo_snapshot();
+    assert_eq!(snapshot.trip.preferences, TripPreferences::default());
+    let Itinerary::Route(route) = &snapshot.trip.itinerary else {
+        panic!("the demo trip has a route");
+    };
+    assert_eq!(route.origin.window_override, None);
+    assert_eq!(
+        route.via_places[1].stay,
+        PlaceStay::SameDay {
+            stay_range_override: None,
+            prefers_longer_stay: false,
+        }
+    );
+    // The highest place ID in the demo trip is four.
+    assert_eq!(snapshot.trip.next_place_id.get(), 5);
 }

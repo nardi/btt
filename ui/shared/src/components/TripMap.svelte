@@ -320,17 +320,20 @@
   ondblclick={handleMapDoubleClick}
   onmoveend={reportView}
 >
-  <GeoJSONSource id="station-search-radii" data={circles}>
-    <FillLayer
-      paint={{
-        "fill-color": mapAccent[theme.current],
-        "fill-opacity": ["case", ["get", "selected"], 0.16, 0.07],
-      }}
-    />
-    <LineLayer
-      paint={{ "line-color": mapAccent[theme.current], "line-width": 1.5, "line-opacity": 0.6 }}
-    />
-  </GeoJSONSource>
+  <!-- A read-only map draws no station search radii, because a shared trip does not keep them. -->
+  {#if editable !== null}
+    <GeoJSONSource id="station-search-radii" data={circles}>
+      <FillLayer
+        paint={{
+          "fill-color": mapAccent[theme.current],
+          "fill-opacity": ["case", ["get", "selected"], 0.16, 0.07],
+        }}
+      />
+      <LineLayer
+        paint={{ "line-color": mapAccent[theme.current], "line-width": 1.5, "line-opacity": 0.6 }}
+      />
+    </GeoJSONSource>
+  {/if}
 
   <GeoJSONSource id="station-ways" data={stationWays}>
     <LineLayer

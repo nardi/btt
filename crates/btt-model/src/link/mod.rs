@@ -18,6 +18,7 @@ mod codec;
 mod compact;
 mod radix;
 mod stations;
+mod trains;
 pub mod vocabulary;
 
 use std::io::{Read, Write};
@@ -288,12 +289,12 @@ mod tests {
     #[test]
     fn a_newer_schema_version_is_named_as_such() {
         let mut writer = BitWriter::default();
-        writer.number(2);
+        writer.number(3);
         writer.number(99);
         let payload = payload_of_bytes(&writer.finish());
         assert_eq!(
             decode_snapshot_link(&payload),
-            Err(SnapshotLinkError::NewerSchema(2))
+            Err(SnapshotLinkError::NewerSchema(3))
         );
     }
 

@@ -8,9 +8,11 @@ import { SnapshotLinkError, malformed } from "./errors";
 import { inflateRaw } from "./inflate";
 import { loadCompactAlphabet } from "./compact-alphabet";
 import { checkCharacters, decodeDigits, decodeValues, fragmentAlphabet, qrAlphabet } from "./radix";
-import { readSnapshot } from "./snapshot-reader";
+import { readSchemaVersion, readSnapshot, supportedSchemaVersion } from "./snapshot-reader";
+import { readSnapshotV1 } from "./snapshot-reader-v1";
 import { loadCityDictionary } from "./cities";
 import { loadStationDictionary } from "./stations";
+import { loadTrainDictionary } from "./trains";
 
 /**
  * The first character of a payload names its alphabet and says whether the bytes are
@@ -90,6 +92,15 @@ export async function decodeSnapshotLink(fragment: string): Promise<TripSnapshot
   } else if (bytes.length > maximumInflatedBytes) {
     throw new SnapshotLinkError("too-large", "the link is larger than the viewer reads");
   }
-  const [stations, cities] = await Promise.all([loadStationDictionary(), loadCityDictionary()]);
-  return readSnapshot(bits, stations, cities);
+  // The first number of the layout is its schema version, which picks the reader.
+  const version = readSchemaVersion(bits);
+  if (version > supportedSchemaVersion) {
+    throw new SnapshotLinkError("newer-schema", `the trip was written with schema version ${version}`, version);
+  }
+  const [stations, cities, trains] = await Promise.all([
+    loadStationDictionary(),
+    loadCityDictionary(),
+    loadTrainDictionary(),
+  ]);
+  return version === 1 ? readSnapshotV1(bits, stations, cities) : readSnapshot(bits, stations, cities, trains);
 }

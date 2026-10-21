@@ -475,9 +475,9 @@
       </div>
     {/if}
 
-    {#if expanded && overnightOptions !== null}
+    {#if expanded && overnightOptions !== null && onEdit !== undefined}
       <!-- The settings of the night train sit in their own panel, apart from the journey and
-           its properties. -->
+           its properties. A read-only leg leaves them out, since they only steered the planner. -->
       <div class="settings" transition:slide={expandTransition()}>
         <h4>Night train settings</h4>
         <label>

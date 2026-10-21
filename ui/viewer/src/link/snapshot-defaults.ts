@@ -5,13 +5,23 @@ import type { JourneyCostParts, TravelClass, TravelDayWindows, TripPreferences }
 /** The ID of a trip in a snapshot. A snapshot has no trip ID, so every snapshot gets the nil UUID. */
 export const snapshotTripId = "00000000-0000-0000-0000-000000000000";
 
+/** The time windows a trip has by default, which a snapshot does not store. */
+const defaultWindows: TravelDayWindows = {
+  departure: { start: 420, length: 780 },
+  arrival: { start: 420, length: 960 },
+};
+
 /**
- * Returns the preferences of a snapshot's trip: the default preferences of the app, except for
- * the time windows and the travel class, which the snapshot keeps.
+ * Returns the preferences of a snapshot's trip, which are the default preferences of the app.
+ * A snapshot of schema version 1 also keeps the time windows and the travel class, and passes
+ * them.
  */
-export function snapshotPreferences(defaultWindows: TravelDayWindows, travelClass: TravelClass): TripPreferences {
+export function snapshotPreferences(
+  windows: TravelDayWindows = defaultWindows,
+  travelClass: TravelClass = "Second",
+): TripPreferences {
   return {
-    default_windows: defaultWindows,
+    default_windows: windows,
     transfer_aversion: 50,
     default_same_day_stay: { minimum: 120, maximum_beyond_minimum: null },
     pass_policy: "PreferPass",

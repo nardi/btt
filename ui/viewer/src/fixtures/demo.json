@@ -1,7 +1,7 @@
 {
-  "compact_payload": "d꼦뤴쥷ꗌ姄娢ꩺ툡㖁㭑ꔀ㯏讒ᘷ콥雓馚掍抺इ璼䆣ສ甾띷돮㰶姂敿㗌萕ꏩ뇅친丱ꌹ嵝턽魙洧㫬ᄄႁꫤ篣粠纝汥卅挥翺簟왕ᧆ칁冉甠蕞馶捊큥嫀潼鑸鑋躽ર澎氥羸軱伋鍪驖峛ᓛ嶼룭ⵚ起숩锍媋백툚锘껽惌팩뭩쨽皰틺썝ᥰ渰爍ᆅ蕘ꎦᦵ储弚㙨콖拄庁舯뷧థꛟ赢愷飅㜥锂裺五뙢喹裰ᡝ㕲뭸톕痈㡝업圁ፘ婊蹆焱첟讂戊仴ᱦꗖ닌KB",
+  "compact_payload": "d児鉁撕慞衱蚳㲡拺瘵鑴왪䛔骞㤈쮿餳㪞ꕟ矧龑吞誛䑞䚈ꪹ푆䥭茙젙꽅䓛ᭈ聍밻浂䂹溅됆辞혬僚뵀뙢憳偳虏彳拘鿇嚰稫痽䱻丳隔鮶쮶驻攋랪嫷㙫ᦞ漁鸖쳄ꓰ羨뮿ኄ쀋䋂㗦蜚駜夲룕礭翏櫱賙뤏䉸勗详暉氷蕏앮槥遼槽钜뮚뫃䪾牄ᠫ䀢佊汿㖌稇멇ᝌ齜繵汗먕솚璙搀纱콚舉呧儯錈펗틇쉈稻眘Xh",
   "document": {
-    "schema_version": 1,
+    "schema_version": 2,
     "snapshot": {
       "bundle_version": 2026101101,
       "legs": [
@@ -365,12 +365,7 @@
               "id": 1,
               "name": "Amsterdam",
               "station_search_radius": 5000,
-              "window_override": {
-                "Departure": {
-                  "length": 150,
-                  "start": 390
-                }
-              }
+              "window_override": null
             },
             "via_places": [
               {
@@ -394,7 +389,7 @@
                   "Overnight": {
                     "accepted_berths": {
                       "Either": {
-                        "preferred": "Sleeper"
+                        "preferred": null
                       }
                     },
                     "bedtime": 1350,
@@ -413,11 +408,8 @@
                 },
                 "stay": {
                   "SameDay": {
-                    "prefers_longer_stay": true,
-                    "stay_range_override": {
-                      "maximum_beyond_minimum": 180,
-                      "minimum": 120
-                    }
+                    "prefers_longer_stay": false,
+                    "stay_range_override": null
                   }
                 }
               }
@@ -426,7 +418,7 @@
         },
         "leg_transfer_overrides": [],
         "name": "Vienna and Rome",
-        "next_place_id": 10,
+        "next_place_id": 5,
         "preferences": {
           "default_same_day_stay": {
             "maximum_beyond_minimum": null,
@@ -461,6 +453,6 @@
       }
     }
   },
-  "payload": "bHSrMv)TI9pBJC9+pnyh7A_So768qXbKY9QTMF8&:QPro)8nD4)WLL:+VC-$fb9c5(fYx,x$;kc4k@fBRVmwhY*(MjEWgE(kqz$ZT+4NW7-fIXuZp)XItazncG4w5a@cSu4_9yck*lwYBQsDEB0CZh+k,j)Y+e~DCS3-QV_Yf:BJmwz~)w~QHrpsn=M6$ScR3iL$NJ&zMaaNVJ&KHnq$(z153D!Mia28RpPE8i,&@M52UB~$6mF:0:91))d&zyt,LeOCTj*K=o.ZpP:iEq4FpxF)O+Yn;j-*URWOZI8BP51=c=S1w,eN!L=7wY$-Ht6+ssD)T35_sTgTh-YCdXc3ef6nsVE",
-  "qr_payload": "R1C4RXF/.5E6PZ7AO5KLZ20GHIX3-+Z0IGV.*7R4H17C0TG0RDD0$VR2ZV..0S0REX*A+DW-USXF1FIG/ENZ/VHF1MYEU5PCB8L*ZA0OZY$XERMTD$/:8O3R7Y+3SD+40N3$JIYWOR2$H:-VVHDFPAR1XUGA:MDJYQV3M0LKS2/*BH9LE+EEWGEZEO9-TBEO*LJ2B*L9KY7N+ONPOPQ4KC43W$5N24YUUX7YP*619$WO.EP--ZL.VNEQ.UAB7$T:2NDBFAR3HJJ1KRX$YMP0KSW6XTJ1U/R7$0EXM$GN/BS7Q9BXJDI4HIXKY:E8$E9QUGMZ$3-QST+L73+7933CQYOG9C-ROQH1RGWO0KDM6WMDC0OL.O/W75FE.DA9ZLF$Q$X6Z9R$013M6RYTM9"
+  "payload": "bHQ~QTY+t!ALM-fMrmyPPAAZkqwYH7)8*h+PY8nFgwKj62FGG-w)vMXJfFBQiTZb!Smoarvh&3b1&N_:9zCo-=4ULk92unkjM1nY(:zMWfD2+jI0Ou$jV@32UlR0sfTCxF0:S0;n.qq(nWX$cd&FVs9ZewBEI4i&R1T+n1Nct3Bgwhti$Pky.,*y5u3+OtM2~4a.9z:V-w1-vEA4T;2o1q=.P=jEqrWSG+~J~1iByPw=$sUN-LtJ:IoydH_~oG7tVoz8-Fq$A6m;5G7)Xa=:L)Oik,t-h52R(ktOVQ66d,DVy)Pdy",
+  "qr_payload": "R4XHBS-RQZF1SGO$+KF*QXH+BH.OVBW59+85ZD*+ZX+00P$EGV3/B.B3A6U2.PPG6B/6/M8F:+9I0O*$+IAZB+PH*F0ZY7FB3YG$7/B2T8ZMU/TIBN$:5C9//-L-XQS1W58JLZC1K6NI*15/X$VQIEMRSA/J$6.QX-VK:NLK4G41JV:AZW42//:AFLO0/5AXK*1R/8CCP6ORH-6VTS+NJ+.*DQ6:GL20YJM*MF46.-2-B05+UBHACYWDDVD1D29TDUHKKHKEXII*OD20IEGR4N+V2-D3WM62B3:C-BQZ0F1FMV2H16OZKN9TIMQR9S78HEABW1ZN36VXYE8QB79/9IAX6PX$M77L2"
 }

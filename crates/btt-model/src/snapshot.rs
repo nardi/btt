@@ -1,5 +1,7 @@
 //! A trip with its planned journeys, as the traveller shares it with the web viewer.
 
+use std::num::NonZeroU32;
+
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
@@ -8,7 +10,10 @@ use specta::Type;
 use uuid::Uuid;
 
 use crate::coordinates::{GeoCoordinates, Latitude, Longitude};
-use crate::itinerary::{Itinerary, ItineraryRoute, TripPlace, TripPlaceId, ViaPlace};
+use crate::itinerary::{
+    Itinerary, ItineraryRoute, LegTravelMode, OvernightLegOptions, PlaceStay, StationSearchRadius,
+    TripPlace, TripPlaceId, ViaPlace,
+};
 use crate::link::names_a_city;
 use crate::plan::{
     Journey, JourneyCostParts, LegPlan, LegPlanStation, LegPlanStationIndex, LegPlanningResult,
@@ -26,7 +31,7 @@ pub(crate) const PLACE_STEP_MICRODEGREES: i64 = 100;
 ///
 /// A change that old viewers cannot read bumps it. The viewer reads every older version, so a
 /// link that was sent once keeps opening.
-pub const SNAPSHOT_SCHEMA_VERSION: u16 = 1;
+pub const SNAPSHOT_SCHEMA_VERSION: u16 = 2;
 
 /// A snapshot as it is exported, with the schema version of its document.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -50,8 +55,8 @@ pub struct SnapshotLeg {
 ///
 /// The viewer needs no timetable, no prices and no planner, so the snapshot holds the chosen and
 /// alternative journeys of every leg with their prices. It leaves out what only the desktop app
-/// uses: traveller profiles, the cost parts of a journey, the geometry of the trains and the
-/// options for pass days. `TripSnapshot::new` removes those, so a snapshot decoded from a link
+/// uses: traveller profiles, the settings of the trip and its places, the cost parts of a journey,
+/// the geometry of the trains and the options for pass days. `TripSnapshot::new` removes those, so a snapshot decoded from a link
 /// equals the snapshot that was encoded.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct TripSnapshot {
@@ -164,28 +169,39 @@ impl TripSnapshot {
 }
 
 /// Returns the trip as the snapshot keeps it: without an ID, without traveller profiles, without
-/// the journeys the traveller picked and with the default preferences except for the time
-/// windows and the travel class.
+/// the journeys the traveller picked and without the settings that only steer the planner. Those
+/// settings have their default values, because the viewer shows the planned journeys and has no
+/// use for the settings that led to them. The stays and the times of the overnight legs stay,
+/// since the dates and the notes of the itinerary follow from them.
 fn shared_trip(trip: &Trip) -> Trip {
+    let itinerary = shared_itinerary(&trip.itinerary);
     Trip {
         id: TripId(Uuid::nil()),
         name: trip.name.clone(),
         start_date: trip.start_date,
-        itinerary: snapped_itinerary(&trip.itinerary),
-        preferences: TripPreferences {
-            default_windows: trip.preferences.default_windows,
-            travel_class: trip.preferences.travel_class,
-            ..TripPreferences::default()
-        },
-        next_place_id: trip.next_place_id,
+        next_place_id: next_place_id_after(&itinerary),
+        itinerary,
+        preferences: TripPreferences::default(),
         chosen_journeys: Vec::new(),
         leg_transfer_overrides: Vec::new(),
     }
 }
 
-/// Returns the itinerary with every place at the nearest multiple of `PLACE_STEP_MICRODEGREES`.
-fn snapped_itinerary(itinerary: &Itinerary) -> Itinerary {
-    let snapped = |place: &TripPlace| {
+/// Returns the place ID that follows the highest ID of the itinerary, which is how a reader
+/// restores the counter of a snapshot that does not hold it.
+pub(crate) fn next_place_id_after(itinerary: &Itinerary) -> NonZeroU32 {
+    let highest = itinerary
+        .trip_places()
+        .map(|place| place.id.0.get())
+        .max()
+        .unwrap_or(0);
+    NonZeroU32::new(highest.saturating_add(1)).unwrap_or(NonZeroU32::MIN)
+}
+
+/// Returns the itinerary with every place at the nearest multiple of `PLACE_STEP_MICRODEGREES`
+/// and without the settings that a snapshot leaves out.
+fn shared_itinerary(itinerary: &Itinerary) -> Itinerary {
+    let shared_place = |place: &TripPlace| {
         let snap = |microdegrees: i32| {
             let steps = (i64::from(microdegrees) + PLACE_STEP_MICRODEGREES / 2)
                 .div_euclid(PLACE_STEP_MICRODEGREES);
@@ -202,24 +218,43 @@ fn snapped_itinerary(itinerary: &Itinerary) -> Itinerary {
         };
         TripPlace {
             coordinates,
+            station_search_radius: StationSearchRadius::DEFAULT,
+            window_override: None,
             ..place.clone()
         }
     };
+    let shared_travel_mode = |travel_mode: LegTravelMode| match travel_mode {
+        LegTravelMode::Daytime => LegTravelMode::Daytime,
+        LegTravelMode::Overnight(options) => LegTravelMode::Overnight(OvernightLegOptions {
+            accepted_berths: OvernightLegOptions::DEFAULT.accepted_berths,
+            ..options
+        }),
+    };
+    let shared_stay = |stay: PlaceStay| match stay {
+        PlaceStay::Nights(nights) => PlaceStay::Nights(nights),
+        PlaceStay::SameDay { .. } => PlaceStay::SameDay {
+            stay_range_override: None,
+            prefers_longer_stay: false,
+        },
+    };
     match itinerary {
         Itinerary::Empty => Itinerary::Empty,
-        Itinerary::OriginOnly(origin) => Itinerary::OriginOnly(snapped(origin)),
+        Itinerary::OriginOnly(origin) => Itinerary::OriginOnly(shared_place(origin)),
         Itinerary::Route(route) => Itinerary::Route(ItineraryRoute {
-            origin: snapped(&route.origin),
+            origin: shared_place(&route.origin),
             via_places: route
                 .via_places
                 .iter()
                 .map(|via_place| ViaPlace {
-                    place: snapped(&via_place.place),
-                    ..via_place.clone()
+                    arriving_leg_travel_mode: shared_travel_mode(
+                        via_place.arriving_leg_travel_mode,
+                    ),
+                    place: shared_place(&via_place.place),
+                    stay: shared_stay(via_place.stay),
                 })
                 .collect(),
-            final_leg_travel_mode: route.final_leg_travel_mode,
-            destination: snapped(&route.destination),
+            final_leg_travel_mode: shared_travel_mode(route.final_leg_travel_mode),
+            destination: shared_place(&route.destination),
         }),
     }
 }

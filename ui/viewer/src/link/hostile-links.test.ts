@@ -74,7 +74,7 @@ async function kindOf(payload: string): Promise<string> {
 describe("hostile links", () => {
   it("names a snapshot with a newer schema version", async () => {
     const bits = new TestBits();
-    bits.number(2);
+    bits.number(3);
     bits.number(99);
     expect(await kindOf(await payloadOfBytes(bits.bytes()))).toBe("newer-schema");
   });
@@ -85,13 +85,15 @@ describe("hostile links", () => {
   });
 
   it("refuses a count that the data cannot hold", async () => {
-    // Version 1, a date, a bundle version, then a trip name of a million bytes.
-    const bits = new TestBits();
-    bits.number(1);
-    bits.number(20_000);
-    bits.number(1);
-    bits.number(1_000_000);
-    expect(await kindOf(await payloadOfBytes(bits.bytes()))).toBe("malformed");
+    // A version, a date, a bundle version, then a trip name of a million bytes.
+    for (const version of [1, 2]) {
+      const bits = new TestBits();
+      bits.number(version);
+      bits.number(20_000);
+      bits.number(1);
+      bits.number(1_000_000);
+      expect(await kindOf(await payloadOfBytes(bits.bytes()))).toBe("malformed");
+    }
   });
 
   it("refuses data that is not compressed", async () => {

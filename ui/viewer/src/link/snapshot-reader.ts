@@ -7,7 +7,6 @@
 import type {
   AcceptedBerths,
   AlternativeKind,
-  DailyTimeWindow,
   Itinerary,
   EuroRange,
   Journey,
@@ -17,9 +16,9 @@ import type {
   LegTravelMode,
   NoJourneyReason,
   PlaceStay,
-  PlaceWindowOverride,
   SnapshotLeg,
   StationWay,
+  TrainLabel,
   TrainRide,
   TransferAndRide,
   Trip,
@@ -32,9 +31,13 @@ import { SnapshotLinkError, malformed } from "./errors";
 import { snapshotCostParts, snapshotPreferences, snapshotTripId } from "./snapshot-defaults";
 import { type DictionaryCity, placeStepMicrodegrees, stepsOf } from "./cities";
 import type { DictionaryStation } from "./stations";
+import type { DictionaryTrain } from "./trains";
 
 /** The newest schema version this viewer reads. */
-export const supportedSchemaVersion = 1;
+export const supportedSchemaVersion = 2;
+
+/** The schema version this reader reads. Links of older versions go to their own readers. */
+const schemaVersion = 2;
 
 /** Most stations one leg plan may have, because journeys point at them with a byte. */
 const maximumLegStations = 256;
@@ -70,15 +73,16 @@ export function readSchemaVersion(bytes: Uint8Array): number {
 }
 
 /**
- * Reads a snapshot, or throws a `SnapshotLinkError`. The dictionary is the list of stations
- * that the link refers to by number.
+ * Reads a snapshot, or throws a `SnapshotLinkError`. The dictionaries are the lists of stations,
+ * cities and trains that the link refers to by number.
  */
 export function readSnapshot(
   bytes: Uint8Array,
   dictionary: readonly DictionaryStation[],
   cities: readonly DictionaryCity[],
+  trains: readonly DictionaryTrain[],
 ): TripSnapshot {
-  return new SnapshotReader(bytes, dictionary, cities).snapshot();
+  return new SnapshotReader(bytes, dictionary, cities, trains).snapshot();
 }
 
 /**
@@ -110,18 +114,18 @@ class SnapshotReader {
     bytes: Uint8Array,
     private readonly dictionary: readonly DictionaryStation[],
     private readonly cities: readonly DictionaryCity[],
+    private readonly trains: readonly DictionaryTrain[],
   ) {
     this.bits = new BitReader(bytes);
   }
 
   snapshot(): TripSnapshot {
-    const schemaVersion = this.bits.number();
-    if (schemaVersion > supportedSchemaVersion) {
-      throw new SnapshotLinkError(
-        "newer-schema",
-        `the trip was written with schema version ${schemaVersion}`,
-        schemaVersion,
-      );
+    const version = this.bits.number();
+    if (version > schemaVersion) {
+      throw new SnapshotLinkError("newer-schema", `the trip was written with schema version ${version}`, version);
+    }
+    if (version < schemaVersion) {
+      throw malformed("the link has an older layout than this reader");
     }
     const planned_at = dateFromDays(this.bits.number());
     const bundle_version = this.bits.boundedNumber(2 ** 32 - 1, "the bundle version");
@@ -202,33 +206,13 @@ class SnapshotReader {
     return entry;
   }
 
-  private window(): DailyTimeWindow {
-    const start = this.bits.boundedNumber(minutesPerDay - 1, "a time of day");
-    const length = this.bits.number();
-    if (length < 1 || length > minutesPerDay) {
-      throw malformed("a window length is out of range");
-    }
-    return { start, length };
-  }
-
   private travelMode(): LegTravelMode {
     if (!this.bits.bit()) {
       return "Daytime";
     }
     const bedtime = this.bits.boundedNumber(minutesPerDay - 1, "a time of day");
     const wake_up_time = this.bits.boundedNumber(minutesPerDay - 1, "a time of day");
-    const berths: AcceptedBerths[] = [
-      { Either: { preferred: null } },
-      { Either: { preferred: "Couchette" } },
-      { Either: { preferred: "Sleeper" } },
-      { Only: "Couchette" },
-      { Only: "Sleeper" },
-    ];
-    const accepted_berths = berths[this.bits.bits(3)];
-    if (accepted_berths === undefined) {
-      throw malformed("an unknown berth choice");
-    }
-    return { Overnight: { bedtime, wake_up_time, accepted_berths } };
+    return { Overnight: { bedtime, wake_up_time, accepted_berths: defaultAcceptedBerths } };
   }
 
   private stay(): PlaceStay {
@@ -239,14 +223,7 @@ class SnapshotReader {
       }
       return { Nights: nights };
     }
-    const prefers_longer_stay = this.bits.bit();
-    let stay_range_override = null;
-    if (this.bits.bit()) {
-      const minimum = this.bits.boundedNumber(65_535, "a stay");
-      const maximum_beyond_minimum = this.bits.bit() ? this.bits.boundedNumber(65_535, "a stay") : null;
-      stay_range_override = { minimum, maximum_beyond_minimum };
-    }
-    return { SameDay: { stay_range_override, prefers_longer_stay } };
+    return { SameDay: { stay_range_override: null, prefers_longer_stay: false } };
   }
 
   private place(): TripPlace {
@@ -280,28 +257,7 @@ class SnapshotReader {
       throw malformed("a coordinate is out of range");
     }
     const coordinates = { latitude: latitude / 1_000_000, longitude: longitude / 1_000_000 };
-    const station_search_radius = this.bits.number();
-    if (station_search_radius < 100 || station_search_radius > 50_000) {
-      throw malformed("a search radius is out of range");
-    }
-    let window_override: PlaceWindowOverride | null = null;
-    switch (this.bits.bits(2)) {
-      case 1:
-        window_override = { Arrival: this.window() };
-        break;
-      case 2:
-        window_override = { Departure: this.window() };
-        break;
-      case 3: {
-        const departure = this.window();
-        const arrival = this.window();
-        window_override = { Both: { departure, arrival } };
-        break;
-      }
-      default:
-        break;
-    }
-    return { id, name, coordinates, station_search_radius, window_override };
+    return { id, name, coordinates, station_search_radius: defaultStationSearchRadius, window_override: null };
   }
 
   /** Reads the trip and the day its start date falls on, which the times of the legs count from. */
@@ -309,13 +265,6 @@ class SnapshotReader {
     const name = this.bits.text();
     const startDays = this.bits.number();
     const start_date = dateFromDays(startDays);
-    const travel_class = this.bits.bit() ? "First" : "Second";
-    const departure = this.window();
-    const arrival = this.window();
-    const next_place_id = this.bits.number();
-    if (next_place_id < 1 || next_place_id > 2 ** 32 - 1) {
-      throw malformed("the next place ID is zero");
-    }
     this.placeLatitudeSteps = 0;
     this.placeLongitudeSteps = 0;
     let itinerary: Itinerary;
@@ -349,8 +298,8 @@ class SnapshotReader {
       name,
       start_date,
       itinerary,
-      preferences: snapshotPreferences({ departure, arrival }, travel_class),
-      next_place_id,
+      preferences: snapshotPreferences(),
+      next_place_id: nextPlaceIdAfter(itinerary),
       chosen_journeys: [],
       leg_transfer_overrides: [],
     };
@@ -402,21 +351,41 @@ class SnapshotReader {
     return index;
   }
 
-  private ride(stationCount: number): TrainRide {
-    const boarding_station = this.stationIndex(stationCount);
-    const alighting_station = this.stationIndex(stationCount);
-    const departure_time = this.time();
-    const arrival_time = this.time();
+  /** Reads the train of a ride, which is a line of the dictionary of trains or a literal. */
+  private train(): TrainLabel {
+    const line = this.bits.number();
+    if (line > 0) {
+      const entry = this.trains[line - 1];
+      if (entry === undefined) {
+        // A newer viewer has the train, because the dictionary only grows.
+        throw new SnapshotLinkError("newer-schema", "the link names a train that this viewer does not know");
+      }
+      return { category: entry.category, number: entry.number, operator: entry.operator, agency: "" };
+    }
     const category = this.vocabularyText(categories);
     const number = this.bits.bit() ? String(this.bits.number()) : this.bits.text();
     const operator = this.vocabularyText(operators);
+    return { category, number, operator, agency: "" };
+  }
+
+  /**
+   * Reads a ride and the times of it. A ride that follows another may board where that one
+   * alighted.
+   */
+  private ride(stationCount: number, previousAlighting: number | null): TrainRide {
+    const train_label = this.train();
     const offers_berths = this.bits.bit();
+    const departure_time = this.time();
+    const boarding_station =
+      previousAlighting !== null && this.bits.bit() ? previousAlighting : this.stationIndex(stationCount);
+    const alighting_station = this.stationIndex(stationCount);
+    const arrival_time = this.time();
     return {
       boarding_station,
       departure_time,
       alighting_station,
       arrival_time,
-      train_label: { category, number, operator, agency: "" },
+      train_label,
       offers_berths,
       intermediate_station_coordinates: [],
       path_coordinates: [],
@@ -428,18 +397,20 @@ class SnapshotReader {
   private journey(stationCount: number): Journey {
     const access = this.way();
     const laterCount = this.bits.count();
-    const first_ride = this.ride(stationCount);
+    const first_ride = this.ride(stationCount, null);
     const later_rides: TransferAndRide[] = [];
     let previousArrival = first_ride.arrival_time;
+    let previousAlighting = first_ride.alighting_station;
     for (let index = 0; index < laterCount; index += 1) {
       const matches = this.bits.bit();
       const explicitTransfer = matches ? null : this.bits.boundedNumber(65_535, "a transfer");
-      const ride = this.ride(stationCount);
+      const ride = this.ride(stationCount, previousAlighting);
       const transfer_duration = explicitTransfer ?? ride.departure_time - previousArrival;
       if (transfer_duration < 0 || transfer_duration > 65_535) {
         throw malformed("a transfer is out of range");
       }
       previousArrival = ride.arrival_time;
+      previousAlighting = ride.alighting_station;
       later_rides.push({ transfer_duration, ride });
     }
     let arrival_footpath = null;
@@ -534,6 +505,29 @@ class SnapshotReader {
       end,
     };
   }
+}
+
+/** The berths an overnight leg accepts when nothing says otherwise. */
+const defaultAcceptedBerths: AcceptedBerths = { Either: { preferred: null } };
+
+/** The distance in meters around a place within which the planner looks for stations. */
+const defaultStationSearchRadius = 5000;
+
+/**
+ * Returns the ID that the next place of a trip gets, which is one more than the highest ID in
+ * use. The writer in Rust computes the same number.
+ */
+function nextPlaceIdAfter(itinerary: Itinerary): number {
+  let places: TripPlace[] = [];
+  if (itinerary !== "Empty") {
+    const route = itinerary.Route;
+    places =
+      route === undefined
+        ? [itinerary.OriginOnly]
+        : [route.origin, ...route.via_places.map((via) => via.place), route.destination];
+  }
+  const highest = Math.max(0, ...places.map((place) => place.id));
+  return Math.min(highest + 1, 2 ** 32 - 1);
 }
 
 /** Returns the arrival place of every leg of a trip in itinerary order. */

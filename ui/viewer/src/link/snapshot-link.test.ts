@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import demo from "../fixtures/demo.json";
+import demoV1 from "../fixtures/demo-v1.json";
 import stress from "../fixtures/stress.json";
+import stressV1 from "../fixtures/stress-v1.json";
 import { SnapshotLinkError } from "./errors";
 import { decodeSnapshotLink } from "./snapshot-link";
 
@@ -48,6 +50,20 @@ describe("reading the links the encoder writes", () => {
 
   it("accepts the hash sign in front of the payload", async () => {
     expect(await decodeSnapshotLink(`#${demo.payload}`)).toEqual(demo.document.snapshot);
+  });
+});
+
+describe("reading the links of schema version 1", () => {
+  // The fixtures of version 1 never change, so the links that were shared before version 2 keep
+  // opening.
+  it("reads the demo trip with the settings the link kept", async () => {
+    expect(await decodeSnapshotLink(demoV1.payload)).toEqual(demoV1.document.snapshot);
+    expect(await decodeSnapshotLink(demoV1.qr_payload)).toEqual(demoV1.document.snapshot);
+    expect(await decodeSnapshotLink(demoV1.compact_payload)).toEqual(demoV1.document.snapshot);
+  });
+
+  it("reads the large trip", async () => {
+    expect(await decodeSnapshotLink(stressV1.payload)).toEqual(stressV1.document.snapshot);
   });
 });
 

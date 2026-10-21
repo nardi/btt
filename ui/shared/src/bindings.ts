@@ -1647,8 +1647,8 @@ export type TripPreferences = {
  * 
  *  The viewer needs no timetable, no prices and no planner, so the snapshot holds the chosen and
  *  alternative journeys of every leg with their prices. It leaves out what only the desktop app
- *  uses: traveller profiles, the cost parts of a journey, the geometry of the trains and the
- *  options for pass days. `TripSnapshot::new` removes those, so a snapshot decoded from a link
+ *  uses: traveller profiles, the settings of the trip and its places, the cost parts of a journey,
+ *  the geometry of the trains and the options for pass days. `TripSnapshot::new` removes those, so a snapshot decoded from a link
  *  equals the snapshot that was encoded.
  */
 export type TripSnapshot = {

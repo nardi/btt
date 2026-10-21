@@ -31,10 +31,10 @@ describe("reading a trip file", () => {
 
   it("names a file from a newer version", () => {
     const document = demoDocument();
-    document.schema_version = 2;
+    document.schema_version = 3;
     const error = failure(document);
     expect(error.kind).toBe("newer-schema");
-    expect(error.schemaVersion).toBe(2);
+    expect(error.schemaVersion).toBe(3);
   });
 
   it("drops fields it does not know", () => {

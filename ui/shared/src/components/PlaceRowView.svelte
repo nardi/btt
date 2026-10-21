@@ -76,6 +76,9 @@
   const arrivalOverride = $derived(overriddenArrivalWindow(row.place.window_override));
   const departureOverride = $derived(overriddenDepartureWindow(row.place.window_override));
   const disabled = $derived(onEdit === undefined);
+  // A read-only place shows only its stay. The windows, the preference for a longer stay and the
+  // search radius only steered the planner, so a shared trip does not keep them.
+  const hasSettings = $derived(onEdit !== undefined || row.stay !== null);
 
   /** The dates of the place on its closed card, such as "Sat 11 Oct to Sun 12 Oct". */
   const dates = $derived.by(() => {
@@ -191,20 +194,22 @@
       >
         <Icon name="pin" />
       </button>
-      <button
-        type="button"
-        class="icon-button"
-        aria-expanded={expanded}
-        aria-controls={`place-settings-${placeId}`}
-        aria-label={expanded ? "Hide settings" : "Show settings"}
-        title={expanded ? "Hide settings" : "Show settings"}
-        onclick={() => (expanded = !expanded)}
-      >
-        <Icon name="chevron" turned={expanded} />
-      </button>
+      {#if hasSettings}
+        <button
+          type="button"
+          class="icon-button"
+          aria-expanded={expanded}
+          aria-controls={`place-settings-${placeId}`}
+          aria-label={expanded ? "Hide settings" : "Show settings"}
+          title={expanded ? "Hide settings" : "Show settings"}
+          onclick={() => (expanded = !expanded)}
+        >
+          <Icon name="chevron" turned={expanded} />
+        </button>
+      {/if}
     </div>
 
-    {#if expanded}
+    {#if expanded && hasSettings}
       <div class="settings" id={`place-settings-${placeId}`} transition:slide={expandTransition()}>
         <div class="fields">
           {#if row.stay !== null}
@@ -227,7 +232,7 @@
               />
               <span class="hint">nights</span>
             </label>
-            {#if row.stay.SameDay !== undefined}
+            {#if row.stay.SameDay !== undefined && onEdit !== undefined}
               <label class="switch-row">
                 <input
                   type="checkbox"
@@ -242,7 +247,7 @@
           {/if}
           <!-- The arrival comes first, as it does at the place. The origin has no arrival and the
                destination no departure. -->
-          {#if row.role !== "origin"}
+          {#if row.role !== "origin" && onEdit !== undefined}
             <TimeWindowOverrideField
               label="Arrive here between"
               window={arrivalOverride}
@@ -251,7 +256,7 @@
               onChange={(arrival) => setWindows(placeWindowOverride(arrival, departureOverride))}
             />
           {/if}
-          {#if row.role !== "destination"}
+          {#if row.role !== "destination" && onEdit !== undefined}
             <TimeWindowOverrideField
               label="Leave here between"
               window={departureOverride}
@@ -264,12 +269,12 @@
             <button type="button" class="small" onclick={() => setWindows(null)}>Use trip defaults</button>
           {/if}
         </div>
-        <div class="footer">
-          <p class="radius">
-            Stations within {formatDistance(row.place.station_search_radius)}.
-            {#if onEdit !== undefined}Drag the ring on the map to change it.{/if}
-          </p>
-          {#if onEdit !== undefined}
+        {#if onEdit !== undefined}
+          <div class="footer">
+            <p class="radius">
+              Stations within {formatDistance(row.place.station_search_radius)}. Drag the ring on the map to
+              change it.
+            </p>
             <button
               type="button"
               class="icon-button danger-hover"
@@ -279,8 +284,8 @@
             >
               <Icon name="trash" />
             </button>
-          {/if}
-        </div>
+          </div>
+        {/if}
       </div>
     {/if}
   </div>

@@ -6,7 +6,11 @@
 //! Times travel as the difference to the previous time, in minutes, because the times of a trip
 //! lie close together. The first time of a trip counts from the midnight (UTC) of its start
 //! date. Coordinates travel as the difference in microdegrees to the previous point. A text that
-//! repeats across trips travels as an index into a vocabulary, and every other text as bytes.
+//! repeats across trips travels as an index into a vocabulary, and every other text as bytes. A
+//! train travels as its line in the dictionary of trains when the dictionary has it.
+//!
+//! The layout leaves out the settings of the trip and its places, since the viewer shows the
+//! planned journeys and the settings only steered the planner. A reader restores their defaults.
 
 use std::collections::HashMap;
 use std::num::{NonZeroU8, NonZeroU32};
@@ -19,12 +23,11 @@ use uuid::Uuid;
 use super::SnapshotLinkError;
 use super::bits::{BitReader, BitWriter};
 use super::vocabulary::{self, CATEGORIES, OPERATORS, TIME_ZONES};
-use super::{cities, stations};
+use super::{cities, stations, trains};
 use crate::coordinates::{GeoCoordinates, Latitude, Longitude};
 use crate::itinerary::{
-    AcceptedBerths, BerthType, Itinerary, ItineraryRoute, LegTravelMode, OvernightLegOptions,
-    PlaceStay, PlaceWindowOverride, SameDayStayRange, StationSearchRadius, TripPlace, TripPlaceId,
-    ViaPlace,
+    Itinerary, ItineraryRoute, LegTravelMode, OvernightLegOptions, PlaceStay, StationSearchRadius,
+    TripPlace, TripPlaceId, ViaPlace,
 };
 use crate::plan::{
     AlternativeKind, ArrivalFootpath, Journey, JourneyCostParts, LegPlan, LegPlanStation,
@@ -33,11 +36,8 @@ use crate::plan::{
 };
 use crate::snapshot::{SNAPSHOT_SCHEMA_VERSION, SnapshotLeg, TripSnapshot};
 use crate::tickets::{EuroCents, EuroRange};
-use crate::time::{
-    DailyTimeWindow, DailyWindowLength, DurationMinutes, LocalTimeOfDay, TravelDayWindows,
-    UnixTimeMinutes,
-};
-use crate::trip::{TravelClass, Trip, TripId, TripPreferences};
+use crate::time::{DurationMinutes, LocalTimeOfDay, UnixTimeMinutes};
+use crate::trip::{Trip, TripId, TripPreferences};
 
 /// Days from 0001-01-01 (day 1) to 1970-01-01, which `NaiveDate` counts from.
 const DAYS_FROM_COMMON_ERA_TO_UNIX_EPOCH: i32 = 719_163;
@@ -140,6 +140,11 @@ pub(super) fn read_snapshot(bytes: &[u8]) -> Result<TripSnapshot, SnapshotLinkEr
     let schema_version = reader.bits.number_u16()?;
     if schema_version > SNAPSHOT_SCHEMA_VERSION {
         return Err(SnapshotLinkError::NewerSchema(schema_version));
+    }
+    if schema_version < SNAPSHOT_SCHEMA_VERSION {
+        return Err(SnapshotLinkError::Malformed(
+            "the link has an older layout than this reader",
+        ));
     }
     let planned_at = date_from_days(reader.bits.number()?)?;
     let bundle_version = reader.bits.number_u32()?;
@@ -286,14 +291,8 @@ impl SnapshotWriter {
         }
     }
 
-    /// Writes a daily time window.
-    fn window(&mut self, window: DailyTimeWindow) {
-        self.bits
-            .number(u64::from(window.start.minutes_since_midnight()));
-        self.bits.number(u64::from(window.length.minutes()));
-    }
-
-    /// Writes how a leg travels.
+    /// Writes how a leg travels. An overnight leg also has the time the traveller goes to bed and
+    /// the time they get up, which the viewer shows in a note.
     fn travel_mode(&mut self, travel_mode: LegTravelMode) {
         match travel_mode {
             LegTravelMode::Daytime => self.bits.bit(false),
@@ -303,46 +302,18 @@ impl SnapshotWriter {
                     .number(u64::from(options.bedtime.minutes_since_midnight()));
                 self.bits
                     .number(u64::from(options.wake_up_time.minutes_since_midnight()));
-                self.bits.bits(
-                    match options.accepted_berths {
-                        AcceptedBerths::Either { preferred: None } => 0,
-                        AcceptedBerths::Either {
-                            preferred: Some(BerthType::Couchette),
-                        } => 1,
-                        AcceptedBerths::Either {
-                            preferred: Some(BerthType::Sleeper),
-                        } => 2,
-                        AcceptedBerths::Only(BerthType::Couchette) => 3,
-                        AcceptedBerths::Only(BerthType::Sleeper) => 4,
-                    },
-                    3,
-                );
             }
         }
     }
 
-    /// Writes how long the traveller stays at a via place.
+    /// Writes how long the traveller stays at a via place: a number of nights, or the same day.
     fn stay(&mut self, stay: PlaceStay) {
         match stay {
             PlaceStay::Nights(nights) => {
                 self.bits.bit(false);
                 self.bits.number(u64::from(nights.get()));
             }
-            PlaceStay::SameDay {
-                stay_range_override,
-                prefers_longer_stay,
-            } => {
-                self.bits.bit(true);
-                self.bits.bit(prefers_longer_stay);
-                self.bits.bit(stay_range_override.is_some());
-                if let Some(range) = stay_range_override {
-                    self.bits.number(u64::from(range.minimum.0));
-                    self.bits.bit(range.maximum_beyond_minimum.is_some());
-                    if let Some(beyond) = range.maximum_beyond_minimum {
-                        self.bits.number(u64::from(beyond.0));
-                    }
-                }
-            }
+            PlaceStay::SameDay { .. } => self.bits.bit(true),
         }
     }
 
@@ -363,35 +334,12 @@ impl SnapshotWriter {
             self.bits.signed_number(longitude - self.place_steps.1);
             self.place_steps = (latitude, longitude);
         }
-        self.bits
-            .number(u64::from(place.station_search_radius.meters()));
-        match place.window_override {
-            None => self.bits.bits(0, 2),
-            Some(PlaceWindowOverride::Arrival(window)) => {
-                self.bits.bits(1, 2);
-                self.window(window);
-            }
-            Some(PlaceWindowOverride::Departure(window)) => {
-                self.bits.bits(2, 2);
-                self.window(window);
-            }
-            Some(PlaceWindowOverride::Both(windows)) => {
-                self.bits.bits(3, 2);
-                self.window(windows.departure);
-                self.window(windows.arrival);
-            }
-        }
     }
 
     /// Writes the trip without the parts a snapshot leaves out.
     fn trip(&mut self, trip: &Trip) -> Result<(), SnapshotLinkError> {
         self.bits.text(&trip.name);
         self.bits.number(days_since_epoch(trip.start_date)?);
-        self.bits
-            .bit(trip.preferences.travel_class == TravelClass::First);
-        self.window(trip.preferences.default_windows.departure);
-        self.window(trip.preferences.default_windows.arrival);
-        self.bits.number(u64::from(trip.next_place_id.get()));
         self.place_steps = (0, 0);
         match &trip.itinerary {
             Itinerary::Empty => self.bits.bits(0, 2),
@@ -441,32 +389,53 @@ impl SnapshotWriter {
         self.bits.bit(way.mode == WayToStationMode::LocalTransport);
     }
 
-    /// Writes one ride and the times of it.
-    fn ride(&mut self, ride: &TrainRide) {
-        self.bits.number(u64::from(ride.boarding_station.0));
-        self.bits.number(u64::from(ride.alighting_station.0));
-        self.time(ride.departure_time);
-        self.time(ride.arrival_time);
-        self.vocabulary_text(CATEGORIES, &ride.train_label.category);
-        if is_plain_number(&ride.train_label.number) {
+    /// Writes the train of a ride: its line in the dictionary of trains plus one, or zero and
+    /// then its category, number and operator.
+    fn train(&mut self, label: &TrainLabel) {
+        if let Some(index) = trains::dictionary().find(label) {
+            self.bits.number(index as u64 + 1);
+            return;
+        }
+        self.bits.number(0);
+        self.vocabulary_text(CATEGORIES, &label.category);
+        if is_plain_number(&label.number) {
             self.bits.bit(true);
             // The check above leaves at most nine digits.
-            self.bits
-                .number(ride.train_label.number.parse::<u64>().unwrap_or(0));
+            self.bits.number(label.number.parse::<u64>().unwrap_or(0));
         } else {
             self.bits.bit(false);
-            self.bits.text(&ride.train_label.number);
+            self.bits.text(&label.number);
         }
-        self.vocabulary_text(OPERATORS, &ride.train_label.operator);
+        self.vocabulary_text(OPERATORS, &label.operator);
+    }
+
+    /// Writes one ride and the times of it. A ride that boards where the previous ride of the
+    /// journey alighted writes a bit instead of the station.
+    fn ride(&mut self, ride: &TrainRide, previous_alighting: Option<LegPlanStationIndex>) {
+        self.train(&ride.train_label);
         self.bits.bit(ride.offers_berths);
+        self.time(ride.departure_time);
+        match previous_alighting {
+            Some(previous) => {
+                let same = previous == ride.boarding_station;
+                self.bits.bit(same);
+                if !same {
+                    self.bits.number(u64::from(ride.boarding_station.0));
+                }
+            }
+            None => self.bits.number(u64::from(ride.boarding_station.0)),
+        }
+        self.bits.number(u64::from(ride.alighting_station.0));
+        self.time(ride.arrival_time);
     }
 
     /// Writes a journey. The clock runs on from its first time.
     fn journey(&mut self, journey: &Journey) {
         self.way(journey.access);
         self.bits.number(journey.later_rides.len() as u64);
-        self.ride(&journey.first_ride);
+        self.ride(&journey.first_ride, None);
         let mut previous_arrival = i64::from(journey.first_ride.arrival_time.0);
+        let mut previous_alighting = journey.first_ride.alighting_station;
         for later in &journey.later_rides {
             let transfer = i64::from(later.ride.departure_time.0) - previous_arrival;
             let matches = transfer == i64::from(later.transfer_duration.0);
@@ -474,8 +443,9 @@ impl SnapshotWriter {
             if !matches {
                 self.bits.number(u64::from(later.transfer_duration.0));
             }
-            self.ride(&later.ride);
+            self.ride(&later.ride, Some(previous_alighting));
             previous_arrival = i64::from(later.ride.arrival_time.0);
+            previous_alighting = later.ride.alighting_station;
         }
         self.bits.bit(journey.arrival_footpath.is_some());
         if let Some(footpath) = &journey.arrival_footpath {
@@ -533,6 +503,14 @@ impl SnapshotWriter {
         }
         end
     }
+}
+
+/// What a journey keeps of its cost parts.
+struct StoredCostParts {
+    /// The time door to door, when the times of the journey do not derive it.
+    explicit_minutes: Option<u32>,
+    /// The price estimate, when the journey has one.
+    price: Option<EuroRange>,
 }
 
 /// Reads the parts of a snapshot.
@@ -596,14 +574,6 @@ impl SnapshotReader<'_> {
         }
     }
 
-    /// Reads a daily time window.
-    fn window(&mut self) -> Result<DailyTimeWindow, SnapshotLinkError> {
-        let invalid = |_| SnapshotLinkError::Malformed("a time window is out of range");
-        let start = LocalTimeOfDay::new(self.bits.number_u16()?).map_err(invalid)?;
-        let length = DailyWindowLength::new(self.bits.number_u16()?).map_err(invalid)?;
-        Ok(DailyTimeWindow { start, length })
-    }
-
     /// Reads how a leg travels.
     fn travel_mode(&mut self) -> Result<LegTravelMode, SnapshotLinkError> {
         if !self.bits.bit()? {
@@ -612,22 +582,10 @@ impl SnapshotReader<'_> {
         let invalid = |_| SnapshotLinkError::Malformed("a time of day is out of range");
         let bedtime = LocalTimeOfDay::new(self.bits.number_u16()?).map_err(invalid)?;
         let wake_up_time = LocalTimeOfDay::new(self.bits.number_u16()?).map_err(invalid)?;
-        let accepted_berths = match self.bits.bits(3)? {
-            0 => AcceptedBerths::Either { preferred: None },
-            1 => AcceptedBerths::Either {
-                preferred: Some(BerthType::Couchette),
-            },
-            2 => AcceptedBerths::Either {
-                preferred: Some(BerthType::Sleeper),
-            },
-            3 => AcceptedBerths::Only(BerthType::Couchette),
-            4 => AcceptedBerths::Only(BerthType::Sleeper),
-            _ => return Err(SnapshotLinkError::Malformed("an unknown berth choice")),
-        };
         Ok(LegTravelMode::Overnight(OvernightLegOptions {
             bedtime,
             wake_up_time,
-            accepted_berths,
+            accepted_berths: OvernightLegOptions::DEFAULT.accepted_berths,
         }))
     }
 
@@ -640,24 +598,9 @@ impl SnapshotReader<'_> {
                 .ok_or(SnapshotLinkError::Malformed("a stay has no nights"))?;
             return Ok(PlaceStay::Nights(nights));
         }
-        let prefers_longer_stay = self.bits.bit()?;
-        let stay_range_override = if self.bits.bit()? {
-            let minimum = DurationMinutes(self.bits.number_u16()?);
-            let maximum_beyond_minimum = if self.bits.bit()? {
-                Some(DurationMinutes(self.bits.number_u16()?))
-            } else {
-                None
-            };
-            Some(SameDayStayRange {
-                minimum,
-                maximum_beyond_minimum,
-            })
-        } else {
-            None
-        };
         Ok(PlaceStay::SameDay {
-            stay_range_override,
-            prefers_longer_stay,
+            stay_range_override: None,
+            prefers_longer_stay: false,
         })
     }
 
@@ -698,27 +641,12 @@ impl SnapshotReader<'_> {
                 .and_then(|microdegrees| Longitude::from_microdegrees(microdegrees).ok())
                 .ok_or_else(out_of_range)?,
         };
-        let station_search_radius = StationSearchRadius::new(self.bits.number_u16()?)
-            .map_err(|_| SnapshotLinkError::Malformed("a search radius is out of range"))?;
-        let window_override = match self.bits.bits(2)? {
-            0 => None,
-            1 => Some(PlaceWindowOverride::Arrival(self.window()?)),
-            2 => Some(PlaceWindowOverride::Departure(self.window()?)),
-            _ => {
-                let departure = self.window()?;
-                let arrival = self.window()?;
-                Some(PlaceWindowOverride::Both(TravelDayWindows {
-                    departure,
-                    arrival,
-                }))
-            }
-        };
         Ok(TripPlace {
             id,
             name,
             coordinates,
-            station_search_radius,
-            window_override,
+            station_search_radius: StationSearchRadius::DEFAULT,
+            window_override: None,
         })
     }
 
@@ -726,15 +654,6 @@ impl SnapshotReader<'_> {
     fn trip(&mut self) -> Result<Trip, SnapshotLinkError> {
         let name = SmolStr::from(self.bits.text()?);
         let start_date = date_from_days(self.bits.number()?)?;
-        let travel_class = if self.bits.bit()? {
-            TravelClass::First
-        } else {
-            TravelClass::Second
-        };
-        let departure = self.window()?;
-        let arrival = self.window()?;
-        let next_place_id = NonZeroU32::new(self.bits.number_u32()?)
-            .ok_or(SnapshotLinkError::Malformed("the next place ID is zero"))?;
         self.place_steps = (0, 0);
         let itinerary = match self.bits.bits(2)? {
             0 => Itinerary::Empty,
@@ -768,13 +687,9 @@ impl SnapshotReader<'_> {
             id: TripId(Uuid::nil()),
             name,
             start_date,
+            next_place_id: crate::snapshot::next_place_id_after(&itinerary),
             itinerary,
-            preferences: TripPreferences {
-                default_windows: TravelDayWindows { departure, arrival },
-                travel_class,
-                ..TripPreferences::default()
-            },
-            next_place_id,
+            preferences: TripPreferences::default(),
             chosen_journeys: Vec::new(),
             leg_transfer_overrides: Vec::new(),
         })
@@ -853,12 +768,23 @@ impl SnapshotReader<'_> {
         Ok(LegPlanStationIndex(index as u8))
     }
 
-    /// Reads one ride and the times of it.
-    fn ride(&mut self, station_count: usize) -> Result<TrainRide, SnapshotLinkError> {
-        let boarding_station = self.station_index(station_count)?;
-        let alighting_station = self.station_index(station_count)?;
-        let departure_time = self.time()?;
-        let arrival_time = self.time()?;
+    /// Reads the train of a ride.
+    fn train(&mut self) -> Result<TrainLabel, SnapshotLinkError> {
+        let line = self.bits.number()?;
+        if line > 0 {
+            let entry = usize::try_from(line - 1)
+                .ok()
+                .and_then(|index| trains::dictionary().get(index))
+                .ok_or(SnapshotLinkError::Malformed(
+                    "a train is not in the dictionary",
+                ))?;
+            return Ok(TrainLabel {
+                category: SmolStr::from(entry.category),
+                number: SmolStr::from(entry.number),
+                operator: SmolStr::from(entry.operator),
+                agency: SmolStr::default(),
+            });
+        }
         let category = self.vocabulary_text(CATEGORIES)?;
         let number = if self.bits.bit()? {
             SmolStr::from(self.bits.number()?.to_string())
@@ -866,18 +792,36 @@ impl SnapshotReader<'_> {
             SmolStr::from(self.bits.text()?)
         };
         let operator = self.vocabulary_text(OPERATORS)?;
+        Ok(TrainLabel {
+            category,
+            number,
+            operator,
+            agency: SmolStr::default(),
+        })
+    }
+
+    /// Reads one ride and the times of it. A ride that follows another may board where that one
+    /// alighted.
+    fn ride(
+        &mut self,
+        station_count: usize,
+        previous_alighting: Option<LegPlanStationIndex>,
+    ) -> Result<TrainRide, SnapshotLinkError> {
+        let train_label = self.train()?;
         let offers_berths = self.bits.bit()?;
+        let departure_time = self.time()?;
+        let boarding_station = match previous_alighting {
+            Some(previous) if self.bits.bit()? => previous,
+            _ => self.station_index(station_count)?,
+        };
+        let alighting_station = self.station_index(station_count)?;
+        let arrival_time = self.time()?;
         Ok(TrainRide {
             boarding_station,
             departure_time,
             alighting_station,
             arrival_time,
-            train_label: TrainLabel {
-                category,
-                number,
-                operator,
-                agency: SmolStr::default(),
-            },
+            train_label,
             offers_berths,
             intermediate_station_coordinates: SmallVec::new(),
             path_coordinates: Vec::new(),
@@ -897,13 +841,36 @@ impl SnapshotReader<'_> {
             .map_err(|_| out_of_range())
     }
 
+    /// Reads what a journey keeps of its cost parts: the time door to door when the times do not
+    /// derive it, and the price. Returns `None` for a journey without cost parts.
+    fn cost_parts_fields(&mut self) -> Result<Option<StoredCostParts>, SnapshotLinkError> {
+        if !self.bits.bit()? {
+            return Ok(None);
+        }
+        let explicit_minutes = if self.bits.bit()? {
+            None
+        } else {
+            Some(self.bits.number_u32()?)
+        };
+        let price = if self.bits.bit()? {
+            Some(self.price()?)
+        } else {
+            None
+        };
+        Ok(Some(StoredCostParts {
+            explicit_minutes,
+            price,
+        }))
+    }
+
     /// Reads a journey. The clock runs on from its first time.
     fn journey(&mut self, station_count: usize) -> Result<Journey, SnapshotLinkError> {
         let access = self.way()?;
         let later_count = self.bits.count()?;
-        let first_ride = self.ride(station_count)?;
+        let first_ride = self.ride(station_count, None)?;
         let mut later_rides: SmallVec<[TransferAndRide; 3]> = SmallVec::new();
         let mut previous_arrival = i64::from(first_ride.arrival_time.0);
+        let mut previous_alighting = first_ride.alighting_station;
         for _ in 0..later_count {
             let matches = self.bits.bit()?;
             let explicit_transfer = if matches {
@@ -911,13 +878,14 @@ impl SnapshotReader<'_> {
             } else {
                 Some(self.bits.number_u16()?)
             };
-            let ride = self.ride(station_count)?;
+            let ride = self.ride(station_count, Some(previous_alighting))?;
             let transfer = match explicit_transfer {
                 Some(minutes) => minutes,
                 None => u16::try_from(i64::from(ride.departure_time.0) - previous_arrival)
                     .map_err(|_| SnapshotLinkError::Malformed("a transfer is out of range"))?,
             };
             previous_arrival = i64::from(ride.arrival_time.0);
+            previous_alighting = ride.alighting_station;
             later_rides.push(TransferAndRide {
                 transfer_duration: DurationMinutes(transfer),
                 ride,
@@ -949,21 +917,7 @@ impl SnapshotReader<'_> {
             2 => Some(AlternativeKind::Faster),
             _ => return Err(SnapshotLinkError::Malformed("an unknown alternative kind")),
         };
-        let cost_parts = if self.bits.bit()? {
-            let explicit_minutes = if self.bits.bit()? {
-                None
-            } else {
-                Some(self.bits.number_u32()?)
-            };
-            let price = if self.bits.bit()? {
-                Some(self.price()?)
-            } else {
-                None
-            };
-            Some((explicit_minutes, price))
-        } else {
-            None
-        };
+        let cost_parts = self.cost_parts_fields()?;
         let mut journey = Journey {
             access,
             first_ride,
@@ -974,7 +928,11 @@ impl SnapshotReader<'_> {
             cost_parts: None,
             alternative_kind,
         };
-        if let Some((explicit_minutes, price)) = cost_parts {
+        if let Some(StoredCostParts {
+            explicit_minutes,
+            price,
+        }) = cost_parts
+        {
             let door_to_door_minutes = match explicit_minutes {
                 Some(minutes) => minutes,
                 None => derived_door_to_door_minutes(&journey).ok_or(
