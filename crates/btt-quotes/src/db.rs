@@ -168,21 +168,110 @@ pub fn parse_connections(response: &Value) -> Result<Vec<Connection>, QuoteError
         .collect())
 }
 
-/// Returns the connection that leaves at the given moment, in seconds since the Unix epoch, with
-/// the given number of trains.
+/// Returns the connection that is the planned trip, or `None` when the answer has none.
+///
+/// A connection is the planned trip when it leaves at the planned moment, in seconds since the
+/// Unix epoch, with the planned number of trains. Where the plan names its trains, such as
+/// `ICE 848`, the trains decide instead. The timetable and DB can disagree on a city train at
+/// the start or the end of the trip, such as the `S7` at 12:18 that DB lists as the `S9` at 12:20,
+/// so those two trains need no match. Every train between them must be one of the connection's
+/// trains, and at least one train must match. Among the connections that qualify, the one with
+/// the most matches wins, then the one that leaves closest to the planned moment, then the first
+/// with a price.
+///
+/// A connection that leaves more than `DEPARTURE_TOLERANCE_SECONDS` from the planned moment
+/// never qualifies, because it can be another run of the same train numbers.
 ///
 /// DB can list one journey twice under different train names, such as a Nightjet as `NJ 403`
-/// without a price and its seats as `IC 60403` with one. Among the connections that match, the
-/// first with a price wins.
-pub fn find_connection(
-    connections: &[Connection],
+/// without a price and its seats as `IC 60403` with one. Among equal connections, the first
+/// with a price wins.
+pub fn find_connection<'a>(
+    connections: &'a [Connection],
     departure_unix_seconds: i64,
     train_count: usize,
-) -> Option<&Connection> {
-    let mut matching = connections.iter().filter(|connection| {
-        connection.departure.timestamp() == departure_unix_seconds
-            && connection.trains.len() == train_count
-    });
+    planned_trains: &[impl AsRef<str>],
+) -> Option<&'a Connection> {
+    let planned: Vec<TrainName> = planned_trains
+        .iter()
+        .map(|train| TrainName::parse(train.as_ref()))
+        .collect();
+    if planned.len() < 3 {
+        // Without a train between the first and the last, the departure and the number of
+        // trains are all there is to go on.
+        let exact = connections.iter().filter(|connection| {
+            connection.departure.timestamp() == departure_unix_seconds
+                && connection.trains.len() == train_count
+        });
+        return first_priced(exact);
+    }
+    let middle = &planned[1..planned.len() - 1];
+    let matches_of = |connection: &Connection| -> Option<usize> {
+        let names: Vec<TrainName> = connection
+            .trains
+            .iter()
+            .map(|train| TrainName::parse(train))
+            .collect();
+        let found = |train: &TrainName| names.contains(train);
+        let distance = (connection.departure.timestamp() - departure_unix_seconds).abs();
+        (distance <= DEPARTURE_TOLERANCE_SECONDS && middle.iter().all(found))
+            .then(|| planned.iter().filter(|train| found(train)).count())
+    };
+    let scored: Vec<(&Connection, usize)> = connections
+        .iter()
+        .filter_map(|connection| Some((connection, matches_of(connection)?)))
+        .collect();
+    let best = scored.iter().map(|&(_, matches)| matches).max()?;
+    let closest = scored
+        .iter()
+        .filter(|&&(_, matches)| matches == best)
+        .map(|&(connection, _)| (connection.departure.timestamp() - departure_unix_seconds).abs())
+        .min()?;
+    first_priced(scored.iter().filter_map(|&(connection, matches)| {
+        (matches == best
+            && (connection.departure.timestamp() - departure_unix_seconds).abs() == closest)
+            .then_some(connection)
+    }))
+}
+
+/// The furthest the first train of a connection can leave from the planned moment and still
+/// be the planned trip.
+const DEPARTURE_TOLERANCE_SECONDS: i64 = 30 * 60;
+
+/// A train as a category and a number, such as `ICE` and `848`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TrainName {
+    /// The category in upper case, with the long names of the timetable shortened as DB writes
+    /// them.
+    category: String,
+    /// The digits of the number.
+    number: String,
+}
+
+impl TrainName {
+    /// Reads a name such as `ICE 848`, `Intercity 28559` or `RE13`, with the letters before the
+    /// digits as the category.
+    fn parse(text: &str) -> Self {
+        let text = text.trim();
+        let split = text
+            .find(|c: char| c.is_ascii_digit())
+            .unwrap_or(text.len());
+        let (category, number) = text.split_at(split);
+        let category = category.trim().to_uppercase();
+        let category = match category.as_str() {
+            "INTERCITY" => "IC".to_owned(),
+            "EUROCITY" => "EC".to_owned(),
+            _ => category,
+        };
+        Self {
+            category,
+            number: number.trim().to_owned(),
+        }
+    }
+}
+
+/// Returns the first connection with a price, or the first connection when none has one.
+fn first_priced<'a>(connections: impl Iterator<Item = &'a Connection>) -> Option<&'a Connection> {
+    let mut matching = connections;
     let first = matching.next()?;
     if first.price.is_some() {
         return Some(first);
@@ -277,6 +366,9 @@ impl DbService {
 mod tests {
     use super::*;
 
+    /// A plan that names no trains.
+    const NO_TRAINS: [&str; 0] = [];
+
     #[test]
     fn a_priced_listing_of_the_same_journey_wins() {
         let departure = DateTime::parse_from_rfc3339("2026-10-22T20:24:00+02:00").unwrap();
@@ -290,10 +382,116 @@ mod tests {
             connection(["RE 8468", "NJ 403"], None),
             connection(["RE 8468", "IC 60403"], Some(52.99)),
         ];
-        let found = find_connection(&connections, departure.timestamp(), 2).unwrap();
+        let found = find_connection(&connections, departure.timestamp(), 2, &NO_TRAINS).unwrap();
         assert_eq!(found.price, Some(52.99));
-        assert!(find_connection(&connections[..1], departure.timestamp(), 2).is_some());
-        assert!(find_connection(&connections, departure.timestamp(), 1).is_none());
+        assert!(find_connection(&connections[..1], departure.timestamp(), 2, &NO_TRAINS).is_some());
+        assert!(find_connection(&connections, departure.timestamp(), 1, &NO_TRAINS).is_none());
+    }
+
+    fn connection(departure: &str, trains: &[&str], price: Option<f64>) -> Connection {
+        Connection {
+            departure: DateTime::parse_from_rfc3339(departure).unwrap(),
+            trains: trains.iter().map(|&train| train.to_owned()).collect(),
+            price,
+            partial_price: false,
+        }
+    }
+
+    fn moment(text: &str) -> i64 {
+        DateTime::parse_from_rfc3339(text).unwrap().timestamp()
+    }
+
+    #[test]
+    fn a_city_train_that_differs_from_the_timetable_still_matches() {
+        let connections = [
+            connection(
+                "2026-10-24T12:15:00+02:00",
+                &["S5", "RJ 178", "ICE 203", "IC 2038", "IC 770"],
+                None,
+            ),
+            connection(
+                "2026-10-24T12:20:00+02:00",
+                &["S9", "ICE 848", "ICE 142", "IC 28470"],
+                Some(137.99),
+            ),
+            connection(
+                "2026-10-24T12:25:00+02:00",
+                &["S5", "ICE 375", "RB58", "ICE 224", "IC 28474"],
+                None,
+            ),
+        ];
+        let planned = ["S7 7088", "ICE 848", "ICE 142", "Intercity 28470"];
+        let found = find_connection(
+            &connections,
+            moment("2026-10-24T12:18:00+02:00"),
+            4,
+            &planned,
+        );
+        assert_eq!(found.unwrap().price, Some(137.99));
+        // Another train in the middle of the plan is another trip.
+        let other = ["S7 7088", "ICE 848", "ICE 999", "Intercity 28470"];
+        assert!(
+            find_connection(&connections, moment("2026-10-24T12:18:00+02:00"), 4, &other).is_none()
+        );
+    }
+
+    #[test]
+    fn a_listing_with_another_name_for_the_last_train_still_matches() {
+        let connections = [
+            connection(
+                "2026-10-24T10:50:00+02:00",
+                &["S3", "ICE 144", "IC 28559", "ICD 1877"],
+                Some(143.99),
+            ),
+            connection(
+                "2026-10-24T10:50:00+02:00",
+                &["S3", "ICE 144", "IC 28559", "IC 1168"],
+                Some(143.99),
+            ),
+        ];
+        let planned = ["S7 7546", "ICE 144", "Intercity 28559", "Intercity 1168"];
+        let found = find_connection(
+            &connections,
+            moment("2026-10-24T10:48:00+02:00"),
+            4,
+            &planned,
+        )
+        .unwrap();
+        // The listing that also matches the last train wins.
+        assert_eq!(found.trains[3], "IC 1168");
+    }
+
+    #[test]
+    fn the_same_trains_far_from_the_planned_moment_do_not_match() {
+        let connections = [connection(
+            "2026-10-24T14:20:00+02:00",
+            &["S9", "ICE 848", "ICE 142", "IC 28470"],
+            Some(137.99),
+        )];
+        let planned = ["S7 7088", "ICE 848", "ICE 142", "Intercity 28470"];
+        let found = find_connection(
+            &connections,
+            moment("2026-10-24T12:18:00+02:00"),
+            4,
+            &planned,
+        );
+        assert!(found.is_none());
+    }
+
+    #[test]
+    fn a_plan_without_a_middle_train_matches_by_moment_and_count() {
+        let connections = [connection(
+            "2026-10-24T12:20:00+02:00",
+            &["ICE 848", "IC 28470"],
+            Some(60.0),
+        )];
+        let none: [&str; 0] = [];
+        let at = |text: &str, count: usize| {
+            find_connection(&connections, moment(text), count, &none).is_some()
+        };
+        assert!(at("2026-10-24T12:20:00+02:00", 2));
+        assert!(!at("2026-10-24T12:20:00+02:00", 1));
+        assert!(!at("2026-10-24T12:18:00+02:00", 2));
     }
 
     #[test]
@@ -332,8 +530,8 @@ mod tests {
         let departure = DateTime::parse_from_rfc3339("2026-10-22T09:37:00+02:00")
             .unwrap()
             .timestamp();
-        assert!(find_connection(&connections, departure, 1).is_some());
-        assert!(find_connection(&connections, departure, 2).is_none());
+        assert!(find_connection(&connections, departure, 1, &NO_TRAINS).is_some());
+        assert!(find_connection(&connections, departure, 2, &NO_TRAINS).is_none());
     }
 
     #[test]

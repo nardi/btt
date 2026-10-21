@@ -812,6 +812,7 @@ impl<'a> Problem<'a> {
                 booking_link: link.url.clone(),
                 first_departure_time: ride.departure_time,
                 ride_count: 1,
+                train_labels: Vec::new(),
                 travel_class: self.settings.class,
                 site_search,
                 run: None,
@@ -924,6 +925,12 @@ impl<'a> Problem<'a> {
                 booking_link: link.url.clone(),
                 first_departure_time: first.departure_time,
                 ride_count: u8::try_from(rides.len()).unwrap_or(u8::MAX),
+                train_labels: rides
+                    .iter()
+                    .map(|ride| {
+                        format!("{} {}", ride.train_label.category, ride.train_label.number).into()
+                    })
+                    .collect(),
                 travel_class: self.settings.class,
                 site_search,
                 run: self.run_description(rides),

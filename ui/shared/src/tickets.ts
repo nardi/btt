@@ -185,7 +185,7 @@ export function liveQuoteKey(item: TicketItem): string | null {
   const searchKey = search === null ? "" : `${search.origin_code}~${search.destination_code}~${search.local_departure}`;
   const accommodation = request.accommodation ?? null;
   const accommodationKey = accommodation === null ? "" : `${accommodation.train}~${accommodation.with_pass}`;
-  return `${request.booking_link}|${request.first_departure_time}|${request.ride_count}|${request.travel_class}|${searchKey}|${accommodationKey}`;
+  return `${request.booking_link}|${request.first_departure_time}|${request.ride_count}|${(request.train_labels ?? []).join(",")}|${request.travel_class}|${searchKey}|${accommodationKey}`;
 }
 
 /** Returns the live price of a ticket, or `null` when it has none yet. */

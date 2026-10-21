@@ -266,6 +266,29 @@ async fn look_up_on_site(
     )
 }
 
+/// Returns the departure with the UTC offset of the station.
+///
+/// The service reads the clock of `reiseDatum` as local time and ignores its offset, so a
+/// departure in UTC would search two hours too early in summer. The local clock comes from the
+/// `hd` parameter of the booking link, written in local time. A link without it gets UTC.
+fn db_departure(
+    unix_seconds: i64,
+    link_time: Option<&str>,
+) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    let moment = chrono::DateTime::from_timestamp(unix_seconds, 0)?;
+    let local_clock = link_time
+        .and_then(|text| chrono::NaiveDateTime::parse_from_str(text, "%Y-%m-%dT%H:%M:%S").ok());
+    let offset = local_clock
+        .and_then(|clock| {
+            let seconds = clock
+                .signed_duration_since(moment.naive_utc())
+                .num_seconds();
+            chrono::FixedOffset::east_opt(i32::try_from(seconds).ok()?)
+        })
+        .unwrap_or_else(|| chrono::FixedOffset::east_opt(0).expect("zero is a valid offset"));
+    Some(moment.with_timezone(&offset))
+}
+
 /// Looks up the live price of a ticket on the service of the DB app, from the stations, time,
 /// class and traveller of its bahn.de link.
 async fn look_up_db(
@@ -279,9 +302,10 @@ async fn look_up_db(
     let traveller_type = parameter(link, "r")
         .and_then(|travellers| travellers.split(':').next().map(str::to_owned))
         .and_then(|id| btt_quotes::db::traveller_type(&id));
-    let departure =
-        chrono::DateTime::from_timestamp(i64::from(request.first_departure_time.0) * 60, 0)
-            .map(|moment| moment.fixed_offset());
+    let departure = db_departure(
+        i64::from(request.first_departure_time.0) * 60,
+        parameter(link, "hd").as_deref(),
+    );
     let (Some(origin_eva), Some(destination_eva), Some(traveller_type), Some(departure)) = (
         parameter(link, "soei"),
         parameter(link, "zoei"),
@@ -318,6 +342,7 @@ async fn look_up_db(
         &connections,
         departure.timestamp(),
         usize::from(request.ride_count),
+        &request.train_labels,
     ) else {
         return (LiveQuoteOutcome::NoMatchingTrip, answer);
     };
@@ -958,11 +983,23 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn the_db_departure_has_the_offset_of_the_local_clock_in_the_link() {
+        // 10:18 UTC is 12:18 in Berlin on 2026-10-24.
+        let unix_seconds = 29_880_618 * 60;
+        let summer = db_departure(unix_seconds, Some("2026-10-24T12:18:00")).unwrap();
+        assert_eq!(summer.to_rfc3339(), "2026-10-24T12:18:00+02:00");
+        let without_link = db_departure(unix_seconds, None).unwrap();
+        assert_eq!(without_link.to_rfc3339(), "2026-10-24T10:18:00+00:00");
+        assert_eq!(summer.timestamp(), without_link.timestamp());
+    }
+
     fn request(minute: u32) -> LiveQuoteRequest {
         LiveQuoteRequest {
             booking_link: "https://www.sbb.ch/en".into(),
             first_departure_time: UnixTimeMinutes(minute),
             ride_count: 1,
+            train_labels: Vec::new(),
             travel_class: TravelClass::Second,
             site_search: None,
             run: None,

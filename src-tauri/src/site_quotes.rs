@@ -124,6 +124,7 @@ mod tests {
             booking_link: "https://www.dsb.dk/en/".into(),
             first_departure_time: UnixTimeMinutes(29_920_052),
             ride_count: 2,
+            train_labels: Vec::new(),
             travel_class: TravelClass::Second,
             site_search: Some(SiteSearch {
                 origin_code: "8600626".into(),

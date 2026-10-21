@@ -161,6 +161,7 @@ async fn look_up_through_service(app: AppHandle, path: std::ffi::OsString) {
                 booking_link: link.into(),
                 first_departure_time: btt_model::UnixTimeMinutes(minutes.unwrap_or(0)),
                 ride_count: trains.unwrap_or(1),
+                train_labels: Vec::new(),
                 travel_class: btt_model::TravelClass::Second,
                 site_search: None,
                 run: None,

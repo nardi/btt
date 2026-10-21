@@ -260,6 +260,11 @@ pub struct LiveQuoteRequest {
     pub first_departure_time: UnixTimeMinutes,
     /// Number of trains the ticket covers.
     pub ride_count: u8,
+    /// The trains the ticket covers as category and number, such as `ICE 848`, in order. A site
+    /// that lists connections matches the trip by them, because it can differ from the timetable
+    /// on a city train at the start or the end.
+    #[serde(default)]
+    pub train_labels: Vec<SmolStr>,
     /// Class the price is asked for.
     pub travel_class: TravelClass,
     /// The search to run on the booking site, for a site whose booking link does not name it.
