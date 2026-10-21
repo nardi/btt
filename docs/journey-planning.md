@@ -156,6 +156,8 @@ A live price from a booking site takes two seconds, so the search and the rankin
 
 The leg view then puts the live prices into the costs of those journeys and ranks them again. When a live price moves another journey ahead of the chosen one, the leg shows that journey first and says which one the estimates had put first. Live prices skip the dead band of ten percent, because they carry no noise of the model. A journey the traveller picked stays chosen and only gets its live price. A leg on a pass day keeps its pass journey, because no site gives its price.
 
+A site can also have no trip with the planned trains and sell a similar one. DB does this when it lists a city train at the start or the end of a trip under another name, or when it routes the middle of a trip over other trains. The lookup then reports the cheapest ticket of the connection that rides at least half of the planned trains and leaves within an hour. The tickets screen shows that price next to the estimate. When one of the leg's alternatives has the same trains between its first and last train and leaves within half an hour of the site's trip, the screen offers to pick it. That is the same pick as in the alternatives list, so it pins the leg to that journey.
+
 ## Heuristics and limitations
 
 The planner is exact for part of the cost and a heuristic for the rest. This section lists where it departs from the stated problem, and what each departure costs.

@@ -49,8 +49,8 @@ pub use tickets::{
     AccommodationRequest, BookingLink, BookingLinkKind, EuroCents, EuroRange, ForeignAmount,
     LiveQuote, LiveQuoteRequest, PassOptionSummary, PassScenario, PassScenarioLeg, Price,
     PriceKind, PriceObservation, PriceSource, PriceTotal, RideDescription, RunDescription,
-    ScenarioPass, SiteSearch, StrategyKind, TicketItem, TicketLeg, TicketPlan, TicketProduct,
-    TicketRide, TicketStrategy, UnorderedEuroRangeError,
+    ScenarioPass, SimilarTrip, SiteSearch, StrategyKind, TicketItem, TicketLeg, TicketPlan,
+    TicketProduct, TicketRide, TicketStrategy, UnorderedEuroRangeError,
 };
 pub use time::{
     DailyTimeWindow, DailyWindowLength, DurationMinutes, LocalTimeOfDay, TravelDayWindows,

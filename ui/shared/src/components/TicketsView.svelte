@@ -16,6 +16,7 @@
     liveQuoteKey,
     livePriceOf,
     type LivePrices,
+    similarTripOf,
     priceKindDescription,
     priceKindLabel,
     layoutLinkTitle,
@@ -36,6 +37,8 @@
     unplannedLegs,
     onOpenLink,
     onRetryLivePrice,
+    canSwitchToSimilar,
+    onSwitchToSimilar,
   }: {
     /** The plan, or `null` before the first one arrives. */
     plan: TicketPlan | null;
@@ -54,6 +57,10 @@
     onOpenLink: (url: string) => void;
     /** Looks up the live price of a ticket again, whatever the site answered before. */
     onRetryLivePrice: (item: TicketItem) => void;
+    /** Whether the planner has the journey of the similar trip that a ticket's site sells. */
+    canSwitchToSimilar: (item: TicketItem) => boolean;
+    /** Picks the journey of the similar trip that a ticket's site sells for the leg. */
+    onSwitchToSimilar: (item: TicketItem) => void;
   } = $props();
 
   /** The strategy the traveller looks at, by position. The cheapest comes first. */
@@ -256,6 +263,18 @@
               <p class="detail">
                 Estimate was {formatPrice(item.price)}.
               </p>
+            {/if}
+            {#if similarTripOf(item, livePrices) !== null}
+              {@const similar = similarTripOf(item, livePrices)!}
+              <p class="detail">
+                The booking site has no trip with these trains. It sells a similar one with
+                {similar.trains.join(", ")} for {formatPrice(similar.price)}.
+              </p>
+              {#if canSwitchToSimilar(item)}
+                <button type="button" class="small" onclick={() => onSwitchToSimilar(item)}>
+                  Use that trip
+                </button>
+              {/if}
             {/if}
             {#if item.booking_link !== null}
               {@const link = item.booking_link}

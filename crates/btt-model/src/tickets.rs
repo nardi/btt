@@ -366,6 +366,19 @@ pub enum LiveQuote {
     /// The site shows the trip and sells no ticket for it, such as a train whose sale has not
     /// opened or that is sold out.
     Unavailable,
+    /// The site has no trip with the planned trains, and sells a similar one at this price.
+    Similar(SimilarTrip),
+}
+
+/// A trip that a booking site sells and that is like the planned one, but not the same.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub struct SimilarTrip {
+    /// The price of the similar trip.
+    pub price: Price,
+    /// The trains of the similar trip as the site names them, such as `ICE 848`.
+    pub trains: Vec<String>,
+    /// Departure of the first train of the similar trip.
+    pub first_departure_time: UnixTimeMinutes,
 }
 
 /// What a strategy is.

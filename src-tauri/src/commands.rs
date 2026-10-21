@@ -334,6 +334,8 @@ pub fn plan_pass_scenarios(
 /// Asks the booking site named in a ticket's booking link for the live price of the ticket.
 ///
 /// Returns `LiveQuote::Unavailable` when the site shows the trip and sells no ticket for it.
+/// Returns `LiveQuote::Similar` when the site has no trip with the planned trains and sells one
+/// that is alike.
 /// Returns `None` when the site is not one the app reads, a failure of the site leaves no price,
 /// or the site has no trip at the time. The site's answers are kept for half an hour, and
 /// requests are spaced out and paused after a failure. Every lookup goes into a log that
@@ -361,6 +363,9 @@ async fn quote_ticket(state: &AppState, request: &LiveQuoteRequest) -> Option<Li
             Some(LiveQuote::Priced(price.clone()))
         }
         crate::ticket_report::LiveQuoteOutcome::NotSold => Some(LiveQuote::Unavailable),
+        crate::ticket_report::LiveQuoteOutcome::SimilarTrip(similar) => {
+            Some(LiveQuote::Similar(similar.clone()))
+        }
         _ => None,
     };
     let mut log = state

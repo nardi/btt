@@ -233,9 +233,47 @@ pub fn find_connection<'a>(
     }))
 }
 
+/// Returns the connection with a price that is most like the planned trip when no connection is
+/// the planned trip, or `None` when none is alike enough.
+///
+/// A connection is alike when it leaves within `SIMILAR_DEPARTURE_TOLERANCE_SECONDS` of the
+/// planned moment, sells a whole ticket, and rides at least half of the planned trains. The one
+/// with the most planned trains wins, then the one that leaves closest to the planned moment.
+pub fn find_similar_connection<'a>(
+    connections: &'a [Connection],
+    departure_unix_seconds: i64,
+    planned_trains: &[impl AsRef<str>],
+) -> Option<&'a Connection> {
+    let planned: Vec<TrainName> = planned_trains
+        .iter()
+        .map(|train| TrainName::parse(train.as_ref()))
+        .collect();
+    let needed = planned.len().div_ceil(2).max(1);
+    connections
+        .iter()
+        .filter(|connection| connection.price.is_some() && !connection.partial_price)
+        .filter_map(|connection| {
+            let distance = (connection.departure.timestamp() - departure_unix_seconds).abs();
+            let names: Vec<TrainName> = connection
+                .trains
+                .iter()
+                .map(|train| TrainName::parse(train))
+                .collect();
+            let shared = planned.iter().filter(|train| names.contains(train)).count();
+            (distance <= SIMILAR_DEPARTURE_TOLERANCE_SECONDS && shared >= needed)
+                .then_some((connection, shared, distance))
+        })
+        .max_by_key(|&(_, shared, distance)| (shared, std::cmp::Reverse(distance)))
+        .map(|(connection, _, _)| connection)
+}
+
 /// The furthest the first train of a connection can leave from the planned moment and still
 /// be the planned trip.
 const DEPARTURE_TOLERANCE_SECONDS: i64 = 30 * 60;
+
+/// The furthest the first train of a connection can leave from the planned moment and still be
+/// a trip like the planned one.
+const SIMILAR_DEPARTURE_TOLERANCE_SECONDS: i64 = 60 * 60;
 
 /// A train as a category and a number, such as `ICE` and `848`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -492,6 +530,38 @@ mod tests {
         assert!(at("2026-10-24T12:20:00+02:00", 2));
         assert!(!at("2026-10-24T12:20:00+02:00", 1));
         assert!(!at("2026-10-24T12:18:00+02:00", 2));
+    }
+
+    #[test]
+    fn a_priced_trip_that_shares_half_of_the_trains_is_similar() {
+        let connections = [
+            connection(
+                "2026-10-24T12:20:00+02:00",
+                &["S9", "ICE 848", "ICE 999", "IC 1"],
+                None,
+            ),
+            connection(
+                "2026-10-24T12:25:00+02:00",
+                &["S9", "ICE 848", "ICE 999", "IC 2"],
+                Some(150.0),
+            ),
+            connection(
+                "2026-10-24T12:20:00+02:00",
+                &["S9", "ICE 848", "ICE 142", "IC 3"],
+                Some(120.0),
+            ),
+            connection("2026-10-24T12:20:00+02:00", &["ICE 5", "ICE 6"], Some(50.0)),
+        ];
+        let planned = ["S7 7088", "ICE 848", "ICE 142", "Intercity 28470"];
+        let at = moment("2026-10-24T12:18:00+02:00");
+        // Two shared trains with a price qualify, and the one with the most shared trains wins.
+        let found = find_similar_connection(&connections, at, &planned).unwrap();
+        assert_eq!(found.price, Some(120.0));
+        // A connection with a different journey altogether is never similar.
+        assert!(find_similar_connection(&connections[3..], at, &planned).is_none());
+        // Neither is one that leaves more than an hour away.
+        let late = moment("2026-10-24T14:00:00+02:00");
+        assert!(find_similar_connection(&connections, late, &planned).is_none());
     }
 
     #[test]

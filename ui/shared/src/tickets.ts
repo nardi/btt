@@ -8,6 +8,7 @@ import type {
   Price,
   PriceKind,
   PriceTotal,
+  SimilarTrip,
   TicketItem,
   TicketRide,
   TicketStrategy,
@@ -192,7 +193,14 @@ export function liveQuoteKey(item: TicketItem): string | null {
 export function livePriceOf(item: TicketItem, live: LivePrices): Price | null {
   const key = liveQuoteKey(item);
   const quote = key === null ? null : (live.get(key) ?? null);
-  return quote === null || quote === "Unavailable" ? null : quote.Priced;
+  return quote === null || typeof quote === "string" ? null : (quote.Priced ?? null);
+}
+
+/** Returns the similar trip that the booking site sells in place of the planned one, or `null`. */
+export function similarTripOf(item: TicketItem, live: LivePrices): SimilarTrip | null {
+  const key = liveQuoteKey(item);
+  const quote = key === null ? null : (live.get(key) ?? null);
+  return quote === null || typeof quote === "string" ? null : (quote.Similar ?? null);
 }
 
 /** Returns whether the booking site shows the trip of a ticket and sells no ticket for it. */

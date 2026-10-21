@@ -107,6 +107,8 @@ export const commands = {
 	 *  Asks the booking site named in a ticket's booking link for the live price of the ticket.
 	 * 
 	 *  Returns `LiveQuote::Unavailable` when the site shows the trip and sells no ticket for it.
+	 *  Returns `LiveQuote::Similar` when the site has no trip with the planned trains and sells one
+	 *  that is alike.
 	 *  Returns `None` when the site is not one the app reads, a failure of the site leaves no price,
 	 *  or the site has no trip at the time. The site's answers are kept for half an hour, and
 	 *  requests are spaced out and paused after a failure. Every lookup goes into a log that
@@ -114,12 +116,14 @@ export const commands = {
 	 */
 	fetchLiveQuote: (request: LiveQuoteRequest) => typedError<
 /**  The site sells the ticket at this price. */
-{ Priced: Price } | 
+({ Priced: Price }) & { Similar?: never } | 
 /**
  *  The site shows the trip and sells no ticket for it, such as a train whose sale has not
  *  opened or that is sold out.
  */
-"Unavailable" | null, CommandError>(__TAURI_INVOKE("fetch_live_quote", { request })),
+"Unavailable" | 
+/**  The site has no trip with the planned trains, and sells a similar one at this price. */
+({ Similar: SimilarTrip }) & { Priced?: never } | null, CommandError>(__TAURI_INVOKE("fetch_live_quote", { request })),
 	/**
 	 *  Asks where to save a problem report for a trip and writes it there. Returns the path of the
 	 *  saved file, or `None` when the traveller cancelled.
@@ -715,12 +719,14 @@ export type LegTravelMode =
 /**  The answer of a booking site about a ticket. */
 export type LiveQuote = 
 /**  The site sells the ticket at this price. */
-{ Priced: Price } | 
+({ Priced: Price }) & { Similar?: never } | 
 /**
  *  The site shows the trip and sells no ticket for it, such as a train whose sale has not
  *  opened or that is sold out.
  */
-"Unavailable";
+"Unavailable" | 
+/**  The site has no trip with the planned trains, and sells a similar one at this price. */
+({ Similar: SimilarTrip }) & { Priced?: never };
 
 /**  A request for the live price of a ticket on the booking site that sells it. */
 export type LiveQuoteRequest = {
@@ -1167,6 +1173,16 @@ export type SharedTrip = {
 	 *  big for it.
 	 */
 	qr: QrText | null,
+};
+
+/**  A trip that a booking site sells and that is like the planned one, but not the same. */
+export type SimilarTrip = {
+	/**  The price of the similar trip. */
+	price: Price,
+	/**  The trains of the similar trip as the site names them, such as `ICE 848`. */
+	trains: string[],
+	/**  Departure of the first train of the similar trip. */
+	first_departure_time: UnixTimeMinutes,
 };
 
 /**  A search on a booking site whose booking link opens its start page. */

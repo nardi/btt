@@ -5,7 +5,8 @@
 
 use btt_model::{
     AccommodationRequest, EuroCents, ForeignAmount, LiveQuoteRequest, Price, PriceKind,
-    PriceSource, TicketLeg, TicketPlan, TicketPreferences, TravelClass, Traveller,
+    PriceSource, SimilarTrip, TicketLeg, TicketPlan, TicketPreferences, TravelClass, Traveller,
+    UnixTimeMinutes,
 };
 use btt_quotes::sbb::{Quote, Search, find_trip};
 use serde::Serialize;
@@ -61,6 +62,8 @@ pub enum LiveQuoteOutcome {
         /// The price as shown in the app, in euro.
         price: Price,
     },
+    /// The site has no trip with the planned trains, and sells a similar one.
+    SimilarTrip(SimilarTrip),
 }
 
 /// One live price lookup.
@@ -289,6 +292,42 @@ fn db_departure(
     Some(moment.with_timezone(&offset))
 }
 
+/// Returns the outcome for a planned trip that DB lists under no connection: the price of the
+/// connection that is most like it, or `NoMatchingTrip` when DB has none alike.
+async fn similar_db_trip(
+    state: &AppState,
+    request: &LiveQuoteRequest,
+    connections: &[btt_quotes::db::Connection],
+    departure_unix_seconds: i64,
+) -> LiveQuoteOutcome {
+    let Some(connection) = btt_quotes::db::find_similar_connection(
+        connections,
+        departure_unix_seconds,
+        &request.train_labels,
+    ) else {
+        return LiveQuoteOutcome::NoMatchingTrip;
+    };
+    let Some(amount) = connection.price else {
+        return LiveQuoteOutcome::NoMatchingTrip;
+    };
+    let note = format!(
+        "The lowest price DB shows for {}, for one traveller with no discount card. It can be a \
+         saver fare that ties the ticket to the train.",
+        connection.trains.join(" and ")
+    );
+    match live_price(state, request, BookingSite::Db, amount, "EUR", &note).await {
+        LiveQuoteOutcome::Quoted { price } => LiveQuoteOutcome::SimilarTrip(SimilarTrip {
+            price,
+            trains: connection.trains.clone(),
+            // A departure of the site lies on a whole minute.
+            first_departure_time: UnixTimeMinutes(
+                u32::try_from(connection.departure.timestamp() / 60).unwrap_or_default(),
+            ),
+        }),
+        other => other,
+    }
+}
+
 /// Looks up the live price of a ticket on the service of the DB app, from the stations, time,
 /// class and traveller of its bahn.de link.
 async fn look_up_db(
@@ -344,7 +383,8 @@ async fn look_up_db(
         usize::from(request.ride_count),
         &request.train_labels,
     ) else {
-        return (LiveQuoteOutcome::NoMatchingTrip, answer);
+        let outcome = similar_db_trip(state, request, &connections, departure.timestamp()).await;
+        return (outcome, answer);
     };
     let Some(amount) = connection.price else {
         return (LiveQuoteOutcome::NotSold, answer);

@@ -20,9 +20,10 @@
   import TripMap from "@btt/shared/components/TripMap.svelte";
   import ThemeSwitch from "@btt/shared/components/ThemeSwitch.svelte";
   import Icon from "@btt/shared/components/Icon.svelte";
-  import { itineraryRows, legLine, type LegLine } from "@btt/shared/itinerary";
+  import { itineraryRows, journeyRides, legLine, type LegLine } from "@btt/shared/itinerary";
   import { operatorGaps, tripLastDate } from "@btt/shared/timetable-coverage";
-  import { liveQuoteKey } from "@btt/shared/tickets";
+  import { arrivalPlaceOfTicket, journeyOfSimilarTrip } from "@btt/shared/similar-trip";
+  import { liveQuoteKey, similarTripOf } from "@btt/shared/tickets";
   import { legViewState, plannedArrivalDates } from "@btt/shared/trip-source";
   import type { PlaceFocusRequest } from "@btt/shared/map-features";
   import { openUrl } from "@tauri-apps/plugin-opener";
@@ -308,6 +309,34 @@
     retrying = remaining;
   }
 
+  /**
+   * Returns the journey of the leg that is the similar trip a booking site sells for a ticket,
+   * and the place the leg arrives at, or `null` when the planner has no such journey.
+   */
+  function similarJourneyOf(item: TicketItem) {
+    const similar = similarTripOf(item, livePrices);
+    const place = ticketPlan === null ? null : arrivalPlaceOfTicket(ticketPlan, item);
+    const state = place === null ? undefined : openSource?.legStatesByArrivalPlace.get(place);
+    if (similar === null || place === null || state === undefined || state.status !== "found") {
+      return null;
+    }
+    const journey = journeyOfSimilarTrip(state.legPlan, similar);
+    return journey === null ? null : { place, journey };
+  }
+
+  /** Plans the leg of a ticket with the similar trip that its booking site sells. */
+  async function switchToSimilarTrip(item: TicketItem) {
+    const found = similarJourneyOf(item);
+    if (found === null) {
+      return;
+    }
+    const choice = {
+      first_departure_time: found.journey.first_ride.departure_time,
+      trains: journeyRides(found.journey).map((ride) => ride.train_label),
+    };
+    await openSource?.applyEdit({ ChooseJourney: { arrival_place_id: found.place, choice } });
+  }
+
   /** Opens a booking link in the system browser. */
   async function openBookingLink(url: string) {
     try {
@@ -502,6 +531,8 @@
             {unplannedLegs}
             onOpenLink={openBookingLink}
             onRetryLivePrice={retryLivePrice}
+            canSwitchToSimilar={(item) => similarJourneyOf(item) !== null}
+            onSwitchToSimilar={switchToSimilarTrip}
           />
         {:else}
           <div class="workspace">

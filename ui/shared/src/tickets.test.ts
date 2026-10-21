@@ -15,6 +15,7 @@ import {
   formatTotal,
   isLiveFailed,
   isLiveUnavailable,
+  similarTripOf,
   layoutLinkTitle,
   liveQuoteKey,
   livePriceOf,
@@ -246,5 +247,31 @@ describe("layoutLinkTitle", () => {
     expect(layoutLinkTitle("ApproximateTrain")).toContain("another operator's train");
     expect(layoutLinkTitle("CategoryList")).toContain("category");
     expect(layoutLinkTitle("OperatorList")).toContain("operator");
+  });
+});
+
+describe("similar trips", () => {
+  const ticket: TicketItem = {
+    id: 0,
+    product: "Single",
+    title: "t",
+    detail: "d",
+    ride_indices: [0],
+    price: { low: 1, high: 1, kind: "Range", source: { name: "t", note: "", as_of: null, page: null } },
+    booking_link: null,
+    live_quote_request: { booking_link: "https://www.bahn.de/x", first_departure_time: 1, ride_count: 1, travel_class: "Second", site_search: null },
+  } as unknown as TicketItem;
+  const similar = {
+    price: { low: 100, high: 100, kind: "Live" as const, source: { name: "DB", note: "", as_of: null, page: null } },
+    trains: ["ICE 848"],
+    first_departure_time: 5,
+  };
+
+  it("keeps the estimate and names the trip that the site sells", () => {
+    const live = new Map([[liveQuoteKey(ticket)!, { Similar: similar }]]);
+    expect(similarTripOf(ticket, live)).toEqual(similar);
+    expect(livePriceOf(ticket, live)).toBeNull();
+    expect(isLiveFailed(ticket, live)).toBe(false);
+    expect(similarTripOf(ticket, new Map())).toBeNull();
   });
 });
