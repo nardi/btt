@@ -48,6 +48,14 @@ pub struct RideInput {
     pub layout_links: Vec<LayoutLink>,
 }
 
+impl RideInput {
+    /// Returns the train as category and number, such as `ICE 848`, the way booking sites list
+    /// it.
+    pub fn train_name(&self) -> String {
+        format!("{} {}", self.train_label.category, self.train_label.number)
+    }
+}
+
 /// Returns the local date and time of day of a moment in a time zone, or `None` for an unknown
 /// zone.
 fn local_moment(moment: UnixTimeMinutes, time_zone: &str) -> Option<(NaiveDate, NaiveTime)> {

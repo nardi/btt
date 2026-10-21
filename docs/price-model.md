@@ -162,6 +162,20 @@ Which residual should the noise learn from? The residual before the update still
 
 A booking site sometimes returns a price that is no fare, such as a promotion of one euro or a price for part of the trip. One such price should not drag the model far. An observation more than 2.1 standard deviations from the prediction therefore counts as if its noise were large enough to put it at 2.1, and it moves the model by a bounded amount. The model ignores prices below 50 cents, because their logarithm says nothing about a fare.
 
+### Runs that share trains
+
+Two runs on the same day that ride some of the same trains have fares that move together, because the site prices them from the same trains and the same day. A live price for one run therefore says something about the other, beyond what the regression learns about the terms.
+
+The model keeps the last live runs of each day in memory, with the train, the distance and the residual of every ride. When it predicts a run, it compares the run with each kept run of the same day. The shared part $c$ is the sum of $k_A k_B$ over the trains that both runs ride, divided by $K_A K_B$, where $k$ is the distance of one ride and $K$ the distance of the run. Two identical runs give $c = 1$ and runs without a common train give $c = 0$. The covariance of the two fares around the model is
+
+$$
+\operatorname{cov} = c \, \kappa \, \sqrt{\sigma_A^2 \sigma_B^2},
+$$
+
+where $\kappa$ is `common_share` in `price_model.toml`, set by hand to 0.9. The model then does the conditional update of a Gaussian. The gain is $\operatorname{cov} / (\sigma_A^2 + v_A)$, with $v_A$ the variance of the weights at the kept run. The mean of the new run moves by the gain times the residual of the kept run, and its noise variance shrinks by the gain times the covariance. Because $\kappa < 1$, the noise never reaches zero, so a second run on the same trains still gets a range.
+
+Runs of another day or without a common train change nothing. A later price for the same trains and day replaces the earlier one. The model keeps at most `kept_runs` runs and forgets the runs whose day has passed. The price note names the trains that the estimate leans on.
+
 ### Start of the app
 
 The app does not store the posterior. At start, it builds the posterior from three sources in order.
@@ -290,6 +304,10 @@ The shift $k_0$ is set by hand per country, from a tariff where one is known and
 ### Width of the range
 
 The range comes from a normal distribution of the log price. Saver fares give fare distributions with a long tail towards cheap prices, which a symmetric range in log space does not follow. The optimizer decides with the middle of the range, which lies above the median and rises with the uncertainty. A long run with an uncertain prediction can therefore look dearer than two shorter runs, and the optimizer then splits a ticket that one ticket would cover. In countries with fixed tariffs the opposite happens. Most prices hit the tariff and a few lie well off it, so the range holds more than its share.
+
+### Shared trains
+
+The value of `common_share` is a guess and no fit. The model also treats the residual of a kept run as exact, and it learns nothing from runs of past days, since the fares of another day are not the same fares.
 
 ### Prior levels
 

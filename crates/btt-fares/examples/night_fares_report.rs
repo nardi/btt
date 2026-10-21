@@ -56,6 +56,8 @@ fn general_model_error(text: &str) -> Option<f64> {
             category,
             distance_kilometres: kilometres,
             offers_berths: true,
+            train: "",
+            date: None,
         };
         let estimate = model.estimate(&[ride])?;
         errors.push((seat.ln() - estimate.median.ln()).abs());

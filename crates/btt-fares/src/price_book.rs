@@ -1,6 +1,7 @@
 //! The sources that price a single ticket, tried from the most to the least exact.
 
-use btt_model::{EuroCents, Price, PriceKind, PriceSource, RideDescription};
+use btt_model::{EuroCents, Price, PriceKind, PriceSource, RideDescription, RunDescription};
+use chrono::NaiveDate;
 
 use crate::FareData;
 
@@ -19,10 +20,15 @@ pub struct RideFacts<'a> {
     pub distance_kilometres: f64,
     /// Whether the train has couchettes or sleepers.
     pub offers_berths: bool,
+    /// The train as category and number, such as `ICE 848`. Empty when not known.
+    pub train: &'a str,
+    /// The day the train leaves, if known.
+    pub date: Option<NaiveDate>,
 }
 
 impl<'a> RideFacts<'a> {
-    /// Returns the facts of a ride as a live price request describes it.
+    /// Returns the facts of a ride as a live price request describes it. The day is not known
+    /// from the ride alone.
     pub fn of_description(ride: &'a RideDescription) -> Self {
         Self {
             from_country: ride.from_country.as_deref(),
@@ -31,7 +37,21 @@ impl<'a> RideFacts<'a> {
             category: &ride.category,
             distance_kilometres: f64::from(ride.distance_metres) / 1000.0,
             offers_berths: ride.offers_berths,
+            train: &ride.train,
+            date: None,
         }
+    }
+
+    /// Returns the facts of the rides of a run as a live price request describes it, with the
+    /// day of the first departure on every ride.
+    pub fn of_run(run: &'a RunDescription) -> Vec<Self> {
+        run.rides
+            .iter()
+            .map(|ride| Self {
+                date: Some(run.local_departure.date()),
+                ..Self::of_description(ride)
+            })
+            .collect()
     }
 }
 
@@ -131,6 +151,8 @@ mod tests {
             category: "RE",
             distance_kilometres: 30.0,
             offers_berths: false,
+            train: "",
+            date: None,
         }
     }
 

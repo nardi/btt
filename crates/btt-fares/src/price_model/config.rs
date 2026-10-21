@@ -109,6 +109,26 @@ pub(crate) struct Spread {
     pub border_operator: f64,
 }
 
+/// How much a live price for one run says about another run that rides some of the same trains.
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct SharedTrains {
+    /// The share of the variance of a fare around the model that two runs on the same trains
+    /// have in common, when they are the same run. The rest is noise of each run alone. A share
+    /// of 0 leaves the live prices of other runs out.
+    pub common_share: f64,
+    /// The most live runs the model keeps to compare with.
+    pub kept_runs: usize,
+}
+
+impl Default for SharedTrains {
+    fn default() -> Self {
+        Self {
+            common_share: 0.9,
+            kept_runs: 64,
+        }
+    }
+}
+
 /// The prior of the noise of a single fare around the model.
 #[derive(Debug, Clone, Deserialize)]
 pub(crate) struct NoisePrior {
@@ -207,6 +227,9 @@ pub(crate) struct ModelConfig {
     pub reference_kilometres: f64,
     /// The prior of the noise.
     pub noise: NoisePrior,
+    /// How live prices of runs that share trains inform each other.
+    #[serde(default)]
+    pub shared_trains: SharedTrains,
     /// The level that every country starts from.
     pub global: GlobalLevel,
     /// Prior standard deviations of the offsets.
@@ -237,7 +260,9 @@ impl ModelConfig {
                 *category = category.to_lowercase().into();
             }
         }
-        let shares_valid = config.interval_share > 0.0 && config.interval_share < 1.0;
+        let shares_valid = config.interval_share > 0.0
+            && config.interval_share < 1.0
+            && (0.0..1.0).contains(&config.shared_trains.common_share);
         let positive = [
             config.half_life_days,
             config.outlier_limit,
@@ -258,8 +283,9 @@ impl ModelConfig {
         if !shares_valid || !positive {
             return Err(FareDataError::InvalidValue {
                 file: "price_model.toml",
-                message: "the interval share must lie between 0 and 1, and half lives, prices, \
-                          distances and standard deviations must be positive"
+                message: "the interval share must lie between 0 and 1, the common share of \
+                          shared trains from 0 up to 1, and half lives, prices, distances and \
+                          standard deviations must be positive"
                     .to_owned(),
             });
         }

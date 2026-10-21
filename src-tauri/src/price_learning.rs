@@ -24,7 +24,7 @@ pub fn learn_from_lookup(
     outcome: &LiveQuoteOutcome,
 ) -> Option<Price> {
     let run = request.run.as_ref()?;
-    let rides: Vec<RideFacts<'_>> = run.rides.iter().map(RideFacts::of_description).collect();
+    let rides = RideFacts::of_run(run);
     let estimate = state.fare_data.price_model.read().price(&rides);
     if let LiveQuoteOutcome::Quoted { price } = outcome {
         let observation = PriceObservation {

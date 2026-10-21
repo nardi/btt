@@ -28,6 +28,8 @@ fn ride<'a>(
         category,
         distance_kilometres: kilometres,
         offers_berths: false,
+        train: "",
+        date: None,
     }
 }
 
@@ -48,6 +50,7 @@ fn observation(ride: &RideFacts<'_>, euro: f64, looked_up_on: NaiveDate) -> Pric
                 to_country: ride.to_country.map(Into::into),
                 distance_metres,
                 offers_berths: ride.offers_berths,
+                train: ride.train.into(),
             }],
         },
         price: EuroCents::from_euro(euro),
@@ -362,6 +365,8 @@ fn the_table_prices_single_rides_as_the_model_estimates_them() {
                 category,
                 distance_kilometres: kilometres,
                 offers_berths,
+                train: "",
+                date: None,
             }];
             let estimate = model.estimate(&facts).unwrap().median;
             let shift = f64::from(row.shift);
@@ -379,4 +384,97 @@ fn the_table_prices_single_rides_as_the_model_estimates_them() {
             );
         }
     }
+}
+
+/// A German ICE ride with a train name, which leaves on the given day.
+fn named_ride(train: &str, kilometres: f64, date: NaiveDate) -> RideFacts<'_> {
+    RideFacts {
+        train,
+        date: Some(date),
+        ..ride("db-fernverkehr", "ICE", "DE", "DE", kilometres)
+    }
+}
+
+/// Returns the width of the range of an estimate in log space.
+fn log_width(estimate: &PriceEstimate) -> f64 {
+    (estimate.high / estimate.low).ln()
+}
+
+/// A model that has seen a high price for a ride of a named train, and the same model with that
+/// run forgotten, so the two differ only in the shared train term.
+fn models_with_and_without_the_live_run() -> (PriceModel, PriceModel) {
+    let mut with = prior_model();
+    let seen = named_ride("ICE 848", 270.0, day(100));
+    assert!(with.observe(&observation(&seen, 250.0, day(100))));
+    let mut without = with.clone();
+    without.live_runs.clear();
+    (with, without)
+}
+
+#[test]
+fn a_run_on_the_same_train_leans_on_its_live_price() {
+    let (with, without) = models_with_and_without_the_live_run();
+    let run = [
+        named_ride("ICE 848", 270.0, day(100)),
+        named_ride("IC 28470", 50.0, day(100)),
+    ];
+    let leaning = with.estimate(&run).unwrap();
+    let alone = without.estimate(&run).unwrap();
+    assert_eq!(leaning.shared_trains, ["ICE 848"]);
+    assert_eq!(alone.shared_trains, [] as [SmolStr; 0]);
+    // The price was far above the prior, so the median rises and the range narrows.
+    assert!(leaning.median > alone.median);
+    assert!(log_width(&leaning) < 0.9 * log_width(&alone));
+}
+
+#[test]
+fn the_same_run_leans_harder_than_a_run_that_shares_a_small_part() {
+    let (with, without) = models_with_and_without_the_live_run();
+    let same = [named_ride("ICE 848", 270.0, day(100))];
+    let small_share = [
+        named_ride("ICE 848", 270.0, day(100)),
+        named_ride("ICE 1", 700.0, day(100)),
+    ];
+    let narrowing = |run: &[RideFacts<'_>]| {
+        log_width(&with.estimate(run).unwrap()) / log_width(&without.estimate(run).unwrap())
+    };
+    assert!(narrowing(&same) < narrowing(&small_share));
+    assert!(narrowing(&small_share) < 1.0);
+}
+
+#[test]
+fn a_live_price_of_another_day_or_other_trains_changes_nothing() {
+    let (with, without) = models_with_and_without_the_live_run();
+    let next_day = [named_ride("ICE 848", 270.0, day(101))];
+    let other_train = [named_ride("ICE 849", 270.0, day(100))];
+    let unnamed = [ride("db-fernverkehr", "ICE", "DE", "DE", 270.0)];
+    for run in [&next_day[..], &other_train[..], &unnamed[..]] {
+        assert_eq!(with.estimate(run), without.estimate(run));
+    }
+}
+
+#[test]
+fn the_noise_keeps_a_floor_when_the_runs_are_the_same() {
+    let (with, without) = models_with_and_without_the_live_run();
+    let same = [named_ride("ICE 848", 270.0, day(100))];
+    let leaning = with.estimate(&same).unwrap();
+    let alone = without.estimate(&same).unwrap();
+    // A common share below 1 leaves some noise, so the range never collapses.
+    assert!(log_width(&leaning) > 0.2 * log_width(&alone));
+}
+
+#[test]
+fn live_runs_that_have_left_are_forgotten() {
+    let (mut with, _) = models_with_and_without_the_live_run();
+    with.advance_to(day(101));
+    assert!(with.live_runs.is_empty());
+}
+
+#[test]
+fn a_price_for_the_same_trains_and_day_replaces_the_earlier_one() {
+    let mut model = prior_model();
+    let seen = named_ride("ICE 848", 270.0, day(100));
+    model.observe(&observation(&seen, 250.0, day(99)));
+    model.observe(&observation(&seen, 240.0, day(100)));
+    assert_eq!(model.live_runs.len(), 1);
 }

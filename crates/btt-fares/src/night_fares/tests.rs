@@ -153,6 +153,8 @@ fn only_night_trains_of_the_shop_are_priced() {
         category,
         distance_kilometres: kilometres,
         offers_berths: berths,
+        train: "",
+        date: None,
     };
     assert!(source.price_run(&[ride("NJ", 800.0, true)]).is_some());
     // A feeder before the night train does not change who sets the price.
@@ -253,6 +255,8 @@ fn each_operator_is_fitted_to_its_own_offers() {
             category: "ES",
             distance_kilometres: 700.0,
             offers_berths: true,
+            train: "",
+            date: None,
         }])
         .unwrap();
     assert_eq!(price.source.name, "European Sleeper offers");

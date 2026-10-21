@@ -204,6 +204,8 @@ mod tests {
             category: "EC",
             distance_kilometres: 100.0,
             offers_berths: false,
+            train: "",
+            date: None,
         };
         assert!(tariff.price_run(&[ride("CZ", "CZ")]).is_some());
         assert!(tariff.price_run(&[ride("CZ", "AT")]).is_none());

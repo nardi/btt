@@ -1101,6 +1101,11 @@ export type RideDescription = {
 	distance_metres: number,
 	/**  Whether the train has couchettes or sleepers. */
 	offers_berths: boolean,
+	/**
+	 *  The train as category and number, such as `ICE 848`. Empty in prices saved before the app
+	 *  kept it.
+	 */
+	train?: string,
 };
 
 /**  The run of trains that one ticket covers, as the price model reads it. */

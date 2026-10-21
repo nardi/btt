@@ -326,6 +326,10 @@ pub struct RideDescription {
     pub distance_metres: u32,
     /// Whether the train has couchettes or sleepers.
     pub offers_berths: bool,
+    /// The train as category and number, such as `ICE 848`. Empty in prices saved before the app
+    /// kept it.
+    #[serde(default)]
+    pub train: SmolStr,
 }
 
 /// A live price of a ticket, kept so the price model can learn from it.

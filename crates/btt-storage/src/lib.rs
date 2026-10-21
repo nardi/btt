@@ -680,6 +680,7 @@ mod tests {
                     to_country: Some("CH".into()),
                     distance_metres: 95_000,
                     offers_berths: false,
+                    train: "".into(),
                 }],
             },
             price: EuroCents(4210),

@@ -131,6 +131,77 @@ pub struct PriceEstimate {
     pub operator_observations: u32,
     /// The number of live prices the model has learned from for the country of the run.
     pub country_observations: u32,
+    /// The trains of the run that a live price for the same day also covers, such as `ICE 848`.
+    /// The estimate leans on that price. Empty when no such price is known.
+    pub shared_trains: Vec<SmolStr>,
+}
+
+/// One ride of a run that a live price covered, kept to compare with other runs.
+#[derive(Debug, Clone)]
+struct StoredRide {
+    /// The operator as the app names it. Empty when not known.
+    operator: SmolStr,
+    /// Category of the train.
+    category: SmolStr,
+    /// Country of the boarding station, if known.
+    from_country: Option<SmolStr>,
+    /// Country of the alighting station, if known.
+    to_country: Option<SmolStr>,
+    /// Length of the ride along its line, in kilometres.
+    kilometres: f64,
+    /// Whether the train has berths.
+    offers_berths: bool,
+    /// The train as category and number. Empty when not known.
+    train: SmolStr,
+}
+
+impl StoredRide {
+    /// Returns the ride as the facts that the model estimates from.
+    fn facts(&self) -> RideFacts<'_> {
+        RideFacts {
+            from_country: self.from_country.as_deref(),
+            to_country: self.to_country.as_deref(),
+            operator: &self.operator,
+            category: &self.category,
+            distance_kilometres: self.kilometres,
+            offers_berths: self.offers_berths,
+            train: &self.train,
+            date: None,
+        }
+    }
+}
+
+/// A run that a live price covered, kept so that runs on the same trains can lean on its price.
+#[derive(Debug, Clone)]
+struct LiveRun {
+    /// The day of the first departure.
+    date: NaiveDate,
+    /// The rides of the run.
+    rides: Vec<StoredRide>,
+    /// The log of the price in euro.
+    log_price: f64,
+}
+
+/// What a live price of another run changes in the estimate of a run that shares trains with it.
+struct SharedAdjustment {
+    /// The amount to add to the log price.
+    shift: f64,
+    /// The amount to take off the noise variance, because part of the noise is known.
+    noise_reduction: f64,
+    /// The trains that both runs ride.
+    trains: Vec<SmolStr>,
+}
+
+/// An estimate of the log price of a run before the live prices of other runs are taken in.
+struct LogEstimate<'a> {
+    /// What the model reads from the run.
+    summary: RunSummary<'a>,
+    /// The mean of the log price.
+    mean: f64,
+    /// The variance of the mean, from the weights.
+    parameter_variance: f64,
+    /// The variance of a single fare around the mean.
+    noise_variance: f64,
 }
 
 /// The price model with its posterior.
@@ -153,6 +224,8 @@ pub struct PriceModel {
     current_day: Option<NaiveDate>,
     /// The number of standard deviations from the median to each end of the price range.
     interval_half_width: f64,
+    /// The latest runs with named trains that a live price covered, oldest first.
+    live_runs: Vec<LiveRun>,
 }
 
 impl PriceModel {
@@ -172,6 +245,7 @@ impl PriceModel {
             noise: HashMap::new(),
             current_day: None,
             interval_half_width,
+            live_runs: Vec::new(),
         })
     }
 
@@ -394,8 +468,9 @@ impl PriceModel {
             .map_or(0, |&index| self.observation_counts[index])
     }
 
-    /// Estimates the lowest fare of a run, or returns `None` for an empty run.
-    pub fn estimate(&self, rides: &[RideFacts<'_>]) -> Option<PriceEstimate> {
+    /// Estimates the log price of a run from the weights alone, without the live prices of other
+    /// runs, or returns `None` for an empty run.
+    fn log_estimate<'a>(&self, rides: &[RideFacts<'a>]) -> Option<LogEstimate<'a>> {
         let summary = self.run_summary(rides)?;
         let mut known = Vec::new();
         let mut prior_mean = 0.0;
@@ -413,9 +488,86 @@ impl PriceModel {
         }
         let (known_mean, known_variance) = self.posterior.moments(&known);
         let noise_variance = self.noise_variance(&summary);
-        let mean = known_mean + prior_mean;
-        let spread =
-            (known_variance + prior_variance + noise_variance).sqrt() * self.interval_half_width;
+        Some(LogEstimate {
+            mean: known_mean + prior_mean,
+            parameter_variance: known_variance + prior_variance,
+            noise_variance,
+            summary,
+        })
+    }
+
+    /// Returns what the live price of another run on the same day changes in the estimate of a
+    /// run, when the two ride some of the same trains. Of all such runs, the one that shares the
+    /// most distance counts.
+    ///
+    /// Fares of a train and a day move together, because the saver fares of a train sell out
+    /// together. The noise of a fare around the model therefore has a part that two runs on the
+    /// same trains have in common. The part grows with the share of their distance that rides the
+    /// same trains, and the covariance of the two noises is that share of the common part of
+    /// their variances. The other run's residual, the log of its live price over what the model
+    /// now predicts for it, then tells the mean of this run's noise. It also takes away the part
+    /// of the variance that the covariance explains.
+    fn shared_adjustment(
+        &self,
+        rides: &[RideFacts<'_>],
+        estimate: &LogEstimate<'_>,
+    ) -> Option<SharedAdjustment> {
+        let common_share = self.config.shared_trains.common_share;
+        let date = rides.first()?.date?;
+        let own_kilometres = estimate.summary.kilometres;
+        if common_share <= 0.0 || own_kilometres <= 0.0 {
+            return None;
+        }
+        let mut best: Option<(f64, &LiveRun, Vec<SmolStr>)> = None;
+        for run in self.live_runs.iter().filter(|run| run.date == date) {
+            let run_kilometres: f64 = run.rides.iter().map(|ride| ride.kilometres).sum();
+            if run_kilometres <= 0.0 {
+                continue;
+            }
+            let mut overlap = 0.0;
+            let mut trains = Vec::new();
+            for ride in rides.iter().filter(|ride| !ride.train.is_empty()) {
+                if let Some(other) = run.rides.iter().find(|other| other.train == ride.train) {
+                    overlap += ride.distance_kilometres * other.kilometres;
+                    trains.push(SmolStr::from(ride.train));
+                }
+            }
+            let share = overlap / (run_kilometres * own_kilometres);
+            // A later run wins a tie, because the live runs are in the order they were learned.
+            if share > 0.0 && best.as_ref().is_none_or(|&(most, ..)| share >= most) {
+                best = Some((share, run, trains));
+            }
+        }
+        let (share, run, trains) = best?;
+        let other_facts: Vec<RideFacts<'_>> = run.rides.iter().map(StoredRide::facts).collect();
+        let other = self.log_estimate(&other_facts)?;
+        let residual = run.log_price - other.mean;
+        let covariance =
+            share.min(1.0) * common_share * (estimate.noise_variance * other.noise_variance).sqrt();
+        let gain = covariance / (other.noise_variance + other.parameter_variance);
+        Some(SharedAdjustment {
+            shift: gain * residual,
+            noise_reduction: gain * covariance,
+            trains,
+        })
+    }
+
+    /// Estimates the lowest fare of a run, or returns `None` for an empty run.
+    pub fn estimate(&self, rides: &[RideFacts<'_>]) -> Option<PriceEstimate> {
+        let log = self.log_estimate(rides)?;
+        let adjustment = self.shared_adjustment(rides, &log);
+        let (shift, noise_reduction, shared_trains) =
+            adjustment.map_or((0.0, 0.0, Vec::new()), |adjustment| {
+                (
+                    adjustment.shift,
+                    adjustment.noise_reduction,
+                    adjustment.trains,
+                )
+            });
+        let mean = log.mean + shift;
+        let noise_variance = log.noise_variance - noise_reduction;
+        let spread = (log.parameter_variance + noise_variance).sqrt() * self.interval_half_width;
+        let summary = log.summary;
         Some(PriceEstimate {
             median: mean.exp(),
             low: (mean - spread).exp(),
@@ -426,6 +578,7 @@ impl PriceModel {
                 self.count_of(&Feature::Country(country.clone()))
             }),
             country: summary.country,
+            shared_trains,
         })
     }
 
@@ -450,6 +603,14 @@ impl PriceModel {
             )
         } else {
             "It has no live prices for this country yet, so the range is wide.".to_owned()
+        };
+        let basis = if estimate.shared_trains.is_empty() {
+            basis
+        } else {
+            format!(
+                "{basis} It also leans on a live price for {} on the same day.",
+                estimate.shared_trains.join(" and ")
+            )
         };
         Some(Price {
             low: EuroCents::from_euro(estimate.low),
@@ -505,6 +666,8 @@ impl PriceModel {
             noise.weight *= data_weight;
         }
         self.current_day = Some(day);
+        // A run that left before this day can no longer inform the estimate of a run to buy.
+        self.live_runs.retain(|run| run.date >= day);
     }
 
     /// Learns from a live price. Returns whether the model used it. It leaves out prices that
@@ -560,7 +723,51 @@ impl PriceModel {
         for &(index, _) in &sparse {
             self.observation_counts[index] += 1;
         }
+        self.keep_live_run(observation, log_price);
         true
+    }
+
+    /// Keeps the run of a live price to compare with other runs, when the app named its trains.
+    /// A price for the same trains on the same day replaces the earlier one. The model keeps
+    /// the latest `kept_runs` runs.
+    fn keep_live_run(&mut self, observation: &PriceObservation, log_price: f64) {
+        let rides: Vec<StoredRide> = observation
+            .run
+            .rides
+            .iter()
+            .map(|ride| StoredRide {
+                operator: ride.operator.clone(),
+                category: ride.category.clone(),
+                from_country: ride.from_country.clone(),
+                to_country: ride.to_country.clone(),
+                kilometres: f64::from(ride.distance_metres) / 1000.0,
+                offers_berths: ride.offers_berths,
+                train: ride.train.clone(),
+            })
+            .collect();
+        if rides.iter().all(|ride| ride.train.is_empty()) {
+            return;
+        }
+        let date = observation.run.local_departure.date();
+        let same_trains = |run: &LiveRun| {
+            run.date == date
+                && run.rides.len() == rides.len()
+                && run
+                    .rides
+                    .iter()
+                    .zip(&rides)
+                    .all(|(a, b)| a.train == b.train)
+        };
+        self.live_runs.retain(|run| !same_trains(run));
+        self.live_runs.push(LiveRun {
+            date,
+            rides,
+            log_price,
+        });
+        let kept = self.config.shared_trains.kept_runs;
+        if self.live_runs.len() > kept {
+            self.live_runs.drain(..self.live_runs.len() - kept);
+        }
     }
 }
 

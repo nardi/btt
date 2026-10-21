@@ -294,6 +294,7 @@ impl<'a> Problem<'a> {
                 _ => days.push(index..index + 1),
             }
         }
+        let train_names: Vec<String> = rides.iter().map(RideInput::train_name).collect();
         let mut run_prices = Vec::with_capacity(rides.len());
         for day in &days {
             for first in day.clone() {
@@ -301,13 +302,16 @@ impl<'a> Problem<'a> {
                     .map(|last| {
                         let facts: Vec<RideFacts<'_>> = rides[first..=last]
                             .iter()
-                            .map(|ride| RideFacts {
+                            .zip(&train_names[first..=last])
+                            .map(|(ride, train)| RideFacts {
                                 from_country: ride.from_country.as_deref(),
                                 to_country: ride.to_country.as_deref(),
                                 operator: &ride.train_label.operator,
                                 category: &ride.train_label.category,
                                 distance_kilometres: ride.distance_kilometres,
                                 offers_berths: ride.offers_berths,
+                                train,
+                                date: Some(ride.departure_date),
                             })
                             .collect();
                         scaled(&book.price_run(&facts), settings.single_ticket_percent)
@@ -925,12 +929,7 @@ impl<'a> Problem<'a> {
                 booking_link: link.url.clone(),
                 first_departure_time: first.departure_time,
                 ride_count: u8::try_from(rides.len()).unwrap_or(u8::MAX),
-                train_labels: rides
-                    .iter()
-                    .map(|ride| {
-                        format!("{} {}", ride.train_label.category, ride.train_label.number).into()
-                    })
-                    .collect(),
+                train_labels: rides.iter().map(|ride| ride.train_name().into()).collect(),
                 travel_class: self.settings.class,
                 site_search,
                 run: self.run_description(rides),
@@ -962,6 +961,7 @@ impl<'a> Problem<'a> {
                     #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                     distance_metres: (ride.distance_kilometres * 1000.0).round() as u32,
                     offers_berths: ride.offers_berths,
+                    train: ride.train_name().into(),
                 })
                 .collect(),
         })

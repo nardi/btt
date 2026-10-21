@@ -256,6 +256,8 @@ impl Brute<'_> {
                 category: &ride.train_label.category,
                 distance_kilometres: ride.distance_kilometres,
                 offers_berths: ride.offers_berths,
+                train: "",
+                date: None,
             })
             .collect();
         u64::from(self.book.price_run(&facts).middle().0)
@@ -834,6 +836,8 @@ fn a_night_ride_costs_the_accommodation_on_a_pass_and_the_extra_over_the_seat_wi
         category: "NJ",
         distance_kilometres: 770.0,
         offers_berths: true,
+        train: "",
+        date: None,
     }]);
     assert_eq!(ticket.source.name, "ÖBB night train offers");
     assert!(ticket.high.0 < 20_000, "{ticket:?}");

@@ -34,6 +34,14 @@ prior_weight = 20.0
 kind_weight = 10.0
 operator_weight = 10.0
 
+# How the live price of one run informs another run on the same day that rides some of the same
+# trains. The common share is the share of the noise variance that two identical runs have in
+# common. It is set by hand, because the seed holds no pairs of runs on the same trains. The
+# model keeps the latest kept_runs runs to compare with.
+[shared_trains]
+common_share = 0.9
+kept_runs = 64
+
 # The level that every country starts from: the price per kilometre of a slope of 1, so
 # `euro_per_kilometre × (km + shift)`. This is a lowest fare between a saver fare and a regional
 # fare, and the terms below move away from it.
