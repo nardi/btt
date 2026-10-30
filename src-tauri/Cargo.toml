@@ -11,6 +11,10 @@ license-file.workspace = true
 name = "btt_app_lib"
 crate-type = ["rlib"]
 
+[features]
+# The portable build asks on first launch where to keep the data.
+portable-build = []
+
 [build-dependencies]
 tauri-build.workspace = true
 

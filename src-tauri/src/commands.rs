@@ -68,6 +68,12 @@ pub enum CommandError {
         /// Description of the failure.
         message: String,
     },
+    /// Saving the data location failed, or the new folder is not writable.
+    #[error("changing the data location failed: {message}")]
+    DataLocation {
+        /// Description of the failure.
+        message: String,
+    },
 }
 
 impl From<btt_storage::StorageError> for CommandError {

@@ -58,6 +58,9 @@ export function commandErrorMessage(error: CommandError): string {
   if (error.Timetable !== undefined) {
     return `Timetable failed: ${error.Timetable.message}`;
   }
+  if (error.DataLocation !== undefined) {
+    return `Changing the data location failed: ${error.DataLocation.message}`;
+  }
   return `Place search failed: ${error.PlaceSearch.message}`;
 }
 
