@@ -83,8 +83,8 @@
     } else if (result.error === "TripTooLargeForLink") {
       link = null;
       linkProblem = includeAlternatives
-        ? "This trip is too big for a link with its alternatives. Leave them out, or save the trip as a file."
-        : "This trip is too big for a link. Save it as a file and send the file instead.";
+        ? "Too big for a link with alternatives. Leave them out or save as a file."
+        : "Too big for a link. Save as a file instead.";
     } else {
       link = null;
       linkProblem = commandErrorMessage(result.error);
@@ -101,7 +101,7 @@
       await navigator.clipboard.writeText(link.url);
       message = "Link copied.";
     } catch {
-      message = "The link could not be copied. Select it and copy it by hand.";
+      message = "Could not copy. Select the link and copy it by hand.";
     }
   }
 
@@ -121,9 +121,9 @@
         throw new Error("no picture");
       }
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-      message = "QR code copied as a picture.";
+      message = "QR code copied.";
     } catch {
-      message = "The QR code could not be copied. Scan it from the screen instead.";
+      message = "Could not copy the QR code.";
     }
   }
 
@@ -143,19 +143,13 @@
 <div class="backdrop" role="presentation">
   <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="share-title">
     <h2 id="share-title">Share this trip</h2>
-    <p>
-      Anyone with the link, the QR code or the file can read the whole trip: the places, the dates
-      and the journeys. The link and the QR code can leave out the price estimates and the names of
-      the places, but the file always holds them. None of them holds traveller names or ages. The link carries the trip
-      after the # sign, which browsers never send to a server.
-    </p>
+    <p>Anyone with the link, QR code or file can read the trip. Traveller names and ages are not included.</p>
 
     {#if shared.unfinishedLegs === 0}
       <div class="options">
         <label class="option">
           <input type="checkbox" bind:checked={compact} onchange={() => void writeLink()} />
-          Compact link. It has less than half the characters, in letters of many scripts. Some apps
-          show it longer, because a browser keeps those letters as codes.
+          Compact link (~50% size reduction)
         </label>
         <label class="option">
           <input
@@ -163,11 +157,11 @@
             bind:checked={includeAlternatives}
             onchange={() => void writeLink()}
           />
-          Include the alternative journeys of every leg. The link gets about three times as long.
+          Include alternative journeys (~3x larger)
         </label>
         <label class="option">
           <input type="checkbox" bind:checked={includePrices} onchange={() => void writeLink()} />
-          Include the price estimates. Leaving them out makes the link and the QR code smaller.
+          Include price estimates
         </label>
         <label class="option">
           <input
@@ -175,8 +169,7 @@
             bind:checked={namePlacesByStation}
             onchange={() => void writeLink()}
           />
-          Name the places by their nearest station. Places that have the name of a well-known city
-          keep it, because that is shorter.
+          Name places by nearest station
         </label>
       </div>
     {/if}
@@ -184,7 +177,7 @@
     {#if shared.unfinishedLegs > 0}
       <p class="message">
         {shared.unfinishedLegs === 1 ? "One leg is" : `${shared.unfinishedLegs} legs are`} still being planned.
-        Share the trip once the planner is done, so it holds every journey.
+        Share the trip once planning is done.
       </p>
     {:else if link !== null}
       <label class="link">
@@ -194,21 +187,18 @@
       <p class="size">{formatCharacters(link.link_characters)} characters.</p>
       {#if link.long_for_messengers}
         <p class="message">
-          This link is long, and some messengers cut long links. A cut link says so when it opens,
-          but you may prefer to send the file.
+          This link is long. Some messengers cut long links, so a file may be safer.
         </p>
       {/if}
       {#if qrCode !== null}
         <div class="qr">
           <QrCode matrix={qrCode} label="QR code of the trip" />
-          <p class="size">
-            Scan it with the camera of a phone. Version {qrCode.version}, {qrCode.size} by {qrCode.size} modules.
-          </p>
-          <button type="button" onclick={copyQrCode}>Copy the QR code as a picture</button>
+          <p class="size">Scan it with a phone camera.</p>
+          <button type="button" onclick={copyQrCode}>Copy QR code</button>
         </div>
       {:else}
         <p class="message">
-          This trip is too big for a QR code that scans well from a screen.
+          Too big for a QR code.
           {includeAlternatives ? "Leave out the alternatives for a smaller code." : "Send the link or the file."}
         </p>
       {/if}
