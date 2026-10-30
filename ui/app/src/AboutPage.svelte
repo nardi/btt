@@ -1,17 +1,46 @@
 <script lang="ts">
   // What the app is, which requests it makes and where its data comes from.
-  import { commands, type FeedCredit } from "@btt/shared/bindings";
+  import { commands, type DataLocationStatus, type FeedCredit } from "@btt/shared/bindings";
   import Icon from "@btt/shared/components/Icon.svelte";
   import { onMount } from "svelte";
+  import { commandErrorMessage } from "./tauri-trip-source.svelte";
 
   let { onClose }: { onClose: () => void } = $props();
 
   /** The feeds of the installed timetable, or `null` until the backend answered. */
   let feeds: FeedCredit[] | null = $state(null);
 
+  /** Whether the data sits next to the app, or `null` until the backend answered. */
+  let locationStatus: DataLocationStatus | null = $state(null);
+
+  /** The message of the last failed change of the data location. */
+  let locationMessage: string | null = $state(null);
+
   onMount(async () => {
     feeds = await commands.timetableFeeds();
+    await loadLocationStatus();
   });
+
+  /** Loads whether the data sits next to the app and whether a restart is pending. */
+  async function loadLocationStatus() {
+    const result = await commands.dataLocationStatus();
+    if (result.status === "ok") {
+      locationStatus = result.data;
+    } else {
+      locationMessage = commandErrorMessage(result.error);
+    }
+  }
+
+  /** Saves portable mode. The data moves at the next start, so the page offers a restart. */
+  async function setPortable(enabled: boolean) {
+    const result = await commands.setPortableMode(enabled);
+    if (result.status === "error") {
+      locationMessage = commandErrorMessage(result.error);
+    } else {
+      locationMessage = null;
+    }
+    await loadLocationStatus();
+  }
 
   /** Returns the address of a feed when it is a web address the page may link to. */
   function safeAddress(address: string): string | null {
@@ -86,6 +115,31 @@
     <a href="https://openfreemap.org" rel="noopener noreferrer" target="_blank">OpenFreeMap</a>.
   </p>
 
+  <h2>Data location</h2>
+  {#if locationStatus === null}
+    <p class="muted">Loading the data location.</p>
+  {:else}
+    <label class="option">
+      <input
+        type="checkbox"
+        checked={locationStatus.portable}
+        onchange={(event) => void setPortable(event.currentTarget.checked)}
+      />
+      Portable mode
+    </label>
+    <p>
+      In portable mode, the trips, travellers and timetable go into a folder named
+      <code>data</code> beside the app. Without it, they stay in your user profile.
+    </p>
+    {#if locationStatus.restart_pending}
+      <p>The data moves when the app restarts.</p>
+      <button type="button" onclick={() => void commands.restartApp()}>Restart now</button>
+    {/if}
+  {/if}
+  {#if locationMessage !== null}
+    <p class="message" role="alert">{locationMessage}</p>
+  {/if}
+
   <h2>Use of the data</h2>
   <p>
     The data is for personal and non-commercial use. Prices are estimates, and they can differ
@@ -134,7 +188,15 @@
     font-weight: 600;
   }
 
-  .muted {
+  .muted,
+  .message {
     color: var(--color-text-muted);
+    overflow-wrap: anywhere;
+  }
+
+  .option {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
   }
 </style>

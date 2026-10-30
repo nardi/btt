@@ -22,6 +22,18 @@ BigTrainTrip (BTT) is a desktop app for planning a train trip that visits severa
 
 Download an installer from the [releases page](https://github.com/nardi/btt/releases). There are installers for Windows, macOS and Linux. They are not signed, so Windows and macOS will ask you to confirm that you want to open them.
 
+### Portable version
+
+The releases page also has a portable archive for each system. It needs no installation and no admin rights, so it can run from a USB stick or from a folder you cannot install into. Unpack the archive and start `BigTrainTrip` (`BigTrainTrip.exe` on Windows).
+
+On first launch, the portable version asks where to keep your data. Next to the app, the trips, travellers and timetable go into a `data` folder beside the app, so you can copy that folder to take everything to another computer. In your user profile, the data stays with your user account, as it does in the installed version.
+
+You can change the choice on the About page, where the setting is called portable mode. The data moves when the app restarts. The old copy stays where it was, so you can switch back at any time.
+
+The installed version has the same setting. Portable mode needs a folder that the app can write to, so it fails in a folder such as `Program Files`.
+
+The web view of the operating system keeps its own cache and cookies in your user profile, for example the cookies of a booking site you opened from the app. The app also keeps a small settings file in your user profile, which records the choice of portable mode. Windows needs the WebView2 runtime, which Windows 11 and recent Windows 10 builds include. The Linux archive needs WebKitGTK 4.1 installed, for example the `libwebkit2gtk-4.1-0` package on Debian and Ubuntu.
+
 ### Why?
 
 Booking sites answer one question at a time, such as "when is the next train from Amsterdam to Vienna?". A trip across Europe is a chain of those questions, and the answers depend on each other. A late arrival in one city can make a night train in the next one impossible, and a cheap ticket on the wrong day can cost you a night in a hotel. BTT looks at the chain as a whole, so that you compare complete trips instead of single connections.

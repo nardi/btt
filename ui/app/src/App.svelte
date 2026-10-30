@@ -33,6 +33,7 @@
   import AboutPage from "./AboutPage.svelte";
   import ProblemReportDialog from "./ProblemReportDialog.svelte";
   import ShareDialog from "./ShareDialog.svelte";
+  import PortableModeDialog from "./PortableModeDialog.svelte";
   import TimetableCoverageWarning from "./TimetableCoverageWarning.svelte";
   import TimetableDialog from "./TimetableDialog.svelte";
   import TripList from "./TripList.svelte";
@@ -49,6 +50,9 @@
   let showTimetable = $state(false);
   /** Whether the about screen replaces the trip list or the open trip. */
   let showAbout = $state(false);
+
+  /** Whether the first-launch question about the data location is open. */
+  let showPortableQuestion = $state(false);
   /** The operators whose trains stop before the end of the timetable the planner uses. */
   let operatorEnds: OperatorEndDate[] = $state([]);
   /** The day the open trip reaches its destination, by the plan where there is one. */
@@ -376,16 +380,29 @@
     }
   }
 
+  /** Opens the first-launch question when the portable build has not asked it yet. */
+  async function checkPortableQuestion() {
+    const location = await commands.dataLocationStatus();
+    if (location.status === "ok" && location.data.question_pending) {
+      showPortableQuestion = true;
+    }
+  }
+
   onMount(() => {
     void refreshTrips();
     void refreshTravellers();
     void startTimetableUpdates();
+    void checkPortableQuestion();
   });
 </script>
 
 <svelte:window onkeydown={handleHistoryShortcut} />
 
 <main class:trip-open={openSource !== null && !showAbout}>
+  {#if showPortableQuestion}
+    <PortableModeDialog onAnswered={() => (showPortableQuestion = false)} />
+  {/if}
+
   {#if timetableStatus !== null && (showTimetable || timetableStatus.installed === null)}
     <TimetableDialog
       status={timetableStatus}

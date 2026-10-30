@@ -189,6 +189,12 @@ export const commands = {
 	downloadTimetable: (progress: Channel<DownloadProgress>) => typedError<TimetableStatus, CommandError>(__TAURI_INVOKE("download_timetable", { progress })),
 	/**  Turns the check for a newer timetable on startup on or off. */
 	setTimetableChecks: (enabled: boolean) => typedError<null, CommandError>(__TAURI_INVOKE("set_timetable_checks", { enabled })),
+	/**  Returns what the app knows about the data location. */
+	dataLocationStatus: () => typedError<DataLocationStatus, CommandError>(__TAURI_INVOKE("data_location_status")),
+	/**  Saves whether the data sits next to the app. The data moves at the next start. */
+	setPortableMode: (enabled: boolean) => typedError<null, CommandError>(__TAURI_INVOKE("set_portable_mode", { enabled })),
+	/**  Restarts the app, so that a changed data location takes effect. */
+	restartApp: () => __TAURI_INVOKE<void>("restart_app"),
 };
 
 /* Types */
@@ -293,40 +299,45 @@ export type ChosenJourney = {
 /**  Errors a command returns to the frontend. */
 export type CommandError = 
 /**  No trip with this ID exists. */
-({ TripNotFound: TripId }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripNotOpen?: never } | 
+({ TripNotFound: TripId }) & { DataLocation?: never; InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripNotOpen?: never } | 
 /**  The frontend edited a trip it has not opened. */
-({ TripNotOpen: TripId }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripNotFound?: never } | 
+({ TripNotOpen: TripId }) & { DataLocation?: never; InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripNotFound?: never } | 
 /**  The edit does not fit the trip. */
-({ InvalidEdit: TripEditError }) & { PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
+({ InvalidEdit: TripEditError }) & { DataLocation?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
 /**  Reading or writing the database failed. */
 ({ Storage: {
 	/**  Description of the failure. */
 	message: string,
-} }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
+} }) & { DataLocation?: never; InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
 /**  The place search service failed or could not be reached. */
 ({ PlaceSearch: {
 	/**  Description of the failure. */
 	message: string,
-} }) & { InvalidEdit?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
+} }) & { DataLocation?: never; InvalidEdit?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
 /**  The trip has more journeys than a link can carry. */
 "TripTooLargeForLink" | 
 /**  Writing the link or the trip file failed. */
 ({ Sharing: {
 	/**  Description of the failure. */
 	message: string,
-} }) & { InvalidEdit?: never; PlaceSearch?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
+} }) & { DataLocation?: never; InvalidEdit?: never; PlaceSearch?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
 /**  The start date of a trip lies outside the days the timetable covers. */
 ({ StartDateOutsideTimetable: {
 	/**  First day the timetable covers. */
 	first: string,
 	/**  Last day the timetable covers. */
 	last: string,
-} }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; Storage?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
+} }) & { DataLocation?: never; InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; Storage?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
 /**  Downloading or installing a timetable failed. */
 ({ Timetable: {
 	/**  Description of the failure. */
 	message: string,
-} }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; TripNotFound?: never; TripNotOpen?: never };
+} }) & { DataLocation?: never; InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; TripNotFound?: never; TripNotOpen?: never } | 
+/**  Saving the data location failed, or the new folder is not writable. */
+({ DataLocation: {
+	/**  Description of the failure. */
+	message: string,
+} }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never };
 
 /**
  *  A time window that recurs on every travel day, such as 08:00 to 12:00.
@@ -344,6 +355,16 @@ export type DailyTimeWindow = {
 
 /**  The length of a daily time window, from one minute to a whole day. */
 export type DailyWindowLength = number;
+
+/**  What the settings page and the first-launch question need to know about the data location. */
+export type DataLocationStatus = {
+	/**  Whether the portable build still has to ask where to keep the data. */
+	question_pending: boolean,
+	/**  Whether the data sits next to the app. */
+	portable: boolean,
+	/**  Whether the app must restart before a changed location takes effect. */
+	restart_pending: boolean,
+};
 
 /**  A discount card that lowers the price of single tickets. */
 export type DiscountCard = 

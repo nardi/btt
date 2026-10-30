@@ -5,6 +5,7 @@ mod booking_page;
 mod commands;
 mod log_buffer;
 mod place_naming;
+mod portable;
 mod price_learning;
 mod price_seed;
 pub mod pricing;
@@ -64,6 +65,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             timetable_updates::timetable_feeds,
             timetable_updates::download_timetable,
             timetable_updates::set_timetable_checks,
+            portable::data_location_status,
+            portable::set_portable_mode,
+            portable::restart_app,
         ])
         // The viewer reads the file of a shared trip, which no command returns.
         .typ::<btt_model::StoredSnapshot>()
@@ -112,10 +116,18 @@ pub fn run() {
             specta_builder.mount_events(app);
             // A development override lets a test start with no timetable and no trips, without
             // touching the real data. It must be an absolute path, because the working directory
-            // of the app differs between `tauri dev` and an installed app.
-            let data_directory = match std::env::var_os(DATA_DIRECTORY_VARIABLE) {
-                Some(path) => std::path::PathBuf::from(path),
-                None => app.path().app_data_dir()?,
+            // of the app differs between `tauri dev` and an installed app. Without the override,
+            // the data location comes from the setting of portable mode.
+            let data_directory = if let Some(path) = std::env::var_os(DATA_DIRECTORY_VARIABLE) {
+                std::path::PathBuf::from(path)
+            } else {
+                let configuration_directory = app.path().app_config_dir()?;
+                let location = portable::load_settings(&configuration_directory);
+                let data_directory =
+                    portable::data_directory(&location, &app.path().app_data_dir()?)?;
+                // The data of a changed location is copied before the database opens.
+                portable::apply_pending_move(&configuration_directory, &data_directory)?;
+                data_directory
             };
             std::fs::create_dir_all(&data_directory)?;
             let storage = Storage::open(&data_directory.join("btt.sqlite3"))?;
