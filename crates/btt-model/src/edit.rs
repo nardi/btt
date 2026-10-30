@@ -348,46 +348,63 @@ impl Trip {
             TripEdit::ChooseJourney {
                 arrival_place_id,
                 choice,
-            } => {
-                let layout = ItineraryLayout::from_itinerary(&self.itinerary);
-                let index = layout.index_of(arrival_place_id)?;
-                let Some(previous_index) = index.checked_sub(1) else {
-                    return Err(TripEditError::PlaceHasNoArrivingLeg(arrival_place_id));
-                };
-                let departure_place_id = layout.places[previous_index].id;
-                self.chosen_journeys
-                    .retain(|chosen| chosen.arrival_place_id != arrival_place_id);
-                if let Some(choice) = choice {
-                    self.chosen_journeys.push(ChosenJourney {
-                        departure_place_id,
-                        arrival_place_id,
-                        choice: *choice,
-                    });
-                }
-                Ok(TripEditNotices::new())
-            }
+            } => self.choose_journey(arrival_place_id, choice),
             TripEdit::SetLegMinimumTransferTime {
                 arrival_place_id,
                 minimum_transfer_time,
-            } => {
-                let layout = ItineraryLayout::from_itinerary(&self.itinerary);
-                let index = layout.index_of(arrival_place_id)?;
-                let Some(previous_index) = index.checked_sub(1) else {
-                    return Err(TripEditError::PlaceHasNoArrivingLeg(arrival_place_id));
-                };
-                let departure_place_id = layout.places[previous_index].id;
-                self.leg_transfer_overrides
-                    .retain(|leg| leg.arrival_place_id != arrival_place_id);
-                if let Some(minimum_transfer_time) = minimum_transfer_time {
-                    self.leg_transfer_overrides.push(LegTransferOverride {
-                        departure_place_id,
-                        arrival_place_id,
-                        minimum_transfer_time,
-                    });
-                }
-                Ok(TripEditNotices::new())
-            }
+            } => self.set_leg_minimum_transfer_time(arrival_place_id, minimum_transfer_time),
         }
+    }
+
+    /// Returns the place that the leg arriving at `arrival_place_id` departs from.
+    fn departure_place_id_of_leg(
+        &self,
+        arrival_place_id: TripPlaceId,
+    ) -> Result<TripPlaceId, TripEditError> {
+        let layout = ItineraryLayout::from_itinerary(&self.itinerary);
+        let index = layout.index_of(arrival_place_id)?;
+        let Some(previous_index) = index.checked_sub(1) else {
+            return Err(TripEditError::PlaceHasNoArrivingLeg(arrival_place_id));
+        };
+        Ok(layout.places[previous_index].id)
+    }
+
+    /// Replaces the chosen journey of a leg, or removes it when `choice` is `None`.
+    fn choose_journey(
+        &mut self,
+        arrival_place_id: TripPlaceId,
+        choice: Option<Box<JourneyChoice>>,
+    ) -> Result<TripEditNotices, TripEditError> {
+        let departure_place_id = self.departure_place_id_of_leg(arrival_place_id)?;
+        self.chosen_journeys
+            .retain(|chosen| chosen.arrival_place_id != arrival_place_id);
+        if let Some(choice) = choice {
+            self.chosen_journeys.push(ChosenJourney {
+                departure_place_id,
+                arrival_place_id,
+                choice: *choice,
+            });
+        }
+        Ok(TripEditNotices::new())
+    }
+
+    /// Replaces the minimum transfer time of a leg, or removes it when it is `None`.
+    fn set_leg_minimum_transfer_time(
+        &mut self,
+        arrival_place_id: TripPlaceId,
+        minimum_transfer_time: Option<DurationMinutes>,
+    ) -> Result<TripEditNotices, TripEditError> {
+        let departure_place_id = self.departure_place_id_of_leg(arrival_place_id)?;
+        self.leg_transfer_overrides
+            .retain(|leg| leg.arrival_place_id != arrival_place_id);
+        if let Some(minimum_transfer_time) = minimum_transfer_time {
+            self.leg_transfer_overrides.push(LegTransferOverride {
+                departure_place_id,
+                arrival_place_id,
+                minimum_transfer_time,
+            });
+        }
+        Ok(TripEditNotices::new())
     }
 
     /// Drops the journey choices and transfer time overrides of legs that no longer exist, such
