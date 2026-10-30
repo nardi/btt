@@ -1,0 +1,8 @@
+This file turns on portable mode for BigTrainTrip.
+
+While it sits next to the app, the app keeps your trips, travellers and timetable in the
+folder "data" next to it, instead of in your user profile. To move BigTrainTrip to another
+computer or a USB stick, copy the whole folder.
+
+Delete this file to go back to the normal behaviour. The app then uses your user profile and
+ignores the folder "data".

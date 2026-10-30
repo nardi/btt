@@ -83,6 +83,73 @@ jobs:
         with:
           releaseId: ${{ needs.draft.outputs.release_id }}
 
+  # A portable build is the app without an installer, next to a `portable.txt` that makes it keep
+  # its data in a `data` folder beside it. It needs no installation and no admin rights.
+  portable:
+    name: Portable build for ${{ matrix.os }}
+    needs: draft
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system libraries for Tauri
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libssl-dev \
+            libayatana-appindicator3-dev librsvg2-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # Windows and Linux get the bare executable. macOS needs the `.app` bundle to run at all.
+      - name: Build the app
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            npx tauri build --bundles app
+          else
+            npx tauri build --no-bundle
+          fi
+      - name: Pack the portable folder
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          folder="BigTrainTrip-$version-portable"
+          mkdir "$folder"
+          cp src-tauri/portable/portable.txt "$folder/"
+          case "$RUNNER_OS" in
+            Windows)
+              cp target/release/btt-app.exe "$folder/BigTrainTrip.exe"
+              7z a "$folder-windows.zip" "$folder"
+              echo "ARCHIVE=$folder-windows.zip" >> "$GITHUB_ENV"
+              ;;
+            Linux)
+              cp target/release/btt-app "$folder/BigTrainTrip"
+              tar -czf "$folder-linux.tar.gz" "$folder"
+              echo "ARCHIVE=$folder-linux.tar.gz" >> "$GITHUB_ENV"
+              ;;
+            macOS)
+              # `ditto` keeps the permissions and the extended attributes that the bundle needs.
+              ditto target/release/bundle/macos/BigTrainTrip.app "$folder/BigTrainTrip.app"
+              ditto -c -k --keepParent "$folder" "$folder-macos.zip"
+              echo "ARCHIVE=$folder-macos.zip" >> "$GITHUB_ENV"
+              ;;
+          esac
+      - name: Upload to the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" "$ARCHIVE" --repo "$GITHUB_REPOSITORY"
+
   # The viewer goes live at tag time, while the release is still a draft. That way the live
   # viewer reads the schema the new app writes before anyone can install the app.
   viewer:

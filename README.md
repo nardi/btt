@@ -22,6 +22,16 @@ BigTrainTrip (BTT) is a desktop app for planning a train trip that visits severa
 
 Download an installer from the [releases page](https://github.com/nardi/btt/releases). There are installers for Windows, macOS and Linux. They are not signed, so Windows and macOS will ask you to confirm that you want to open them.
 
+### Portable version
+
+The releases page also has a portable archive for each system. It needs no installation and no admin rights, so it runs from a USB stick or a folder you cannot install into. Unpack the archive and start `BigTrainTrip` (`BigTrainTrip.exe` on Windows).
+
+The archive holds a file called `portable.txt` next to the app. While that file is there, the app keeps your trips, travellers, timetable and learned prices in a `data` folder beside it, and it leaves your user profile alone. To move to another computer, copy the whole folder. If you delete `portable.txt`, the app goes back to your user profile and ignores the `data` folder.
+
+The installed app can become portable too. Put an empty `portable.txt` next to the executable, next to the `.app` bundle on macOS, or next to the `.AppImage` file on Linux.
+
+The web view of the operating system still keeps its own cache and cookies in your user profile, for example the cookies of a booking site you opened from the app. Windows needs the WebView2 runtime, which Windows 11 and recent Windows 10 builds include. The Linux archive needs WebKitGTK 4.1 to be installed, for example the `libwebkit2gtk-4.1-0` package on Debian and Ubuntu.
+
 ### Why?
 
 Booking sites answer one question at a time, such as "when is the next train from Amsterdam to Vienna?". A trip across Europe is a chain of those questions, and the answers depend on each other. A late arrival in one city can make a night train in the next one impossible, and a cheap ticket on the wrong day can cost you a night in a hotel. BTT looks at the chain as a whole, so that you compare complete trips instead of single connections.

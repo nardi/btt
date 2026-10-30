@@ -5,6 +5,7 @@ mod booking_page;
 mod commands;
 mod log_buffer;
 mod place_naming;
+mod portable;
 mod price_learning;
 mod price_seed;
 pub mod pricing;
@@ -112,10 +113,15 @@ pub fn run() {
             specta_builder.mount_events(app);
             // A development override lets a test start with no timetable and no trips, without
             // touching the real data. It must be an absolute path, because the working directory
-            // of the app differs between `tauri dev` and an installed app.
+            // of the app differs between `tauri dev` and an installed app. Without the override,
+            // a portable app keeps its data next to itself and an installed app uses the profile
+            // of the user.
             let data_directory = match std::env::var_os(DATA_DIRECTORY_VARIABLE) {
                 Some(path) => std::path::PathBuf::from(path),
-                None => app.path().app_data_dir()?,
+                None => match portable::portable_data_directory() {
+                    Some(path) => path,
+                    None => app.path().app_data_dir()?,
+                },
             };
             std::fs::create_dir_all(&data_directory)?;
             let storage = Storage::open(&data_directory.join("btt.sqlite3"))?;
