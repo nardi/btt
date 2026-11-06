@@ -9,7 +9,7 @@ use std::num::{NonZeroU8, NonZeroU32};
 use std::path::Path;
 use std::sync::Arc;
 
-use btt_app_lib::pricing::PriceBookJourneyPricer;
+use btt_backend::pricing::PriceBookJourneyPricer;
 use btt_fares::{FareData, PriceBook};
 use btt_geo::TimeZoneFinder;
 use btt_model::{

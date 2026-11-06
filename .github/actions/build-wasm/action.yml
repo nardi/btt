@@ -1,0 +1,31 @@
+name: Build the WebAssembly backend
+description: >
+  Builds the backend of the web app as WebAssembly into `ui/web/src/wasm`. The job needs the
+  Rust toolchain, and the Rust cache, before this step.
+
+inputs:
+  profile:
+    description: The Cargo profile, `release` or `debug`.
+    default: release
+
+runs:
+  using: composite
+  steps:
+    # The command line tool has to match the `wasm-bindgen` crate in `Cargo.lock`. The Rust
+    # cache keeps the installed binary, so only the first run of a version compiles it.
+    - name: Install the WebAssembly tools
+      shell: bash
+      run: |
+        rustup target add wasm32-unknown-unknown
+        version=$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | sed -n 's/^version = "\(.*\)"$/\1/p')
+        if ! wasm-bindgen --version 2> /dev/null | grep -q " $version\$"; then
+          cargo install wasm-bindgen-cli --version "$version" --locked
+        fi
+    - name: Build the module
+      shell: bash
+      run: |
+        if [ "${{ inputs.profile }}" = debug ]; then
+          npm run wasm --workspace ui/web -- --debug
+        else
+          npm run wasm --workspace ui/web
+        fi

@@ -1,0 +1,19 @@
+{
+  "name": "@btt/web",
+  "private": true,
+  "license": "SEE LICENSE IN LICENSE.md",
+  "type": "module",
+  "scripts": {
+    "wasm": "node scripts/build-wasm.mjs",
+    "dev": "vite",
+    "build": "vite build",
+    "check": "svelte-check --tsconfig ./tsconfig.json"
+  },
+  "dependencies": {
+    "@btt/shared": "*",
+    "fzstd": "^0.1.1"
+  },
+  "devDependencies": {
+    "binaryen": "132.0.0"
+  }
+}

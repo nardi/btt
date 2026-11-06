@@ -7,14 +7,16 @@ use btt_model::{
     LegPlan, LegPlanningResult, NearbyDaySuggestion, PlanningRunId, PlanningSessionEvent, Trip,
     TripPlaceId,
 };
+use futures_util::StreamExt;
+use futures_util::stream::FuturesUnordered;
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
-use tokio::task::{JoinHandle, JoinSet};
 use tokio_util::sync::CancellationToken;
 
 use crate::backend::LegPlanningBackend;
 use crate::input::{LegCacheKey, LegChainInput, leg_chain_inputs};
 use crate::pricing::{JourneyPricer, NoPrice};
+use crate::runtime::{self, TaskHandle};
 
 /// Time a session waits after the last trip change before it starts planning, so a burst of
 /// edits leads to one run.
@@ -116,7 +118,7 @@ struct CurrentRun {
     /// Fires when a newer change replaces this run.
     cancellation: CancellationToken,
     /// The task that waits for the debounce time and then plans.
-    task: JoinHandle<()>,
+    task: TaskHandle,
 }
 
 impl<S: PlanningEventSink, P: JourneyPricer> TripPlanningSession<S, NoLegResultStore, P> {
@@ -146,8 +148,8 @@ impl<S: PlanningEventSink, C: LegResultStore, P: JourneyPricer> TripPlanningSess
         }
     }
 
-    /// Replaces the running plan with one for the changed trip. Must be called from within a
-    /// Tokio runtime.
+    /// Replaces the running plan with one for the changed trip. Natively this must be called from
+    /// within a Tokio runtime.
     pub fn trip_changed(&self, trip: Trip) {
         let mut state = self.shared.lock_state();
         if let Some(previous_run) = state.current_run.take() {
@@ -155,7 +157,7 @@ impl<S: PlanningEventSink, C: LegResultStore, P: JourneyPricer> TripPlanningSess
             previous_run.task.abort();
         }
         let cancellation = CancellationToken::new();
-        let task = tokio::spawn(Arc::clone(&self.shared).run(trip, cancellation.clone()));
+        let task = runtime::spawn(Arc::clone(&self.shared).run(trip, cancellation.clone()));
         state.current_run = Some(CurrentRun { cancellation, task });
     }
 
@@ -191,7 +193,7 @@ impl<S: PlanningEventSink, C: LegResultStore, P: JourneyPricer> SessionShared<S,
 
     /// Waits for the debounce time, then plans the legs whose inputs changed.
     async fn run(self: Arc<Self>, trip: Trip, cancellation: CancellationToken) {
-        tokio::time::sleep(self.debounce).await;
+        runtime::sleep(self.debounce).await;
         let namespace = self.backend.cache_namespace();
         let legs_to_plan = {
             let mut state = self.lock_state();
@@ -202,19 +204,17 @@ impl<S: PlanningEventSink, C: LegResultStore, P: JourneyPricer> SessionShared<S,
         };
         let run_id = legs_to_plan.run_id;
 
-        let mut planning_tasks = JoinSet::new();
+        let planning_tasks = FuturesUnordered::new();
         for chain in legs_to_plan.uncached {
             let backend = Arc::clone(&self.backend);
             let cancellation = cancellation.clone();
-            planning_tasks.spawn(async move {
+            planning_tasks.push(async move {
                 let results = backend.plan_chain(&chain, &cancellation).await;
                 (chain, results)
             });
         }
-        while let Some(joined) = planning_tasks.join_next().await {
-            let Ok((chain, results)) = joined else {
-                continue;
-            };
+        let mut planning_tasks = planning_tasks;
+        while let Some((chain, results)) = planning_tasks.next().await {
             let mut state = self.lock_state();
             if cancellation.is_cancelled() {
                 return;
@@ -267,7 +267,7 @@ impl<S: PlanningEventSink, C: LegResultStore, P: JourneyPricer> SessionShared<S,
         namespace: u64,
         cancellation: &CancellationToken,
     ) {
-        let mut tasks = JoinSet::new();
+        let tasks = FuturesUnordered::new();
         {
             let state = self.lock_state();
             for chain in chains {
@@ -288,7 +288,7 @@ impl<S: PlanningEventSink, C: LegResultStore, P: JourneyPricer> SessionShared<S,
                     let cancellation = cancellation.clone();
                     let (input, plan, arrival_place_id) =
                         (leg.input.clone(), plan.clone(), leg.arrival_place_id);
-                    tasks.spawn(async move {
+                    tasks.push(async move {
                         let extras = backend
                             .plan_extras(&input, &plan, with_pass_options, &cancellation)
                             .await;
@@ -297,10 +297,8 @@ impl<S: PlanningEventSink, C: LegResultStore, P: JourneyPricer> SessionShared<S,
                 }
             }
         }
-        while let Some(joined) = tasks.join_next().await {
-            let Ok((arrival_place_id, key, extras)) = joined else {
-                continue;
-            };
+        let mut tasks = tasks;
+        while let Some((arrival_place_id, key, extras)) = tasks.next().await {
             let mut state = self.lock_state();
             if cancellation.is_cancelled() {
                 return;
@@ -332,7 +330,7 @@ impl<S: PlanningEventSink, C: LegResultStore, P: JourneyPricer> SessionShared<S,
         namespace: u64,
         cancellation: &CancellationToken,
     ) {
-        let mut tasks = JoinSet::new();
+        let tasks = FuturesUnordered::new();
         for chain in chains {
             for day_offset in [-1_i8, 1] {
                 let Some(shifted) = shifted_chain(chain, day_offset) else {
@@ -355,7 +353,7 @@ impl<S: PlanningEventSink, C: LegResultStore, P: JourneyPricer> SessionShared<S,
                     .collect();
                 let backend = Arc::clone(&self.backend);
                 let cancellation = cancellation.clone();
-                tasks.spawn(async move {
+                tasks.push(async move {
                     let (results, planned) = match cached {
                         Some(results) => (results, false),
                         None => (backend.plan_chain(&shifted, &cancellation).await, true),
@@ -366,10 +364,10 @@ impl<S: PlanningEventSink, C: LegResultStore, P: JourneyPricer> SessionShared<S,
         }
 
         let mut best_by_place: SmallVec<[(TripPlaceId, NearbyDaySuggestion); 8]> = SmallVec::new();
-        while let Some(joined) = tasks.join_next().await {
-            let Ok((shifted, keys, current_keys, day_offset, results, planned)) = joined else {
-                continue;
-            };
+        let mut tasks = tasks;
+        while let Some((shifted, keys, current_keys, day_offset, results, planned)) =
+            tasks.next().await
+        {
             let mut state = self.lock_state();
             if cancellation.is_cancelled() {
                 return;

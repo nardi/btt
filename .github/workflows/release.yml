@@ -153,7 +153,7 @@ jobs:
   # The viewer goes live at tag time, while the release is still a draft. That way the live
   # viewer reads the schema the new app writes before anyone can install the app.
   viewer:
-    name: Deploy the web viewer
+    name: Deploy the web viewer and app
     needs: checks
     runs-on: ubuntu-latest
     permissions:
@@ -169,15 +169,21 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
       - run: npm ci
+      - uses: ./.github/actions/build-wasm
       - run: npm run build --workspace ui/viewer
+      - run: npm run build --workspace ui/web
+      # The site holds the viewer, the web app and the timetable that the web app downloads.
+      - run: node tools/assemble-pages-site.js site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: ui/viewer/dist
+          path: site
       - id: deployment
         uses: actions/deploy-pages@v4

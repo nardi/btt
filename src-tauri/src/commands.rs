@@ -8,81 +8,19 @@ use btt_model::{
     EuroCents, EuroRange, GeoCoordinates, LiveQuote, LiveQuoteRequest, PassScenario,
     PassScenarioLeg, PlaceInsertionPoint, PlaceSearchResult, PlanningSessionEvent,
     StationSearchRadius, StrategyKind, TicketLeg, TicketPlan, TicketPreferences, Traveller,
-    TravellerId, Trip, TripEdit, TripEditError, TripEditOutcome, TripId, TripSummary,
+    TravellerId, Trip, TripEdit, TripEditOutcome, TripId, TripSummary,
 };
 use chrono::NaiveDate;
-use serde::Serialize;
 use smol_str::SmolStr;
-use specta::Type;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, State};
-use thiserror::Error;
 
-use crate::place_naming::{name_provisional_places, provisional_place_name};
+use btt_backend::place_naming::provisional_place_name;
+use btt_backend::tickets::{first_traveller, plan_trip_pass_scenarios, plan_trip_tickets};
+use btt_model::CommandError;
+
+use crate::place_naming::name_provisional_places;
 use crate::state::AppState;
-
-/// Errors a command returns to the frontend.
-#[derive(Debug, Error, Serialize, Type)]
-pub enum CommandError {
-    /// No trip with this ID exists.
-    #[error("trip {0:?} does not exist")]
-    TripNotFound(TripId),
-    /// The frontend edited a trip it has not opened.
-    #[error("trip {0:?} is not open")]
-    TripNotOpen(TripId),
-    /// The edit does not fit the trip.
-    #[error("invalid edit: {0}")]
-    InvalidEdit(TripEditError),
-    /// Reading or writing the database failed.
-    #[error("storage failed: {message}")]
-    Storage {
-        /// Description of the failure.
-        message: String,
-    },
-    /// The place search service failed or could not be reached.
-    #[error("place search failed: {message}")]
-    PlaceSearch {
-        /// Description of the failure.
-        message: String,
-    },
-    /// The trip has more journeys than a link can carry.
-    #[error("the trip is too big for a link")]
-    TripTooLargeForLink,
-    /// Writing the link or the trip file failed.
-    #[error("sharing failed: {message}")]
-    Sharing {
-        /// Description of the failure.
-        message: String,
-    },
-    /// The start date of a trip lies outside the days the timetable covers.
-    #[error("the timetable covers {first} to {last}")]
-    StartDateOutsideTimetable {
-        /// First day the timetable covers.
-        first: NaiveDate,
-        /// Last day the timetable covers.
-        last: NaiveDate,
-    },
-    /// Downloading or installing a timetable failed.
-    #[error("timetable download failed: {message}")]
-    Timetable {
-        /// Description of the failure.
-        message: String,
-    },
-    /// Saving the data location failed, or the new folder is not writable.
-    #[error("changing the data location failed: {message}")]
-    DataLocation {
-        /// Description of the failure.
-        message: String,
-    },
-}
-
-impl From<btt_storage::StorageError> for CommandError {
-    fn from(error: btt_storage::StorageError) -> Self {
-        Self::Storage {
-            message: error.to_string(),
-        }
-    }
-}
 
 /// Returns a summary of every stored trip, most recently changed first.
 #[tauri::command]
@@ -271,23 +209,12 @@ pub fn plan_tickets(
         .map(|open_trip| open_trip.trip.preferences.clone())
         .ok_or(CommandError::TripNotOpen(trip_id))?;
     let travellers = state.storage.list_travellers()?;
-    let traveller = preferences
-        .traveller_ids
-        .iter()
-        .find_map(|id| travellers.iter().find(|traveller| traveller.id == *id));
-    let rides = legs
-        .iter()
-        .flat_map(|leg| {
-            btt_ticketing::rides_of_journey(leg.arrival_place_id, &leg.journey, &leg.stations)
-        })
-        .collect();
-    let plan = btt_ticketing::plan_tickets(
-        &btt_ticketing::TicketRequest {
-            rides,
-            traveller,
-            preferences: &preferences.ticket_preferences,
-            today: today_utc(),
-        },
+    let traveller = first_traveller(&preferences, &travellers);
+    let plan = plan_trip_tickets(
+        &legs,
+        &preferences,
+        traveller,
+        today_utc(),
         &state.fare_data,
         &state.price_book,
     );
@@ -325,15 +252,12 @@ pub fn plan_pass_scenarios(
         .map(|open_trip| open_trip.trip.preferences.clone())
         .ok_or(CommandError::TripNotOpen(trip_id))?;
     let travellers = state.storage.list_travellers()?;
-    let traveller = preferences
-        .traveller_ids
-        .iter()
-        .find_map(|id| travellers.iter().find(|traveller| traveller.id == *id));
-    Ok(btt_ticketing::pass_scenarios(
+    let traveller = first_traveller(&preferences, &travellers);
+    Ok(plan_trip_pass_scenarios(
         &legs,
-        &state.fare_data.passes,
+        &preferences,
         traveller,
-        preferences.price_weight,
+        &state.fare_data,
     ))
 }
 
