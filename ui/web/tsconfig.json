@@ -1,0 +1,20 @@
+{
+  "extends": "@tsconfig/svelte/tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "types": ["svelte", "vite/client"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
+    "paths": {
+      "@tauri-apps/api/core": ["./src/shims/tauri-core.ts"],
+      "@tauri-apps/plugin-opener": ["./src/shims/tauri-opener.ts"],
+      "@btt/app-source/*": ["../app/src/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.svelte", "../app/src/**/*.ts", "../app/src/**/*.svelte"]
+}

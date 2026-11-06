@@ -92,6 +92,18 @@ impl LoadedTimetableBundle {
         Self::validated(BundleBytes::Mapped(map))
     }
 
+    /// Copies the bytes of a bundle into aligned memory and validates them, for platforms that
+    /// cannot map a file.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the bytes are corrupt or have another format version.
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, BundleLoadError> {
+        let mut aligned = AlignedVec::with_capacity(bytes.len());
+        aligned.extend_from_slice(bytes);
+        Self::validated(BundleBytes::Owned(aligned))
+    }
+
     /// Archives a bundle in memory and validates the result, for tests and for writing files.
     ///
     /// # Errors

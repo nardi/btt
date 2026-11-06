@@ -38,6 +38,9 @@
   import TimetableDialog from "./TimetableDialog.svelte";
   import TripList from "./TripList.svelte";
 
+  /** Whether the header offers a problem report, which only the desktop app can write. */
+  let { canReportProblems = true }: { canReportProblems?: boolean } = $props();
+
   let trips: TripSummary[] = $state([]);
   let openSource: TauriTripSource | null = $state(null);
   let errorMessage: string | null = $state(null);
@@ -497,7 +500,9 @@
       </div>
       <ThemeSwitch />
       <button type="button" onclick={() => (showShare = true)}>Share</button>
-      <button type="button" onclick={() => (showProblemReport = true)}>Report a problem</button>
+      {#if canReportProblems}
+        <button type="button" onclick={() => (showProblemReport = true)}>Report a problem</button>
+      {/if}
       <button type="button" onclick={() => (showAbout = true)}>About</button>
     </header>
     {#if showShare}

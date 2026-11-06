@@ -18,6 +18,10 @@ specta-typescript.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
 
+# The version 7 IDs need a source of randomness, which the browser provides.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+uuid = { workspace = true, features = ["js"] }
+
 [dev-dependencies]
 proptest.workspace = true
 serde_json.workspace = true

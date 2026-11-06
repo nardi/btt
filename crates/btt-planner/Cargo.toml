@@ -14,6 +14,7 @@ btt-router.workspace = true
 btt-timetable.workspace = true
 chrono.workspace = true
 chrono-tz.workspace = true
+futures-util.workspace = true
 percent-encoding.workspace = true
 postcard.workspace = true
 regex.workspace = true
@@ -26,6 +27,11 @@ toml.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
 xxhash-rust.workspace = true
+
+# The browser has no threads or Tokio timers, so tasks and timers use its event loop.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+gloo-timers = { workspace = true, features = ["futures"] }
+wasm-bindgen-futures.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

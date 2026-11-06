@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::{AppHandle, Manager};
 
-use crate::commands::CommandError;
+use btt_model::CommandError;
 
 /// Name of the settings file in the configuration folder of the user profile.
 const SETTINGS_FILE_NAME: &str = "location.json";
