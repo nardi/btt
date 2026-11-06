@@ -181,7 +181,12 @@ enum LabelOrigin {
         candidate: u16,
     },
     /// The traveller rode a trip there.
-    TrainRide(RideOrigin),
+    TrainRide {
+        ride: RideOrigin,
+        /// The round in which the ride was scanned. The ride boarded from the label of the
+        /// round before, which a later round may copy and so does not keep in its own slot.
+        round: usize,
+    },
     /// The traveller rode a trip to another station and walked from there.
     ///
     /// The ride is part of the label, because the label of the station where the ride ended
@@ -189,6 +194,8 @@ enum LabelOrigin {
     TrainRideAndFootpath {
         ride: RideOrigin,
         alighting_station: BundleStationIndex,
+        /// The round in which the ride was scanned, as in `TrainRide`.
+        round: usize,
     },
 }
 
@@ -552,7 +559,7 @@ impl<F: RideFilter> Search<'_, F> {
                         station,
                         Label {
                             arrival,
-                            origin: LabelOrigin::TrainRide(ride),
+                            origin: LabelOrigin::TrainRide { ride, round },
                         },
                     );
                 }
@@ -582,7 +589,7 @@ impl<F: RideFilter> Search<'_, F> {
     #[inline]
     fn transfer_slack(&self, origin: LabelOrigin) -> u32 {
         match origin {
-            LabelOrigin::TrainRide(_) => u32::from(self.query.minimum_transfer_minutes),
+            LabelOrigin::TrainRide { .. } => u32::from(self.query.minimum_transfer_minutes),
             LabelOrigin::DepartureCandidate { .. } | LabelOrigin::TrainRideAndFootpath { .. } => 0,
         }
     }
@@ -650,6 +657,7 @@ impl<F: RideFilter> Search<'_, F> {
                 let origin = LabelOrigin::TrainRideAndFootpath {
                     ride,
                     alighting_station: station,
+                    round,
                 };
                 self.improve(round, footpath.to_station, Label { arrival, origin });
             }
@@ -693,7 +701,7 @@ impl<F: RideFilter> Search<'_, F> {
         // steps.
         for _ in 0..=round {
             let label = self.label(current_round, station)?;
-            let (ride, alighting_station) = match label.origin {
+            let (ride, alighting_station, scan_round) = match label.origin {
                 LabelOrigin::DepartureCandidate { candidate } => {
                     rides.reverse();
                     let departure_candidate = *self
@@ -713,16 +721,19 @@ impl<F: RideFilter> Search<'_, F> {
                         arrival: MinutesSinceBundleStart(arrival),
                     });
                 }
-                LabelOrigin::TrainRide(ride) => (ride, station),
+                LabelOrigin::TrainRide { ride, round } => (ride, station, round),
                 LabelOrigin::TrainRideAndFootpath {
                     ride,
                     alighting_station,
-                } => (ride, alighting_station),
+                    round,
+                } => (ride, alighting_station, round),
             };
             let raptor_ride = raptor_ride(self.bundle, ride, alighting_station)?;
             station = raptor_ride.boarding_station;
             rides.push(raptor_ride);
-            current_round = current_round.checked_sub(1)?;
+            // The ride boarded from the label of the round before its scan, which is not the
+            // round of this label when the label was copied from an earlier round.
+            current_round = scan_round.checked_sub(1)?;
         }
         None
     }
