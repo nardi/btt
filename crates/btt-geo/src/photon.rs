@@ -78,17 +78,13 @@ impl PhotonClient {
         query: &str,
         language: &str,
     ) -> Result<PlaceSearchResults, PhotonError> {
-        let limit = SEARCH_RESULT_LIMIT.to_string();
-        let mut parameters: SmallVec<[(&str, &str); 10]> =
-            SmallVec::from_slice(&[("q", query), ("limit", limit.as_str()), ("lang", language)]);
-        parameters.extend(
-            SEARCH_OSM_TAG_FILTERS
-                .iter()
-                .map(|filter| ("osm_tag", *filter)),
-        );
         let url = format!("{}/api/", self.base_url);
-        self.fetch(&url, &parameters, ResultNaming::ObjectName)
-            .await
+        self.fetch(
+            &url,
+            &search_parameters(query, language),
+            ResultNaming::ObjectName,
+        )
+        .await
     }
 
     /// Finds the place closest to a position.
@@ -101,16 +97,13 @@ impl PhotonClient {
         coordinates: GeoCoordinates,
         language: &str,
     ) -> Result<Option<PlaceSearchResult>, PhotonError> {
-        let latitude = coordinates.latitude.degrees().to_string();
-        let longitude = coordinates.longitude.degrees().to_string();
-        let parameters = [
-            ("lat", latitude.as_str()),
-            ("lon", longitude.as_str()),
-            ("lang", language),
-        ];
         let url = format!("{}/reverse", self.base_url);
         let results = self
-            .fetch(&url, &parameters, ResultNaming::SettlementFirst)
+            .fetch(
+                &url,
+                &reverse_parameters(coordinates, language),
+                ResultNaming::SettlementFirst,
+            )
             .await?;
         Ok(results.into_iter().next())
     }
@@ -119,7 +112,7 @@ impl PhotonClient {
     async fn fetch(
         &self,
         url: &str,
-        parameters: &[(&str, &str)],
+        parameters: &[(String, String)],
         naming: ResultNaming,
     ) -> Result<PlaceSearchResults, PhotonError> {
         self.rate_limiter.until_ready().await;
@@ -134,6 +127,81 @@ impl PhotonClient {
             .await?;
         Ok(place_search_results(feature_collection, naming))
     }
+}
+
+/// Returns the query parameters of a name search.
+fn search_parameters(query: &str, language: &str) -> Vec<(String, String)> {
+    let mut parameters = vec![
+        ("q".to_owned(), query.to_owned()),
+        ("limit".to_owned(), SEARCH_RESULT_LIMIT.to_string()),
+        ("lang".to_owned(), language.to_owned()),
+    ];
+    parameters.extend(
+        SEARCH_OSM_TAG_FILTERS
+            .iter()
+            .map(|filter| ("osm_tag".to_owned(), (*filter).to_owned())),
+    );
+    parameters
+}
+
+/// Returns the query parameters of a search by position.
+fn reverse_parameters(coordinates: GeoCoordinates, language: &str) -> Vec<(String, String)> {
+    vec![
+        ("lat".to_owned(), coordinates.latitude.degrees().to_string()),
+        (
+            "lon".to_owned(),
+            coordinates.longitude.degrees().to_string(),
+        ),
+        ("lang".to_owned(), language.to_owned()),
+    ]
+}
+
+/// Returns the address of a name search, for callers that send the request themselves, such as
+/// the page of the web app.
+pub fn search_request_url(base_url: &str, query: &str, language: &str) -> Option<String> {
+    let url = format!("{}/api/", base_url.trim_end_matches('/'));
+    reqwest::Url::parse_with_params(&url, search_parameters(query, language))
+        .ok()
+        .map(String::from)
+}
+
+/// Returns the address of a search by position, for callers that send the request themselves.
+pub fn reverse_request_url(
+    base_url: &str,
+    coordinates: GeoCoordinates,
+    language: &str,
+) -> Option<String> {
+    let url = format!("{}/reverse", base_url.trim_end_matches('/'));
+    reqwest::Url::parse_with_params(&url, reverse_parameters(coordinates, language))
+        .ok()
+        .map(String::from)
+}
+
+/// Reads the answer to a name search.
+///
+/// # Errors
+///
+/// Returns an error when the text is not a Photon answer.
+pub fn parse_search_answer(body: &str) -> Result<PlaceSearchResults, serde_json::Error> {
+    let feature_collection: PhotonFeatureCollection = serde_json::from_str(body)?;
+    Ok(place_search_results(
+        feature_collection,
+        ResultNaming::ObjectName,
+    ))
+}
+
+/// Reads the answer to a search by position and returns the place it names, if any.
+///
+/// # Errors
+///
+/// Returns an error when the text is not a Photon answer.
+pub fn parse_reverse_answer(body: &str) -> Result<Option<PlaceSearchResult>, serde_json::Error> {
+    let feature_collection: PhotonFeatureCollection = serde_json::from_str(body)?;
+    Ok(
+        place_search_results(feature_collection, ResultNaming::SettlementFirst)
+            .into_iter()
+            .next(),
+    )
 }
 
 /// Which Photon property names a result.

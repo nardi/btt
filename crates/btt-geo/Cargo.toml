@@ -14,13 +14,13 @@ chrono-tz.workspace = true
 governor.workspace = true
 reqwest.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 smallvec.workspace = true
 smol_str.workspace = true
 thiserror.workspace = true
 tzf-rs.workspace = true
 
 [dev-dependencies]
-serde_json.workspace = true
 tokio.workspace = true
 
 [lints]

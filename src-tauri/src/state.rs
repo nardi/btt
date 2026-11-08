@@ -3,11 +3,14 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
+use btt_backend::editing::{PreparedEdit, prepare_edit};
+use btt_backend::pricing::PriceBookJourneyPricer;
+use btt_backend::timetable_status::{InstalledBundle, installed_bundle_of};
 use btt_fares::{FareData, PriceBook};
 use btt_geo::{PUBLIC_PHOTON_BASE_URL, PhotonClient, TimeZoneFinder};
 use btt_model::{
-    LegPlanningResult, PlanningSessionEvent, Trip, TripEdit, TripEditNotices, TripEditOutcome,
-    TripHistory, TripId,
+    CommandError, LegPlanningResult, PlanningSessionEvent, Trip, TripEdit, TripEditNotices,
+    TripEditOutcome, TripHistory, TripId,
 };
 use btt_planner::{
     DEFAULT_PLANNING_DEBOUNCE, LegCacheKey, LegPlanningBackend, LegResultStore, PlanningEventSink,
@@ -16,19 +19,15 @@ use btt_planner::{
 use btt_quotes::QuoteStore;
 use btt_quotes::sbb::SbbService;
 use btt_storage::Storage;
-use btt_timetable::manifest::last_valid_day;
 use chrono::NaiveDate;
 use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 use tauri::ipc::Channel;
 
-use crate::commands::CommandError;
 use crate::log_buffer::RecentLogLines;
-use crate::place_naming::{has_provisional_name, provisional_place_name};
-use crate::pricing::PriceBookJourneyPricer;
 use crate::ticket_report::{LiveQuoteLogEntry, TicketPlanRecord};
 use crate::timetable_updates::{
-    InstalledBundle, KEPT_BUNDLE_FILES, TimetableUpdates, bundle_file_name, prune_bundles,
+    KEPT_BUNDLE_FILES, TimetableUpdates, bundle_file_name, prune_bundles,
 };
 
 /// `User-Agent` for requests to public services, which ask clients to identify themselves.
@@ -449,28 +448,11 @@ impl AppState {
         let open_trip = open_trips
             .get_mut(&trip_id)
             .ok_or(CommandError::TripNotOpen(trip_id))?;
-        let mut trip = open_trip.trip.clone();
-        let description = edit.describe(&trip);
-        let provisional_rename = match &edit {
-            TripEdit::MovePlace {
-                place_id,
-                coordinates,
-            } if trip
-                .itinerary
-                .place(*place_id)
-                .is_some_and(has_provisional_name) =>
-            {
-                Some(TripEdit::RenamePlace {
-                    place_id: *place_id,
-                    name: provisional_place_name(*coordinates),
-                })
-            }
-            _ => None,
-        };
-        let mut notices = trip.apply_edit(edit).map_err(CommandError::InvalidEdit)?;
-        if let Some(rename) = provisional_rename {
-            notices.extend(trip.apply_edit(rename).map_err(CommandError::InvalidEdit)?);
-        }
+        let PreparedEdit {
+            trip,
+            notices,
+            description,
+        } = prepare_edit(&open_trip.trip, edit)?;
         // Saving under the lock keeps the stored order of edits the same as the applied order.
         self.storage.save_trip(&trip)?;
         let before = std::mem::replace(&mut open_trip.trip, trip.clone());
@@ -567,15 +549,6 @@ struct OpenedBundle {
     installed: Option<InstalledBundle>,
     /// The router over the bundle, when it loaded.
     router: Option<TimetableBundleRouter<PriceBookJourneyPricer>>,
-}
-
-/// Returns the facts about the bundle a router plans on.
-fn installed_bundle_of(router: &TimetableBundleRouter<PriceBookJourneyPricer>) -> InstalledBundle {
-    InstalledBundle {
-        version: router.bundle_version(),
-        valid_from: router.validity_start(),
-        valid_until: last_valid_day(router.validity_start(), router.validity_days()),
-    }
 }
 
 /// Deletes the planned legs of other bundle versions than the backend's, which can never match

@@ -118,6 +118,14 @@ pub enum StorageError {
     ObservationRides(serde_json::Error),
 }
 
+impl From<StorageError> for btt_model::CommandError {
+    fn from(error: StorageError) -> Self {
+        Self::Storage {
+            message: error.to_string(),
+        }
+    }
+}
+
 /// The app's SQLite database. One connection behind a mutex, because the app has one writer.
 pub struct Storage {
     /// The open connection.

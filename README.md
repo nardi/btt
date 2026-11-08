@@ -52,11 +52,17 @@ The share dialog turns a trip into a link, a QR code or a file. Anyone who opens
 
 Long trips make long links. The dialog lets you leave out the alternatives, the price estimates and the names of places to keep the link and the QR code short, and it can write the link in a compact alphabet that halves its length. A file always holds the complete trip.
 
+### Web app
+
+The same interface runs in the browser at [nardi.github.io/btt/app](https://nardi.github.io/btt/app/). The planner is compiled to WebAssembly and runs in a web worker on your device, so the planning happens in your browser. The first visit downloads the timetable, which is about 12 MB, and the browser keeps it for later visits.
+
+Booking sites do not accept requests from a web page, so the web app has no live prices and shows estimates only. The desktop app looks up live prices and learns from them. The web app also searches long legs one after the other where the desktop app uses several threads, so a long search takes longer.
+
 ## Where the data comes from
 
 The trains and times come from public timetable feeds of railway operators and transport authorities, mostly collected by the [Transitous](https://transitous.org) project. The app downloads a timetable file from the releases of this repository. A GitHub workflow rebuilds that file every Monday and a build is valid for 90 days. The About page of the app lists every feed with its license.
 
-Besides the timetable, the app makes two kinds of requests. It loads map tiles from [OpenFreeMap](https://openfreemap.org), and it asks booking sites for the live price of a ticket when you price a trip.
+Besides the timetable, the app makes three kinds of requests. It loads map tiles from [OpenFreeMap](https://openfreemap.org), it searches places with [Photon](https://photon.komoot.io), and it asks booking sites for the live price of a ticket when you price a trip. The web app makes the first two only.
 
 ## Status
 
@@ -74,6 +80,19 @@ Install the dependencies and start the app:
 npm ci
 npm run dev
 ```
+
+The web app needs the `wasm32-unknown-unknown` Rust target and a `wasm-bindgen` command line tool of the same version as the `wasm-bindgen` crate in `Cargo.lock`. Build the module once and start the dev server:
+
+```bash
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli --locked
+npm run wasm --workspace ui/web -- --debug
+npm run dev --workspace ui/web
+```
+
+A release build (`npm run wasm --workspace ui/web`) also runs `wasm-opt` from [binaryen](https://github.com/WebAssembly/binaryen), which `npm ci` installs.
+
+The dev server has no timetable. Run `node tools/assemble-pages-site.js site` after a build to see how the site gets its copy of the newest one.
 
 Run the checks that CI runs:
 
@@ -94,8 +113,10 @@ The Rust code is a workspace of small crates, and the frontend is an npm workspa
 * `btt-router` and `btt-planner` search the trains and choose a journey for every leg.
 * `btt-fares`, `btt-quotes` and `btt-ticketing` estimate prices, read live prices and find the cheapest tickets.
 * `btt-geo` and `btt-storage` handle places and the local database.
+* `btt-backend` holds the backend logic that the desktop app and the web app share, such as pricing a trip and writing a share link.
 * `src-tauri` is the app itself, which exposes the crates to the frontend. The TypeScript types in `ui/shared/src/bindings.ts` are generated from the Rust types.
-* `ui/app` is the desktop interface, `ui/viewer` is the web viewer and `ui/shared` holds what they have in common.
+* `btt-web` is the backend as a WebAssembly module, with the same commands as `src-tauri`.
+* `ui/app` is the desktop interface, `ui/viewer` is the web viewer, `ui/web` runs the desktop interface in the browser and `ui/shared` holds what they have in common.
 
 ### Documentation
 

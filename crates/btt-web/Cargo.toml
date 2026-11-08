@@ -1,0 +1,34 @@
+[package]
+name = "btt-web"
+description = "The BTT backend as a WebAssembly module for the browser"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license-file.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+btt-backend.workspace = true
+btt-fares.workspace = true
+btt-geo.workspace = true
+btt-model.workspace = true
+btt-planner.workspace = true
+btt-timetable.workspace = true
+chrono.workspace = true
+console_error_panic_hook.workspace = true
+futures-channel.workspace = true
+futures-util.workspace = true
+js-sys.workspace = true
+rustc-hash.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+smol_str.workspace = true
+tracing.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+
+[lints]
+workspace = true

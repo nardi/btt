@@ -8,7 +8,6 @@ mod place_naming;
 mod portable;
 mod price_learning;
 mod price_seed;
-pub mod pricing;
 mod probe;
 mod problem_report;
 mod quote_refresh;

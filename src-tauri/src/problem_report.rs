@@ -16,9 +16,9 @@ use specta::Type;
 use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
 
-use crate::commands::CommandError;
 use crate::state::AppState;
 use crate::ticket_report::{LiveQuoteLogEntry, TicketPlanRecord};
+use btt_model::CommandError;
 
 /// Environment variable that saves reports to a fixed path without asking, for automated tests.
 const REPORT_PATH_VARIABLE: &str = "BTT_PROBLEM_REPORT_PATH";
