@@ -641,7 +641,7 @@ dependencies = [
 
 [[package]]
 name = "btt-app"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "btt-backend",
  "btt-fares",
@@ -677,7 +677,7 @@ dependencies = [
 
 [[package]]
 name = "btt-backend"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "btt-fares",
  "btt-model",
@@ -694,7 +694,7 @@ dependencies = [
 
 [[package]]
 name = "btt-builder"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "btt-model",
  "btt-timetable",
@@ -722,7 +722,7 @@ dependencies = [
 
 [[package]]
 name = "btt-fares"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "btt-model",
  "chrono",
@@ -739,7 +739,7 @@ dependencies = [
 
 [[package]]
 name = "btt-geo"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "btt-model",
  "chrono",
@@ -757,7 +757,7 @@ dependencies = [
 
 [[package]]
 name = "btt-model"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "flate2",
@@ -775,7 +775,7 @@ dependencies = [
 
 [[package]]
 name = "btt-planner"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "btt-fares",
  "btt-geo",
@@ -808,7 +808,7 @@ dependencies = [
 
 [[package]]
 name = "btt-quotes"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "regex",
@@ -822,7 +822,7 @@ dependencies = [
 
 [[package]]
 name = "btt-router"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "btt-model",
  "btt-timetable",
@@ -834,7 +834,7 @@ dependencies = [
 
 [[package]]
 name = "btt-storage"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "btt-model",
  "chrono",
@@ -851,7 +851,7 @@ dependencies = [
 
 [[package]]
 name = "btt-ticketing"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "btt-fares",
  "btt-model",
@@ -867,7 +867,7 @@ dependencies = [
 
 [[package]]
 name = "btt-timetable"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "btt-model",
  "chrono",
@@ -883,7 +883,7 @@ dependencies = [
 
 [[package]]
 name = "btt-web"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "btt-backend",
  "btt-fares",
