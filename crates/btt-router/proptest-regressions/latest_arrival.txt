@@ -5,3 +5,4 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc 939da333a8f098edf50ec27f53978fc5b3530ef70eb8bd4ff1e2aaa6b0f4c350 # shrinks to trips = [([0, 4], 211, [17])], footpaths = [], time_to_place = 7, deadline = 235
+cc a416300abf09093d51b9f6601dd4087c1003e213a067848dc34485cb050b1d84 # shrinks to trips = [([1, 4, 3], 82, [5, 5]), ([3, 1], 75, [5])], footpaths = [(3, 1, 13)], time_to_place = 0, deadline = 87
