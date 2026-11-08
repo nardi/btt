@@ -104,7 +104,7 @@ impl<P: JourneyPricer> LegPlanningBackend<P> {
                 let router = Arc::clone(router);
                 let input = input.clone();
                 let cancellation = cancellation.clone();
-                let search = tokio::task::spawn_blocking(move || {
+                let search = crate::runtime::run_blocking(move || {
                     router.plan_leg(&input, || cancellation.is_cancelled())
                 });
                 search.await.unwrap_or(LegPlanningResult::NoJourneyFound(
@@ -138,7 +138,7 @@ impl<P: JourneyPricer> LegPlanningBackend<P> {
                 let input = input.clone();
                 let owned_plan = plan.clone();
                 let cancellation = cancellation.clone();
-                tokio::task::spawn_blocking(move || {
+                crate::runtime::run_blocking(move || {
                     router.plan_extras(&input, &owned_plan, with_pass_options, || {
                         cancellation.is_cancelled()
                     })
@@ -171,7 +171,7 @@ impl<P: JourneyPricer> LegPlanningBackend<P> {
                 let chain = chain.clone();
                 let leg_count = chain.legs.len();
                 let cancellation = cancellation.clone();
-                let search = tokio::task::spawn_blocking(move || {
+                let search = crate::runtime::run_blocking(move || {
                     router.plan_chain(&chain, || cancellation.is_cancelled())
                 });
                 search.await.unwrap_or_else(|_| {
@@ -193,7 +193,7 @@ impl<P: JourneyPricer> LegPlanningBackend<P> {
             Self::TimetableBundle(router) => {
                 let router = Arc::clone(router);
                 let input = input.clone();
-                tokio::task::spawn_blocking(move || router.explain_leg(&input))
+                crate::runtime::run_blocking(move || router.explain_leg(&input))
                     .await
                     .unwrap_or_else(|_| {
                         LegExplanation::without_search(LegPlanningResult::NoJourneyFound(

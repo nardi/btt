@@ -31,6 +31,8 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: write
+      # Starts the workflow that deploys the site.
+      actions: write
     steps:
       # The runner starts with about 14 GB of free disk, and the release build, the feeds and the
       # working database together come close to it. These preinstalled toolchains are unused.
@@ -134,3 +136,8 @@ jobs:
                   gh release delete "$tag" --cleanup-tag --yes
                 fi
               done
+
+      # The web app downloads its timetable from the site, because the release assets cannot be
+      # read from a page. The site workflow copies the newest bundle, so it runs again now.
+      - name: Refresh the site
+        run: gh workflow run viewer.yml --ref "${{ github.event.repository.default_branch }}"

@@ -10,6 +10,7 @@ publish = false
 license-file = "LICENSE.md"
 
 [workspace.dependencies]
+btt-backend = { path = "crates/btt-backend" }
 btt-fares = { path = "crates/btt-fares" }
 btt-geo = { path = "crates/btt-geo" }
 btt-model = { path = "crates/btt-model" }
@@ -25,8 +26,12 @@ chrono = { version = "0.4.45", default-features = false, features = ["std", "ser
 chrono-tz = "0.10.4"
 clap = { version = "4.6.7", features = ["derive"] }
 fixedbitset = "0.5.7"
+console_error_panic_hook = "0.1.7"
+futures-channel = { version = "0.3.31", default-features = false, features = ["std"] }
+futures-util = { version = "0.3.31", default-features = false, features = ["alloc"] }
 flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"] }
 duckdb = { version = "1.10505.0", features = ["bundled", "json", "parquet"] }
+gloo-timers = "0.3.0"
 governor = "0.10.4"
 memmap2 = "0.9.11"
 nalgebra = "0.35.0"
@@ -52,7 +57,9 @@ tauri-plugin-opener = "2"
 tauri-build = "2"
 tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
 thiserror = "2.0.21"
-tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+# The multi-threaded runtime is not available in the browser, so the programs that need it ask
+# for it themselves.
+tokio = { version = "1.53.1", features = ["rt", "macros", "sync", "time"] }
 tokio-util = "0.7.19"
 toml = "1.1.6"
 tracing = "0.1"
@@ -62,6 +69,9 @@ quick-xml = "0.42.0"
 regex = "1.13.1"
 tzf-rs = { version = "2.1.2", default-features = false, features = ["bundled"] }
 uuid = { version = "1.26.1", features = ["v7", "serde"] }
+js-sys = "0.3.77"
+wasm-bindgen = "0.2.100"
+wasm-bindgen-futures = "0.4.50"
 zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 zstd = { version = "0.14.3", features = ["zstdmt"] }
 semver = "1.0"

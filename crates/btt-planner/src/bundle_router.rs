@@ -1346,6 +1346,12 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
                 .push(buffers);
             found
         };
+        // The browser has no threads, so the parts follow one another there.
+        #[cfg(target_arch = "wasm32")]
+        {
+            CostParetoJourneySet::merge(window_slices(departure_window).map(search_slice))
+        }
+        #[cfg(not(target_arch = "wasm32"))]
         std::thread::scope(|scope| {
             let searches: Vec<_> = window_slices(departure_window)
                 .map(|slice_window| scope.spawn(|| search_slice(slice_window)))

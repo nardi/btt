@@ -8,6 +8,7 @@
 extern crate self as btt_model;
 
 mod bounded;
+pub mod command_error;
 pub mod coordinates;
 pub mod edit;
 pub mod history;
@@ -22,6 +23,7 @@ pub mod traveller;
 pub mod trip;
 
 pub use bounded::ValueOutOfRangeError;
+pub use command_error::CommandError;
 pub use coordinates::{GeoCoordinates, Latitude, Longitude};
 pub use edit::{
     PlaceInsertionPoint, TripEdit, TripEditError, TripEditNotice, TripEditNotices, TripEditOutcome,
