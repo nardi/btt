@@ -14,8 +14,7 @@ use crate::itinerary::{
     TripPlace, TripPlaceId, ViaPlace,
 };
 use crate::plan::JourneyChoice;
-use crate::time::DurationMinutes;
-use crate::trip::{ChosenJourney, LegTransferOverride, Trip, TripPreferences};
+use crate::trip::{ChosenJourney, LegTransferOverride, TransferTimeSetting, Trip, TripPreferences};
 
 /// Largest number of places in one itinerary.
 pub const MAXIMUM_PLACE_COUNT: usize = 255;
@@ -121,8 +120,8 @@ pub enum TripEdit {
     SetLegMinimumTransferTime {
         /// Place at which the leg arrives.
         arrival_place_id: TripPlaceId,
-        /// The leg's own minimum transfer time, or `None` for the trip-wide time.
-        minimum_transfer_time: Option<DurationMinutes>,
+        /// The leg's own minimum transfer time, or `TripDefault` for the trip-wide time.
+        setting: TransferTimeSetting,
     },
 }
 
@@ -187,14 +186,14 @@ impl TripEdit {
             ),
             Self::SetLegMinimumTransferTime {
                 arrival_place_id,
-                minimum_transfer_time: Some(_),
+                setting: TransferTimeSetting::Minutes(_),
             } => format!(
                 "Change the transfer time to {}",
                 place_name(arrival_place_id)
             ),
             Self::SetLegMinimumTransferTime {
                 arrival_place_id,
-                minimum_transfer_time: None,
+                setting: TransferTimeSetting::TripDefault,
             } => format!(
                 "Use the default transfer time to {}",
                 place_name(arrival_place_id)
@@ -351,8 +350,8 @@ impl Trip {
             } => self.choose_journey(arrival_place_id, choice),
             TripEdit::SetLegMinimumTransferTime {
                 arrival_place_id,
-                minimum_transfer_time,
-            } => self.set_leg_minimum_transfer_time(arrival_place_id, minimum_transfer_time),
+                setting,
+            } => self.set_leg_minimum_transfer_time(arrival_place_id, setting),
         }
     }
 
@@ -392,12 +391,12 @@ impl Trip {
     fn set_leg_minimum_transfer_time(
         &mut self,
         arrival_place_id: TripPlaceId,
-        minimum_transfer_time: Option<DurationMinutes>,
+        setting: TransferTimeSetting,
     ) -> Result<TripEditNotices, TripEditError> {
         let departure_place_id = self.departure_place_id_of_leg(arrival_place_id)?;
         self.leg_transfer_overrides
             .retain(|leg| leg.arrival_place_id != arrival_place_id);
-        if let Some(minimum_transfer_time) = minimum_transfer_time {
+        if let TransferTimeSetting::Minutes(minimum_transfer_time) = setting {
             self.leg_transfer_overrides.push(LegTransferOverride {
                 departure_place_id,
                 arrival_place_id,
@@ -656,6 +655,7 @@ fn least_added_distance_index(places: &[TripPlace], coordinates: GeoCoordinates)
 mod tests {
     use super::*;
     use crate::itinerary::tests::overnight;
+    use crate::time::DurationMinutes;
 
     fn new_place(name: &str, latitude: f64, longitude: f64) -> NewTripPlace {
         NewTripPlace {
@@ -753,7 +753,7 @@ mod tests {
         let default = trip.preferences.minimum_transfer_time;
         trip.apply_edit(TripEdit::SetLegMinimumTransferTime {
             arrival_place_id: berlin,
-            minimum_transfer_time: Some(DurationMinutes(25)),
+            setting: TransferTimeSetting::Minutes(DurationMinutes(25)),
         })
         .unwrap();
         assert_eq!(
@@ -765,7 +765,7 @@ mod tests {
         // A second override for the same leg replaces the first.
         trip.apply_edit(TripEdit::SetLegMinimumTransferTime {
             arrival_place_id: berlin,
-            minimum_transfer_time: Some(DurationMinutes(5)),
+            setting: TransferTimeSetting::Minutes(DurationMinutes(5)),
         })
         .unwrap();
         assert_eq!(trip.leg_transfer_overrides.len(), 1);
@@ -786,12 +786,12 @@ mod tests {
         let berlin = id_of(&trip, "Berlin");
         trip.apply_edit(TripEdit::SetLegMinimumTransferTime {
             arrival_place_id: berlin,
-            minimum_transfer_time: Some(DurationMinutes(25)),
+            setting: TransferTimeSetting::Minutes(DurationMinutes(25)),
         })
         .unwrap();
         trip.apply_edit(TripEdit::SetLegMinimumTransferTime {
             arrival_place_id: berlin,
-            minimum_transfer_time: None,
+            setting: TransferTimeSetting::TripDefault,
         })
         .unwrap();
         assert_eq!(
@@ -801,7 +801,7 @@ mod tests {
         assert_eq!(
             trip.apply_edit(TripEdit::SetLegMinimumTransferTime {
                 arrival_place_id: amsterdam,
-                minimum_transfer_time: None,
+                setting: TransferTimeSetting::TripDefault,
             }),
             Err(TripEditError::PlaceHasNoArrivingLeg(amsterdam))
         );

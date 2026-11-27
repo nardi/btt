@@ -35,7 +35,7 @@ export function snapshotPreferences(
       fare_type: "Flexible",
       reserve_optional_seats: false,
       live_prices: true,
-      assumed_purchase_date: null,
+      assumed_purchase_date: "Today",
     },
   };
 }

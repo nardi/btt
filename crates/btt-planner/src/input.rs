@@ -221,7 +221,9 @@ pub fn leg_chain_inputs(trip: &Trip) -> SmallVec<[LegChainInput; 8]> {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use btt_model::{PlaceInsertionPoint, PlaceStay, TripEdit, edit::NewTripPlace};
+    use btt_model::{
+        PlaceInsertionPoint, PlaceStay, TransferTimeSetting, TripEdit, edit::NewTripPlace,
+    };
 
     use super::*;
 
@@ -304,7 +306,7 @@ pub(crate) mod tests {
         let before = cache_keys(&trip);
         trip.apply_edit(TripEdit::SetLegMinimumTransferTime {
             arrival_place_id: place_id(&trip, 2),
-            minimum_transfer_time: Some(DurationMinutes(30)),
+            setting: TransferTimeSetting::Minutes(DurationMinutes(30)),
         })
         .unwrap();
         let inputs = leg_planning_inputs(&trip);

@@ -58,7 +58,7 @@ export function amsterdamViennaRome(): Trip {
         fare_type: "Flexible",
         reserve_optional_seats: false,
         live_prices: true,
-        assumed_purchase_date: null,
+        assumed_purchase_date: "Today",
       },
     },
     next_place_id: 4,

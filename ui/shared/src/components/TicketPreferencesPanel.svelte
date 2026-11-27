@@ -1,7 +1,7 @@
 <script lang="ts">
   // Trip-wide choices that decide how tickets are priced. The pass settings sit behind the
   // switch that makes them matter, because the optimizer reads them only for passes.
-  import type { FareType, TicketPreferences, Traveller } from "../bindings";
+  import type { FareType, PurchaseDate, TicketPreferences, Traveller } from "../bindings";
   import { RESIDENCE_COUNTRIES } from "../traveller";
 
   let {
@@ -23,6 +23,16 @@
 
   function update(changes: Partial<TicketPreferences>) {
     onChange?.({ ...preferences, ...changes });
+  }
+
+  /** Returns the date of the input, which is empty for today. */
+  function purchaseDateText(purchaseDate: PurchaseDate): string {
+    return purchaseDate === "Today" ? "" : purchaseDate.On;
+  }
+
+  /** Returns the purchase date that the input holds, where an empty input means today. */
+  function purchaseDateOf(text: string): PurchaseDate {
+    return text === "" ? "Today" : { On: text };
   }
 
   /** Saves the residence of a traveller, which the Interrail pass rules read. */
@@ -114,9 +124,10 @@
       <input
         type="date"
         class="numbers"
-        value={preferences.assumed_purchase_date ?? ""}
+        value={purchaseDateText(preferences.assumed_purchase_date)}
         {disabled}
-        onchange={(event) => update({ assumed_purchase_date: event.currentTarget.value || null })}
+        onchange={(event) =>
+          update({ assumed_purchase_date: purchaseDateOf(event.currentTarget.value) })}
       />
       <span class="hint">empty means today</span>
     </label>

@@ -72,6 +72,24 @@ pub enum FareType {
     Saver,
 }
 
+/// The minimum transfer time of one leg.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub enum TransferTimeSetting {
+    /// The leg uses the trip-wide `minimum_transfer_time`.
+    TripDefault,
+    /// The leg uses its own time.
+    Minutes(DurationMinutes),
+}
+
+/// The day on which tickets are assumed to be bought, which decides the booking window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+pub enum PurchaseDate {
+    /// The tickets are bought on the day of the lookup.
+    Today,
+    /// The tickets are bought on this day.
+    On(NaiveDate),
+}
+
 /// How tickets for the trip are chosen. The options are independent switches.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
@@ -87,9 +105,8 @@ pub struct TicketPreferences {
     /// Whether prices are looked up on the booking sites of operators. These sites are not
     /// meant to be read by programs, so the lookup is a choice.
     pub live_prices: bool,
-    /// The day tickets are assumed to be bought, which decides the booking window. `None` means
-    /// today.
-    pub assumed_purchase_date: Option<NaiveDate>,
+    /// The day tickets are assumed to be bought, which decides the booking window.
+    pub assumed_purchase_date: PurchaseDate,
 }
 
 impl Default for TicketPreferences {
@@ -100,7 +117,7 @@ impl Default for TicketPreferences {
             fare_type: FareType::Flexible,
             reserve_optional_seats: false,
             live_prices: true,
-            assumed_purchase_date: None,
+            assumed_purchase_date: PurchaseDate::Today,
         }
     }
 }
@@ -394,7 +411,7 @@ impl Trip {
 }
 
 /// Schema version that `StoredTrip` documents written by this build carry.
-pub const CURRENT_TRIP_SCHEMA_VERSION: u16 = 5;
+pub const CURRENT_TRIP_SCHEMA_VERSION: u16 = 6;
 
 /// A trip as it is stored and exported, with the schema version of its document.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]

@@ -150,8 +150,9 @@
 
   /** Sets the minimum transfer time of this leg, or goes back to the trip's time with `null`. */
   function setTransferTime(minutes: number | null) {
+    const setting = minutes === null ? "TripDefault" : { Minutes: minutes };
     onEdit?.({
-      SetLegMinimumTransferTime: { arrival_place_id: leg.arrivalPlace.id, minimum_transfer_time: minutes },
+      SetLegMinimumTransferTime: { arrival_place_id: leg.arrivalPlace.id, setting },
     });
   }
 

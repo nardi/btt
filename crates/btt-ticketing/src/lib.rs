@@ -11,8 +11,8 @@ mod rides;
 
 use btt_fares::{FareData, PriceBook};
 use btt_model::{
-    AgeGroup, EuroCents, EuroRange, Journey, LegPlanStation, TicketPlan, TicketPreferences,
-    TicketRide, TravelClass, Traveller,
+    AgeGroup, EuroCents, EuroRange, Journey, LegPlanStation, PurchaseDate, TicketPlan,
+    TicketPreferences, TicketRide, TravelClass, Traveller,
 };
 use smol_str::SmolStr;
 
@@ -104,10 +104,10 @@ pub fn plan_tickets(request: &TicketRequest<'_>, data: &FareData, book: &PriceBo
             .traveller
             .map(|traveller| traveller.residence_country.as_str()),
         preferences: request.preferences,
-        purchase_date: request
-            .preferences
-            .assumed_purchase_date
-            .unwrap_or(request.today),
+        purchase_date: match request.preferences.assumed_purchase_date {
+            PurchaseDate::Today => request.today,
+            PurchaseDate::On(purchase_date) => purchase_date,
+        },
         today: request.today,
         single_ticket_percent,
     };

@@ -438,7 +438,7 @@
           "pass_policy": "PreferPass",
           "price_weight": 0,
           "ticket_preferences": {
-            "assumed_purchase_date": null,
+            "assumed_purchase_date": "Today",
             "consider_families": true,
             "consider_passes": true,
             "fare_type": "Flexible",

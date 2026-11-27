@@ -1106,6 +1106,13 @@ export type ProblemReportView = {
 	map_zoom: number | null,
 };
 
+/**  The day on which tickets are assumed to be bought, which decides the booking window. */
+export type PurchaseDate = 
+/**  The tickets are bought on the day of the lookup. */
+"Today" | 
+/**  The tickets are bought on this day. */
+{ On: string };
+
 /**  What a QR code holds: the web address of the viewer and the trip. */
 export type QrText = {
 	/**  The web address of the viewer with the `#`, which goes in a segment of bytes. */
@@ -1312,11 +1319,8 @@ export type TicketPreferences = {
 	 *  meant to be read by programs, so the lookup is a choice.
 	 */
 	live_prices: boolean,
-	/**
-	 *  The day tickets are assumed to be bought, which decides the booking window. `None` means
-	 *  today.
-	 */
-	assumed_purchase_date: string | null,
+	/**  The day tickets are assumed to be bought, which decides the booking window. */
+	assumed_purchase_date: PurchaseDate,
 };
 
 /**  What a ticket is. */
@@ -1450,6 +1454,13 @@ export type TransferAndRide = {
  *  fewest transfers.
  */
 export type TransferAversion = number;
+
+/**  The minimum transfer time of one leg. */
+export type TransferTimeSetting = 
+/**  The leg uses the trip-wide `minimum_transfer_time`. */
+"TripDefault" | 
+/**  The leg uses its own time. */
+{ Minutes: DurationMinutes };
 
 /**  Travel class for passes and fares. */
 export type TravelClass = 
@@ -1592,8 +1603,8 @@ export type TripEdit =
 ({ SetLegMinimumTransferTime: {
 	/**  Place at which the leg arrives. */
 	arrival_place_id: TripPlaceId,
-	/**  The leg's own minimum transfer time, or `None` for the trip-wide time. */
-	minimum_transfer_time: DurationMinutes | null,
+	/**  The leg's own minimum transfer time, or `TripDefault` for the trip-wide time. */
+	setting: TransferTimeSetting,
 } }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never };
 
 /**  Reasons an edit can be rejected. A rejected edit leaves the trip unchanged. */

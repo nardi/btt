@@ -13,12 +13,28 @@ type TripDocumentMigration = fn(&mut Value);
 ///
 /// A change to the `Trip` layout adds a function here, bumps `CURRENT_TRIP_SCHEMA_VERSION` and
 /// adds a fixture for the old version.
-const TRIP_DOCUMENT_MIGRATIONS: [TripDocumentMigration; 4] = [
+const TRIP_DOCUMENT_MIGRATIONS: [TripDocumentMigration; 5] = [
     wrap_window_overrides,
     night_windows_to_bedtime,
     add_ticket_preferences,
     add_live_prices,
+    purchase_date_to_enum,
 ];
+
+/// Version 6 replaces the optional assumed purchase date with `PurchaseDate`. A missing or null
+/// date becomes `Today`, and a date becomes `On` with that date.
+fn purchase_date_to_enum(document: &mut Value) {
+    let Some(Value::Object(preferences)) =
+        document.pointer_mut("/trip/preferences/ticket_preferences")
+    else {
+        return;
+    };
+    let purchase_date = match preferences.remove("assumed_purchase_date") {
+        Some(Value::String(date)) => serde_json::json!({ "On": date }),
+        _ => Value::from("Today"),
+    };
+    preferences.insert("assumed_purchase_date".to_owned(), purchase_date);
+}
 
 /// Version 5 adds the choice to look up live prices on booking sites, which is on.
 fn add_live_prices(document: &mut Value) {
@@ -141,7 +157,8 @@ pub fn trip_from_document(document: &str) -> Result<Trip, StorageError> {
 
 #[cfg(test)]
 mod tests {
-    use btt_model::{LegTravelMode, PlaceWindowOverride, TicketPreferences};
+    use btt_model::{LegTravelMode, PlaceWindowOverride, PurchaseDate, TicketPreferences};
+    use chrono::NaiveDate;
 
     use super::*;
 
@@ -156,6 +173,9 @@ mod tests {
 
     /// A document written by schema version 4, before the live price choice existed.
     const TRIP_DOCUMENT_VERSION_4: &str = include_str!("../tests/fixtures/trip_v4.json");
+
+    /// A document written by schema version 5, with a purchase date that is set.
+    const TRIP_DOCUMENT_VERSION_5: &str = include_str!("../tests/fixtures/trip_v5.json");
 
     #[test]
     fn every_schema_version_fixture_loads() {
@@ -191,6 +211,16 @@ mod tests {
 
         let trip = trip_from_document(TRIP_DOCUMENT_VERSION_4).unwrap();
         assert!(trip.preferences.ticket_preferences.live_prices);
+        assert_eq!(
+            trip.preferences.ticket_preferences.assumed_purchase_date,
+            PurchaseDate::Today
+        );
+
+        let trip = trip_from_document(TRIP_DOCUMENT_VERSION_5).unwrap();
+        assert_eq!(
+            trip.preferences.ticket_preferences.assumed_purchase_date,
+            PurchaseDate::On(NaiveDate::from_ymd_opt(2026, 1, 2).unwrap())
+        );
     }
 
     #[test]
