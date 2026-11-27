@@ -42,6 +42,7 @@ fn a_snapshot_survives_the_json_of_the_file() {
     let stored = StoredSnapshot {
         schema_version: SNAPSHOT_SCHEMA_VERSION,
         snapshot: snapshot.clone(),
+        editable_trip: None,
     };
     let json = serde_json::to_string(&stored).unwrap();
     let parsed: StoredSnapshot = serde_json::from_str(&json).unwrap();

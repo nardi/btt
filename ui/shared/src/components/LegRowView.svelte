@@ -235,18 +235,20 @@
   <div class="leg-card" class:expanded data-popup-edge>
     <div class="head">
       <!-- An open card names its trains in the list of rides, so the header keeps only the date. -->
-      {#if !expanded && journey !== null}
-        <span class="chips">
-          {#each rides as ride, rideIndex (rideIndex)}
-            <TrainChip
-              label={trainName(ride)}
-              colour={legLine.colour}
-              sleeping={journey.sleeping_ride === rideIndex}
-            />
-          {/each}
-        </span>
-      {/if}
-      <span class="when numbers" class:open={expanded}>{formatDate(leg.departureDate)}</span>
+      <span class="identity">
+        {#if !expanded && journey !== null}
+          <span class="chips">
+            {#each rides as ride, rideIndex (rideIndex)}
+              <TrainChip
+                label={trainName(ride)}
+                colour={legLine.colour}
+                sleeping={journey.sleeping_ride === rideIndex}
+              />
+            {/each}
+          </span>
+        {/if}
+        <span class="when numbers" class:open={expanded}>{formatDate(leg.departureDate)}</span>
+      </span>
       <span class="grow"></span>
       {#if hasExplanation}
         <button
@@ -566,6 +568,22 @@
     display: flex;
     align-items: center;
     gap: var(--space-2);
+  }
+
+  /* The trains and the date of the leg. They are on one line in a wide list. */
+  .identity {
+    display: contents;
+  }
+
+  /* A narrow list, such as on a phone, has the date under the trains. */
+  @container itinerary (max-width: 480px) {
+    .identity {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: var(--space-1);
+      min-width: 0;
+    }
   }
 
   .chips {

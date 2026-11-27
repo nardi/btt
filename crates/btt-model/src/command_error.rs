@@ -41,6 +41,12 @@ pub enum CommandError {
         /// Description of the failure.
         message: String,
     },
+    /// A trip file cannot be opened as a trip.
+    #[error("the trip file cannot be opened: {message}")]
+    TripFileUnreadable {
+        /// Description of the failure.
+        message: String,
+    },
     /// The start date of a trip lies outside the days the timetable covers.
     #[error("the timetable covers {first} to {last}")]
     StartDateOutsideTimetable {

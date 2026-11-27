@@ -6,7 +6,9 @@ use std::sync::{Arc, Mutex, PoisonError};
 use btt_backend::editing::{PreparedEdit, prepare_edit};
 use btt_backend::place_naming::{has_provisional_name, provisional_place_name};
 use btt_backend::pricing::PriceBookJourneyPricer;
-use btt_backend::sharing::{LinkOptions, share_snapshot, trip_file_json, trip_file_name};
+use btt_backend::sharing::{
+    LinkOptions, share_snapshot, trip_file_json, trip_file_name, trip_of_file_json,
+};
 use btt_backend::tickets::{first_traveller, plan_trip_pass_scenarios, plan_trip_tickets};
 use btt_backend::timetable_status::{
     InstalledBundle, OperatorEndDate, StatusInputs, build_status, installed_bundle_of,
@@ -308,6 +310,7 @@ impl WebBackend {
         match command {
             "list_trips" => to_value(&self.storage.borrow().list_trips()),
             "create_trip" => self.create_trip(arguments.get("name")?, arguments.get("startDate")?),
+            "import_trip_file" => self.import_trip_file(&arguments.get::<String>("contents")?),
             "open_trip" => {
                 self.open_trip(arguments.get("tripId")?, channel_id(arguments, "events")?)
             }
@@ -591,29 +594,30 @@ impl WebBackend {
         ))
     }
 
-    /// Builds the snapshot of an open trip from the legs as the page shows them.
+    /// Returns an open trip and its snapshot, from the legs as the page shows them.
     fn snapshot_of_open_trip(
         &self,
         trip_id: TripId,
         legs: &[SnapshotLeg],
-    ) -> Result<TripSnapshot, CommandError> {
+    ) -> Result<(Trip, TripSnapshot), CommandError> {
         let trip = self
             .open_trips
             .borrow()
             .get(&trip_id)
             .map(|open_trip| open_trip.trip.clone())
             .ok_or(CommandError::TripNotOpen(trip_id))?;
-        Ok(TripSnapshot::new(
+        let snapshot = TripSnapshot::new(
             &trip,
             legs,
             today_utc(),
             self.planning_backend()?.bundle_version(),
-        ))
+        );
+        Ok((trip, snapshot))
     }
 
     /// Writes an open trip as a link for the web viewer.
     fn share_trip(&self, arguments: &Arguments) -> Result<Value, Failure> {
-        let snapshot = self.snapshot_of_open_trip(
+        let (_, snapshot) = self.snapshot_of_open_trip(
             arguments.get("tripId")?,
             &arguments.get::<Vec<SnapshotLeg>>("legs")?,
         )?;
@@ -631,11 +635,18 @@ impl WebBackend {
 
     /// Hands the page a trip file to download. Returns the name of the file.
     fn export_trip_file(&self, trip_id: TripId, legs: &[SnapshotLeg]) -> Result<Value, Failure> {
-        let snapshot = self.snapshot_of_open_trip(trip_id, legs)?;
+        let (trip, snapshot) = self.snapshot_of_open_trip(trip_id, legs)?;
         let file_name = trip_file_name(&snapshot.trip.name);
-        let json = trip_file_json(snapshot)?;
+        let json = trip_file_json(snapshot, &trip)?;
         self.host.save_file(&file_name, &json);
         Ok(json!(file_name))
+    }
+
+    /// Stores the trip of a `.btt` file as a new trip. Returns the new trip.
+    fn import_trip_file(&self, contents: &str) -> Result<Value, Failure> {
+        let trip = trip_of_file_json(contents)?;
+        self.save_trip(&trip);
+        to_value(&trip)
     }
 
     /// Collects what the page shows about the timetable.

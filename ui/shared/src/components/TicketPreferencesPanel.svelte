@@ -2,6 +2,7 @@
   // Trip-wide choices that decide how tickets are priced. The pass settings sit behind the
   // switch that makes them matter, because the optimizer reads them only for passes.
   import type { FareType, TicketPreferences, Traveller } from "../bindings";
+  import { appFeatures } from "../app-features";
   import { RESIDENCE_COUNTRIES } from "../traveller";
 
   let {
@@ -93,22 +94,26 @@
       />
       <span>Reserve seats where a reservation is optional</span>
     </label>
-    <label class="switch-row">
-      <input
-        type="checkbox"
-        class="switch"
-        checked={preferences.live_prices}
-        {disabled}
-        onchange={(event) => update({ live_prices: event.currentTarget.checked })}
-      />
-      <span>Look up live prices on booking sites</span>
-      <span class="hint">
-        unofficial: <span class="term">SBB</span>, <span class="term">DB</span>,
-        <span class="term">ÖBB</span>, <span class="term">PKP Intercity</span>,
-        <span class="term">Trenitalia</span> and <span class="term">NS</span>, and
-        <span class="term">SBB</span> for France
-      </span>
-    </label>
+    {#if appFeatures().livePrices}
+      <label class="switch-row">
+        <input
+          type="checkbox"
+          class="switch"
+          checked={preferences.live_prices}
+          {disabled}
+          onchange={(event) => update({ live_prices: event.currentTarget.checked })}
+        />
+        <span>Look up live prices on booking sites</span>
+        <span class="hint">
+          unofficial: <span class="term">SBB</span>, <span class="term">DB</span>,
+          <span class="term">ÖBB</span>, <span class="term">PKP Intercity</span>,
+          <span class="term">Trenitalia</span> and <span class="term">NS</span>, and
+          <span class="term">SBB</span> for France
+        </span>
+      </label>
+    {:else}
+      <p class="hint">Live prices from booking sites are only in the desktop app.</p>
+    {/if}
     <label>
       <span class="label">Buying on</span>
       <input
@@ -153,5 +158,9 @@
   .hint {
     color: var(--color-text-muted);
     font-size: var(--text-small);
+  }
+
+  p.hint {
+    margin: 0;
   }
 </style>

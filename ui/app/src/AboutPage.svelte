@@ -1,11 +1,15 @@
 <script lang="ts">
   // What the app is, which requests it makes and where its data comes from.
   import { commands, type DataLocationStatus, type FeedCredit } from "@btt/shared/bindings";
+  import { appFeatures } from "@btt/shared/app-features";
   import Icon from "@btt/shared/components/Icon.svelte";
   import { onMount } from "svelte";
   import { commandErrorMessage } from "./tauri-trip-source.svelte";
 
   let { onClose }: { onClose: () => void } = $props();
+
+  /** The features of this build, which decide what the page says about data and requests. */
+  const features = appFeatures();
 
   /** The feeds of the installed timetable, or `null` until the backend answered. */
   let feeds: FeedCredit[] | null = $state(null);
@@ -18,7 +22,9 @@
 
   onMount(async () => {
     feeds = await commands.timetableFeeds();
-    await loadLocationStatus();
+    if (features.dataLocation) {
+      await loadLocationStatus();
+    }
   });
 
   /** Loads whether the data sits next to the app and whether a restart is pending. */
@@ -63,16 +69,32 @@
     Back
   </button>
   <h1>About BigTrainTrip</h1>
-  <p>
-    BigTrainTrip plans long train trips across Europe and estimates what their tickets cost. Your
-    trips are stored on this computer and the app has no account.
-  </p>
-  <p>
-    The app makes three kinds of requests. It downloads its timetable file from the releases of
-    the project on GitHub. It loads map tiles from OpenFreeMap, which sees the area on screen but
-    not the trip. When you price a trip, it asks some booking sites for the live price of a
-    ticket, and those sites see the stations and the dates of that ticket.
-  </p>
+  {#if features.runsInBrowser}
+    <p>
+      BigTrainTrip plans long train trips across Europe and estimates what their tickets cost. Your
+      trips are stored in this browser and the app has no account. Other browsers and devices do
+      not see them. To move a trip, save it as a file in the share dialog and import the file on
+      the other device.
+    </p>
+    <p>
+      The web app makes three kinds of requests. It downloads its timetable file from this website.
+      It loads map tiles from OpenFreeMap, which sees the area on screen but not the trip. It
+      searches places with Photon, which sees the text you type in the search field. It does not
+      ask booking sites for live prices, so every price is an estimate. The desktop app also looks
+      up live prices.
+    </p>
+  {:else}
+    <p>
+      BigTrainTrip plans long train trips across Europe and estimates what their tickets cost. Your
+      trips are stored on this computer and the app has no account.
+    </p>
+    <p>
+      The app makes three kinds of requests. It downloads its timetable file from the releases of
+      the project on GitHub. It loads map tiles from OpenFreeMap, which sees the area on screen but
+      not the trip. When you price a trip, it asks some booking sites for the live price of a
+      ticket, and those sites see the stations and the dates of that ticket.
+    </p>
+  {/if}
 
   <h2>Timetable data</h2>
   <p>The trains and times come from the public timetable feeds below.</p>
@@ -115,29 +137,31 @@
     <a href="https://openfreemap.org" rel="noopener noreferrer" target="_blank">OpenFreeMap</a>.
   </p>
 
-  <h2>Data location</h2>
-  {#if locationStatus === null}
-    <p class="muted">Loading the data location.</p>
-  {:else}
-    <label class="option">
-      <input
-        type="checkbox"
-        checked={locationStatus.portable}
-        onchange={(event) => void setPortable(event.currentTarget.checked)}
-      />
-      Portable mode
-    </label>
-    <p>
-      In portable mode, the trips, travellers and timetable go into a folder named
-      <code>data</code> beside the app. Without it, they stay in your user profile.
-    </p>
-    {#if locationStatus.restart_pending}
-      <p>The data moves when the app restarts.</p>
-      <button type="button" onclick={() => void commands.restartApp()}>Restart now</button>
+  {#if features.dataLocation}
+    <h2>Data location</h2>
+    {#if locationStatus === null}
+      <p class="muted">Loading the data location.</p>
+    {:else}
+      <label class="option">
+        <input
+          type="checkbox"
+          checked={locationStatus.portable}
+          onchange={(event) => void setPortable(event.currentTarget.checked)}
+        />
+        Portable mode
+      </label>
+      <p>
+        In portable mode, the trips, travellers and timetable go into a folder named
+        <code>data</code> beside the app. Without it, they stay in your user profile.
+      </p>
+      {#if locationStatus.restart_pending}
+        <p>The data moves when the app restarts.</p>
+        <button type="button" onclick={() => void commands.restartApp()}>Restart now</button>
+      {/if}
     {/if}
-  {/if}
-  {#if locationMessage !== null}
-    <p class="message" role="alert">{locationMessage}</p>
+    {#if locationMessage !== null}
+      <p class="message" role="alert">{locationMessage}</p>
+    {/if}
   {/if}
 
   <h2>Use of the data</h2>

@@ -26,6 +26,7 @@
   let {
     row,
     index,
+    placeCount,
     lineAbove,
     lineBelow,
     selected,
@@ -40,6 +41,8 @@
   }: {
     row: PlaceRow;
     index: number;
+    /** The number of places in the itinerary, which decides whether the place can move down. */
+    placeCount: number;
     /** The leg that arrives here, whose colour draws the spine above the glyph. */
     lineAbove: LegLine | null;
     /** The leg that leaves here, whose colour draws the spine below the glyph. */
@@ -275,6 +278,31 @@
               Stations within {formatDistance(row.place.station_search_radius)}. Drag the ring on the map to
               change it.
             </p>
+            <!-- A touch screen cannot drag a row, so it moves the place with these buttons. -->
+            {#if onReorder !== undefined}
+              <span class="move-buttons">
+                <button
+                  type="button"
+                  class="icon-button"
+                  aria-label="Move place up"
+                  title="Move place up"
+                  disabled={index === 0}
+                  onclick={() => onReorder?.(placeId, index - 1)}
+                >
+                  <Icon name="chevron" turned />
+                </button>
+                <button
+                  type="button"
+                  class="icon-button"
+                  aria-label="Move place down"
+                  title="Move place down"
+                  disabled={index === placeCount - 1}
+                  onclick={() => onReorder?.(placeId, index + 1)}
+                >
+                  <Icon name="chevron" />
+                </button>
+              </span>
+            {/if}
             <button
               type="button"
               class="icon-button danger-hover"
@@ -418,6 +446,15 @@
     min-width: 0;
   }
 
+  /* A narrow list, such as on a phone, has the dates under the name. */
+  @container itinerary (max-width: 480px) {
+    .title {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0;
+    }
+  }
+
   .name {
     font-size: var(--text-lead);
     font-weight: 700;
@@ -482,5 +519,18 @@
     margin: 0;
     color: var(--color-text-muted);
     font-size: var(--text-small);
+  }
+
+  .move-buttons {
+    display: none;
+    gap: var(--space-2);
+    margin-left: auto;
+  }
+
+  /* A touch screen, which cannot drag a row. */
+  @media (pointer: coarse) {
+    .move-buttons {
+      display: flex;
+    }
   }
 </style>

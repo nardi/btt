@@ -32,6 +32,7 @@ fn document_of(snapshot: &TripSnapshot) -> StoredSnapshot {
     StoredSnapshot {
         schema_version: SNAPSHOT_SCHEMA_VERSION,
         snapshot: snapshot.clone(),
+        editable_trip: None,
     }
 }
 

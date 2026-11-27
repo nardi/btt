@@ -1,5 +1,6 @@
 // Editable trip source backed by Tauri commands and a planning event channel.
 
+import { appFeatures } from "@btt/shared/app-features";
 import { commands } from "@btt/shared/bindings";
 import type {
   CommandError,
@@ -50,6 +51,9 @@ export function commandErrorMessage(error: CommandError): string {
   }
   if (error.Sharing !== undefined) {
     return `Sharing failed: ${error.Sharing.message}`;
+  }
+  if (error.TripFileUnreadable !== undefined) {
+    return `This trip file cannot be opened: ${error.TripFileUnreadable.message}.`;
   }
   if (error.StartDateOutsideTimetable !== undefined) {
     const { first, last } = error.StartDateOutsideTimetable;
@@ -279,7 +283,11 @@ export class TauriTripSource implements TripViewState {
    */
   private queueLiveLookups(arrivalPlaceId: TripPlaceId, legPlan: LegPlan): void {
     const preferences = this.trip.preferences;
-    if (preferences.price_weight === 0 || !preferences.ticket_preferences.live_prices) {
+    if (
+      !appFeatures().livePrices ||
+      preferences.price_weight === 0 ||
+      !preferences.ticket_preferences.live_prices
+    ) {
       return;
     }
     for (const journey of liveCandidates(legPlan)) {
@@ -305,7 +313,7 @@ export class TauriTripSource implements TripViewState {
    * same request costs no new lookup.
    */
   lookUpChosenLivePrices(): void {
-    if (!this.trip.preferences.ticket_preferences.live_prices) {
+    if (!appFeatures().livePrices || !this.trip.preferences.ticket_preferences.live_prices) {
       return;
     }
     for (const [arrivalPlaceId, state] of this.legStatesByArrivalPlace) {

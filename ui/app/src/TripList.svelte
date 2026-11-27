@@ -14,6 +14,7 @@
     onCreate,
     onOpen,
     onDelete,
+    onImport,
     onAbout,
   }: {
     trips: TripSummary[];
@@ -24,6 +25,8 @@
     onCreate: (name: string, startDate: string) => void;
     onOpen: (tripId: TripId) => void;
     onDelete: (tripId: TripId) => void;
+    /** Stores the text of a `.btt` file as a new trip. */
+    onImport: (contents: string) => void;
     /** Opens the about screen. */
     onAbout: () => void;
   } = $props();
@@ -53,6 +56,18 @@
     newTripStartDate = clampToTimetable(newTripStartDate);
   });
 
+  /** The hidden file field that the import button opens. */
+  let fileInput: HTMLInputElement | undefined = $state();
+
+  /** Reads the picked trip file and empties the field, so that the same file can be picked again. */
+  async function importPickedFile(input: HTMLInputElement) {
+    const file = input.files?.[0];
+    input.value = "";
+    if (file !== undefined) {
+      onImport(await file.text());
+    }
+  }
+
   function create(event: SubmitEvent) {
     event.preventDefault();
     const name = newTripName.trim();
@@ -67,6 +82,16 @@
   <div class="title-row">
     <Logo height={48} />
     <div class="title-actions">
+      <button type="button" title="Open a .btt trip file as a new trip" onclick={() => fileInput?.click()}>
+        Import trip…
+      </button>
+      <input
+        bind:this={fileInput}
+        type="file"
+        accept=".btt,application/json"
+        hidden
+        onchange={(event) => void importPickedFile(event.currentTarget)}
+      />
       <button type="button" onclick={onAbout}>About</button>
       <ThemeSwitch />
     </div>
@@ -103,7 +128,7 @@
               </span>
             </span>
           </button>
-          <button type="button" onclick={() => onOpen(trip.trip_id)}>Open</button>
+          <button type="button" class="open-button" onclick={() => onOpen(trip.trip_id)}>Open</button>
           <button
             type="button"
             class="icon-button danger-hover"
@@ -201,9 +226,46 @@
     font-size: var(--text-lead);
   }
 
+  .name {
+    overflow-wrap: anywhere;
+  }
+
   .details,
   .empty {
     color: var(--color-text-muted);
     font-size: var(--text-small);
+  }
+
+  /* A phone. The row of a trip opens the trip, so the open button goes. */
+  @media (max-width: 719px) {
+    .title-row {
+      flex-wrap: wrap;
+      gap: var(--space-3);
+    }
+
+    .title-actions {
+      gap: var(--space-2);
+    }
+
+    .new-trip {
+      flex-wrap: wrap;
+    }
+
+    .new-trip input[type="text"] {
+      flex-basis: 100%;
+    }
+
+    .new-trip input[type="date"] {
+      flex: 1;
+      min-width: 0;
+    }
+
+    li {
+      padding: var(--space-2) var(--space-3);
+    }
+
+    .open-button {
+      display: none;
+    }
   }
 </style>

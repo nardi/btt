@@ -153,7 +153,7 @@ export const commands = {
 	shareTrip: (tripId: TripId, legs: SnapshotLeg[], includeAlternatives: boolean, includePrices: boolean, namePlacesByStation: boolean, compact: boolean) => typedError<SharedTrip, CommandError>(__TAURI_INVOKE("share_trip", { tripId, legs, includeAlternatives, includePrices, namePlacesByStation, compact })),
 	/**
 	 *  Asks where to save the trip as a file and writes it there, for the viewer's open button, for
-	 *  email and for `AirDrop`. Returns the path of the saved file, or `None` when the traveller
+	 *  email and for `AirDrop`. The app can open the file again with `import_trip_file`. Returns the path of the saved file, or `None` when the traveller
 	 *  cancelled.
 	 * 
 	 *  # Errors
@@ -161,6 +161,19 @@ export const commands = {
 	 *  Returns an error when the trip is not open or the file cannot be written.
 	 */
 	exportTripFile: (tripId: TripId, legs: SnapshotLeg[]) => typedError<string | null, CommandError>(__TAURI_INVOKE("export_trip_file", { tripId, legs })),
+	/**
+	 *  Reads the text of a `.btt` file and stores its trip as a new trip. Returns the new trip.
+	 * 
+	 *  The frontend reads the file, so this command works the same for a file that the traveller
+	 *  picked and for a file that was dropped on the window. See `trip_of_file_json` for what the
+	 *  trip holds.
+	 * 
+	 *  # Errors
+	 * 
+	 *  Returns an error when the text is not a trip file, when a newer version of the app wrote it,
+	 *  or when the trip cannot be stored.
+	 */
+	importTripFile: (contents: string) => typedError<Trip, CommandError>(__TAURI_INVOKE("import_trip_file", { contents })),
 	/**  Returns what the app knows about its timetable, without any request. */
 	timetableStatus: () => __TAURI_INVOKE<TimetableStatus>("timetable_status"),
 	/**
@@ -299,45 +312,50 @@ export type ChosenJourney = {
 /**  Errors a command returns to the frontend. */
 export type CommandError = 
 /**  No trip with this ID exists. */
-({ TripNotFound: TripId }) & { DataLocation?: never; InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripNotOpen?: never } | 
+({ TripNotFound: TripId }) & { DataLocation?: never; InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripFileUnreadable?: never; TripNotOpen?: never } | 
 /**  The frontend edited a trip it has not opened. */
-({ TripNotOpen: TripId }) & { DataLocation?: never; InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripNotFound?: never } | 
+({ TripNotOpen: TripId }) & { DataLocation?: never; InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripFileUnreadable?: never; TripNotFound?: never } | 
 /**  The edit does not fit the trip. */
-({ InvalidEdit: TripEditError }) & { DataLocation?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
+({ InvalidEdit: TripEditError }) & { DataLocation?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripFileUnreadable?: never; TripNotFound?: never; TripNotOpen?: never } | 
 /**  Reading or writing the database failed. */
 ({ Storage: {
 	/**  Description of the failure. */
 	message: string,
-} }) & { DataLocation?: never; InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
+} }) & { DataLocation?: never; InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Timetable?: never; TripFileUnreadable?: never; TripNotFound?: never; TripNotOpen?: never } | 
 /**  The place search service failed or could not be reached. */
 ({ PlaceSearch: {
 	/**  Description of the failure. */
 	message: string,
-} }) & { DataLocation?: never; InvalidEdit?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
+} }) & { DataLocation?: never; InvalidEdit?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripFileUnreadable?: never; TripNotFound?: never; TripNotOpen?: never } | 
 /**  The trip has more journeys than a link can carry. */
 "TripTooLargeForLink" | 
 /**  Writing the link or the trip file failed. */
 ({ Sharing: {
 	/**  Description of the failure. */
 	message: string,
-} }) & { DataLocation?: never; InvalidEdit?: never; PlaceSearch?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
+} }) & { DataLocation?: never; InvalidEdit?: never; PlaceSearch?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripFileUnreadable?: never; TripNotFound?: never; TripNotOpen?: never } | 
+/**  A trip file cannot be opened as a trip. */
+({ TripFileUnreadable: {
+	/**  Description of the failure. */
+	message: string,
+} }) & { DataLocation?: never; InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
 /**  The start date of a trip lies outside the days the timetable covers. */
 ({ StartDateOutsideTimetable: {
 	/**  First day the timetable covers. */
 	first: string,
 	/**  Last day the timetable covers. */
 	last: string,
-} }) & { DataLocation?: never; InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; Storage?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never } | 
+} }) & { DataLocation?: never; InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; Storage?: never; Timetable?: never; TripFileUnreadable?: never; TripNotFound?: never; TripNotOpen?: never } | 
 /**  Downloading or installing a timetable failed. */
 ({ Timetable: {
 	/**  Description of the failure. */
 	message: string,
-} }) & { DataLocation?: never; InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; TripNotFound?: never; TripNotOpen?: never } | 
+} }) & { DataLocation?: never; InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; TripFileUnreadable?: never; TripNotFound?: never; TripNotOpen?: never } | 
 /**  Saving the data location failed, or the new folder is not writable. */
 ({ DataLocation: {
 	/**  Description of the failure. */
 	message: string,
-} }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripNotFound?: never; TripNotOpen?: never };
+} }) & { InvalidEdit?: never; PlaceSearch?: never; Sharing?: never; StartDateOutsideTimetable?: never; Storage?: never; Timetable?: never; TripFileUnreadable?: never; TripNotFound?: never; TripNotOpen?: never };
 
 /**
  *  A time window that recurs on every travel day, such as 08:00 to 12:00.
@@ -1241,11 +1259,34 @@ export type StationWay = {
 };
 
 /**  A snapshot as it is exported, with the schema version of its document. */
-export type StoredSnapshot = {
+export type StoredSnapshot = StoredSnapshot_Serialize | StoredSnapshot_Deserialize;
+
+/**  A snapshot as it is exported, with the schema version of its document. */
+export type StoredSnapshot_Deserialize = {
 	/**  Version of the document layout, which the reader checks before it reads the rest. */
 	schema_version: number,
 	/**  The snapshot itself. */
 	snapshot: TripSnapshot,
+	/**
+	 *  The trip with its settings and the journeys the traveller picked, so that the app can
+	 *  open the file as a trip to edit. It has no ID and no travellers. The viewer ignores it.
+	 *  Files from older versions do not have it.
+	 */
+	editable_trip?: Trip | null,
+};
+
+/**  A snapshot as it is exported, with the schema version of its document. */
+export type StoredSnapshot_Serialize = {
+	/**  Version of the document layout, which the reader checks before it reads the rest. */
+	schema_version: number,
+	/**  The snapshot itself. */
+	snapshot: TripSnapshot,
+	/**
+	 *  The trip with its settings and the journeys the traveller picked, so that the app can
+	 *  open the file as a trip to edit. It has no ID and no travellers. The viewer ignores it.
+	 *  Files from older versions do not have it.
+	 */
+	editable_trip?: Trip | null,
 };
 
 /**  What a strategy is. */

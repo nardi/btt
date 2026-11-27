@@ -17,6 +17,9 @@
     | "back"
     | "close"
     | "warning"
+    | "info"
+    | "map"
+    | "list"
     | "coaches";
 
   /** The drawing of one icon. */
@@ -63,6 +66,11 @@
     back: { paths: ["M19 12H5M11 6l-6 6 6 6"] },
     close: { paths: ["M6 6l12 12M18 6L6 18"] },
     warning: { paths: ["M12 3.5l9.5 16.5h-19z", "M12 10v4.5M12 17.2v.3"] },
+    info: {
+      paths: ["M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z", "M12 11v5.5M12 7.8v.2"],
+    },
+    map: { paths: ["M9 4L3 6.5v13.5l6-2.5 6 2.5 6-2.5V4l-6 2.5z", "M9 4v13.5M15 6.5V20"] },
+    list: { paths: ["M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"] },
     coaches: { paths: ["M2.5 7h8.5v9H2.5z", "M13 7h8.5v9H13z", "M11 11.5h2"] },
   };
 </script>

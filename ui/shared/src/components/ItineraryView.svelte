@@ -163,6 +163,7 @@
       <PlaceRowView
         {row}
         {index}
+        placeCount={rows.places.length}
         lineAbove={index > 0 ? legLine(rows.legs[index - 1]!.travelMode, index) : null}
         lineBelow={index < rows.legs.length ? legLine(rows.legs[index]!.travelMode, index + 1) : null}
         selected={row.place.id === selectedPlaceId}
@@ -213,6 +214,9 @@
     margin: 0;
     padding: 0;
     list-style: none;
+    /* The rows stack their dates under the names when the list is narrow, see the
+       `itinerary` container queries in the rows. */
+    container: itinerary / inline-size;
   }
 
   /* The summary of the default windows and the button to the setup screen share a line. */
