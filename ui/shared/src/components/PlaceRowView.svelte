@@ -1,3 +1,8 @@
+<script lang="ts" module>
+  /** The side of a place on which a new place goes. */
+  export type InsertionSide = "before" | "after";
+</script>
+
 <script lang="ts">
   // One place of the itinerary. The closed card is one line with the name, the dates and the
   // stay. The open card adds the settings of the place.
@@ -21,6 +26,7 @@
   import { expandTransition, rowEnter, rowExit } from "../motion";
   import Icon from "./Icon.svelte";
   import TimeWindowOverrideField from "./TimeWindowOverrideField.svelte";
+  import type { Snippet } from "svelte";
   import { fly, slide } from "svelte/transition";
 
   let {
@@ -37,6 +43,11 @@
     onReorder,
     draggedIndex = null,
     onDragChange,
+    touchDropIndex = null,
+    onTouchDropChange,
+    onInsert,
+    insertionSide = null,
+    insertionSearch,
     enterDelay,
   }: {
     row: PlaceRow;
@@ -60,6 +71,16 @@
     draggedIndex?: number | null;
     /** Reports the start and end of dragging this row. */
     onDragChange?: (draggedIndex: number | null) => void;
+    /** The index of the row under the finger during a touch drag, or `null`. */
+    touchDropIndex?: number | null;
+    /** Reports the row under the finger during a touch drag of this row. */
+    onTouchDropChange?: (dropIndex: number | null) => void;
+    /** Opens the search for a new place on one side of this place, or closes it. */
+    onInsert?: (side: InsertionSide) => void;
+    /** The side of this place on which the open search adds a place, or `null`. */
+    insertionSide?: InsertionSide | null;
+    /** The search for the new place, which exists while the search is open. */
+    insertionSearch?: Snippet;
     /** Staggers the enter transition of the rows of a freshly opened trip. */
     enterDelay: number;
   } = $props();
@@ -69,7 +90,7 @@
   let dropTarget = $state(false);
   // A place dragged down lands after this row, and one dragged up lands before it.
   const dropPosition = $derived(
-    !dropTarget || draggedIndex === null || draggedIndex === index
+    !(dropTarget || touchDropIndex === index) || draggedIndex === null || draggedIndex === index
       ? null
       : draggedIndex < index
         ? "after"
@@ -123,6 +144,148 @@
     onEdit?.({ SetPlaceWindowOverride: { place_id: placeId, window_override: windowOverride } });
   }
 
+  const insertionSides: InsertionSide[] = ["before", "after"];
+
+  /**
+   * Whether the main pointer is a finger. The browser then starts a drag only after a long press,
+   * which also selects text, so the row is not draggable and the grip starts a touch drag.
+   */
+  const coarsePointer = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+
+  /** Changes the name of the place. An empty name keeps the old one. */
+  function renamePlace(field: HTMLInputElement) {
+    const name = field.value.trim();
+    if (name === "") {
+      field.value = row.place.name;
+    } else if (name !== row.place.name) {
+      onEdit?.({ RenamePlace: { place_id: placeId, name } });
+    }
+  }
+
+  /** The state of a touch drag of this row, which starts on the grip. See `coarsePointer`. */
+  let touchDrag: {
+    pointerId: number;
+    startY: number;
+    lastY: number;
+    scroller: HTMLElement | null;
+    startScrollTop: number;
+    frame: number;
+  } | null = $state(null);
+  /** The distance in pixels by which the dragged row follows the finger. */
+  let touchOffset = $state(0);
+  let rowElement: HTMLLIElement | undefined = $state();
+
+  /** The nearest ancestor of the row that scrolls, which scrolls when the finger is at its edge. */
+  function scrollingAncestor(element: HTMLElement): HTMLElement | null {
+    for (let parent = element.parentElement; parent !== null; parent = parent.parentElement) {
+      const overflow = getComputedStyle(parent).overflowY;
+      if ((overflow === "auto" || overflow === "scroll") && parent.scrollHeight > parent.clientHeight) {
+        return parent;
+      }
+    }
+    return document.scrollingElement as HTMLElement | null;
+  }
+
+  /** The index of the place row under a point, or `null` when the point is outside the list. */
+  function placeIndexAt(clientX: number, clientY: number): number | null {
+    const rowUnderPoint = document.elementFromPoint(clientX, clientY)?.closest(".place-row");
+    const indexText = rowUnderPoint?.getAttribute("data-index");
+    return indexText === undefined || indexText === null ? null : Number(indexText);
+  }
+
+  /**
+   * Moves the dragged row to the finger and marks the row where the place will land. Between two
+   * place rows, such as over a leg, the last marked row stays marked.
+   */
+  function followTouch(clientX: number) {
+    if (touchDrag === null) {
+      return;
+    }
+    const scrolled = (touchDrag.scroller?.scrollTop ?? 0) - touchDrag.startScrollTop;
+    touchOffset = touchDrag.lastY - touchDrag.startY + scrolled;
+    // The dragged row is under the finger, so the hit test skips it for one moment.
+    if (rowElement !== undefined) {
+      rowElement.style.pointerEvents = "none";
+    }
+    const dropIndex = placeIndexAt(clientX, touchDrag.lastY);
+    if (rowElement !== undefined) {
+      rowElement.style.pointerEvents = "";
+    }
+    if (dropIndex !== null) {
+      onTouchDropChange?.(dropIndex);
+    }
+  }
+
+  /** Scrolls the list while the finger is near its top or bottom edge. */
+  function scrollNearEdge(clientX: number) {
+    if (touchDrag === null || touchDrag.scroller === null) {
+      return;
+    }
+    const edgeSize = 48;
+    const bounds =
+      touchDrag.scroller === document.scrollingElement
+        ? { top: 0, bottom: innerHeight }
+        : touchDrag.scroller.getBoundingClientRect();
+    const step =
+      touchDrag.lastY < bounds.top + edgeSize
+        ? -8
+        : touchDrag.lastY > bounds.bottom - edgeSize
+          ? 8
+          : 0;
+    if (step !== 0) {
+      touchDrag.scroller.scrollTop += step;
+      followTouch(clientX);
+    }
+    touchDrag.frame = requestAnimationFrame(() => scrollNearEdge(clientX));
+  }
+
+  function startTouchDrag(event: PointerEvent) {
+    if (event.pointerType === "mouse" || onReorder === undefined || rowElement === undefined) {
+      return;
+    }
+    event.preventDefault();
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    const scroller = scrollingAncestor(rowElement);
+    touchDrag = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      lastY: event.clientY,
+      scroller,
+      startScrollTop: scroller?.scrollTop ?? 0,
+      frame: 0,
+    };
+    touchOffset = 0;
+    onDragChange?.(index);
+    onTouchDropChange?.(index);
+    touchDrag.frame = requestAnimationFrame(() => scrollNearEdge(event.clientX));
+  }
+
+  function moveTouchDrag(event: PointerEvent) {
+    if (touchDrag === null || event.pointerId !== touchDrag.pointerId) {
+      return;
+    }
+    touchDrag.lastY = event.clientY;
+    cancelAnimationFrame(touchDrag.frame);
+    followTouch(event.clientX);
+    touchDrag.frame = requestAnimationFrame(() => scrollNearEdge(event.clientX));
+  }
+
+  /** Ends a touch drag. The place moves only when the drag ends on another row. */
+  function endTouchDrag(event: PointerEvent, dropped: boolean) {
+    if (touchDrag === null || event.pointerId !== touchDrag.pointerId) {
+      return;
+    }
+    cancelAnimationFrame(touchDrag.frame);
+    const dropIndex = touchDropIndex;
+    touchDrag = null;
+    touchOffset = 0;
+    onTouchDropChange?.(null);
+    onDragChange?.(null);
+    if (dropped && dropIndex !== null && dropIndex !== index) {
+      onReorder?.(placeId, dropIndex);
+    }
+  }
+
   function dropPlace(event: DragEvent) {
     event.preventDefault();
     dropTarget = false;
@@ -134,11 +297,15 @@
 </script>
 
 <li
+  bind:this={rowElement}
   class="place-row"
+  class:touch-dragged={touchDrag !== null}
+  style:transform={touchDrag === null ? undefined : `translateY(${touchOffset}px)`}
+  data-index={index}
   class:drop-before={dropPosition === "before"}
   class:drop-after={dropPosition === "after"}
   class:selected
-  draggable={onReorder !== undefined}
+  draggable={onReorder !== undefined && !coarsePointer}
   in:fly={rowEnter(enterDelay)}
   out:fly={rowExit()}
   ondragstart={(event) => {
@@ -175,8 +342,17 @@
   <div class="place-card">
     <div class="head">
       {#if onReorder !== undefined}
-        <!-- The grip shows that the whole row can be dragged to another position. -->
-        <span class="grip" title="Drag to move this place in the route" aria-hidden="true">
+        <!-- The grip shows that the row can be dragged to another position. On a touch screen,
+             only the grip starts a drag. -->
+        <span
+          class="grip"
+          title="Drag to move this place in the route"
+          aria-hidden="true"
+          onpointerdown={startTouchDrag}
+          onpointermove={moveTouchDrag}
+          onpointerup={(event) => endTouchDrag(event, true)}
+          onpointercancel={(event) => endTouchDrag(event, false)}
+        >
           <Icon name="grip" />
         </span>
       {/if}
@@ -215,6 +391,22 @@
     {#if expanded && hasSettings}
       <div class="settings" id={`place-settings-${placeId}`} transition:slide={expandTransition()}>
         <div class="fields">
+          {#if onEdit !== undefined}
+            <label class="field">
+              <span class="label">Name</span>
+              <input
+                class="name-field"
+                type="text"
+                value={row.place.name}
+                onchange={(event) => renamePlace(event.currentTarget)}
+                onkeydown={(event) => {
+                  if (event.key === "Enter") {
+                    event.currentTarget.blur();
+                  }
+                }}
+              />
+            </label>
+          {/if}
           {#if row.stay !== null}
             <label class="field">
               <span class="label">Stay</span>
@@ -272,13 +464,34 @@
             <button type="button" class="small" onclick={() => setWindows(null)}>Use trip defaults</button>
           {/if}
         </div>
+        {#if onInsert !== undefined}
+          <div class="field">
+            <span class="label">Add a place</span>
+            <span class="insert-buttons">
+              {#each insertionSides as side (side)}
+                <button
+                  type="button"
+                  class="with-icon"
+                  class:on={insertionSide === side}
+                  aria-pressed={insertionSide === side}
+                  onclick={() => onInsert?.(side)}
+                >
+                  <Icon name="plus" size={16} />
+                  {side === "before" ? "Before" : "After"}
+                </button>
+              {/each}
+            </span>
+          </div>
+          {@render insertionSearch?.()}
+        {/if}
         {#if onEdit !== undefined}
           <div class="footer">
             <p class="radius">
               Stations within {formatDistance(row.place.station_search_radius)}. Drag the ring on the map to
               change it.
             </p>
-            <!-- A touch screen cannot drag a row, so it moves the place with these buttons. -->
+            <!-- The buttons move the place by one position, which is easier than a drag on a
+                 small touch screen. -->
             {#if onReorder !== undefined}
               <span class="move-buttons">
                 <button
@@ -324,7 +537,7 @@
   .place-row {
     position: relative;
     display: grid;
-    grid-template-columns: 34px 1fr;
+    grid-template-columns: 34px minmax(0, 1fr);
     column-gap: var(--space-3);
     list-style: none;
   }
@@ -438,6 +651,15 @@
     cursor: grab;
   }
 
+  /* The row that follows the finger during a touch drag is above the other rows. */
+  .place-row.touch-dragged {
+    z-index: 2;
+  }
+
+  .place-row.touch-dragged .place-card {
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+  }
+
   .title {
     display: flex;
     flex: 1;
@@ -504,6 +726,25 @@
     width: 3em;
   }
 
+  .field input.name-field {
+    flex: 1;
+    width: auto;
+    min-width: 8em;
+  }
+
+  .insert-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  /* A button takes the accent colour while its search for a new place is open. */
+  .insert-buttons button.on {
+    color: var(--color-accent);
+    border-color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface));
+  }
+
   .hint {
     color: var(--color-text-muted);
   }
@@ -527,10 +768,28 @@
     margin-left: auto;
   }
 
-  /* A touch screen, which cannot drag a row. */
+  /* A touch screen. The grip is the handle of a touch drag, so it is larger and the browser
+     does not scroll or select text when a finger moves on it. The other words on the closed card
+     are not selected by a long press either. */
   @media (pointer: coarse) {
     .move-buttons {
       display: flex;
+    }
+
+    .grip {
+      align-self: stretch;
+      align-items: center;
+      padding: 0 4px 0 var(--space-2);
+      margin-left: calc(-1 * var(--space-4));
+      margin-block: calc(-1 * var(--space-3));
+      opacity: 1;
+      touch-action: none;
+    }
+
+    .head {
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
     }
   }
 </style>

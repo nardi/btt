@@ -524,7 +524,7 @@
   /* The row is a grid: the spine cell on the left, the leg card 12px away from it. */
   .leg-row {
     display: grid;
-    grid-template-columns: 34px 1fr;
+    grid-template-columns: 34px minmax(0, 1fr);
     column-gap: var(--space-3);
     list-style: none;
   }
