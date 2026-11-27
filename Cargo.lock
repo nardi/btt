@@ -791,6 +791,7 @@ dependencies = [
  "percent-encoding",
  "postcard",
  "regex",
+ "rstar",
  "rustc-hash",
  "serde",
  "serde_json",

@@ -1,18 +1,26 @@
 <script lang="ts">
-  // Searches places by name and reports the one the user picks.
+  // Searches places by name and reports the one the user picks. The local search answers at
+  // once. The online search adds its places below the local ones when it answers.
   import type { PlaceSearchResult } from "../bindings";
   import Spinner from "./Spinner.svelte";
 
-  /** Time without typing after which a search starts, so each keystroke sends no request. */
-  const searchDelayMilliseconds = 300;
+  /**
+   * Time without typing after which an online search starts, so each keystroke sends no
+   * request.
+   */
+  const onlineSearchDelayMilliseconds = 300;
 
   let {
     searchPlaces,
+    searchPlacesOnline,
     onPick,
     placeholder = "Add a place: city or station",
     focusOnMount = false,
   }: {
+    /** Searches the places that the app knows without a network connection. */
     searchPlaces: (query: string) => Promise<PlaceSearchResult[]>;
+    /** Searches the places that the local search does not find, with a network connection. */
+    searchPlacesOnline?: (query: string) => Promise<PlaceSearchResult[]>;
     onPick: (result: PlaceSearchResult) => void;
     /** The hint of the empty search field. */
     placeholder?: string;
@@ -29,40 +37,56 @@
   });
 
   let query = $state("");
-  let results: PlaceSearchResult[] = $state([]);
-  let searching = $state(false);
-  let pendingSearch: ReturnType<typeof setTimeout> | undefined;
-  /** Counts searches, so an answer to an older query never replaces a newer one. */
+  let localResults: PlaceSearchResult[] = $state([]);
+  let onlineResults: PlaceSearchResult[] = $state([]);
+  const results = $derived([...localResults, ...onlineResults]);
+  let searchingOnline = $state(false);
+  let pendingOnlineSearch: ReturnType<typeof setTimeout> | undefined;
+  /** Counts queries, so an answer to an older query never replaces a newer one. */
   let latestSearchNumber = 0;
 
-  /** Starts a search once typing pauses. */
+  /** Starts the local search at once and the online search once typing pauses. */
   function scheduleSearch(text: string) {
     query = text;
-    clearTimeout(pendingSearch);
+    clearTimeout(pendingOnlineSearch);
+    const searchNumber = ++latestSearchNumber;
+    onlineResults = [];
+    searchingOnline = false;
     if (text.trim().length < 2) {
-      results = [];
+      localResults = [];
       return;
     }
-    pendingSearch = setTimeout(async () => {
-      const searchNumber = ++latestSearchNumber;
-      searching = true;
+    void searchPlaces(text).then((found) => {
+      if (searchNumber === latestSearchNumber) {
+        localResults = found;
+      }
+    });
+    if (searchPlacesOnline === undefined) {
+      return;
+    }
+    pendingOnlineSearch = setTimeout(async () => {
+      searchingOnline = true;
       try {
-        const found = await searchPlaces(text);
+        const found = await searchPlacesOnline(text);
         if (searchNumber === latestSearchNumber) {
-          results = found;
+          onlineResults = found;
         }
       } finally {
         if (searchNumber === latestSearchNumber) {
-          searching = false;
+          searchingOnline = false;
         }
       }
-    }, searchDelayMilliseconds);
+    }, onlineSearchDelayMilliseconds);
   }
 
   function pick(result: PlaceSearchResult) {
     onPick(result);
+    clearTimeout(pendingOnlineSearch);
+    latestSearchNumber++;
     query = "";
-    results = [];
+    localResults = [];
+    onlineResults = [];
+    searchingOnline = false;
   }
 </script>
 
@@ -74,10 +98,10 @@
     value={query}
     oninput={(event) => scheduleSearch(event.currentTarget.value)}
   />
-  {#if searching}
+  {#if searchingOnline}
     <span class="status">
-      <Spinner label="Searching" />
-      Searching…
+      <Spinner label="Searching online" />
+      Searching online…
     </span>
   {/if}
   {#if results.length > 0}

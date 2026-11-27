@@ -11,6 +11,7 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
+use crate::coordinates::{GeoCoordinates, Latitude, Longitude};
 use crate::itinerary::TripPlace;
 use crate::snapshot::PLACE_STEP_MICRODEGREES;
 
@@ -73,6 +74,20 @@ pub(super) struct CityDictionary {
 /// shorter than the name itself.
 pub(crate) fn names_a_city(place: &TripPlace) -> bool {
     dictionary().find(place).is_some()
+}
+
+/// Returns the names and positions of the cities in the dictionary, in the order of the file.
+///
+/// The biggest city comes first. A city can have more than one line, such as "Cologne" and
+/// "Köln", and these lines have the same position.
+pub fn dictionary_cities() -> impl Iterator<Item = (&'static str, GeoCoordinates)> {
+    dictionary().entries.iter().filter_map(|city| {
+        let coordinates = GeoCoordinates {
+            latitude: Latitude::from_microdegrees(city.latitude).ok()?,
+            longitude: Longitude::from_microdegrees(city.longitude).ok()?,
+        };
+        Some((city.name, coordinates))
+    })
 }
 
 /// Returns the dictionary, which is parsed on first use.

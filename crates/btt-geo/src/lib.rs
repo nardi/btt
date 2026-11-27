@@ -1,8 +1,10 @@
 //! Time zone lookup and place search.
 
+pub mod country;
 pub mod photon;
 pub mod time_zone;
 
+pub use country::country_of_time_zone;
 pub use photon::{
     PUBLIC_PHOTON_BASE_URL, PhotonClient, PhotonError, PlaceSearchResults, parse_reverse_answer,
     parse_search_answer, reverse_request_url, search_request_url,

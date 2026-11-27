@@ -62,7 +62,13 @@ export type TripSource =
       readonly kind: "editable";
       readonly viewState: TripViewState;
       applyEdit(edit: TripEdit): Promise<void>;
+      /** Searches places by name in the data of the app, which needs no network connection. */
       searchPlaces(query: string): Promise<PlaceSearchResult[]>;
+      /**
+       * Searches places by name with an online geocoder. Returns only the places that
+       * `searchPlaces` does not find, or none when the geocoder cannot be reached.
+       */
+      searchPlacesOnline(query: string): Promise<PlaceSearchResult[]>;
       /** What undo and redo would do. */
       readonly history: TripHistoryState;
       /** Takes back the most recent edit. */

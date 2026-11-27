@@ -34,6 +34,7 @@ use crate::cost_model::LegCostModel;
 use crate::explanation::{CandidateExplanation, LegExplanation, RankedJourneyExplanation};
 use crate::input::{LegChainInput, LegEndpoint, LegPlanningInput, SameDayStop};
 use crate::operators::{OperatorEnd, OperatorTable};
+use crate::place_search::PlaceIndex;
 use crate::pricing::{JourneyPricer, NoPrice, PriceMode, RidePrices};
 use crate::ride_path::StationHopGraph;
 use crate::scoring::{
@@ -134,6 +135,8 @@ pub struct TimetableBundleRouter<P: JourneyPricer = NoPrice> {
     /// The listed operators whose trains end before the bundle does. Computed on first use,
     /// because it reads every trip of the bundle.
     operator_ends: OnceLock<Vec<OperatorEnd>>,
+    /// The cities and stations that a local place search finds. Built on first use.
+    place_index: OnceLock<PlaceIndex>,
     /// Prices a journey, which the plan shows next to the journey's time.
     pricer: P,
     /// The prices of rides, which the search adds to the cost. `None` when the pricer knows
@@ -197,6 +200,7 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             spare_search_buffers: Mutex::new(Vec::new()),
             operators,
             operator_ends: OnceLock::new(),
+            place_index: OnceLock::new(),
             pricer,
             ride_prices,
         }
@@ -243,6 +247,13 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             ends.sort_by(|left, right| left.name.cmp(&right.name));
             ends
         })
+    }
+
+    /// Returns the index of the cities and the stations of the bundle, which is built on first
+    /// use.
+    pub fn place_index(&self) -> &PlaceIndex {
+        self.place_index
+            .get_or_init(|| PlaceIndex::new(Some(&self.bundle), &self.time_zone_finder))
     }
 
     /// Returns the feeds that went into the bundle as name, license and address.

@@ -63,10 +63,15 @@ export const commands = {
 	/**  Deletes a trip and stops planning it. */
 	deleteTrip: (tripId: TripId) => typedError<null, CommandError>(__TAURI_INVOKE("delete_trip", { tripId })),
 	/**
-	 *  Searches settlements and railway stations by name. Answers repeated searches from the
-	 *  cache.
+	 *  Searches cities and stations by name in the timetable and the dictionary of cities, without
+	 *  a network connection.
 	 */
 	searchPlaces: (query: string) => typedError<PlaceSearchResult[], CommandError>(__TAURI_INVOKE("search_places", { query })),
+	/**
+	 *  Searches settlements and railway stations by name with Photon. Returns only the results that
+	 *  `search_places` does not return for the same query. Answers repeated searches from the cache.
+	 */
+	searchPlacesOnline: (query: string) => typedError<PlaceSearchResult[], CommandError>(__TAURI_INVOKE("search_places_online", { query })),
 	/**  Returns every traveller profile. */
 	listTravellers: () => typedError<Traveller[], CommandError>(__TAURI_INVOKE("list_travellers")),
 	/**  Inserts a traveller profile, or replaces the one with the same ID. */

@@ -10,6 +10,7 @@ use crate::bundle_router::TimetableBundleRouter;
 use crate::explanation::LegExplanation;
 use crate::input::{LegChainInput, LegPlanningInput};
 use crate::operators::OperatorEnd;
+use crate::place_search::PlaceIndex;
 use crate::pricing::{JourneyPricer, NoPrice};
 #[cfg(test)]
 use crate::stub::StubBackend;
@@ -42,6 +43,16 @@ impl<P: JourneyPricer> LegPlanningBackend<P> {
             Self::TimetableBundle(router) => (2 << 32) | u64::from(router.bundle_version()),
         };
         (LEG_PLAN_REVISION << 40) | backend
+    }
+
+    /// Returns the index of the places that a local search finds, or `None` for a backend
+    /// without a timetable.
+    pub fn place_index(&self) -> Option<&PlaceIndex> {
+        match self {
+            #[cfg(test)]
+            Self::Stub(_) => None,
+            Self::TimetableBundle(router) => Some(router.place_index()),
+        }
     }
 
     /// Returns the version of the timetable bundle the backend plans with, or zero for a

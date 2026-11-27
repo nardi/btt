@@ -188,6 +188,17 @@ export class TauriTripSource implements TripViewState {
     return result.data;
   }
 
+  async searchPlacesOnline(query: string): Promise<PlaceSearchResult[]> {
+    const result = await commands.searchPlacesOnline(query);
+    if (result.status === "error") {
+      // Without a network connection the local results are all there is, so the failure is
+      // not shown.
+      console.warn("the online place search failed", commandErrorMessage(result.error));
+      return [];
+    }
+    return result.data;
+  }
+
   /** Applies one planning event to the leg states. */
   private handleEvent(event: PlanningSessionEvent): void {
     if (event.TripChanged !== undefined) {

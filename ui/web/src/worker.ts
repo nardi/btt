@@ -235,27 +235,30 @@ function photonFetch(url: string): Promise<string> {
   return turn;
 }
 
-/** Answers of earlier name searches. */
-const searchCache = new Map<string, string>();
+/** Photon answers of earlier name searches, by query. */
+const photonAnswerCache = new Map<string, string>();
 
-/** Searches places by name. */
-async function searchPlaces(argumentsJson: string): Promise<string> {
-  const query = (JSON.parse(argumentsJson) as { query: string }).query.trim().toLowerCase();
-  if (query === "") {
-    return "[]";
-  }
-  const cached = searchCache.get(query);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const url = backend.photon_search_url(query, LANGUAGE);
-  if (url === undefined) {
+/**
+ * Searches places by name with Photon. Returns only the places that the local search of the
+ * backend does not find for the same query.
+ */
+async function searchPlacesOnline(argumentsJson: string): Promise<string> {
+  const query = (JSON.parse(argumentsJson) as { query: string }).query;
+  const normalizedQuery = query.trim().toLowerCase();
+  if (normalizedQuery === "") {
     return "[]";
   }
   try {
-    const results = backend.photon_search_results(await photonFetch(url));
-    searchCache.set(query, results);
-    return results;
+    let answer = photonAnswerCache.get(normalizedQuery);
+    if (answer === undefined) {
+      const url = backend.photon_search_url(normalizedQuery, LANGUAGE);
+      if (url === undefined) {
+        return "[]";
+      }
+      answer = await photonFetch(url);
+      photonAnswerCache.set(normalizedQuery, answer);
+    }
+    return backend.online_place_extras(query, answer);
   } catch (error) {
     throw JSON.stringify({
       PlaceSearch: { message: error instanceof Error ? error.message : String(error) },
@@ -307,8 +310,8 @@ function nameProvisionalPlaces(answerJson: string): void {
 /** Runs a command. */
 async function run(request: CommandRequest): Promise<string> {
   switch (request.command) {
-    case "search_places":
-      return searchPlaces(request.args);
+    case "search_places_online":
+      return searchPlacesOnline(request.args);
     case "check_timetable":
       return checkTimetable();
     case "download_timetable":

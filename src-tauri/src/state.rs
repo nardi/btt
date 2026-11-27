@@ -13,8 +13,8 @@ use btt_model::{
     TripEditOutcome, TripHistory, TripId,
 };
 use btt_planner::{
-    DEFAULT_PLANNING_DEBOUNCE, LegCacheKey, LegPlanningBackend, LegResultStore, PlanningEventSink,
-    TimetableBundleRouter, TripPlanningSession,
+    DEFAULT_PLANNING_DEBOUNCE, LegCacheKey, LegPlanningBackend, LegResultStore, PlaceIndex,
+    PlanningEventSink, TimetableBundleRouter, TripPlanningSession,
 };
 use btt_quotes::QuoteStore;
 use btt_quotes::sbb::SbbService;
@@ -316,6 +316,16 @@ impl AppState {
         self.active_timetable
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Runs a function on the index of the places that a local search finds. Without a
+    /// timetable, the index has the cities only.
+    pub fn with_place_index<T>(&self, function: impl FnOnce(&PlaceIndex) -> T) -> T {
+        let backend = self.current_backend();
+        match backend.as_deref().and_then(LegPlanningBackend::place_index) {
+            Some(index) => function(index),
+            None => function(PlaceIndex::cities_only(&self.time_zone_finder)),
+        }
     }
 
     /// Returns the backend that plans legs, or `None` while the app has no timetable.

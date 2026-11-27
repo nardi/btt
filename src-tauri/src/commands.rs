@@ -372,11 +372,22 @@ pub async fn live_journey_price(
     Ok(EuroRange::new(to_cents(low), to_cents(middle), to_cents(high)).ok())
 }
 
-/// Searches settlements and railway stations by name. Answers repeated searches from the
-/// cache.
+/// Searches cities and stations by name in the timetable and the dictionary of cities, without
+/// a network connection.
 #[tauri::command]
 #[specta::specta]
 pub async fn search_places(
+    state: State<'_, AppState>,
+    query: String,
+) -> Result<Vec<PlaceSearchResult>, CommandError> {
+    Ok(state.with_place_index(|index| index.search(&query)))
+}
+
+/// Searches settlements and railway stations by name with Photon. Returns only the results that
+/// `search_places` does not return for the same query. Answers repeated searches from the cache.
+#[tauri::command]
+#[specta::specta]
+pub async fn search_places_online(
     state: State<'_, AppState>,
     query: String,
 ) -> Result<Vec<PlaceSearchResult>, CommandError> {
@@ -385,17 +396,19 @@ pub async fn search_places(
         return Ok(Vec::new());
     }
     let request_key = format!("search:{}:{normalized_query}", state.language);
-    if let Some(cached) = state.storage.cached_place_search(&request_key)? {
-        return Ok(cached);
-    }
-    let results = state
-        .photon
-        .search(&normalized_query, &state.language)
-        .await
-        .map_err(|error| CommandError::PlaceSearch {
-            message: error.to_string(),
-        })?
-        .into_vec();
-    state.storage.store_place_search(&request_key, &results)?;
-    Ok(results)
+    let online_results = if let Some(cached) = state.storage.cached_place_search(&request_key)? {
+        cached
+    } else {
+        let results = state
+            .photon
+            .search(&normalized_query, &state.language)
+            .await
+            .map_err(|error| CommandError::PlaceSearch {
+                message: error.to_string(),
+            })?
+            .into_vec();
+        state.storage.store_place_search(&request_key, &results)?;
+        results
+    };
+    Ok(state.with_place_index(|index| index.online_extras(&query, online_results)))
 }

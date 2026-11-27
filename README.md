@@ -62,7 +62,7 @@ Booking sites do not accept requests from a web page, so the web app has no live
 
 The trains and times come from public timetable feeds of railway operators and transport authorities, mostly collected by the [Transitous](https://transitous.org) project. The app downloads a timetable file from the releases of this repository. A GitHub workflow rebuilds that file every Monday and a build is valid for 90 days. The About page of the app lists every feed with its license.
 
-Besides the timetable, the app makes three kinds of requests. It loads map tiles from [OpenFreeMap](https://openfreemap.org), it searches places with [Photon](https://photon.komoot.io), and it asks booking sites for the live price of a ticket when you price a trip. The web app makes the first two only.
+Besides the timetable, the app makes three kinds of requests. It loads map tiles from [OpenFreeMap](https://openfreemap.org), it asks [Photon](https://photon.komoot.io) for more places when you search, and it asks booking sites for the live price of a ticket when you price a trip. The web app makes the first two only. The place search itself does not need a network connection. It finds the stations in the timetable and the cities in the built-in city list, and it adds the Photon results below these when Photon can be reached.
 
 ## Status
 

@@ -8,6 +8,7 @@ pub mod explanation;
 pub mod input;
 mod layout_links;
 pub mod operators;
+pub mod place_search;
 mod pricing;
 mod ride_path;
 mod runtime;
@@ -24,6 +25,7 @@ pub use input::{
     leg_chain_inputs, leg_planning_inputs,
 };
 pub use operators::OperatorEnd;
+pub use place_search::PlaceIndex;
 pub use pricing::{
     JourneyPricer, NoPrice, PriceMode, RidePassRow, RidePassTable, RidePriceClass, RidePriceRow,
     RidePriceTable,

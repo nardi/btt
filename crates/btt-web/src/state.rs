@@ -21,8 +21,8 @@ use btt_model::{
     TripSnapshot,
 };
 use btt_planner::{
-    DEFAULT_PLANNING_DEBOUNCE, LegCacheKey, LegPlanningBackend, LegResultStore, PlanningEventSink,
-    TimetableBundleRouter, TripPlanningSession,
+    DEFAULT_PLANNING_DEBOUNCE, LegCacheKey, LegPlanningBackend, LegResultStore, PlaceIndex,
+    PlanningEventSink, TimetableBundleRouter, TripPlanningSession,
 };
 use btt_timetable::LoadedTimetableBundle;
 use btt_timetable::manifest::TimetableManifest;
@@ -307,6 +307,10 @@ impl WebBackend {
     fn dispatch(&self, command: &str, arguments: &Arguments) -> Result<Value, Failure> {
         match command {
             "list_trips" => to_value(&self.storage.borrow().list_trips()),
+            "search_places" => {
+                let query: String = arguments.get("query")?;
+                to_value(&self.with_place_index(|index| index.search(&query)))
+            }
             "create_trip" => self.create_trip(arguments.get("name")?, arguments.get("startDate")?),
             "open_trip" => {
                 self.open_trip(arguments.get("tripId")?, channel_id(arguments, "events")?)
@@ -392,6 +396,16 @@ impl WebBackend {
             other => Err(Failure::Other(format!(
                 "the command `{other}` does not exist"
             ))),
+        }
+    }
+
+    /// Runs a function on the index of the places that a local search finds. Without a
+    /// timetable, the index has the cities only.
+    pub(crate) fn with_place_index<T>(&self, function: impl FnOnce(&PlaceIndex) -> T) -> T {
+        let backend = self.timetable.borrow().backend.clone();
+        match backend.as_deref().and_then(LegPlanningBackend::place_index) {
+            Some(index) => function(index),
+            None => function(PlaceIndex::cities_only(&self.time_zone_finder)),
         }
     }
 

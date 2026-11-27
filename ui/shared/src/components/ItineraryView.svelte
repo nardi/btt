@@ -128,6 +128,7 @@
       placeholder="Add a stop on this leg: city or station"
       focusOnMount
       searchPlaces={(query) => editable.searchPlaces(query)}
+      searchPlacesOnline={(query) => editable.searchPlacesOnline(query)}
       onPick={addStop}
     />
   {/if}
@@ -189,7 +190,11 @@
   {/if}
 
   {#if editable !== null}
-    <PlaceSearch searchPlaces={(query) => editable.searchPlaces(query)} onPick={addPlace} />
+    <PlaceSearch
+      searchPlaces={(query) => editable.searchPlaces(query)}
+      searchPlacesOnline={(query) => editable.searchPlacesOnline(query)}
+      onPick={addPlace}
+    />
   {/if}
 
   {#if onOpenSetup !== undefined}

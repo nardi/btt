@@ -136,15 +136,17 @@ pub fn photon_reverse_url(latitude: f64, longitude: f64, language: &str) -> Opti
     btt_geo::reverse_request_url(btt_geo::PUBLIC_PHOTON_BASE_URL, coordinates, language)
 }
 
-/// Reads the answer of a Photon name search and returns the places as JSON.
+/// Reads the answer of a Photon name search and returns, as JSON, the places that the local
+/// search for the same query does not find.
 ///
 /// # Errors
 ///
-/// Returns a message when the text is not a Photon answer.
+/// Returns a message when the backend has not started or the text is not a Photon answer.
 #[wasm_bindgen]
-pub fn photon_search_results(body: &str) -> Result<String, String> {
-    let results = btt_geo::parse_search_answer(body).map_err(|error| error.to_string())?;
-    serde_json::to_string(&results.into_vec()).map_err(|error| error.to_string())
+pub fn online_place_extras(query: &str, body: &str) -> Result<String, String> {
+    let online_results = btt_geo::parse_search_answer(body).map_err(|error| error.to_string())?;
+    let extras = backend()?.with_place_index(|index| index.online_extras(query, online_results));
+    serde_json::to_string(&extras).map_err(|error| error.to_string())
 }
 
 /// Reads the answer of a Photon search by position and returns the name of the town.
