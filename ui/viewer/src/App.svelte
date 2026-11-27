@@ -7,6 +7,7 @@
   import { onMount } from "svelte";
 
   import AboutPage from "./AboutPage.svelte";
+  import LandingPage from "./LandingPage.svelte";
   import { SnapshotLinkError } from "./link/errors";
   import { parseSnapshotFile } from "./link/snapshot-file";
   import { decodeSnapshotLink } from "./link/snapshot-link";
@@ -130,9 +131,14 @@
     return () => window.removeEventListener("hashchange", reopen);
   });
 
-  // The tab title names the trip.
+  // The tab title names the trip, or the app on the landing page.
   $effect(() => {
-    document.title = content.phase === "trip" ? `${content.snapshot.trip.name} on BigTrainTrip` : "BigTrainTrip trip";
+    document.title =
+      content.phase === "trip"
+        ? `${content.snapshot.trip.name} on BigTrainTrip`
+        : content.phase === "welcome"
+          ? "BigTrainTrip"
+          : "BigTrainTrip trip";
   });
 </script>
 
@@ -145,8 +151,11 @@
       {/if}
     </div>
     <div class="actions">
-      <button type="button" onclick={() => (showScanner = true)}>Scan a QR code</button>
-      <button type="button" onclick={() => fileInput?.click()}>Open a file</button>
+      <!-- The landing page has these buttons in its own section about shared trips. -->
+      {#if content.phase !== "welcome" || showAbout}
+        <button type="button" onclick={() => (showScanner = true)}>Scan a QR code</button>
+        <button type="button" onclick={() => fileInput?.click()}>Open a file</button>
+      {/if}
       <button type="button" onclick={() => (showAbout = !showAbout)} aria-pressed={showAbout}>About</button>
       <ThemeSwitch />
     </div>
@@ -184,14 +193,7 @@
       {/if}
     </section>
   {:else}
-    <section class="welcome">
-      <h1>A trip planned in BigTrainTrip</h1>
-      <p>
-        Open the link someone sent you, and the trip shows up here. You can also scan the QR code of
-        a trip with the camera, open a picture of the code, or open a trip file, with the buttons
-        above. Nothing you open leaves your device, apart from the map tiles.
-      </p>
-    </section>
+    <LandingPage onScan={() => (showScanner = true)} onOpenFile={() => fileInput?.click()} />
   {/if}
 </main>
 
@@ -250,15 +252,9 @@
     font-size: var(--text-small);
   }
 
-  .message,
-  .welcome {
+  .message {
     max-width: 560px;
     margin: var(--space-6) auto;
-  }
-
-  .welcome h1 {
-    font-size: var(--text-title);
-    margin: 0 0 var(--space-3);
   }
 
   @media (max-width: 760px) {

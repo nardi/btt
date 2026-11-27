@@ -1,7 +1,8 @@
-// Assembles the site that GitHub Pages serves. The viewer sits at the root, the web app in the
-// `app` folder, and the newest timetable bundle in `app/timetable`, where the web app downloads
-// it from. Pages sends no CORS headers for release assets, so the web app cannot read the
-// bundle from the release and the site carries a copy of it.
+// Assembles the site that GitHub Pages serves. The viewer is at the root, where it shows the
+// landing page when the address holds no trip. The web app is in the `app` folder, and the newest
+// timetable bundle in `app/timetable`, where the web app downloads it from. Pages sends no CORS
+// headers for release assets, so the web app cannot read the bundle from the release and the site
+// carries a copy of it.
 //
 // Build the viewer and the web app first. Then run
 //

@@ -6,21 +6,28 @@
   </picture>
 
   <h2 align="center">
-  BigTrainTrip - Plan long train trips across Europe and see what they cost
+  BigTrainTrip - Plan and price long train trips across Europe
   </h2>
 
 </div>
 
 ## Introduction
 
-BigTrainTrip (BTT) is a desktop app for planning a train trip that visits several places. You list the places and how long you want to stay in each. The app picks a journey for every leg, prefers night trains where they save you a hotel, and estimates what the tickets will cost.
+BigTrainTrip (BTT) is an app for planning a train trip that visits several places. It runs in the browser and as a desktop app. You list the places and how long you want to stay in each. The app picks a journey for every leg, prefers night trains where they save you a hotel, and estimates what the tickets will cost.
 
 1. It plans the whole trip at once. Each leg gets the journey that fits your time windows, your tolerance for changing trains and, if you set one, your bedtime and wake-up time.
 2. It shows the alternatives for every leg, so you can swap a journey and see the effect on the rest of the trip.
-3. It prices the trip. Prices come from published tariffs and from the live prices of booking sites, with a statistical model for everything else. The app can also work out whether an Interrail pass is cheaper than single tickets.
-4. It keeps everything on your computer. There is no account, and your trips never leave the app unless you share them.
+3. It prices the trip. Prices come from published tariffs and, in the desktop app, from the live prices of booking sites, with a statistical model for everything else. The app can also work out whether an Interrail pass is cheaper than single tickets.
+4. It keeps everything on your device. There is no account, and your trips never leave the app unless you share them.
 
-Download an installer from the [releases page](https://github.com/nardi/btt/releases). There are installers for Windows, macOS and Linux. They are not signed, so Windows and macOS will ask you to confirm that you want to open them.
+### Web app and desktop app
+
+The [website](https://nardi.github.io/btt/) links to both versions.
+
+- The [web app](https://nardi.github.io/btt/app/) runs in the browser on a computer, a tablet or a phone, and needs no installation. All prices in the web app are estimates. See [Web app](#web-app) for the other differences.
+- The desktop app is on the [releases page](https://github.com/nardi/btt/releases). There are installers for Windows, macOS and Linux. They are not signed, so Windows and macOS will ask you to confirm that you want to open them.
+
+To move a trip from one version to the other, save it as a file and import it. See [Sharing a trip](#sharing-a-trip).
 
 ### Portable version
 
@@ -48,15 +55,21 @@ The tickets screen shows what you need to buy. It groups the rides that one tick
 
 ### Sharing a trip
 
-The share dialog turns a trip into a link, a QR code or a file. Anyone who opens a link or scans the code sees the trip in the [web viewer](https://nardi.github.io/btt/), without installing anything. The link holds the whole trip after the `#` sign, so no server ever receives it. Travellers' names and ages are never included.
+The share dialog turns a trip into a link, a QR code or a file. Anyone who opens a link or scans the code sees the trip in the [web viewer](https://nardi.github.io/btt/), without installing anything. Without a trip in the link, the same page is the website of BTT. The link holds the whole trip after the `#` sign, so no server ever receives it. Travellers' names and ages are never included.
 
 Long trips make long links. The dialog lets you leave out the alternatives, the price estimates and the names of places to keep the link and the QR code short, and it can write the link in a compact alphabet that halves its length. A file always holds the complete trip.
 
+The trip list can import a `.btt` file as a new trip. The file holds the settings of the trip and the journeys you picked, so a file moves a trip between the desktop app and the web app, or between two devices. Travellers are not in the file, so you add them again in Setup. Files from older versions do not have the settings. The app imports such a file with the default settings and picks the journeys that the file shows.
+
 ### Web app
 
-The same interface runs in the browser at [nardi.github.io/btt/app](https://nardi.github.io/btt/app/). The planner is compiled to WebAssembly and runs in a web worker on your device, so the planning happens in your browser. The first visit downloads the timetable, which is about 12 MB, and the browser keeps it for later visits.
+The web app has the interface of the desktop app. The planner is compiled to WebAssembly and runs in a web worker on your device, so the planning happens in your browser. The first visit downloads the timetable, which is about 12 MB, and the browser keeps it for later visits.
 
 Booking sites do not accept requests from a web page, so the web app has no live prices and shows estimates only. The desktop app looks up live prices and learns from them. The web app also searches long legs one after the other where the desktop app uses several threads, so a long search takes longer.
+
+The web app stores trips in the browser, and other browsers and devices do not see them. To move a trip, save it as a file in the share dialog and import it on the other device.
+
+The web app works on phones and tablets. On a phone, the planning tab shows the list or the map, and a button switches between the two. When the phone is in landscape, the list and the map are side by side. On a touch screen, each place has buttons that move it up or down in the list.
 
 ## Where the data comes from
 
