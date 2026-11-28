@@ -15,7 +15,9 @@ use btt_builder::config::BuilderConfig;
 use btt_builder::database::WorkDatabase;
 use btt_builder::load::ValidityWindow;
 use btt_builder::{FeedInput, PipelineInputs, PipelineOutcome, run_pipeline};
-use btt_timetable::{BundleStationIndex, BundleTripIndex, LoadedTimetableBundle, RaptorRouteIndex};
+use btt_timetable::{
+    Availability, BundleStationIndex, BundleTripIndex, LoadedTimetableBundle, RaptorRouteIndex,
+};
 use chrono::NaiveDate;
 
 const CONFIG: &str = r#"
@@ -689,4 +691,115 @@ fn german_uic_codes_match_on_the_eva_number() {
     assert_eq!(bundle.station_trainline_id(bad_schandau), Some(1));
     let dresden = station(&bundle, "Dresden Hbf");
     assert_eq!(bundle.station_trainline_id(dresden), Some(3));
+}
+
+/// Returns the files of a feed with some files replaced.
+fn with_files<'a>(
+    feed: &[(&'a str, &'a str)],
+    replacements: &[(&'a str, &'a str)],
+) -> Vec<(&'a str, &'a str)> {
+    feed.iter()
+        .map(|&(name, contents)| {
+            replacements
+                .iter()
+                .find(|(replaced, _)| *replaced == name)
+                .copied()
+                .unwrap_or((name, contents))
+        })
+        .collect()
+}
+
+#[test]
+fn bike_and_wheelchair_values_reach_the_bundle() {
+    // Feed A says that the ICE takes no bikes and is step-free. Feed B says that its copy takes
+    // bikes and says nothing on wheelchairs.
+    let feed_a = with_files(
+        FEED_A,
+        &[(
+            "trips.txt",
+            "route_id,service_id,trip_id,trip_short_name,bikes_allowed,wheelchair_accessible\n\
+             ice,daily,ice-105,0105,2,1\n\
+             regional,daily,rb-1,4711,1,\n\
+             bus,daily,bus-1,1,,\n",
+        )],
+    );
+    // The platforms of feed B have no value, so they take the value of their parent station.
+    let feed_b = with_files(
+        FEED_B,
+        &[
+            (
+                "trips.txt",
+                "route_id,service_id,trip_id,trip_short_name,bikes_allowed,wheelchair_accessible\n\
+                 rj,all,rj-105,RJ 105,1,\n",
+            ),
+            (
+                "stops.txt",
+                "stop_id,stop_name,stop_lat,stop_lon,parent_station,location_type,wheelchair_boarding\n\
+                 P0,Köln Hbf,50.9429,6.9587,,1,1\n\
+                 P1,Frankfurt (Main) Hbf,50.1071,8.6636,,1,2\n\
+                 P2,Wien Hbf,48.1852,16.3761,,1,2\n\
+                 0,Köln Hbf Gleis 1,50.9429,6.9587,P0,,\n\
+                 1,Frankfurt (Main) Hbf Gleis 9,50.1071,8.6636,P1,,\n\
+                 2,Wien Hbf Bahnsteig 5,48.1852,16.3761,P2,,\n",
+            ),
+        ],
+    );
+    let outcome = run_fixture_pipeline(
+        "pipeline_access",
+        CONFIG,
+        &[
+            FixtureFeed {
+                files: &feed_a,
+                country_file_name: "de.json",
+                country_config: TRANSITOUS_DE,
+            },
+            FixtureFeed {
+                files: &feed_b,
+                country_file_name: "at.json",
+                country_config: TRANSITOUS_AT,
+            },
+        ],
+        TRAINLINE_STATIONS,
+    );
+    let bundle = LoadedTimetableBundle::from_bundle(&outcome.bundle).unwrap();
+
+    // A platform of Köln is step-free, which makes the station step-free. Only feed B says that
+    // Frankfurt is not step-free, and feed A has no value, so the value is unknown. Wien is in
+    // feed B only, and its parent station is not step-free.
+    let boarding = |name| bundle.station_wheelchair_boarding(station(&bundle, name));
+    assert_eq!(boarding("Köln Hbf"), Availability::Yes);
+    assert_eq!(boarding("Frankfurt (Main) Hbf"), Availability::Unknown);
+    assert_eq!(boarding("Wien Hbf"), Availability::No);
+
+    // The merged copy runs on days 0 and 2. Feeds that disagree give an unknown value, and a
+    // feed without a value gives way to the other. Feed B keeps day 1 on its own, with its own
+    // values.
+    let cologne = station(&bundle, "Köln Hbf");
+    let route = bundle.route(bundle.route_stops_at(cologne).next().unwrap().raptor_route);
+    let mut values = Vec::new();
+    for offset in 0..route.trip_count {
+        let trip = BundleTripIndex(route.first_trip_index + offset);
+        let runs_on_day_one = bundle.trip_service_days(trip).runs_on(1);
+        values.push((
+            runs_on_day_one,
+            bundle.trip_bike_carriage(trip),
+            bundle.trip_wheelchair_access(trip),
+        ));
+    }
+    values.sort_by_key(|(runs_on_day_one, _, _)| *runs_on_day_one);
+    assert_eq!(
+        values,
+        [
+            (false, Availability::Unknown, Availability::Yes),
+            (true, Availability::Yes, Availability::Unknown),
+        ]
+    );
+
+    // The regional train has its own route and keeps the values of feed A.
+    let regional = BundleTripIndex(bundle.route(RaptorRouteIndex(0)).first_trip_index);
+    assert_eq!(bundle.trip_bike_carriage(regional), Availability::Yes);
+    assert_eq!(
+        bundle.trip_wheelchair_access(regional),
+        Availability::Unknown
+    );
 }

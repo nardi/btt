@@ -8,7 +8,8 @@ use std::path::Path;
 
 use btt_model::{GeoCoordinates, Latitude, Longitude};
 use btt_timetable::{
-    BundleBuilder, BundleStationIndex, FeedAttributionInput, StationInput, TimetableBundle,
+    Availability, BundleBuilder, BundleStationIndex, FeedAttributionInput, StationInput,
+    TimetableBundle,
 };
 use std::num::NonZeroU32;
 
@@ -33,7 +34,7 @@ pub fn assemble_bundle(
     let mut builder = BundleBuilder::new(window.start, window.days, bundle_version)?;
 
     let mut statement = database.connection.prepare(
-        "SELECT name, latitude, longitude, time_zone, trainline_station_id
+        "SELECT name, latitude, longitude, time_zone, trainline_station_id, wheelchair_boarding
          FROM bundle_stations ORDER BY bundle_station_id",
     )?;
     let mut rows = statement.query([])?;
@@ -55,6 +56,7 @@ pub fn assemble_bundle(
             trainline_station_id: trainline_station_id
                 .and_then(|id| u32::try_from(id).ok())
                 .and_then(NonZeroU32::new),
+            wheelchair_boarding: Availability::from_gtfs(row.get(5)?),
         })?;
     }
 

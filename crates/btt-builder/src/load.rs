@@ -58,7 +58,8 @@ pub fn load_feed(
          WHERE {RAIL_ROUTE_TYPE_FILTER};
 
          INSERT INTO feed_trips
-         SELECT {feed_id}, trip_id, route_id, service_id, {trip_short_name}, {trip_headsign}
+         SELECT {feed_id}, trip_id, route_id, service_id, {trip_short_name}, {trip_headsign},
+                gtfs_availability({bikes_allowed}), gtfs_availability({wheelchair_accessible})
          FROM {trips}
          WHERE route_id IN (SELECT route_id FROM feed_routes WHERE feed_id = {feed_id});",
         agency_id = column_or_null(&agency_columns, "agency_id"),
@@ -72,6 +73,8 @@ pub fn load_feed(
         routes = csv("routes.txt")?,
         trip_short_name = column_or_null(&trip_columns, "trip_short_name"),
         trip_headsign = column_or_null(&trip_columns, "trip_headsign"),
+        bikes_allowed = column_or_null(&trip_columns, "bikes_allowed"),
+        wheelchair_accessible = column_or_null(&trip_columns, "wheelchair_accessible"),
         trips = csv("trips.txt")?,
     ))?;
 
@@ -104,7 +107,8 @@ pub fn load_feed(
     database.run(&format!(
         "INSERT INTO feed_stops
          SELECT {feed_id}, stop_id, {stop_name}, TRY_CAST(stop_lat AS DOUBLE),
-                TRY_CAST(stop_lon AS DOUBLE), {station_key}, {station_code}
+                TRY_CAST(stop_lon AS DOUBLE), {station_key}, {station_code},
+                gtfs_availability({wheelchair_boarding})
          FROM {stops};
 
          INSERT INTO feed_config
@@ -112,6 +116,7 @@ pub fn load_feed(
                 (SELECT any_value(agency_timezone) FROM feed_agencies WHERE feed_id = {feed_id}),
                 {namespace};",
         stop_name = column_or_null(&stop_columns, "stop_name"),
+        wheelchair_boarding = column_or_null(&stop_columns, "wheelchair_boarding"),
         stops = csv("stops.txt")?,
         scheme = sql_string(station_code_scheme_name(feed.station_code)),
         namespace = feed

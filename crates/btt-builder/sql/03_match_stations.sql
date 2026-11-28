@@ -67,6 +67,13 @@ WHERE is_city = 'f'
   AND TRY_CAST(latitude AS DOUBLE) IS NOT NULL
   AND TRY_CAST(longitude AS DOUBLE) IS NOT NULL;
 
+-- Combines availability values of the parts of one station: 1 (yes) when any part is yes, 2 (no)
+-- when no part is yes and some part is no, else 0 (unknown). A station with one step-free
+-- platform counts as step-free, because GTFS feeds mark parent stations and platforms
+-- inconsistently and a platform that leaves the value empty inherits it from the parent.
+CREATE MACRO combined_availability(value) AS
+    CASE WHEN bool_or(value = 1) THEN 1 WHEN bool_or(value = 2) THEN 2 ELSE 0 END;
+
 -- One row per station key that rail trips use. The row whose stop ID is the key, which is the
 -- parent station, names and places the station. Without such a row the platforms do.
 CREATE TABLE feed_stations AS
@@ -83,7 +90,8 @@ SELECT stops.feed_id,
                 avg(stops.latitude)) AS latitude,
        coalesce(any_value(stops.longitude) FILTER (WHERE stops.stop_id = stops.station_key),
                 avg(stops.longitude)) AS longitude,
-       max(stops.station_code) AS station_code
+       max(stops.station_code) AS station_code,
+       combined_availability(stops.wheelchair_boarding) AS wheelchair_boarding
 FROM feed_stops AS stops
 JOIN used_station_keys USING (feed_id, station_key)
 WHERE stops.latitude IS NOT NULL AND stops.longitude IS NOT NULL

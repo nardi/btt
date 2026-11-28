@@ -13,7 +13,7 @@ use thiserror::Error;
 use crate::format::{
     ArchivedBundleStation, ArchivedFeedAttribution, ArchivedFootpath, ArchivedIndex,
     ArchivedLayoutPageKind, ArchivedPooledString, ArchivedRouteStopPosition,
-    ArchivedTimetableBundle, BUNDLE_FORMAT_VERSION, BUNDLE_MAGIC, BundleStationIndex,
+    ArchivedTimetableBundle, Availability, BUNDLE_FORMAT_VERSION, BUNDLE_MAGIC, BundleStationIndex,
     BundleTripIndex, Footpath, LayoutPageKind, MinutesSinceServiceDateUtc, PackedPatternStop,
     RaptorRoute, RaptorRouteIndex, RouteStopPosition, ServiceDayBitset, StopEventTimes,
     TimetableBundle,
@@ -244,6 +244,11 @@ impl LoadedTimetableBundle {
             .map(|id| id.get())
     }
 
+    /// Returns whether a wheelchair user can board trains at a station, as the feeds say.
+    pub fn station_wheelchair_boarding(&self, station: BundleStationIndex) -> Availability {
+        self.station(station).wheelchair_boarding.to_native()
+    }
+
     /// Returns the days on which any trip stops at a station.
     #[inline]
     pub fn station_service_days(&self, station: BundleStationIndex) -> ServiceDayBitset {
@@ -355,6 +360,27 @@ impl LoadedTimetableBundle {
         )
     }
 
+    /// Returns the position of a trip's train label in the order of `train_labels`. Trips of
+    /// one train with the same values share a label.
+    pub fn trip_train_label_index(&self, trip: BundleTripIndex) -> usize {
+        self.archived().trips[trip.as_usize()]
+            .train_label
+            .to_native()
+            .as_usize()
+    }
+
+    /// Returns the bike and wheelchair values of every train label, in label order.
+    pub fn train_label_availability(
+        &self,
+    ) -> impl Iterator<Item = (Availability, Availability)> + '_ {
+        self.archived().train_labels.iter().map(|label| {
+            (
+                label.bike_carriage.to_native(),
+                label.wheelchair_access.to_native(),
+            )
+        })
+    }
+
     /// Returns the category, number and agency of every train label, in label order.
     pub fn train_labels(&self) -> impl Iterator<Item = (&str, &str, &str)> + '_ {
         self.archived().train_labels.iter().map(|label| {
@@ -415,6 +441,24 @@ impl LoadedTimetableBundle {
         let archived = self.archived();
         let label_index = archived.trips[trip.as_usize()].train_label.to_native();
         archived.train_labels[label_index.as_usize()].offers_berths
+    }
+
+    /// Returns whether a trip's train takes bikes, as the feed says.
+    pub fn trip_bike_carriage(&self, trip: BundleTripIndex) -> Availability {
+        let archived = self.archived();
+        let label_index = archived.trips[trip.as_usize()].train_label.to_native();
+        archived.train_labels[label_index.as_usize()]
+            .bike_carriage
+            .to_native()
+    }
+
+    /// Returns whether a wheelchair user can travel on a trip's train, as the feed says.
+    pub fn trip_wheelchair_access(&self, trip: BundleTripIndex) -> Availability {
+        let archived = self.archived();
+        let label_index = archived.trips[trip.as_usize()].train_label.to_native();
+        archived.train_labels[label_index.as_usize()]
+            .wheelchair_access
+            .to_native()
     }
 
     /// Returns the feeds that went into the bundle as name, license and URL.

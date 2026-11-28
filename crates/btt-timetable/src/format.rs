@@ -9,7 +9,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 
 /// Changes whenever the layout of `TimetableBundle` changes, so an app never reads a bundle it
 /// does not understand.
-pub const BUNDLE_FORMAT_VERSION: u32 = 3;
+pub const BUNDLE_FORMAT_VERSION: u32 = 4;
 
 /// Marks the start of every bundle file.
 pub const BUNDLE_MAGIC: [u8; 8] = *b"BTTBUNDL";
@@ -219,6 +219,70 @@ impl PackedPatternStop {
     }
 }
 
+/// Whether a feed says that a train or a station offers something, such as bike carriage.
+#[derive(
+    Archive,
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Default,
+)]
+#[rkyv(derive(Debug, Clone, Copy, PartialEq, Eq))]
+pub enum Availability {
+    /// The feed does not say.
+    #[default]
+    Unknown,
+    /// The feed says yes.
+    Yes,
+    /// The feed says no.
+    No,
+}
+
+impl Availability {
+    /// Returns the value of a GTFS field such as `bikes_allowed`, where 1 is yes, 2 is no and
+    /// every other value is unknown.
+    pub const fn from_gtfs(value: u8) -> Self {
+        match value {
+            1 => Self::Yes,
+            2 => Self::No,
+            _ => Self::Unknown,
+        }
+    }
+
+    /// Returns the value of two copies of the same train from different feeds. A copy without
+    /// a value gives way to the other copy, except that a no needs the agreement of both
+    /// copies. Copies that disagree give unknown.
+    ///
+    /// Feeds often mark the trains and stations of other countries as unsuitable without
+    /// knowing, so a no from one feed only excludes a train when no other feed covers it.
+    #[must_use]
+    pub const fn merged_with(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::No, Self::No) => Self::No,
+            (Self::Yes, Self::Yes | Self::Unknown) | (Self::Unknown, Self::Yes) => Self::Yes,
+            (Self::No | Self::Unknown, _) | (Self::Yes, Self::No) => Self::Unknown,
+        }
+    }
+}
+
+impl ArchivedAvailability {
+    /// Returns the native value.
+    pub const fn to_native(self) -> Availability {
+        match self {
+            Self::Unknown => Availability::Unknown,
+            Self::Yes => Availability::Yes,
+            Self::No => Availability::No,
+        }
+    }
+}
+
 /// A station that trips stop at.
 #[derive(Archive, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct BundleStation {
@@ -232,6 +296,8 @@ pub struct BundleStation {
     pub time_zone: TimeZoneIndex,
     /// Station ID in the Trainline stations dataset, when the builder matched one.
     pub trainline_station_id: Option<NonZeroU32>,
+    /// Whether a wheelchair user can board trains here, from GTFS `wheelchair_boarding`.
+    pub wheelchair_boarding: Availability,
 }
 
 /// A walking or local transit connection between two stations.
@@ -297,6 +363,10 @@ pub struct BundleTrainLabel {
     pub agency: PooledString,
     /// Whether the train has couchettes or sleepers.
     pub offers_berths: bool,
+    /// Whether the train takes bikes, from GTFS `bikes_allowed`.
+    pub bike_carriage: Availability,
+    /// Whether a wheelchair user can travel on the train, from GTFS `wheelchair_accessible`.
+    pub wheelchair_access: Availability,
     /// The page that shows the layout of the train, if the builder found one.
     pub layout_page: Option<LayoutPageIndex>,
 }
@@ -407,6 +477,52 @@ pub struct TimetableBundle {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn availability_merge_lets_a_known_value_replace_a_missing_one() {
+        assert_eq!(
+            Availability::Unknown.merged_with(Availability::Yes),
+            Availability::Yes
+        );
+        assert_eq!(
+            Availability::Yes.merged_with(Availability::Unknown),
+            Availability::Yes
+        );
+        assert_eq!(
+            Availability::Yes.merged_with(Availability::Yes),
+            Availability::Yes
+        );
+        assert_eq!(
+            Availability::No.merged_with(Availability::No),
+            Availability::No
+        );
+        assert_eq!(
+            Availability::Unknown.merged_with(Availability::Unknown),
+            Availability::Unknown
+        );
+    }
+
+    #[test]
+    fn availability_merge_needs_both_copies_to_agree_on_no() {
+        // A single copy that says no is not enough, because a foreign feed can mark a train
+        // or station it does not serve as unavailable.
+        assert_eq!(
+            Availability::No.merged_with(Availability::Unknown),
+            Availability::Unknown
+        );
+        assert_eq!(
+            Availability::Unknown.merged_with(Availability::No),
+            Availability::Unknown
+        );
+        assert_eq!(
+            Availability::No.merged_with(Availability::Yes),
+            Availability::Unknown
+        );
+        assert_eq!(
+            Availability::Yes.merged_with(Availability::No),
+            Availability::Unknown
+        );
+    }
 
     #[test]
     fn last_day_is_the_highest_set_bit_of_either_word() {

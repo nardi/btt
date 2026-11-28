@@ -3,12 +3,12 @@
 use std::fmt::Write as _;
 use std::path::Path;
 
-use btt_timetable::TimetableBundle;
 use btt_timetable::format::{
     ArchivedBundleStation, ArchivedBundleTrainLabel, ArchivedBundleTrip, ArchivedFootpath,
     ArchivedPackedPatternStop, ArchivedRaptorRoute, ArchivedRouteStopPosition,
-    ArchivedServiceDayBitset, ArchivedStopEventTimes,
+    ArchivedServiceDayBitset, ArchivedStopEventTimes, BundleTrip,
 };
+use btt_timetable::{Availability, TimetableBundle};
 
 use crate::BuildError;
 use crate::config::FeedConfig;
@@ -220,7 +220,7 @@ fn bundle_statistics(bundle: &TimetableBundle, bundle_file_bytes: u64) -> Vec<Bu
     let bytes = |name: &str, count: usize, element_bytes: usize| {
         table(&format!("{name} bytes"), count * element_bytes)
     };
-    vec![
+    let mut statistics = vec![
         table("stations", bundle.stations.len()),
         table("RAPTOR routes", bundle.raptor_routes.len()),
         table("trips", bundle.trips.len()),
@@ -278,7 +278,60 @@ fn bundle_statistics(bundle: &TimetableBundle, bundle_file_bytes: u64) -> Vec<Bu
             statistic: "file bytes".to_owned(),
             value: i64::try_from(bundle_file_bytes).unwrap_or(i64::MAX),
         },
-    ]
+    ];
+    statistics.extend(availability_statistics(bundle));
+    statistics
+}
+
+/// Counts the trips and stations per availability value. The counts show how much of the bundle
+/// the bike and wheelchair modes can confirm, and how much they only allow.
+fn availability_statistics(bundle: &TimetableBundle) -> Vec<BuildStatistic> {
+    let count_by_value = |values: &mut dyn Iterator<Item = Availability>| {
+        let mut counts = [0_usize; 3];
+        for value in values {
+            counts[match value {
+                Availability::Unknown => 0,
+                Availability::Yes => 1,
+                Availability::No => 2,
+            }] += 1;
+        }
+        counts
+    };
+    let trip_label = |trip: &BundleTrip| &bundle.train_labels[trip.train_label.as_usize()];
+    let bike_counts = count_by_value(
+        &mut bundle
+            .trips
+            .iter()
+            .map(|trip| trip_label(trip).bike_carriage),
+    );
+    let wheelchair_counts = count_by_value(
+        &mut bundle
+            .trips
+            .iter()
+            .map(|trip| trip_label(trip).wheelchair_access),
+    );
+    let station_counts = count_by_value(
+        &mut bundle
+            .stations
+            .iter()
+            .map(|station| station.wheelchair_boarding),
+    );
+    let table = |statistic: String, value: usize| BuildStatistic {
+        scope: "bundle".to_owned(),
+        statistic,
+        value: to_statistic(value),
+    };
+    let mut availability = Vec::new();
+    for (subject, counts) in [
+        ("trips with bike carriage", bike_counts),
+        ("trips with wheelchair access", wheelchair_counts),
+        ("stations with wheelchair boarding", station_counts),
+    ] {
+        for (value, count) in ["unknown", "yes", "no"].into_iter().zip(counts) {
+            availability.push(table(format!("{subject} {value}"), count));
+        }
+    }
+    availability
 }
 
 /// Lists the uncertain station matches, most similar first.

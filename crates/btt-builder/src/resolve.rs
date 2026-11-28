@@ -1,7 +1,7 @@
 //! Step 5: resolves GTFS local times to UTC for every day a trip runs, and reads train labels.
 
 use btt_timetable::{
-    BundleStationIndex, ServiceDayBitset, TrainLabelInput, TripInput, TripStopInput,
+    Availability, BundleStationIndex, ServiceDayBitset, TrainLabelInput, TripInput, TripStopInput,
 };
 use chrono::{Days, NaiveDate, TimeZone};
 use chrono_tz::Tz;
@@ -52,6 +52,10 @@ struct FeedTripHeader {
     route_id: String,
     /// Stop ID of the trip's first stop, which some feeds use to name the train's product.
     first_stop_id: Option<String>,
+    /// Whether the train takes bikes.
+    bike_carriage: Availability,
+    /// Whether a wheelchair user can travel on the train.
+    wheelchair_access: Availability,
 }
 
 /// Reads every rail trip from the working database and resolves it to UTC.
@@ -194,7 +198,8 @@ fn read_trip_headers(
                 routes.route_short_name, coalesce(agencies.agency_name, ''),
                 coalesce(agencies.agency_timezone, feed_config.default_time_zone, 'UTC'),
                 routes.route_type, trips.trip_headsign, routes.route_desc,
-                first_stops.first_stop_id, routes.route_long_name, routes.route_id
+                first_stops.first_stop_id, routes.route_long_name, routes.route_id,
+                trips.bikes_allowed, trips.wheelchair_accessible
          FROM feed_trips AS trips
          JOIN feed_routes AS routes USING (feed_id, route_id)
          JOIN feed_config USING (feed_id)
@@ -226,6 +231,8 @@ fn read_trip_headers(
                 first_stop_id: row.get(10)?,
                 route_long_name: row.get(11)?,
                 route_id: row.get(12)?,
+                bike_carriage: Availability::from_gtfs(row.get(13)?),
+                wheelchair_access: Availability::from_gtfs(row.get(14)?),
             },
         );
     }
@@ -301,6 +308,8 @@ fn train_label(rule: &TrainLabelRule, header: &FeedTripHeader) -> (String, Train
         agency: header.agency_name.clone(),
         // The caller decides this with the list of night train categories.
         offers_berths: false,
+        bike_carriage: header.bike_carriage,
+        wheelchair_access: header.wheelchair_access,
     };
     (train_number, label)
 }
@@ -497,6 +506,8 @@ mod tests {
             route_long_name: None,
             route_id: String::new(),
             first_stop_id: None,
+            bike_carriage: Availability::Unknown,
+            wheelchair_access: Availability::Unknown,
         };
         let rule = TrainLabelRule {
             field: TrainLabelField::TripShortName,
@@ -529,6 +540,8 @@ mod tests {
             route_long_name: None,
             route_id: String::new(),
             first_stop_id: Some("StopPoint:OCETGV INOUI-87686006".into()),
+            bike_carriage: Availability::Unknown,
+            wheelchair_access: Availability::Unknown,
         };
         let rule = TrainLabelRule {
             field: TrainLabelField::TripHeadsign,
@@ -567,6 +580,8 @@ mod tests {
             route_long_name: Some(long.into()),
             route_id: String::new(),
             first_stop_id: None,
+            bike_carriage: Availability::Unknown,
+            wheelchair_access: Availability::Unknown,
         };
         let rule = TrainLabelRule {
             field: TrainLabelField::RouteLongName,

@@ -32,7 +32,10 @@ CREATE TABLE feed_trips (
     route_id VARCHAR NOT NULL,
     service_id VARCHAR NOT NULL,
     trip_short_name VARCHAR,
-    trip_headsign VARCHAR
+    trip_headsign VARCHAR,
+    -- GTFS `bikes_allowed` and `wheelchair_accessible`: 0 when unknown, 1 when yes, 2 when no.
+    bikes_allowed UTINYINT NOT NULL DEFAULT 0,
+    wheelchair_accessible UTINYINT NOT NULL DEFAULT 0
 );
 
 CREATE TABLE feed_stop_times (
@@ -54,7 +57,9 @@ CREATE TABLE feed_stops (
     latitude DOUBLE,
     longitude DOUBLE,
     station_key VARCHAR NOT NULL,
-    station_code VARCHAR
+    station_code VARCHAR,
+    -- GTFS `wheelchair_boarding`: 0 when unknown, 1 when yes, 2 when no.
+    wheelchair_boarding UTINYINT NOT NULL DEFAULT 0
 );
 
 CREATE TABLE feed_service_days (
@@ -63,6 +68,11 @@ CREATE TABLE feed_service_days (
     -- Day number within the bundle's validity window.
     service_day SMALLINT NOT NULL
 );
+
+-- Turns a GTFS availability value such as `bikes_allowed` into 0 (unknown), 1 (yes) or 2 (no).
+-- Empty and unexpected values are unknown.
+CREATE MACRO gtfs_availability(value) AS
+    CASE trim(coalesce(value, '')) WHEN '1' THEN 1 WHEN '2' THEN 2 ELSE 0 END;
 
 -- Turns a GTFS time such as '25:10:00' into seconds. Hours can pass 24 for trips that run past
 -- midnight.

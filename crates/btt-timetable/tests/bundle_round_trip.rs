@@ -14,6 +14,7 @@ fn station(name: &str, latitude: f64, longitude: f64) -> StationInput {
         coordinates: GeoCoordinates::from_degrees(latitude, longitude).unwrap(),
         time_zone: "Europe/Berlin".to_owned(),
         trainline_station_id: None,
+        wheelchair_boarding: btt_timetable::Availability::Unknown,
     }
 }
 
@@ -41,6 +42,8 @@ fn label(number: &str) -> TrainLabelInput {
         number: number.into(),
         agency: "DB".into(),
         offers_berths: number == "3",
+        bike_carriage: btt_timetable::Availability::Unknown,
+        wheelchair_access: btt_timetable::Availability::Unknown,
     }
 }
 

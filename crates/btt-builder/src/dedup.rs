@@ -3,7 +3,7 @@
 //! After UTC resolution the trips already sit in Rust memory, and trips with the same train
 //! number form small groups, so both steps run here without a round trip through the database.
 
-use btt_timetable::{BundleStationIndex, ServiceDayBitset, TripStopInput};
+use btt_timetable::{BundleStationIndex, ServiceDayBitset, TrainLabelInput, TripStopInput};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::resolve::ResolvedTrip;
@@ -295,7 +295,25 @@ fn extended_trip(
     if secondary.trip.train_label.offers_berths && !primary.trip.train_label.offers_berths {
         merged.trip.train_label = secondary.trip.train_label.clone();
     }
+    merge_availability(
+        &mut merged.trip.train_label,
+        &primary.trip.train_label,
+        &secondary.trip.train_label,
+    );
     Some(merged)
+}
+
+/// Sets the bike and wheelchair values of `label` from the two copies of one train, with the
+/// rule of `Availability::merged_with`.
+fn merge_availability(
+    label: &mut TrainLabelInput,
+    primary: &TrainLabelInput,
+    secondary: &TrainLabelInput,
+) {
+    label.bike_carriage = primary.bike_carriage.merged_with(secondary.bike_carriage);
+    label.wheelchair_access = primary
+        .wheelchair_access
+        .merged_with(secondary.wheelchair_access);
 }
 
 /// Largest difference between the times of a train with berths and a copy without them at a
@@ -355,7 +373,13 @@ pub fn link_berths(trips: &mut [ResolvedTrip], nearby: &NearbyStationPairs) -> u
                 })
                 .min_by_key(|&with| trips[with].train_number != trips[without].train_number);
             if let Some(with) = berth_copy {
-                new_labels.push((without, trips[with].trip.train_label.clone()));
+                let mut label = trips[with].trip.train_label.clone();
+                merge_availability(
+                    &mut label,
+                    &trips[with].trip.train_label,
+                    &trips[without].trip.train_label,
+                );
+                new_labels.push((without, label));
             }
         }
     }
@@ -514,6 +538,11 @@ fn joined_trip(
         if continuing.trip.train_label.offers_berths && !ending.trip.train_label.offers_berths {
             joined.trip.train_label = continuing.trip.train_label.clone();
         }
+        merge_availability(
+            &mut joined.trip.train_label,
+            &continuing.trip.train_label,
+            &ending.trip.train_label,
+        );
         return Some((joined, shared_days));
     }
     None
@@ -551,7 +580,7 @@ fn ordered_pair(left: usize, right: usize) -> (usize, usize) {
 
 #[cfg(test)]
 mod tests {
-    use btt_timetable::{TrainLabelInput, TripInput};
+    use btt_timetable::TripInput;
 
     use super::*;
 
@@ -589,6 +618,8 @@ mod tests {
                     number: "65".into(),
                     agency: String::new(),
                     offers_berths: false,
+                    bike_carriage: btt_timetable::Availability::Unknown,
+                    wheelchair_access: btt_timetable::Availability::Unknown,
                 },
             },
         }

@@ -11,9 +11,9 @@ use rustc_hash::FxHashMap;
 use thiserror::Error;
 
 use crate::format::{
-    BUNDLE_FORMAT_VERSION, BUNDLE_MAGIC, BundleHeader, BundleStation, BundleStationIndex,
-    BundleTrainLabel, BundleTrip, CompressedSparseRows, FeedAttribution, Footpath,
-    MAXIMUM_VALIDITY_DAYS, MinutesSinceServiceDateUtc, PackedPatternStop, PooledString,
+    Availability, BUNDLE_FORMAT_VERSION, BUNDLE_MAGIC, BundleHeader, BundleStation,
+    BundleStationIndex, BundleTrainLabel, BundleTrip, CompressedSparseRows, FeedAttribution,
+    Footpath, MAXIMUM_VALIDITY_DAYS, MinutesSinceServiceDateUtc, PackedPatternStop, PooledString,
     RaptorRoute, RaptorRouteIndex, RouteStopPosition, ServiceDayBitset, ServiceDayBitsetIndex,
     StopEventTimes, TimeZoneIndex, TimetableBundle, TrainLabelIndex,
 };
@@ -65,6 +65,8 @@ pub struct StationInput {
     pub time_zone: String,
     /// Station ID in the Trainline stations dataset, if matched.
     pub trainline_station_id: Option<NonZeroU32>,
+    /// Whether a wheelchair user can board trains here.
+    pub wheelchair_boarding: Availability,
 }
 
 /// One stop of a trip to add to a bundle.
@@ -93,6 +95,10 @@ pub struct TrainLabelInput {
     pub agency: String,
     /// Whether the train has couchettes or sleepers.
     pub offers_berths: bool,
+    /// Whether the train takes bikes.
+    pub bike_carriage: Availability,
+    /// Whether a wheelchair user can travel on the train.
+    pub wheelchair_access: Availability,
 }
 
 /// A trip to add to a bundle.
@@ -495,6 +501,7 @@ impl<'input> BundleTables<'input> {
             longitude_microdegrees: station.coordinates.longitude.microdegrees(),
             time_zone,
             trainline_station_id: station.trainline_station_id,
+            wheelchair_boarding: station.wheelchair_boarding,
         });
         Ok(())
     }
@@ -589,6 +596,8 @@ impl<'input> BundleTables<'input> {
             number: self.strings.intern(&label.number)?,
             agency: self.strings.intern(&label.agency)?,
             offers_berths: label.offers_berths,
+            bike_carriage: label.bike_carriage,
+            wheelchair_access: label.wheelchair_access,
             layout_page: None,
         });
         self.train_label_indices.insert(label, index);

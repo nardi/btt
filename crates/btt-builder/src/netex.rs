@@ -965,7 +965,10 @@ pub fn load_netex_feed(
             trip.route_id,
             trip.trip_id,
             trip.train_number,
-            None::<String>
+            None::<String>,
+            // The NeTEx import does not read the facilities of a train, so both are unknown.
+            0_u8,
+            0_u8
         ])?;
     }
     drop(appender);
@@ -993,7 +996,9 @@ pub fn load_netex_feed(
             stop.latitude,
             stop.longitude,
             stop.stop_id,
-            stop.station_code
+            stop.station_code,
+            // The NeTEx import does not read the accessibility of a stop place.
+            0_u8
         ])?;
     }
     drop(appender);
