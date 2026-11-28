@@ -25,10 +25,11 @@ use smol_str::SmolStr;
 use tauri::ipc::Channel;
 
 use crate::log_buffer::RecentLogLines;
-use crate::ticket_report::{LiveQuoteLogEntry, TicketPlanRecord};
+use crate::ticket_report::LiveQuoteLogEntry;
 use crate::timetable_updates::{
     KEPT_BUNDLE_FILES, TimetableUpdates, bundle_file_name, prune_bundles,
 };
+use btt_backend::problem_report::TicketPlanRecord;
 
 /// `User-Agent` for requests to public services, which ask clients to identify themselves.
 const USER_AGENT: &str = concat!(

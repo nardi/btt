@@ -409,7 +409,7 @@ impl Trip {
 
     /// Drops the journey choices and transfer time overrides of legs that no longer exist, such
     /// as after a reorder that separated their two places.
-    fn drop_choices_of_missing_legs(&mut self) {
+    pub(crate) fn drop_choices_of_missing_legs(&mut self) {
         let legs: SmallVec<[(TripPlaceId, TripPlaceId); 16]> = self
             .itinerary
             .legs()

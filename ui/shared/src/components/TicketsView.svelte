@@ -1,6 +1,7 @@
 <script lang="ts">
   // The tickets screen: the trains of the trip on the left, the tickets to buy on the right.
   import type { Price, TicketItem, TicketPlan, TicketStrategy, TripPlaceId } from "../bindings";
+  import { appFeatures } from "../app-features";
   import { formatDate, formatTimeInZone } from "../format";
   import type { LegLine } from "../itinerary";
   import {
@@ -224,6 +225,11 @@
           </button>
         {/each}
       </div>
+      {#if !appFeatures().livePrices}
+        <p class="note">
+          The prices are estimates. The desktop app also looks up live prices on booking sites.
+        </p>
+      {/if}
       {#each [...plan.notes, ...selected.notes] as note (note)}
         <p class="note">{note}</p>
       {/each}
@@ -543,5 +549,17 @@
 
   .muted {
     color: var(--color-text-muted);
+  }
+
+  /* A phone: one column, which scrolls as a whole. */
+  @media (max-width: 719px) {
+    .tickets {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    /* The tickets to buy come first, above the trains they cover. */
+    .buy {
+      order: -1;
+    }
   }
 </style>

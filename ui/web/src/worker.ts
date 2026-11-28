@@ -61,7 +61,7 @@ async function start(): Promise<void> {
       clearTimeout(pendingStateSave);
       pendingStateSave = setTimeout(() => void saveState(json), 200);
     },
-    (name: string, contents: string) => reply({ kind: "file", name, contents }),
+    (name: string, contents: string | Uint8Array) => reply({ kind: "file", name, contents }),
     (namespace: string, key: string, json: string) =>
       void saveLeg(namespace, key, json).catch((error) =>
         console.warn("could not save a planned leg", error),

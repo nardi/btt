@@ -1,8 +1,8 @@
 //! Writing a trip snapshot as a link for the web viewer or as a file.
 
 use btt_model::{
-    CommandError, LinkAlphabet, SNAPSHOT_SCHEMA_VERSION, SnapshotLinkError, StoredSnapshot,
-    TripSnapshot, encode_snapshot_link_in,
+    CommandError, LinkAlphabet, SNAPSHOT_SCHEMA_VERSION, SnapshotLinkError, StoredSnapshot, Trip,
+    TripFileError, TripSnapshot, encode_snapshot_link_in,
 };
 use serde::Serialize;
 use specta::Type;
@@ -111,19 +111,60 @@ pub fn trip_file_name(trip_name: &str) -> String {
     format!("{}.btt", file_stem(trip_name))
 }
 
-/// Writes a snapshot as the JSON text of a `.btt` file.
+/// Writes a snapshot and the trip it was made from as the JSON text of a `.btt` file.
+///
+/// The viewer shows the snapshot. The app opens the trip as a new trip to edit, see
+/// `trip_of_file_json`.
 ///
 /// # Errors
 ///
 /// Returns an error when the snapshot cannot be written as JSON.
-pub fn trip_file_json(snapshot: TripSnapshot) -> Result<String, CommandError> {
-    let document = StoredSnapshot {
-        schema_version: SNAPSHOT_SCHEMA_VERSION,
-        snapshot,
-    };
+pub fn trip_file_json(snapshot: TripSnapshot, trip: &Trip) -> Result<String, CommandError> {
+    let document = StoredSnapshot::of_trip(snapshot, trip);
     serde_json::to_string(&document).map_err(|error| CommandError::Sharing {
         message: error.to_string(),
     })
+}
+
+/// The schema version of a `.btt` file, without the rest of the document.
+#[derive(serde::Deserialize)]
+struct SchemaVersion {
+    /// See `StoredSnapshot::schema_version`.
+    schema_version: u16,
+}
+
+/// Largest `.btt` file in bytes that the app reads, which is the limit of the viewer.
+const MAXIMUM_TRIP_FILE_BYTES: usize = 8_000_000;
+
+/// Reads the JSON text of a `.btt` file as a new trip with a new ID.
+///
+/// The trip has the settings and the picked journeys of the file. It has no travellers, because
+/// the file has no traveller profiles. A file from a version that did not write the settings
+/// gives the trip with default settings, and its planned journeys become picked journeys.
+///
+/// # Errors
+///
+/// Returns `CommandError::TripFileUnreadable` when the text is not a trip file, or when a newer
+/// version of the app wrote it.
+pub fn trip_of_file_json(contents: &str) -> Result<Trip, CommandError> {
+    let unreadable = |message: String| CommandError::TripFileUnreadable { message };
+    if contents.len() > MAXIMUM_TRIP_FILE_BYTES {
+        return Err(unreadable("the file is too large".to_owned()));
+    }
+    // The version is read first, so that a file from a newer version gets a clear message even
+    // when the rest of its layout changed.
+    let version: SchemaVersion = serde_json::from_str(contents)
+        .map_err(|_| unreadable("the file is not a trip file".to_owned()))?;
+    if version.schema_version > SNAPSHOT_SCHEMA_VERSION {
+        return Err(unreadable(
+            TripFileError::NewerSchema(version.schema_version).to_string(),
+        ));
+    }
+    let document: StoredSnapshot = serde_json::from_str(contents)
+        .map_err(|error| unreadable(format!("the file is not a trip file ({error})")))?;
+    document
+        .into_editable_trip()
+        .map_err(|error| unreadable(error.to_string()))
 }
 
 /// Returns a trip name as the name of a file, without the characters file systems reject.
@@ -155,5 +196,36 @@ mod tests {
         assert_eq!(file_stem("Wien / Roma: 2026"), "Wien _ Roma_ 2026");
         assert_eq!(file_stem("  "), "trip");
         assert_eq!(file_stem("Zürich"), "Zürich");
+    }
+
+    #[test]
+    fn a_text_that_is_not_a_trip_file_is_unreadable() {
+        for contents in ["", "not json", "{}", r#"{"schema_version": 2}"#] {
+            assert!(matches!(
+                trip_of_file_json(contents),
+                Err(CommandError::TripFileUnreadable { .. })
+            ));
+        }
+    }
+
+    #[test]
+    fn a_file_from_a_newer_version_names_the_version() {
+        let contents = format!(
+            r#"{{"schema_version": {}, "layout": "new"}}"#,
+            SNAPSHOT_SCHEMA_VERSION + 1
+        );
+        let Err(CommandError::TripFileUnreadable { message }) = trip_of_file_json(&contents) else {
+            panic!("A file from a newer version must be refused.");
+        };
+        assert!(message.contains("newer version"), "{message}");
+    }
+
+    #[test]
+    fn a_file_larger_than_the_limit_is_unreadable() {
+        let contents = " ".repeat(MAXIMUM_TRIP_FILE_BYTES + 1);
+        assert!(matches!(
+            trip_of_file_json(&contents),
+            Err(CommandError::TripFileUnreadable { .. })
+        ));
     }
 }

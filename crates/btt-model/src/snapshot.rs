@@ -10,16 +10,17 @@ use specta::Type;
 use uuid::Uuid;
 
 use crate::coordinates::{GeoCoordinates, Latitude, Longitude};
+use crate::edit::MAXIMUM_PLACE_COUNT;
 use crate::itinerary::{
     Itinerary, ItineraryRoute, LegTravelMode, OvernightLegOptions, PlaceStay, StationSearchRadius,
     TripPlace, TripPlaceId, ViaPlace,
 };
 use crate::link::names_a_city;
 use crate::plan::{
-    Journey, JourneyCostParts, LegPlan, LegPlanStation, LegPlanStationIndex, LegPlanningResult,
-    TrainLabel, TrainRide, TransferAndRide,
+    Journey, JourneyChoice, JourneyCostParts, LegPlan, LegPlanStation, LegPlanStationIndex,
+    LegPlanningResult, TrainLabel, TrainRide, TransferAndRide,
 };
-use crate::trip::{Trip, TripId, TripPreferences};
+use crate::trip::{ChosenJourney, Trip, TripId, TripPreferences};
 
 /// Size of the steps that a snapshot places its places in, in microdegrees, which is about 11
 /// meters. A place is a point that the traveller picked on a map or found by search, and a
@@ -40,6 +41,106 @@ pub struct StoredSnapshot {
     pub schema_version: u16,
     /// The snapshot itself.
     pub snapshot: TripSnapshot,
+    /// The trip with its settings and the journeys the traveller picked, so that the app can
+    /// open the file as a trip to edit. It has no ID and no travellers. The viewer ignores it.
+    /// Files from older versions do not have it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub editable_trip: Option<Trip>,
+}
+
+/// Why a trip file cannot be opened as a trip.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum TripFileError {
+    /// A newer version of the app wrote the file.
+    #[error("a newer version of the app wrote this file (schema version {0})")]
+    NewerSchema(u16),
+    /// The trip in the file breaks a rule that every trip follows.
+    #[error("the trip in this file is not valid: {0}")]
+    InvalidTrip(&'static str),
+}
+
+impl StoredSnapshot {
+    /// Builds the document of a `.btt` file from a snapshot and the trip it was made from.
+    ///
+    /// The document holds the trip a second time as `editable_trip`, without its ID and without
+    /// its travellers. Traveller profiles are not in the file, so their IDs have no use for the
+    /// reader.
+    pub fn of_trip(snapshot: TripSnapshot, trip: &Trip) -> Self {
+        let mut editable_trip = trip.clone();
+        editable_trip.id = TripId(Uuid::nil());
+        editable_trip.preferences.traveller_ids.clear();
+        Self {
+            schema_version: SNAPSHOT_SCHEMA_VERSION,
+            snapshot,
+            editable_trip: Some(editable_trip),
+        }
+    }
+
+    /// Returns the trip of the document as a new trip to edit, with a new ID.
+    ///
+    /// A document without `editable_trip` gives the trip of the snapshot, with default settings.
+    /// The chosen journey of each planned leg then becomes a picked journey, so that the planner
+    /// keeps the journeys of the file where the timetable still has them.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when a newer version of the app wrote the document, or when the trip
+    /// has too many places or two places with the same ID.
+    pub fn into_editable_trip(self) -> Result<Trip, TripFileError> {
+        if self.schema_version > SNAPSHOT_SCHEMA_VERSION {
+            return Err(TripFileError::NewerSchema(self.schema_version));
+        }
+        let mut trip = match self.editable_trip {
+            Some(trip) => trip,
+            None => trip_with_snapshot_choices(self.snapshot),
+        };
+        let place_ids: Vec<u32> = trip
+            .itinerary
+            .trip_places()
+            .map(|place| place.id.0.get())
+            .collect();
+        if place_ids.len() > MAXIMUM_PLACE_COUNT {
+            return Err(TripFileError::InvalidTrip("it has too many places"));
+        }
+        let mut sorted_ids = place_ids.clone();
+        sorted_ids.sort_unstable();
+        sorted_ids.dedup();
+        if sorted_ids.len() != place_ids.len() {
+            return Err(TripFileError::InvalidTrip("two places have the same ID"));
+        }
+        trip.id = TripId::new_v7();
+        trip.preferences.traveller_ids.clear();
+        // A new place must not reuse the ID of a place in the file.
+        trip.next_place_id = trip.next_place_id.max(next_place_id_after(&trip.itinerary));
+        trip.drop_choices_of_missing_legs();
+        Ok(trip)
+    }
+}
+
+/// Returns the trip of a snapshot with the chosen journey of each planned leg as a picked
+/// journey.
+fn trip_with_snapshot_choices(snapshot: TripSnapshot) -> Trip {
+    let mut trip = snapshot.trip;
+    let choices: Vec<ChosenJourney> = trip
+        .itinerary
+        .legs()
+        .filter_map(|leg| {
+            let snapshot_leg = snapshot
+                .legs
+                .iter()
+                .find(|snapshot_leg| snapshot_leg.arrival_place_id == leg.arrival_place.id)?;
+            let LegPlanningResult::Found(plan) = &snapshot_leg.result else {
+                return None;
+            };
+            Some(ChosenJourney {
+                departure_place_id: leg.departure_place.id,
+                arrival_place_id: leg.arrival_place.id,
+                choice: JourneyChoice::of_journey(&plan.chosen_journey),
+            })
+        })
+        .collect();
+    trip.chosen_journeys = choices;
+    trip
 }
 
 /// The result for one leg of a snapshot.

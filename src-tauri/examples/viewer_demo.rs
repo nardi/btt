@@ -159,6 +159,7 @@ fn main() {
     let document = StoredSnapshot {
         schema_version: SNAPSHOT_SCHEMA_VERSION,
         snapshot,
+        editable_trip: None,
     };
     std::fs::write(
         output.join("demo.btt"),

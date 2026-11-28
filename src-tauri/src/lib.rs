@@ -58,6 +58,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             problem_report::export_problem_report,
             sharing::share_trip,
             sharing::export_trip_file,
+            sharing::import_trip_file,
             timetable_updates::timetable_status,
             timetable_updates::check_timetable,
             timetable_updates::operator_end_dates,

@@ -24,6 +24,15 @@ pub(crate) enum Outgoing {
     },
 }
 
+/// The contents of a file that the page offers for download.
+#[derive(Clone, Copy)]
+pub(crate) enum FileContents<'a> {
+    /// A JSON text, such as a trip file.
+    Json(&'a str),
+    /// The bytes of a ZIP archive, such as a problem report.
+    Zip(&'a [u8]),
+}
+
 /// The functions of the page, and the queue that carries messages to it.
 pub(crate) struct Host {
     /// Writes the stored state.
@@ -69,9 +78,14 @@ impl Host {
         }
     }
 
-    /// Gives the page a file to offer for download.
-    pub(crate) fn save_file(&self, name: &str, contents: &str) {
-        let arguments = js_sys::Array::of2(&JsValue::from_str(name), &JsValue::from_str(contents));
+    /// Gives the page a file to offer for download. A JSON text reaches the page as a string,
+    /// and a ZIP archive as a `Uint8Array`.
+    pub(crate) fn save_file(&self, name: &str, contents: FileContents<'_>) {
+        let contents = match contents {
+            FileContents::Json(text) => JsValue::from_str(text),
+            FileContents::Zip(bytes) => js_sys::Uint8Array::from(bytes).into(),
+        };
+        let arguments = js_sys::Array::of2(&JsValue::from_str(name), &contents);
         if let Err(error) = self.save_file.apply(&JsValue::NULL, &arguments) {
             tracing::warn!(?error, "the page could not save the file");
         }

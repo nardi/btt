@@ -6,9 +6,9 @@
 use std::path::PathBuf;
 
 use btt_backend::sharing::{
-    LinkOptions, SharedTrip, share_snapshot, trip_file_json, trip_file_name,
+    LinkOptions, SharedTrip, share_snapshot, trip_file_json, trip_file_name, trip_of_file_json,
 };
-use btt_model::{CommandError, SnapshotLeg, TripId, TripSnapshot};
+use btt_model::{CommandError, SnapshotLeg, Trip, TripId, TripSnapshot};
 use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
 
@@ -19,23 +19,24 @@ use crate::state::AppState;
 /// tests.
 const TRIP_FILE_PATH_VARIABLE: &str = "BTT_TRIP_FILE_PATH";
 
-/// Builds the snapshot of an open trip, from the legs as the frontend shows them.
+/// Returns an open trip and its snapshot, from the legs as the frontend shows them.
 fn snapshot_of_open_trip(
     state: &AppState,
     trip_id: TripId,
     legs: &[SnapshotLeg],
-) -> Result<TripSnapshot, CommandError> {
+) -> Result<(Trip, TripSnapshot), CommandError> {
     let trip = state
         .open_trips()
         .get(&trip_id)
         .map(|open_trip| open_trip.trip.clone())
         .ok_or(CommandError::TripNotOpen(trip_id))?;
-    Ok(TripSnapshot::new(
+    let snapshot = TripSnapshot::new(
         &trip,
         legs,
         today_utc(),
         state.planning_backend()?.bundle_version(),
-    ))
+    );
+    Ok((trip, snapshot))
 }
 
 /// Writes an open trip with the journeys the frontend shows as a link for the web viewer.
@@ -66,7 +67,7 @@ pub fn share_trip(
     name_places_by_station: bool,
     compact: bool,
 ) -> Result<SharedTrip, CommandError> {
-    let snapshot = snapshot_of_open_trip(&state, trip_id, &legs)?;
+    let (_, snapshot) = snapshot_of_open_trip(&state, trip_id, &legs)?;
     share_snapshot(
         snapshot,
         LinkOptions {
@@ -79,7 +80,7 @@ pub fn share_trip(
 }
 
 /// Asks where to save the trip as a file and writes it there, for the viewer's open button, for
-/// email and for `AirDrop`. Returns the path of the saved file, or `None` when the traveller
+/// email and for `AirDrop`. The app can open the file again with `import_trip_file`. Returns the path of the saved file, or `None` when the traveller
 /// cancelled.
 ///
 /// # Errors
@@ -93,7 +94,7 @@ pub async fn export_trip_file(
     trip_id: TripId,
     legs: Vec<SnapshotLeg>,
 ) -> Result<Option<String>, CommandError> {
-    let snapshot = snapshot_of_open_trip(&state, trip_id, &legs)?;
+    let (trip, snapshot) = snapshot_of_open_trip(&state, trip_id, &legs)?;
     let file_name = trip_file_name(&snapshot.trip.name);
     let chosen_path = std::env::var_os(TRIP_FILE_PATH_VARIABLE)
         .map(PathBuf::from)
@@ -109,9 +110,30 @@ pub async fn export_trip_file(
     let Some(path) = chosen_path else {
         return Ok(None);
     };
-    let json = trip_file_json(snapshot)?;
+    let json = trip_file_json(snapshot, &trip)?;
     std::fs::write(&path, json).map_err(|error| CommandError::Sharing {
         message: error.to_string(),
     })?;
     Ok(Some(path.to_string_lossy().into_owned()))
+}
+
+/// Reads the text of a `.btt` file and stores its trip as a new trip. Returns the new trip.
+///
+/// The frontend reads the file, so this command works the same for a file that the traveller
+/// picked and for a file that was dropped on the window. See `trip_of_file_json` for what the
+/// trip holds.
+///
+/// # Errors
+///
+/// Returns an error when the text is not a trip file, when a newer version of the app wrote it,
+/// or when the trip cannot be stored.
+#[tauri::command]
+#[specta::specta]
+pub fn import_trip_file(
+    state: State<'_, AppState>,
+    contents: String,
+) -> Result<Trip, CommandError> {
+    let trip = trip_of_file_json(&contents)?;
+    state.storage.save_trip(&trip)?;
+    Ok(trip)
 }

@@ -690,6 +690,7 @@ dependencies = [
  "serde_json",
  "smol_str",
  "specta",
+ "zip 8.6.0",
 ]
 
 [[package]]

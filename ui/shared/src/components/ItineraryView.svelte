@@ -12,7 +12,7 @@
   import { staggerDelay } from "../motion";
   import { legViewState, plannedArrivalDates, type TripSource } from "../trip-source";
   import LegRowView from "./LegRowView.svelte";
-  import PlaceRowView from "./PlaceRowView.svelte";
+  import PlaceRowView, { type InsertionSide } from "./PlaceRowView.svelte";
   import PlaceSearch from "./PlaceSearch.svelte";
 
   /** Search radius of places added through search, in meters. */
@@ -94,6 +94,35 @@
     });
   }
 
+  /** The place next to which the open search adds a place, and the side, or `null`. */
+  let insertion: { placeId: TripPlaceId; side: InsertionSide } | null = $state(null);
+
+  /** Opens the search for a place on one side of another place, or closes it when it is open. */
+  function toggleInsertion(placeId: TripPlaceId, side: InsertionSide) {
+    insertion =
+      insertion?.placeId === placeId && insertion.side === side ? null : { placeId, side };
+  }
+
+  /** Adds the picked place on the chosen side of the place whose search is open. */
+  function insertPlace(result: PlaceSearchResult) {
+    const index = rows.places.findIndex((row) => row.place.id === insertion?.placeId);
+    const side = insertion?.side;
+    insertion = null;
+    if (index < 0) {
+      return;
+    }
+    onEdit?.({
+      AddPlace: {
+        place: {
+          name: result.name,
+          coordinates: result.coordinates,
+          station_search_radius: defaultStationSearchRadius,
+        },
+        insert_at: { AtIndex: side === "before" ? index : index + 1 },
+      },
+    });
+  }
+
   /** Describes the default time windows of the trip in one line. */
   function preferencesSummary(preferences: TripPreferences): string {
     const { departure, arrival } = preferences.default_windows;
@@ -106,6 +135,9 @@
 
   /** Position of the place being dragged, so rows can show where it would land. */
   let draggedIndex: number | null = $state(null);
+
+  /** Position of the row under the finger during a touch drag. */
+  let touchDropIndex: number | null = $state(null);
 
   /** The places the view has shown, so a single added place enters without a stagger. */
   let knownPlaceIds = new Set<TripPlaceId>();
@@ -121,6 +153,17 @@
     onEdit?.({ ReorderPlace: { place_id: draggedPlaceId, new_index: newIndex } });
   }
 </script>
+
+{#snippet insertionSearch()}
+  {#if editable !== null && insertion !== null}
+    <PlaceSearch
+      placeholder={`Add a place ${insertion.side} ${placeName(insertion.placeId)}: city or station`}
+      focusOnMount
+      searchPlaces={(query) => editable.searchPlaces(query)}
+      onPick={insertPlace}
+    />
+  {/if}
+{/snippet}
 
 {#snippet stopSearch()}
   {#if editable !== null}
@@ -163,6 +206,7 @@
       <PlaceRowView
         {row}
         {index}
+        placeCount={rows.places.length}
         lineAbove={index > 0 ? legLine(rows.legs[index - 1]!.travelMode, index) : null}
         lineBelow={index < rows.legs.length ? legLine(rows.legs[index]!.travelMode, index + 1) : null}
         selected={row.place.id === selectedPlaceId}
@@ -173,6 +217,11 @@
         onReorder={editable === null ? undefined : reorderPlace}
         {draggedIndex}
         onDragChange={(newDraggedIndex) => (draggedIndex = newDraggedIndex)}
+        {touchDropIndex}
+        onTouchDropChange={(newDropIndex) => (touchDropIndex = newDropIndex)}
+        onInsert={editable === null ? undefined : (side) => toggleInsertion(row.place.id, side)}
+        insertionSide={insertion?.placeId === row.place.id ? insertion.side : null}
+        insertionSearch={insertion?.placeId === row.place.id ? insertionSearch : undefined}
         enterDelay={staggered ? staggerDelay(2 * index) : 0}
       />
     {/each}
@@ -213,6 +262,9 @@
     margin: 0;
     padding: 0;
     list-style: none;
+    /* The rows stack their dates under the names when the list is narrow, see the
+       `itinerary` container queries in the rows. */
+    container: itinerary / inline-size;
   }
 
   /* The summary of the default windows and the button to the setup screen share a line. */

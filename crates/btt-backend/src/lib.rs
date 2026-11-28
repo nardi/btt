@@ -3,6 +3,7 @@
 pub mod editing;
 pub mod place_naming;
 pub mod pricing;
+pub mod problem_report;
 pub mod sharing;
 pub mod tickets;
 pub mod timetable_status;

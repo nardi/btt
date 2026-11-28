@@ -25,6 +25,7 @@
   import { arrivalPlaceOfTicket, journeyOfSimilarTrip } from "@btt/shared/similar-trip";
   import { liveQuoteKey, similarTripOf } from "@btt/shared/tickets";
   import { legViewState, plannedArrivalDates } from "@btt/shared/trip-source";
+  import { appFeatures } from "@btt/shared/app-features";
   import type { PlaceFocusRequest } from "@btt/shared/map-features";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { onMount } from "svelte";
@@ -38,8 +39,8 @@
   import TimetableDialog from "./TimetableDialog.svelte";
   import TripList from "./TripList.svelte";
 
-  /** Whether the header offers a problem report, which only the desktop app can write. */
-  let { canReportProblems = true }: { canReportProblems?: boolean } = $props();
+  /** The features of this build, which are fewer in the web app. */
+  const features = appFeatures();
 
   let trips: TripSummary[] = $state([]);
   let openSource: TauriTripSource | null = $state(null);
@@ -160,6 +161,17 @@
     }
   }
 
+  /** Stores the trip of a `.btt` file as a new trip and opens it. */
+  async function importTrip(contents: string) {
+    const result = await commands.importTripFile(contents);
+    if (result.status === "ok") {
+      await refreshTrips();
+      await openTrip(result.data.id);
+    } else {
+      errorMessage = commandErrorMessage(result.error);
+    }
+  }
+
   async function deleteTrip(tripId: TripId) {
     const result = await commands.deleteTrip(tripId);
     if (result.status === "error") {
@@ -183,8 +195,15 @@
     }
   }
 
-  /** Selects a place and asks the map to move to it. */
+  /**
+   * Whether a phone in portrait shows the map of the planning screen instead of the itinerary.
+   * Wider screens show both, and ignore it.
+   */
+  let phoneShowsMap = $state(false);
+
+  /** Selects a place and asks the map to move to it. A phone in portrait then shows the map. */
   function focusPlace(placeId: number) {
+    phoneShowsMap = true;
     selectedPlaceId = placeId;
     focusRequest = { placeId, requestNumber: (focusRequest?.requestNumber ?? 0) + 1 };
   }
@@ -262,6 +281,9 @@
    * The backend keeps the answers and spaces its requests, so a repeat costs nothing.
    */
   async function fetchLivePrices(plan: TicketPlan, requestNumber: number) {
+    if (!features.livePrices) {
+      return;
+    }
     const requests = new Map<string, NonNullable<(typeof plan.strategies)[number]["items"][number]["live_quote_request"]>>();
     for (const strategy of plan.strategies) {
       for (const item of strategy.items) {
@@ -385,6 +407,9 @@
 
   /** Opens the first-launch question when the portable build has not asked it yet. */
   async function checkPortableQuestion() {
+    if (!features.dataLocation) {
+      return;
+    }
     const location = await commands.dataLocationStatus();
     if (location.status === "ok" && location.data.question_pending) {
       showPortableQuestion = true;
@@ -435,12 +460,12 @@
       {trips}
       firstDate={timetableStatus?.installed?.valid_from ?? null}
       lastDate={timetableStatus?.installed?.valid_until ?? null}
-      onCreate={createTrip} onOpen={openTrip} onDelete={deleteTrip} onAbout={() => (showAbout = true)} />
+      onCreate={createTrip} onOpen={openTrip} onDelete={deleteTrip} onImport={importTrip} onAbout={() => (showAbout = true)} />
   {:else}
     <header class="trip-header">
-      <button type="button" class="with-icon" onclick={closeTrip}>
+      <button type="button" class="with-icon back-button" aria-label="Trips" onclick={closeTrip}>
         <Icon name="back" />
-        Trips
+        <span class="wide-only">Trips</span>
       </button>
       <input
         class="trip-name"
@@ -454,6 +479,7 @@
         <input
           type="date"
           class="numbers"
+          aria-label="Start date"
           value={openSource.trip.start_date}
           min={timetableStatus?.installed?.valid_from}
           max={timetableStatus?.installed?.valid_until}
@@ -499,11 +525,27 @@
         </button>
       </div>
       <ThemeSwitch />
-      <button type="button" onclick={() => (showShare = true)}>Share</button>
-      {#if canReportProblems}
-        <button type="button" onclick={() => (showProblemReport = true)}>Report a problem</button>
-      {/if}
-      <button type="button" onclick={() => (showAbout = true)}>About</button>
+      <button type="button" class="share-button" onclick={() => (showShare = true)}>Share</button>
+      <button
+        type="button"
+        class="report-button"
+        aria-label="Report a problem"
+        onclick={() => (showProblemReport = true)}
+      >
+        <span class="narrow-only"><Icon name="flag" size={18} /></span>
+        <span class="wide-only">Report a problem</span>
+      </button>
+      <button
+        type="button"
+        class="about-button"
+        aria-label="About"
+        onclick={() => (showAbout = true)}
+      >
+        <span class="narrow-only"><Icon name="info" size={18} /></span>
+        <span class="wide-only">About</span>
+      </button>
+      <!-- On a phone the header has two rows, and this element starts the second one. -->
+      <span class="header-break" aria-hidden="true"></span>
     </header>
     {#if showShare}
       <ShareDialog
@@ -557,7 +599,29 @@
             onSwitchToSimilar={switchToSimilarTrip}
           />
         {:else}
-          <div class="workspace">
+          <!-- A phone in portrait shows the list or the map, and this control switches. -->
+          <div class="view-switch" role="radiogroup" aria-label="View">
+            <span class="view-switch-thumb" class:on-map={phoneShowsMap} aria-hidden="true"></span>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={!phoneShowsMap}
+              onclick={() => (phoneShowsMap = false)}
+            >
+              <Icon name="list" size={16} />
+              List
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={phoneShowsMap}
+              onclick={() => (phoneShowsMap = true)}
+            >
+              <Icon name="map" size={16} />
+              Map
+            </button>
+          </div>
+          <div class="workspace" class:shows-map={phoneShowsMap}>
             <div class="itinerary-column">
               <ItineraryView
                 source={openSource}
@@ -699,6 +763,210 @@
   .error {
     margin: 0;
     color: var(--color-danger);
+  }
+
+  /* These elements only show on a phone, see the rules for narrow screens below. */
+  .narrow-only,
+  .header-break,
+  .view-switch {
+    display: none;
+  }
+
+  /* A phone, or a tablet in portrait. The header has two rows. The trip name and the share
+     button go on the first row, and the other controls on the second one. */
+  @media (max-width: 719px), (pointer: coarse) and (max-width: 1023px) {
+    .trip-header {
+      flex-wrap: wrap;
+      row-gap: var(--space-2);
+    }
+
+    /* The child components, such as the theme switch, follow the same order. */
+    .trip-header > :global(*) {
+      order: 3;
+    }
+
+    .back-button {
+      order: 0;
+    }
+
+    .trip-name {
+      order: 1;
+    }
+
+    .share-button {
+      order: 2;
+    }
+
+    .header-break {
+      display: block;
+      order: 2;
+      flex-basis: 100%;
+      height: 0;
+    }
+
+    .about-button {
+      margin-left: auto;
+    }
+  }
+
+  /* A phone, in portrait or in landscape. The desktop window is never this narrow. */
+  @media (max-width: 719px) {
+    main {
+      padding: var(--space-4) var(--space-3);
+    }
+
+    main.trip-open {
+      height: 100dvh;
+      padding: var(--space-3);
+      gap: var(--space-3);
+    }
+
+    .trip-header {
+      gap: var(--space-2);
+    }
+
+    /* The back, report and About buttons only hold an icon here, so they are round. The back
+       button has the height of the Share button next to it. The report and About buttons have
+       the size of the icon buttons in their row, which have the class `icon-button large`. */
+    .back-button,
+    .report-button,
+    .about-button {
+      flex: none;
+      align-self: center;
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+    }
+
+    .report-button,
+    .about-button {
+      width: 32px;
+      height: 32px;
+    }
+
+    /* The second row has no room for the report button, so it follows the Share button. */
+    .report-button {
+      order: 2;
+    }
+
+    .trip-name {
+      font-size: var(--text-lead);
+    }
+
+    .start-date .label,
+    .wide-only {
+      display: none;
+    }
+
+    .narrow-only {
+      display: contents;
+    }
+
+    .tabs button {
+      flex: 1;
+    }
+
+    .workspace {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .itinerary-column {
+      padding-right: 0;
+    }
+
+    .workspace:not(.shows-map) .map-column,
+    .workspace.shows-map .itinerary-column {
+      display: none;
+    }
+
+    /* The switch is a track with two halves under the tabs. A thumb slides under the half
+       that is chosen. */
+    .panel > .view-switch {
+      position: relative;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      flex: none;
+      margin-bottom: var(--space-3);
+      padding: 3px;
+      border-radius: var(--radius-pill);
+      background: var(--color-surface-muted);
+    }
+
+    .view-switch button {
+      position: relative;
+      z-index: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-1);
+      padding: var(--space-1) var(--space-3);
+      border: none;
+      border-radius: var(--radius-pill);
+      background: none;
+      color: var(--color-text-muted);
+      font-weight: 500;
+    }
+
+    .view-switch button:hover {
+      background: none;
+      color: var(--color-text);
+    }
+
+    .view-switch button[aria-checked="true"] {
+      color: var(--color-text);
+      font-weight: 600;
+    }
+
+    .view-switch-thumb {
+      position: absolute;
+      inset: 3px auto 3px 3px;
+      width: calc(50% - 3px);
+      border-radius: var(--radius-pill);
+      background: var(--color-surface);
+      box-shadow: 0 1px 3px rgb(0 0 0 / 20%);
+      transition: transform 150ms ease-out;
+    }
+
+    .view-switch-thumb.on-map {
+      transform: translateX(100%);
+    }
+  }
+
+  /* A phone in landscape: the header takes one row, and the list and the map stand side by
+     side. */
+  @media (max-width: 719px) and (max-height: 500px) {
+    main.trip-open {
+      padding: var(--space-2) var(--space-3);
+      gap: var(--space-2);
+    }
+
+    .trip-header {
+      flex-wrap: nowrap;
+    }
+
+    .header-break,
+    .panel > .view-switch {
+      display: none;
+    }
+
+    .tabs button {
+      flex: none;
+      padding-block: var(--space-1) calc(var(--space-1) + 2px);
+    }
+
+    .workspace {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: var(--space-2);
+    }
+
+    .workspace:not(.shows-map) .map-column,
+    .workspace.shows-map .itinerary-column {
+      display: block;
+    }
   }
 
   .notice {

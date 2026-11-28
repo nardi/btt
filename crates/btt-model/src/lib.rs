@@ -46,7 +46,9 @@ pub use plan::{
     PlanningSessionEvent, SearchedWindow, StationWay, TrainLabel, TrainRide, TransferAndRide,
     WayToStationMode,
 };
-pub use snapshot::{SNAPSHOT_SCHEMA_VERSION, SnapshotLeg, StoredSnapshot, TripSnapshot};
+pub use snapshot::{
+    SNAPSHOT_SCHEMA_VERSION, SnapshotLeg, StoredSnapshot, TripFileError, TripSnapshot,
+};
 pub use tickets::{
     AccommodationRequest, BookingLink, BookingLinkKind, EuroCents, EuroRange, ForeignAmount,
     LiveQuote, LiveQuoteRequest, PassOptionSummary, PassScenario, PassScenarioLeg, Price,

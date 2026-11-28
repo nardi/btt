@@ -224,7 +224,7 @@ pub fn plan_tickets(
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .insert(
             trip_id,
-            crate::ticket_report::TicketPlanRecord {
+            btt_backend::problem_report::TicketPlanRecord {
                 created_at: chrono::Local::now().to_rfc3339(),
                 legs,
                 traveller: traveller.cloned(),

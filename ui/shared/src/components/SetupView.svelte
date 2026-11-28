@@ -156,4 +156,11 @@
     margin: 0;
     color: var(--color-text-muted);
   }
+
+  /* A phone: one column, which scrolls as a whole. */
+  @media (max-width: 719px) {
+    .setup {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
 </style>

@@ -1,6 +1,7 @@
 <script lang="ts">
   // Shares the open trip with the web viewer, as a link, as a QR code or as a file. The link
   // holds the whole trip, so the dialog says who can read it.
+  import { appFeatures } from "@btt/shared/app-features";
   import { commands, type SharedTrip, type TripId } from "@btt/shared/bindings";
   import QrCode from "@btt/shared/components/QrCode.svelte";
   import { qrCodeImage, qrCodeOf } from "@btt/shared/qr";
@@ -135,7 +136,9 @@
     if (result.status === "error") {
       message = commandErrorMessage(result.error);
     } else if (result.data !== null) {
-      message = `Saved to ${result.data}`;
+      message = appFeatures().runsInBrowser
+        ? `Downloaded ${result.data}. Open it in the viewer, or import it in the app on another device.`
+        : `Saved to ${result.data}. Open it in the viewer, or import it in the app on another device.`;
     }
   }
 </script>
@@ -236,8 +239,9 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
+    box-sizing: border-box;
     width: min(600px, calc(100vw - 2 * var(--space-4)));
-    max-height: calc(100vh - 2 * var(--space-4));
+    max-height: calc(100dvh - 2 * var(--space-4));
     overflow-y: auto;
     padding: var(--space-4) var(--space-6);
     border: 1px solid var(--color-border);
