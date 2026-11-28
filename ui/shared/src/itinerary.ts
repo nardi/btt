@@ -11,6 +11,8 @@ import type {
   JourneyChoice,
   LegPlan,
   LegTravelMode,
+  MobilityMode,
+  MobilityModeChange,
   PlaceStay,
   PlaceWindowOverride,
   StationWay,
@@ -18,6 +20,7 @@ import type {
   Trip,
   TripPlace,
   TripPlaceId,
+  WayToStationMode,
 } from "./bindings";
 import { dateInZone, formatTimeInZone } from "./format";
 import { haversineMeters } from "./geo";
@@ -63,6 +66,8 @@ export interface LegRow {
   departurePlace: TripPlace;
   arrivalPlace: TripPlace;
   travelMode: LegTravelMode;
+  /** How the traveller moves on the leg, from the last place before it that sets a mode. */
+  mobilityMode: MobilityMode;
   /** Date of departure as `YYYY-MM-DD`. */
   departureDate: string;
 }
@@ -92,6 +97,29 @@ export function tripPlaces(itinerary: Itinerary): TripPlace[] {
   const route = itinerary.Route;
   return [route.origin, ...route.via_places.map((viaPlace) => viaPlace.place), route.destination];
 }
+
+/**
+ * Returns the mobility mode of the legs that leave a place. A place that keeps the mode leaves
+ * in the mode of the leg that arrives at it. Data that a version without mobility modes wrote
+ * has no change, which also keeps the mode.
+ */
+export function departingMobilityMode(
+  arrivingMode: MobilityMode,
+  change: MobilityModeChange | undefined,
+): MobilityMode {
+  return change === undefined || change === "Keep" ? arrivingMode : change.Switch;
+}
+
+/** How a mobility mode reads after "leave", such as "by bike". */
+export const mobilityModeLabels: Record<MobilityMode, string> = {
+  Foot: "on foot",
+  Bike: "by bike",
+  FoldingBike: "by folding bike",
+  Wheelchair: "by wheelchair",
+};
+
+/** The mobility modes in the order that a selector lists them. */
+export const mobilityModes: readonly MobilityMode[] = ["Foot", "Bike", "FoldingBike", "Wheelchair"];
 
 /** Returns whether a leg includes a night train. */
 export function isOvernight(travelMode: LegTravelMode): boolean {
@@ -161,6 +189,8 @@ export function itineraryRows(
   const legs: LegRow[] = [];
   let departureDate = trip.start_date;
   let departurePlace = route.origin;
+  // A trip starts on foot.
+  let mobilityMode = departingMobilityMode("Foot", route.origin.departing_mobility_mode);
 
   const arrivals = [
     ...route.via_places.map((viaPlace) => ({
@@ -175,8 +205,10 @@ export function itineraryRows(
       departurePlace,
       arrivalPlace: arrival.place,
       travelMode: arrival.travelMode,
+      mobilityMode,
       departureDate,
     });
+    mobilityMode = departingMobilityMode(mobilityMode, arrival.place.departing_mobility_mode);
     const arrivalDate = addDays(departureDate, isOvernight(arrival.travelMode) ? 1 : 0);
     const nextDepartureDate =
       arrival.stay === null ? null : addDays(arrivalDate, stayNights(arrival.stay));
@@ -328,17 +360,25 @@ export function journeyOverview(legPlan: LegPlan, journey: Journey): JourneyOver
   };
 }
 
-/** The farthest straight-line distance in meters that the timetable builder counts as a walk. */
+/** The farthest straight-line distance in meters that a traveller walks or wheels. */
 const longestWalkMeters = 1000;
 
 /**
  * Returns the way between the stations of two consecutive rides, or `null` when the second ride
  * boards at the station the first alights at. The plan stores only the time to change, so the
- * way is estimated from the straight-line distance with the rule of the timetable builder
- * (`04_footpaths.sql`): walking at 5 km/h along a path 30 percent longer below a kilometer, and
- * above it 15 minutes plus the distance at 15 km/h by local transport.
+ * way is estimated from the straight-line distance with the formulas of the planner
+ * (`btt-router/src/ways.rs`). The distance along the streets is 30 percent longer. On foot, a
+ * traveller walks at 5 km/h below a kilometer, and above it takes local transport for 15 minutes
+ * plus the distance at 15 km/h. A bike takes 2 minutes plus the distance at 15 km/h at any
+ * distance. A wheelchair moves at 3.5 km/h below a kilometer, and takes local transport with 5
+ * extra minutes above it.
  */
-export function transferWay(legPlan: LegPlan, previous: TrainRide, next: TrainRide): StationWay | null {
+export function transferWay(
+  legPlan: LegPlan,
+  previous: TrainRide,
+  next: TrainRide,
+  mobilityMode: MobilityMode = "Foot",
+): StationWay | null {
   if (previous.alighting_station === next.boarding_station) {
     return null;
   }
@@ -348,10 +388,20 @@ export function transferWay(legPlan: LegPlan, previous: TrainRide, next: TrainRi
     return null;
   }
   const meters = haversineMeters(from.coordinates, to.coordinates);
-  const walk = meters < longestWalkMeters;
-  return {
-    duration: Math.max(1, Math.ceil(walk ? (meters * 1.3) / 83.3 : 15 + meters / 250)),
-    distance_meters: Math.round(meters),
-    mode: walk ? "Walk" : "LocalTransport",
-  };
+  const localTransport = 15 + meters / 250;
+  const near = meters < longestWalkMeters;
+  let minutes: number;
+  let mode: WayToStationMode;
+  if (mobilityMode === "Bike" || mobilityMode === "FoldingBike") {
+    minutes = 2 + (meters * 1.3) / 250;
+    mode = "Cycle";
+  } else if (mobilityMode === "Wheelchair") {
+    minutes = near ? (meters * 1.3) / 58 : localTransport + 5;
+    mode = near ? "Wheel" : "LocalTransport";
+  } else {
+    minutes = near ? (meters * 1.3) / 83.3 : localTransport;
+    mode = near ? "Walk" : "LocalTransport";
+  }
+  return { duration: Math.max(1, Math.ceil(minutes)), distance_meters: Math.round(meters), mode };
 }
+

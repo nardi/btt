@@ -76,6 +76,11 @@ export function nullable<T>(parser: Parser<T>): Parser<T | null> {
   return (value, path) => (value === null || value === undefined ? null : parser(value, path));
 }
 
+/** A value that a file of an older version may lack. A missing value is `fallback`. */
+export function withDefault<T>(parser: Parser<T>, fallback: T): Parser<T> {
+  return (value, path) => (value === undefined ? fallback : parser(value, path));
+}
+
 /** A list of parsed items. */
 export function list<T>(parser: Parser<T>): Parser<T[]> {
   return (value, path) => {

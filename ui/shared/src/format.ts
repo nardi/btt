@@ -1,6 +1,6 @@
 // Formatting of times, dates and durations for display.
 
-import type { DailyTimeWindow, StationWay, UnixTimeMinutes } from "./bindings";
+import type { DailyTimeWindow, StationWay, UnixTimeMinutes, WayToStationMode } from "./bindings";
 
 const minutesPerDay = 1440;
 
@@ -105,17 +105,31 @@ export function formatDistance(meters: number): string {
   return kilometers < 10 ? `${Number(kilometers.toFixed(1))} km` : `${Math.round(kilometers)} km`;
 }
 
+/** Names the mode of a way off the train, such as "walk". */
+const wayModeNames: Record<WayToStationMode, string> = {
+  Walk: "walk",
+  LocalTransport: "by local transport",
+  Cycle: "by bike",
+  Wheel: "by wheelchair",
+};
+
+/** Names what the estimate of a way off the train assumes, for a tooltip. */
+const wayModeAssumptions: Record<WayToStationMode, string> = {
+  Walk: "walking",
+  LocalTransport: "local transport",
+  Cycle: "cycling",
+  Wheel: "moving in a wheelchair",
+};
+
 /** Describes a way off the train, such as "about 6 min walk to Amsterdam Lelylaan". */
 export function formatStationWay(way: StationWay, destination: string): string {
-  const mode = way.mode === "Walk" ? "walk" : "by local transport";
-  return `about ${formatDuration(way.duration)} ${mode} to ${destination}`;
+  return `about ${formatDuration(way.duration)} ${wayModeNames[way.mode]} to ${destination}`;
 }
 
 /** Explains that the time of a way off the train is an estimate, for a tooltip. */
 export function explainStationWay(way: StationWay): string {
-  const assumption = way.mode === "Walk" ? "walking" : "local transport";
   return (
     `Estimated from the straight-line distance of ${formatDistance(way.distance_meters)}, ` +
-    `assuming ${assumption}. This is not a planned connection.`
+    `assuming ${wayModeAssumptions[way.mode]}. This is not a planned connection.`
   );
 }

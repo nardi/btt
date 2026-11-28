@@ -234,6 +234,7 @@
           arrival_place_id: leg.arrivalPlace.id,
           journey: state.legPlan.chosen_journey,
           stations: state.legPlan.station_table,
+          mobility_mode: leg.mobilityMode,
         });
       } else {
         missing += 1;

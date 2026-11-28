@@ -1,5 +1,6 @@
 <script lang="ts" module>
   // The icons of the interface, drawn as outlines on a 24 by 24 grid.
+  import type { MobilityMode } from "../bindings";
 
   /** The name of an icon. */
   export type IconName =
@@ -17,7 +18,19 @@
     | "back"
     | "close"
     | "warning"
-    | "coaches";
+    | "coaches"
+    | "foot"
+    | "bike"
+    | "folding-bike"
+    | "wheelchair";
+
+  /** The icon of each mobility mode. */
+  export const mobilityModeIcons: Record<MobilityMode, IconName> = {
+    Foot: "foot",
+    Bike: "bike",
+    FoldingBike: "folding-bike",
+    Wheelchair: "wheelchair",
+  };
 
   /** The drawing of one icon. */
   interface IconShape {
@@ -64,6 +77,31 @@
     close: { paths: ["M6 6l12 12M18 6L6 18"] },
     warning: { paths: ["M12 3.5l9.5 16.5h-19z", "M12 10v4.5M12 17.2v.3"] },
     coaches: { paths: ["M2.5 7h8.5v9H2.5z", "M13 7h8.5v9H13z", "M11 11.5h2"] },
+    foot: {
+      paths: ["M12 7v7M12 14l-3 7M12 14l3 7M8 11l4-3 4 3"],
+      circles: [{ cx: 12, cy: 4, r: 1.8 }],
+    },
+    bike: {
+      paths: ["M6 16l4-7h5l3 7M10 9l2 7h-6M14 6h2"],
+      circles: [
+        { cx: 6, cy: 16, r: 3.5 },
+        { cx: 18, cy: 16, r: 3.5 },
+      ],
+    },
+    "folding-bike": {
+      paths: ["M7 17l5-8 5 8M12 9V5h3"],
+      circles: [
+        { cx: 7, cy: 17, r: 2.5 },
+        { cx: 17, cy: 17, r: 2.5 },
+      ],
+    },
+    wheelchair: {
+      paths: ["M9 7v6h6l2 5h2", "M9 10h5"],
+      circles: [
+        { cx: 10, cy: 17, r: 4 },
+        { cx: 9, cy: 4, r: 1.5 },
+      ],
+    },
   };
 </script>
 

@@ -76,5 +76,8 @@ describe("formatStationWay", () => {
       "about 25 min by local transport to Berlin Ostbahnhof",
     );
     expect(explainStationWay(localTransport)).toContain("straight-line distance of 2.5 km");
+    const cycle = { duration: 9, distance_meters: 1500, mode: "Cycle" } as const;
+    expect(formatStationWay(cycle, "Utrecht Centraal")).toBe("about 9 min by bike to Utrecht Centraal");
+    expect(explainStationWay(cycle)).toContain("assuming cycling");
   });
 });

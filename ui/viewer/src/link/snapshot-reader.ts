@@ -14,6 +14,9 @@ import type {
   LegPlanStation,
   LegPlanningResult,
   LegTravelMode,
+  MobilityMode,
+  MobilityModeChange,
+  ModeAvailability,
   NoJourneyReason,
   PlaceStay,
   SnapshotLeg,
@@ -24,6 +27,7 @@ import type {
   Trip,
   TripPlace,
   TripSnapshot,
+  WayToStationMode,
 } from "@btt/shared/bindings";
 import { categories, operators, timeZones } from "../generated/vocabularies";
 import { BitReader } from "./bit-reader";
@@ -34,10 +38,19 @@ import type { DictionaryStation } from "./stations";
 import type { DictionaryTrain } from "./trains";
 
 /** The newest schema version this viewer reads. */
-export const supportedSchemaVersion = 2;
+export const supportedSchemaVersion = 3;
 
 /** The schema version this reader reads. Links of older versions go to their own readers. */
-const schemaVersion = 2;
+const schemaVersion = 3;
+
+/** The mobility modes, in the order of their codes. */
+const mobilityModes: readonly MobilityMode[] = ["Foot", "Bike", "FoldingBike", "Wheelchair"];
+
+/** The ways to and from a station, in the order of their codes. */
+const wayModes: readonly WayToStationMode[] = ["Walk", "LocalTransport", "Cycle", "Wheel"];
+
+/** The availabilities of a ride in the mobility mode of its leg, in the order of their codes. */
+const modeAvailabilities: readonly ModeAvailability[] = ["NotRequired", "Confirmed", "Unconfirmed"];
 
 /** Most stations one leg plan may have, because journeys point at them with a byte. */
 const maximumLegStations = 256;
@@ -257,7 +270,24 @@ class SnapshotReader {
       throw malformed("a coordinate is out of range");
     }
     const coordinates = { latitude: latitude / 1_000_000, longitude: longitude / 1_000_000 };
-    return { id, name, coordinates, station_search_radius: defaultStationSearchRadius, window_override: null };
+    const departing_mobility_mode = this.mobilityModeChange();
+    return {
+      id,
+      name,
+      coordinates,
+      station_search_radius: defaultStationSearchRadius,
+      window_override: null,
+      departing_mobility_mode,
+    };
+  }
+
+  /** Reads the mobility mode change of a place: a bit for a switch, then two bits for the mode. */
+  private mobilityModeChange(): MobilityModeChange {
+    if (!this.bits.bit()) {
+      return "Keep";
+    }
+    // Two bits name one of the four modes.
+    return { Switch: mobilityModes[this.bits.bits(2)]! };
   }
 
   /** Reads the trip and the day its start date falls on, which the times of the legs count from. */
@@ -338,7 +368,8 @@ class SnapshotReader {
   private way(): StationWay {
     const duration = this.bits.boundedNumber(65_535, "a way");
     const distance_meters = this.bits.boundedNumber(2 ** 32 - 1, "a distance");
-    const mode = this.bits.bit() ? "LocalTransport" : "Walk";
+    // Two bits name one of the four ways.
+    const mode = wayModes[this.bits.bits(2)]!;
     return { duration, distance_meters, mode };
   }
 
@@ -375,6 +406,10 @@ class SnapshotReader {
   private ride(stationCount: number, previousAlighting: number | null): TrainRide {
     const train_label = this.train();
     const offers_berths = this.bits.bit();
+    const mode_availability = modeAvailabilities[this.bits.bits(2)];
+    if (mode_availability === undefined) {
+      throw malformed("a ride has an unknown availability");
+    }
     const departure_time = this.time();
     const boarding_station =
       previousAlighting !== null && this.bits.bit() ? previousAlighting : this.stationIndex(stationCount);
@@ -387,6 +422,7 @@ class SnapshotReader {
       arrival_time,
       train_label,
       offers_berths,
+      mode_availability,
       intermediate_station_coordinates: [],
       path_coordinates: [],
       layout_links: [],

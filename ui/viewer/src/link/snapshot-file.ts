@@ -16,6 +16,7 @@ import type {
   LegPlanStation,
   LegPlanningResult,
   LegTravelMode,
+  MobilityModeChange,
   NoJourneyReason,
   PlaceStay,
   PlaceWindowOverride,
@@ -43,6 +44,7 @@ import {
   oneOf,
   text,
   variants,
+  withDefault,
 } from "./validate";
 
 /** Largest trip file the viewer reads, in characters. */
@@ -68,6 +70,10 @@ const place: Parser<TripPlace> = object<TripPlace>({
   station_search_radius: integer(100, 50_000),
   window_override: nullable(
     variants<PlaceWindowOverride>([], { Arrival: window, Departure: window, Both: windows }),
+  ),
+  departing_mobility_mode: withDefault(
+    variants<MobilityModeChange>(["Keep"], { Switch: oneOf("Foot", "Bike", "FoldingBike", "Wheelchair") }),
+    "Keep",
   ),
 });
 
@@ -107,7 +113,7 @@ const stationIndex = integer(0, 255);
 const way: Parser<StationWay> = object<StationWay>({
   duration: minutes,
   distance_meters: unsigned32,
-  mode: oneOf("Walk", "LocalTransport"),
+  mode: oneOf("Walk", "LocalTransport", "Cycle", "Wheel"),
 });
 
 /** A text that a file may leave out, which the app names with an empty text. */
@@ -136,6 +142,7 @@ const ride: Parser<TrainRide> = object<TrainRide>({
   arrival_time: unsigned32,
   train_label: trainLabel,
   offers_berths: boolean,
+  mode_availability: withDefault(oneOf("NotRequired", "Confirmed", "Unconfirmed"), "NotRequired"),
   intermediate_station_coordinates: noCoordinates,
   path_coordinates: noCoordinates,
   layout_links: noLayoutLinks,

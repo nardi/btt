@@ -3,6 +3,8 @@ import demo from "../fixtures/demo.json";
 import demoV1 from "../fixtures/demo-v1.json";
 import stress from "../fixtures/stress.json";
 import stressV1 from "../fixtures/stress-v1.json";
+import demoV2 from "../fixtures/demo-v2.json";
+import stressV2 from "../fixtures/stress-v2.json";
 import { SnapshotLinkError } from "./errors";
 import { decodeSnapshotLink } from "./snapshot-link";
 
@@ -64,6 +66,20 @@ describe("reading the links of schema version 1", () => {
 
   it("reads the large trip", async () => {
     expect(await decodeSnapshotLink(stressV1.payload)).toEqual(stressV1.document.snapshot);
+  });
+});
+
+describe("reading the links of schema version 2", () => {
+  // The fixtures of version 2 never change, so the links that were shared before version 3 keep
+  // opening with every leg on foot.
+  it("reads the demo trip", async () => {
+    expect(await decodeSnapshotLink(demoV2.payload)).toEqual(demoV2.document.snapshot);
+    expect(await decodeSnapshotLink(demoV2.qr_payload)).toEqual(demoV2.document.snapshot);
+    expect(await decodeSnapshotLink(demoV2.compact_payload)).toEqual(demoV2.document.snapshot);
+  });
+
+  it("reads the large trip", async () => {
+    expect(await decodeSnapshotLink(stressV2.payload)).toEqual(stressV2.document.snapshot);
   });
 });
 

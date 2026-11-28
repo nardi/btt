@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import demo from "../fixtures/demo.json";
 import { SnapshotLinkError } from "./errors";
 import { parseSnapshotFile } from "./snapshot-file";
+import { supportedSchemaVersion } from "./snapshot-reader";
 
 /** Returns a deep copy of the demo document that a test may damage. */
 function demoDocument(): any {
@@ -31,10 +32,10 @@ describe("reading a trip file", () => {
 
   it("names a file from a newer version", () => {
     const document = demoDocument();
-    document.schema_version = 3;
+    document.schema_version = supportedSchemaVersion + 1;
     const error = failure(document);
     expect(error.kind).toBe("newer-schema");
-    expect(error.schemaVersion).toBe(3);
+    expect(error.schemaVersion).toBe(supportedSchemaVersion + 1);
   });
 
   it("drops fields it does not know", () => {

@@ -2,6 +2,7 @@
   // One place of the itinerary. The closed card is one line with the name, the dates and the
   // stay. The open card adds the settings of the place.
   import type {
+    MobilityModeChange,
     PlaceStay,
     PlaceWindowOverride,
     TravelDayWindows,
@@ -11,6 +12,8 @@
   import { formatDate, formatDistance } from "../format";
   import {
     type LegLine,
+    mobilityModeLabels,
+    mobilityModes,
     overriddenArrivalWindow,
     overriddenDepartureWindow,
     type PlaceRow,
@@ -19,7 +22,7 @@
     stayNights,
   } from "../itinerary";
   import { expandTransition, rowEnter, rowExit } from "../motion";
-  import Icon from "./Icon.svelte";
+  import Icon, { mobilityModeIcons } from "./Icon.svelte";
   import TimeWindowOverrideField from "./TimeWindowOverrideField.svelte";
   import { fly, slide } from "svelte/transition";
 
@@ -79,6 +82,21 @@
   // A read-only place shows only its stay. The windows, the preference for a longer stay and the
   // search radius only steered the planner, so a shared trip does not keep them.
   const hasSettings = $derived(onEdit !== undefined || row.stay !== null);
+
+  /** The mode that the legs from this place switch to, or `null` when they keep the mode. */
+  const switchedMode = $derived.by(() => {
+    const change = row.place.departing_mobility_mode;
+    return change === undefined || change === "Keep" ? null : change.Switch;
+  });
+
+  /** Sends the mode of the selector. The origin has no mode to keep, so foot there means keep. */
+  function setMobilityMode(value: string) {
+    const change: MobilityModeChange =
+      value === "Keep" || (row.role === "origin" && value === "Foot")
+        ? "Keep"
+        : { Switch: mobilityModes.find((mode) => mode === value) ?? "Foot" };
+    onEdit?.({ SetMobilityMode: { place_id: placeId, change } });
+  }
 
   /** The dates of the place on its closed card, such as "Sat 11 Oct to Sun 12 Oct". */
   const dates = $derived.by(() => {
@@ -181,6 +199,16 @@
         <span class="name">{row.place.name}</span>
         <span class="dates numbers">{dates}</span>
       </span>
+      {#if switchedMode !== null && row.role !== "destination"}
+        <!-- The marker shows that the legs from here on use another mobility mode. -->
+        <span
+          class="mode-marker"
+          title={`Leave ${mobilityModeLabels[switchedMode]}`}
+          aria-label={`Leave ${mobilityModeLabels[switchedMode]}`}
+        >
+          <Icon name={mobilityModeIcons[switchedMode]} />
+        </span>
+      {/if}
       <span class="stay">{stayLabel(row.role, row.stay)}</span>
       <button
         type="button"
@@ -264,6 +292,22 @@
               {disabled}
               onChange={(departure) => setWindows(placeWindowOverride(arrivalOverride, departure))}
             />
+          {/if}
+          {#if row.role !== "destination" && onEdit !== undefined}
+            <label class="field">
+              <span class="label">Leave here</span>
+              <select
+                value={switchedMode ?? (row.role === "origin" ? "Foot" : "Keep")}
+                onchange={(event) => setMobilityMode(event.currentTarget.value)}
+              >
+                {#if row.role !== "origin"}
+                  <option value="Keep">as I arrive</option>
+                {/if}
+                {#each mobilityModes as mode (mode)}
+                  <option value={mode}>{mobilityModeLabels[mode]}</option>
+                {/each}
+              </select>
+            </label>
           {/if}
           {#if row.place.window_override !== null && onEdit !== undefined}
             <button type="button" class="small" onclick={() => setWindows(null)}>Use trip defaults</button>
@@ -426,6 +470,11 @@
   .dates {
     color: var(--color-text-muted);
     font-size: var(--text-small);
+  }
+
+  .mode-marker {
+    display: flex;
+    color: var(--color-accent);
   }
 
   .stay {

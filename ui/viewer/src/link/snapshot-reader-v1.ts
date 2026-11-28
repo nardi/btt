@@ -293,7 +293,7 @@ class SnapshotReader {
       default:
         break;
     }
-    return { id, name, coordinates, station_search_radius, window_override };
+    return { id, name, coordinates, station_search_radius, window_override, departing_mobility_mode: "Keep" };
   }
 
   /** Reads the trip and the day its start date falls on, which the times of the legs count from. */
@@ -410,6 +410,7 @@ class SnapshotReader {
       arrival_time,
       train_label: { category, number, operator, agency: "" },
       offers_berths,
+      mode_availability: "NotRequired",
       intermediate_station_coordinates: [],
       path_coordinates: [],
       layout_links: [],

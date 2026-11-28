@@ -1,0 +1,468 @@
+{
+  "compact_payload": "d児鉁撕慞衱蚳㲡拺瘵鑴왪䛔骞㤈쮿餳㪞ꕟ矧龑吞誛䑞䚈ꪹ푆䥭茙젙꽅䓛ᭈ聍밻浂䂹溅됆辞혬僚뵀뙢憳偳虏彳拘鿇嚰稫痽䱻丳隔鮶쮶驻攋랪嫷㙫ᦞ漁鸖쳄ꓰ羨뮿ኄ쀋䋂㗦蜚駜夲룕礭翏櫱賙뤏䉸勗详暉氷蕏앮槥遼槽钜뮚뫃䪾牄ᠫ䀢佊汿㖌稇멇ᝌ齜繵汗먕솚璙搀纱콚舉呧儯錈펗틇쉈稻眘Xh",
+  "document": {
+    "schema_version": 2,
+    "snapshot": {
+      "bundle_version": 2026101101,
+      "legs": [
+        {
+          "arrival_place_id": 2,
+          "result": {
+            "Found": {
+              "alternative_journeys": [
+                {
+                  "access": {
+                    "distance_meters": 300,
+                    "duration": 4,
+                    "mode": "Walk"
+                  },
+                  "alternative_kind": "Cheaper",
+                  "arrival_footpath": {
+                    "to_station": 2,
+                    "way": {
+                      "distance_meters": 1600,
+                      "duration": 7,
+                      "mode": "LocalTransport"
+                    }
+                  },
+                  "cost_parts": {
+                    "arrival_window_cost": 0,
+                    "door_to_door_minutes": 675,
+                    "minutes_outside_arrival_window": 0,
+                    "night_awake_cost": 0,
+                    "night_minutes_awake": 0,
+                    "price": {
+                      "high": 9900,
+                      "low": 4900,
+                      "median": 6900
+                    },
+                    "price_cost": 0,
+                    "rest_of_chain_cost": 0,
+                    "sleeping_minutes": 0,
+                    "total_cost": 0,
+                    "transfer_cost_each": 0,
+                    "transfer_count": 0,
+                    "way_to_station_extra_cost": 0,
+                    "way_to_station_minutes": 0
+                  },
+                  "egress": {
+                    "distance_meters": 2100,
+                    "duration": 9,
+                    "mode": "LocalTransport"
+                  },
+                  "first_ride": {
+                    "alighting_station": 1,
+                    "arrival_time": 29866135,
+                    "boarding_station": 0,
+                    "departure_time": 29865880,
+                    "intermediate_station_coordinates": [],
+                    "layout_links": [],
+                    "offers_berths": false,
+                    "path_coordinates": [],
+                    "train_label": {
+                      "agency": "",
+                      "category": "IC",
+                      "number": "2013",
+                      "operator": "db-fernverkehr"
+                    },
+                    "mode_availability": "NotRequired"
+                  },
+                  "later_rides": [
+                    {
+                      "ride": {
+                        "alighting_station": 3,
+                        "arrival_time": 29866565,
+                        "boarding_station": 1,
+                        "departure_time": 29866180,
+                        "intermediate_station_coordinates": [],
+                        "layout_links": [],
+                        "offers_berths": false,
+                        "path_coordinates": [],
+                        "train_label": {
+                          "agency": "",
+                          "category": "RJX",
+                          "number": "63",
+                          "operator": "oebb"
+                        },
+                        "mode_availability": "NotRequired"
+                      },
+                      "transfer_duration": 31
+                    }
+                  ],
+                  "sleeping_ride": null
+                },
+                {
+                  "access": {
+                    "distance_meters": 300,
+                    "duration": 4,
+                    "mode": "Walk"
+                  },
+                  "alternative_kind": "Faster",
+                  "arrival_footpath": null,
+                  "cost_parts": {
+                    "arrival_window_cost": 0,
+                    "door_to_door_minutes": 500,
+                    "minutes_outside_arrival_window": 0,
+                    "night_awake_cost": 0,
+                    "night_minutes_awake": 0,
+                    "price": null,
+                    "price_cost": 0,
+                    "rest_of_chain_cost": 0,
+                    "sleeping_minutes": 0,
+                    "total_cost": 0,
+                    "transfer_cost_each": 0,
+                    "transfer_count": 0,
+                    "way_to_station_extra_cost": 0,
+                    "way_to_station_minutes": 0
+                  },
+                  "egress": {
+                    "distance_meters": 2100,
+                    "duration": 9,
+                    "mode": "LocalTransport"
+                  },
+                  "first_ride": {
+                    "alighting_station": 2,
+                    "arrival_time": 29866510,
+                    "boarding_station": 0,
+                    "departure_time": 29866022,
+                    "intermediate_station_coordinates": [],
+                    "layout_links": [],
+                    "offers_berths": false,
+                    "path_coordinates": [],
+                    "train_label": {
+                      "agency": "",
+                      "category": "ICE",
+                      "number": "125",
+                      "operator": "db-fernverkehr"
+                    },
+                    "mode_availability": "NotRequired"
+                  },
+                  "later_rides": [],
+                  "sleeping_ride": null
+                }
+              ],
+              "best_journey_cost": 0,
+              "chosen_journey": {
+                "access": {
+                  "distance_meters": 300,
+                  "duration": 4,
+                  "mode": "Walk"
+                },
+                "alternative_kind": null,
+                "arrival_footpath": null,
+                "cost_parts": {
+                  "arrival_window_cost": 0,
+                  "door_to_door_minutes": 587,
+                  "minutes_outside_arrival_window": 0,
+                  "night_awake_cost": 0,
+                  "night_minutes_awake": 0,
+                  "price": {
+                    "high": 15900,
+                    "low": 9900,
+                    "median": 12900
+                  },
+                  "price_cost": 0,
+                  "rest_of_chain_cost": 0,
+                  "sleeping_minutes": 0,
+                  "total_cost": 0,
+                  "transfer_cost_each": 0,
+                  "transfer_count": 0,
+                  "way_to_station_extra_cost": 0,
+                  "way_to_station_minutes": 0
+                },
+                "egress": {
+                  "distance_meters": 2100,
+                  "duration": 9,
+                  "mode": "LocalTransport"
+                },
+                "first_ride": {
+                  "alighting_station": 1,
+                  "arrival_time": 29866181,
+                  "boarding_station": 0,
+                  "departure_time": 29865962,
+                  "intermediate_station_coordinates": [],
+                  "layout_links": [],
+                  "offers_berths": false,
+                  "path_coordinates": [],
+                  "train_label": {
+                    "agency": "",
+                    "category": "ICE",
+                    "number": "125",
+                    "operator": "db-fernverkehr"
+                  },
+                  "mode_availability": "NotRequired"
+                },
+                "later_rides": [
+                  {
+                    "ride": {
+                      "alighting_station": 2,
+                      "arrival_time": 29866536,
+                      "boarding_station": 1,
+                      "departure_time": 29866200,
+                      "intermediate_station_coordinates": [],
+                      "layout_links": [],
+                      "offers_berths": false,
+                      "path_coordinates": [],
+                      "train_label": {
+                        "agency": "",
+                        "category": "RJX",
+                        "number": "63",
+                        "operator": "oebb"
+                      },
+                      "mode_availability": "NotRequired"
+                    },
+                    "transfer_duration": 19
+                  }
+                ],
+                "sleeping_ride": null
+              },
+              "departure_window": null,
+              "follows_traveller_choice": true,
+              "pass_options": [],
+              "station_table": [
+                {
+                  "coordinates": {
+                    "latitude": 52.3789,
+                    "longitude": 4.9003
+                  },
+                  "name": "Amsterdam-Centraal",
+                  "time_zone": "Europe/Amsterdam"
+                },
+                {
+                  "coordinates": {
+                    "latitude": 50.107676,
+                    "longitude": 8.664515
+                  },
+                  "name": "Frankfurt (Main) Hbf",
+                  "time_zone": "Europe/Berlin"
+                },
+                {
+                  "coordinates": {
+                    "latitude": 48.185149,
+                    "longitude": 16.377555
+                  },
+                  "name": "Wien Hbf",
+                  "time_zone": "Europe/Vienna"
+                },
+                {
+                  "coordinates": {
+                    "latitude": 48.2742,
+                    "longitude": 16.4519
+                  },
+                  "name": "Wien Süßenbrunn Halt",
+                  "time_zone": "Europe/Vienna"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "arrival_place_id": 3,
+          "result": {
+            "Found": {
+              "alternative_journeys": [],
+              "best_journey_cost": 0,
+              "chosen_journey": {
+                "access": {
+                  "distance_meters": 2100,
+                  "duration": 9,
+                  "mode": "LocalTransport"
+                },
+                "alternative_kind": null,
+                "arrival_footpath": null,
+                "cost_parts": {
+                  "arrival_window_cost": 0,
+                  "door_to_door_minutes": 740,
+                  "minutes_outside_arrival_window": 0,
+                  "night_awake_cost": 0,
+                  "night_minutes_awake": 0,
+                  "price": {
+                    "high": 21900,
+                    "low": 8900,
+                    "median": 11900
+                  },
+                  "price_cost": 0,
+                  "rest_of_chain_cost": 0,
+                  "sleeping_minutes": 0,
+                  "total_cost": 0,
+                  "transfer_cost_each": 0,
+                  "transfer_count": 0,
+                  "way_to_station_extra_cost": 0,
+                  "way_to_station_minutes": 0
+                },
+                "egress": {
+                  "distance_meters": 200,
+                  "duration": 3,
+                  "mode": "Walk"
+                },
+                "first_ride": {
+                  "alighting_station": 1,
+                  "arrival_time": 29870395,
+                  "boarding_station": 0,
+                  "departure_time": 29869660,
+                  "intermediate_station_coordinates": [],
+                  "layout_links": [],
+                  "offers_berths": true,
+                  "path_coordinates": [],
+                  "train_label": {
+                    "agency": "",
+                    "category": "NJ",
+                    "number": "295",
+                    "operator": "oebb"
+                  },
+                  "mode_availability": "NotRequired"
+                },
+                "later_rides": [],
+                "sleeping_ride": 0
+              },
+              "departure_window": null,
+              "follows_traveller_choice": false,
+              "pass_options": [],
+              "station_table": [
+                {
+                  "coordinates": {
+                    "latitude": 48.185149,
+                    "longitude": 16.377555
+                  },
+                  "name": "Wien Hbf",
+                  "time_zone": "Europe/Vienna"
+                },
+                {
+                  "coordinates": {
+                    "latitude": 41.900569,
+                    "longitude": 12.50202
+                  },
+                  "name": "Roma Termini",
+                  "time_zone": "Europe/Rome"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "arrival_place_id": 4,
+          "result": {
+            "NoJourneyFound": "NoConnectionInWindow"
+          }
+        }
+      ],
+      "planned_at": "2026-10-11",
+      "trip": {
+        "chosen_journeys": [],
+        "id": "00000000-0000-0000-0000-000000000000",
+        "itinerary": {
+          "Route": {
+            "destination": {
+              "coordinates": {
+                "latitude": 40.7484,
+                "longitude": 14.4849
+              },
+              "id": 4,
+              "name": "Pompei Scavi",
+              "station_search_radius": 5000,
+              "window_override": null,
+              "departing_mobility_mode": "Keep"
+            },
+            "final_leg_travel_mode": "Daytime",
+            "origin": {
+              "coordinates": {
+                "latitude": 52.3789,
+                "longitude": 4.9003
+              },
+              "id": 1,
+              "name": "Amsterdam",
+              "station_search_radius": 5000,
+              "window_override": null,
+              "departing_mobility_mode": "Keep"
+            },
+            "via_places": [
+              {
+                "arriving_leg_travel_mode": "Daytime",
+                "place": {
+                  "coordinates": {
+                    "latitude": 48.2084,
+                    "longitude": 16.3725
+                  },
+                  "id": 2,
+                  "name": "Vienna",
+                  "station_search_radius": 5000,
+                  "window_override": null,
+                  "departing_mobility_mode": "Keep"
+                },
+                "stay": {
+                  "Nights": 2
+                }
+              },
+              {
+                "arriving_leg_travel_mode": {
+                  "Overnight": {
+                    "accepted_berths": {
+                      "Either": {
+                        "preferred": null
+                      }
+                    },
+                    "bedtime": 1350,
+                    "wake_up_time": 420
+                  }
+                },
+                "place": {
+                  "coordinates": {
+                    "latitude": 41.8933,
+                    "longitude": 12.4829
+                  },
+                  "id": 3,
+                  "name": "Rome",
+                  "station_search_radius": 5000,
+                  "window_override": null,
+                  "departing_mobility_mode": "Keep"
+                },
+                "stay": {
+                  "SameDay": {
+                    "prefers_longer_stay": false,
+                    "stay_range_override": null
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "leg_transfer_overrides": [],
+        "name": "Vienna and Rome",
+        "next_place_id": 5,
+        "preferences": {
+          "default_same_day_stay": {
+            "maximum_beyond_minimum": null,
+            "minimum": 120
+          },
+          "default_windows": {
+            "arrival": {
+              "length": 960,
+              "start": 420
+            },
+            "departure": {
+              "length": 780,
+              "start": 420
+            }
+          },
+          "minimum_transfer_time": 10,
+          "pass_policy": "PreferPass",
+          "price_weight": 0,
+          "ticket_preferences": {
+            "assumed_purchase_date": "Today",
+            "consider_families": true,
+            "consider_passes": true,
+            "fare_type": "Flexible",
+            "live_prices": true,
+            "reserve_optional_seats": false
+          },
+          "transfer_aversion": 50,
+          "travel_class": "Second",
+          "traveller_ids": []
+        },
+        "start_date": "2026-10-14"
+      }
+    }
+  },
+  "payload": "bHQ~QTY+t!ALM-fMrmyPPAAZkqwYH7)8*h+PY8nFgwKj62FGG-w)vMXJfFBQiTZb!Smoarvh&3b1&N_:9zCo-=4ULk92unkjM1nY(:zMWfD2+jI0Ou$jV@32UlR0sfTCxF0:S0;n.qq(nWX$cd&FVs9ZewBEI4i&R1T+n1Nct3Bgwhti$Pky.,*y5u3+OtM2~4a.9z:V-w1-vEA4T;2o1q=.P=jEqrWSG+~J~1iByPw=$sUN-LtJ:IoydH_~oG7tVoz8-Fq$A6m;5G7)Xa=:L)Oik,t-h52R(ktOVQ66d,DVy)Pdy",
+  "qr_payload": "R4XHBS-RQZF1SGO$+KF*QXH+BH.OVBW59+85ZD*+ZX+00P$EGV3/B.B3A6U2.PPG6B/6/M8F:+9I0O*$+IAZB+PH*F0ZY7FB3YG$7/B2T8ZMU/TIBN$:5C9//-L-XQS1W58JLZC1K6NI*15/X$VQIEMRSA/J$6.QX-VK:NLK4G41JV:AZW42//:AFLO0/5AXK*1R/8CCP6ORH-6VTS+NJ+.*DQ6:GL20YJM*MF46.-2-B05+UBHACYWDDVD1D29TDUHKKHKEXII*OD20IEGR4N+V2-D3WM62B3:C-BQZ0F1FMV2H16OZKN9TIMQR9S78HEABW1ZN36VXYE8QB79/9IAX6PX$M77L2"
+}

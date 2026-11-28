@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Journey, LegPlan, TrainRide } from "./bindings";
 import {
   addDays,
+  departingMobilityMode,
   itineraryRows,
   journeyMinutes,
   journeyOverview,
@@ -190,6 +191,34 @@ describe("transferWay", () => {
     expect(way?.mode).toBe("Walk");
     expect(way?.distance_meters).toBeGreaterThan(400);
     expect(way?.distance_meters).toBeLessThan(500);
+  });
+});
+
+describe("mobility modes", () => {
+  it("keeps a mode until a later place switches it", () => {
+    expect(departingMobilityMode("Bike", "Keep")).toBe("Bike");
+    expect(departingMobilityMode("Bike", undefined)).toBe("Bike");
+    expect(departingMobilityMode("Bike", { Switch: "Wheelchair" })).toBe("Wheelchair");
+  });
+
+  it("starts on foot and applies a switch to the legs that leave the place", () => {
+    const trip = amsterdamViennaRome();
+    const route = trip.itinerary !== "Empty" ? trip.itinerary.Route : undefined;
+    expect(itineraryRows(trip).legs.map((leg) => leg.mobilityMode)).toEqual(["Foot", "Foot"]);
+    route!.origin.departing_mobility_mode = { Switch: "Bike" };
+    expect(itineraryRows(trip).legs.map((leg) => leg.mobilityMode)).toEqual(["Bike", "Bike"]);
+    route!.via_places[0]!.place.departing_mobility_mode = { Switch: "Wheelchair" };
+    expect(itineraryRows(trip).legs.map((leg) => leg.mobilityMode)).toEqual(["Bike", "Wheelchair"]);
+  });
+
+  it("cycles a transfer at any distance and wheels a short one", () => {
+    const jump = journey([ride(0, eight, 1, eight + 60, "1"), ride(0, eight + 70, 2, eight + 90, "2")]);
+    const cycled = transferWay(legPlan(jump), jump.first_ride, jump.later_rides[0]!.ride, "FoldingBike");
+    expect(cycled?.mode).toBe("Cycle");
+    expect(cycled?.duration).toBe(Math.ceil(2 + (cycled!.distance_meters * 1.3) / 250));
+    const wheeled = transferWay(legPlan(jump), jump.first_ride, jump.later_rides[0]!.ride, "Wheelchair");
+    expect(wheeled?.mode).toBe("LocalTransport");
+    expect(wheeled?.duration).toBe(Math.ceil(20 + wheeled!.distance_meters / 250));
   });
 });
 

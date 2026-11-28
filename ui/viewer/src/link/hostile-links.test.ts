@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { SnapshotLinkError } from "./errors";
 import { checkCharacters, fragmentAlphabet } from "./radix";
 import { decodeSnapshotLink, maximumInflatedBytes } from "./snapshot-link";
+import { supportedSchemaVersion } from "./snapshot-reader";
 
 /** Compresses bytes as raw deflate, which the encoder does with a library on the Rust side. */
 async function deflateRaw(bytes: Uint8Array): Promise<Uint8Array> {
@@ -74,7 +75,7 @@ async function kindOf(payload: string): Promise<string> {
 describe("hostile links", () => {
   it("names a snapshot with a newer schema version", async () => {
     const bits = new TestBits();
-    bits.number(3);
+    bits.number(supportedSchemaVersion + 1);
     bits.number(99);
     expect(await kindOf(await payloadOfBytes(bits.bytes()))).toBe("newer-schema");
   });

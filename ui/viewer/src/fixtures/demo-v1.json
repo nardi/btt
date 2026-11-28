@@ -64,7 +64,8 @@
                       "category": "IC",
                       "number": "2013",
                       "operator": "db-fernverkehr"
-                    }
+                    },
+                    "mode_availability": "NotRequired"
                   },
                   "later_rides": [
                     {
@@ -82,7 +83,8 @@
                           "category": "RJX",
                           "number": "63",
                           "operator": "oebb"
-                        }
+                        },
+                        "mode_availability": "NotRequired"
                       },
                       "transfer_duration": 31
                     }
@@ -132,7 +134,8 @@
                       "category": "ICE",
                       "number": "125",
                       "operator": "db-fernverkehr"
-                    }
+                    },
+                    "mode_availability": "NotRequired"
                   },
                   "later_rides": [],
                   "sleeping_ride": null
@@ -186,7 +189,8 @@
                     "category": "ICE",
                     "number": "125",
                     "operator": "db-fernverkehr"
-                  }
+                  },
+                  "mode_availability": "NotRequired"
                 },
                 "later_rides": [
                   {
@@ -204,7 +208,8 @@
                         "category": "RJX",
                         "number": "63",
                         "operator": "oebb"
-                      }
+                      },
+                      "mode_availability": "NotRequired"
                     },
                     "transfer_duration": 19
                   }
@@ -304,7 +309,8 @@
                     "category": "NJ",
                     "number": "295",
                     "operator": "oebb"
-                  }
+                  },
+                  "mode_availability": "NotRequired"
                 },
                 "later_rides": [],
                 "sleeping_ride": 0
@@ -354,7 +360,8 @@
               "id": 4,
               "name": "Pompei Scavi",
               "station_search_radius": 5000,
-              "window_override": null
+              "window_override": null,
+              "departing_mobility_mode": "Keep"
             },
             "final_leg_travel_mode": "Daytime",
             "origin": {
@@ -370,7 +377,8 @@
                   "length": 150,
                   "start": 390
                 }
-              }
+              },
+              "departing_mobility_mode": "Keep"
             },
             "via_places": [
               {
@@ -383,7 +391,8 @@
                   "id": 2,
                   "name": "Vienna",
                   "station_search_radius": 5000,
-                  "window_override": null
+                  "window_override": null,
+                  "departing_mobility_mode": "Keep"
                 },
                 "stay": {
                   "Nights": 2
@@ -409,7 +418,8 @@
                   "id": 3,
                   "name": "Rome",
                   "station_search_radius": 5000,
-                  "window_override": null
+                  "window_override": null,
+                  "departing_mobility_mode": "Keep"
                 },
                 "stay": {
                   "SameDay": {
@@ -446,7 +456,7 @@
           "pass_policy": "PreferPass",
           "price_weight": 0,
           "ticket_preferences": {
-            "assumed_purchase_date": null,
+            "assumed_purchase_date": "Today",
             "consider_families": true,
             "consider_passes": true,
             "fare_type": "Flexible",

@@ -786,6 +786,36 @@ export type LocalTimeOfDay = number;
 export type Longitude = number;
 
 /**
+ *  How the traveller moves on a leg, which limits the trains and sets the time of the ways to
+ *  and between stations.
+ */
+export type MobilityMode = 
+/**  On foot, with local transport for longer ways. */
+"Foot" | 
+/**  With an assembled bike, which only some trains take. */
+"Bike" | 
+/**  With a folding bike, which travels folded as luggage on every train. */
+"FoldingBike" | 
+/**  In a wheelchair, on step-free trains and stations only. */
+"Wheelchair";
+
+/**  Whether a place changes the mobility mode of the legs that leave it. */
+export type MobilityModeChange = 
+/**  The legs keep the mode of the leg that arrives at the place. A trip starts on foot. */
+"Keep" | 
+/**  The legs from the place on use this mode. */
+{ Switch: MobilityMode };
+
+/**  Whether the timetable or a rule confirms that a ride suits the mobility mode of its leg. */
+export type ModeAvailability = 
+/**  The mode places no limit on the ride, such as on foot or with a folding bike. */
+"NotRequired" | 
+/**  The feed or a checked rule confirms the ride. */
+"Confirmed" | 
+/**  Nothing excludes the ride, but nothing confirms it either. */
+"Unconfirmed";
+
+/**
  *  A day before or after a leg's date on which the leg can be travelled much better, such as
  *  the day a night train runs.
  */
@@ -1290,6 +1320,8 @@ export type TicketLeg = {
 	journey: Journey,
 	/**  The stations the journey's rides refer to. */
 	stations: LegPlanStation[],
+	/**  How the traveller moves on the leg, which adds bike and wheelchair items. */
+	mobility_mode?: MobilityMode,
 };
 
 /**  The tickets a trip needs for one traveller. */
@@ -1339,7 +1371,18 @@ export type TicketProduct =
 /**  A seat reservation for a train that a pass covers. */
 "Reservation" | 
 /**  Berth or sleeper accommodation on a night train. */
-"NightAccommodation";
+"NightAccommodation" | 
+/**  A ticket for an assembled bike, for one ride or for the rides of one operator on one day. */
+"BikeTicket" | 
+/**  A reserved bike space on one ride. The fee includes the bike ticket. */
+"BikeReservation" | 
+/**  A reserved wheelchair space on one ride. */
+"WheelchairSpaceReservation" | 
+/**
+ *  A request to the operator for help to board and alight, for its rides on one day. It has
+ *  no fee, and the detail says how long in advance to make it.
+ */
+"AssistanceBooking";
 
 /**  A train of the trip as the tickets screen shows it. */
 export type TicketRide = {
@@ -1439,6 +1482,12 @@ export type TrainRide = {
 	 *  knows none, and in plans stored without them.
 	 */
 	layout_links?: LayoutLink[],
+	/**
+	 *  Whether the timetable or a rule confirms that the traveller can make the ride in the
+	 *  mobility mode of the leg. For a wheelchair, this covers the boarding and the alighting
+	 *  station as well.
+	 */
+	mode_availability?: ModeAvailability,
 };
 
 /**  A transfer from the previous ride, followed by the next ride. */
@@ -1523,69 +1572,79 @@ export type Trip = {
 /**  One change to a trip. */
 export type TripEdit = 
 /**  Changes the trip's name. */
-({ RenameTrip: string }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; ReorderPlace?: never; SetLegMinimumTransferTime?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
+({ RenameTrip: string }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; ReorderPlace?: never; SetLegMinimumTransferTime?: never; SetLegTravelMode?: never; SetMobilityMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
 /**  Changes the date of the first departure. */
-({ SetStartDate: string }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegMinimumTransferTime?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
+({ SetStartDate: string }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegMinimumTransferTime?: never; SetLegTravelMode?: never; SetMobilityMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
 /**  Adds a place. */
 ({ AddPlace: {
 	/**  The place to add. */
 	place: NewTripPlace,
 	/**  Where the place goes. */
 	insert_at: PlaceInsertionPoint,
-} }) & { ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegMinimumTransferTime?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
+} }) & { ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegMinimumTransferTime?: never; SetLegTravelMode?: never; SetMobilityMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
 /**  Moves a place to new coordinates. */
 ({ MovePlace: {
 	/**  The place to move. */
 	place_id: TripPlaceId,
 	/**  The new coordinates. */
 	coordinates: GeoCoordinates,
-} }) & { AddPlace?: never; ChooseJourney?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegMinimumTransferTime?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
+} }) & { AddPlace?: never; ChooseJourney?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegMinimumTransferTime?: never; SetLegTravelMode?: never; SetMobilityMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
 /**  Changes the name of a place. */
 ({ RenamePlace: {
 	/**  The place to rename. */
 	place_id: TripPlaceId,
 	/**  The new name. */
 	name: string,
-} }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegMinimumTransferTime?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
+} }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegMinimumTransferTime?: never; SetLegTravelMode?: never; SetMobilityMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
 /**  Changes how far from a place the planner may look for stations. */
 ({ SetStationSearchRadius: {
 	/**  The place to change. */
 	place_id: TripPlaceId,
 	/**  The new radius. */
 	radius: StationSearchRadius,
-} }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegMinimumTransferTime?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetTripPreferences?: never } | 
+} }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegMinimumTransferTime?: never; SetLegTravelMode?: never; SetMobilityMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetTripPreferences?: never } | 
 /**  Sets or clears the time windows that replace the trip's defaults at a place. */
 ({ SetPlaceWindowOverride: {
 	/**  The place to change. */
 	place_id: TripPlaceId,
 	/**  The new override, or `None` to use the trip's defaults. */
 	window_override: PlaceWindowOverride | null,
-} }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegMinimumTransferTime?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
+} }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegMinimumTransferTime?: never; SetLegTravelMode?: never; SetMobilityMode?: never; SetPlaceStay?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
 /**  Removes a place. */
-({ RemovePlace: TripPlaceId }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegMinimumTransferTime?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
+({ RemovePlace: TripPlaceId }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegMinimumTransferTime?: never; SetLegTravelMode?: never; SetMobilityMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
 /**  Moves a place to another position in the itinerary. */
 ({ ReorderPlace: {
 	/**  The place to move. */
 	place_id: TripPlaceId,
 	/**  Index of the place after the move. */
 	new_index: number,
-} }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; SetLegMinimumTransferTime?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
+} }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; SetLegMinimumTransferTime?: never; SetLegTravelMode?: never; SetMobilityMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
 /**  Changes how long the traveller stays at a via place. */
 ({ SetPlaceStay: {
 	/**  The via place to change. */
 	place_id: TripPlaceId,
 	/**  The new stay. */
 	stay: PlaceStay,
-} }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegMinimumTransferTime?: never; SetLegTravelMode?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
+} }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegMinimumTransferTime?: never; SetLegTravelMode?: never; SetMobilityMode?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
 /**  Changes whether the leg that arrives at a place includes a night train. */
 ({ SetLegTravelMode: {
 	/**  Place at which the leg arrives. Every place except the origin has one arriving leg. */
 	arrival_place_id: TripPlaceId,
 	/**  The new travel mode. */
 	travel_mode: LegTravelMode,
-} }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegMinimumTransferTime?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
+} }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegMinimumTransferTime?: never; SetMobilityMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
+/**
+ *  Changes the mobility mode of the legs that leave a place. The change has no effect on the
+ *  destination, because no leg leaves it.
+ */
+({ SetMobilityMode: {
+	/**  Place from which the changed legs leave. */
+	place_id: TripPlaceId,
+	/**  The new mode, or `Keep` to use the mode of the leg that arrives at the place. */
+	change: MobilityModeChange,
+} }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegMinimumTransferTime?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
 /**  Replaces the trip-wide preferences. */
-({ SetTripPreferences: TripPreferences }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegMinimumTransferTime?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never } | 
+({ SetTripPreferences: TripPreferences }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegMinimumTransferTime?: never; SetLegTravelMode?: never; SetMobilityMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never } | 
 /**  Picks a journey for the leg that arrives at a place, or goes back to the planner's pick. */
 ({ ChooseJourney: {
 	/**  Place at which the leg arrives. */
@@ -1595,7 +1654,7 @@ export type TripEdit =
 	 *  several train labels and would make every edit as large.
 	 */
 	choice: JourneyChoice | null,
-} }) & { AddPlace?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegMinimumTransferTime?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
+} }) & { AddPlace?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegMinimumTransferTime?: never; SetLegTravelMode?: never; SetMobilityMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never } | 
 /**
  *  Sets the minimum transfer time of the leg that arrives at a place, or goes back to the
  *  trip-wide time.
@@ -1605,7 +1664,7 @@ export type TripEdit =
 	arrival_place_id: TripPlaceId,
 	/**  The leg's own minimum transfer time, or `TripDefault` for the trip-wide time. */
 	setting: TransferTimeSetting,
-} }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never };
+} }) & { AddPlace?: never; ChooseJourney?: never; MovePlace?: never; RemovePlace?: never; RenamePlace?: never; RenameTrip?: never; ReorderPlace?: never; SetLegTravelMode?: never; SetMobilityMode?: never; SetPlaceStay?: never; SetPlaceWindowOverride?: never; SetStartDate?: never; SetStationSearchRadius?: never; SetTripPreferences?: never };
 
 /**  Reasons an edit can be rejected. A rejected edit leaves the trip unchanged. */
 export type TripEditError = 
@@ -1674,6 +1733,11 @@ export type TripPlace = {
 	station_search_radius: StationSearchRadius,
 	/**  Replaces the trip's default windows for legs that leave or reach this place. */
 	window_override: PlaceWindowOverride | null,
+	/**
+	 *  Whether the legs that leave this place use another mobility mode. The destination
+	 *  keeps `Keep`, because no leg leaves it.
+	 */
+	departing_mobility_mode?: MobilityModeChange,
 };
 
 /**  Identifies a place within one trip. Unique within that trip only. */
@@ -1775,7 +1839,11 @@ export type WayToStationMode =
 /**  On foot, for ways shorter than a kilometer. */
 "Walk" | 
 /**  By bus, tram or metro, for longer ways. */
-"LocalTransport";
+"LocalTransport" | 
+/**  By bike, at any distance. */
+"Cycle" | 
+/**  In a wheelchair, for ways shorter than a kilometer. */
+"Wheel";
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

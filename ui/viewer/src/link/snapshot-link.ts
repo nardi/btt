@@ -10,6 +10,7 @@ import { loadCompactAlphabet } from "./compact-alphabet";
 import { checkCharacters, decodeDigits, decodeValues, fragmentAlphabet, qrAlphabet } from "./radix";
 import { readSchemaVersion, readSnapshot, supportedSchemaVersion } from "./snapshot-reader";
 import { readSnapshotV1 } from "./snapshot-reader-v1";
+import { readSnapshotV2 } from "./snapshot-reader-v2";
 import { loadCityDictionary } from "./cities";
 import { loadStationDictionary } from "./stations";
 import { loadTrainDictionary } from "./trains";
@@ -102,5 +103,11 @@ export async function decodeSnapshotLink(fragment: string): Promise<TripSnapshot
     loadCityDictionary(),
     loadTrainDictionary(),
   ]);
-  return version === 1 ? readSnapshotV1(bits, stations, cities) : readSnapshot(bits, stations, cities, trains);
+  if (version === 1) {
+    return readSnapshotV1(bits, stations, cities);
+  }
+  if (version === 2) {
+    return readSnapshotV2(bits, stations, cities, trains);
+  }
+  return readSnapshot(bits, stations, cities, trains);
 }

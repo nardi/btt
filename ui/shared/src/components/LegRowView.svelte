@@ -26,6 +26,7 @@
     journeyOverview,
     journeyRides,
     type LegLine,
+    mobilityModeLabels,
     type LegRow,
     stationName,
     stationTime,
@@ -38,7 +39,7 @@
   import { describeJourneyPrice, formatJourneyPrice } from "../tickets";
   import type { LegViewState } from "../trip-source";
   import AlternativesPopup from "./AlternativesPopup.svelte";
-  import Icon from "./Icon.svelte";
+  import Icon, { mobilityModeIcons } from "./Icon.svelte";
   import JourneyExplanation from "./JourneyExplanation.svelte";
   import JourneyLine from "./JourneyLine.svelte";
   import Spinner from "./Spinner.svelte";
@@ -93,6 +94,14 @@
   const plan: LegPlan | null = $derived(legState.status === "found" ? legState.legPlan : null);
   const journey: Journey | null = $derived(plan?.chosen_journey ?? null);
   const rides = $derived(journey === null ? [] : journeyRides(journey));
+  /** How many rides of the journey neither the timetable nor a rule confirms for the mode. */
+  const unconfirmedRides = $derived(rides.filter((ride) => ride.mode_availability === "Unconfirmed").length);
+  /** Explains the "not confirmed" badge, for a tooltip. */
+  const unconfirmedExplanation = $derived(
+    leg.mobilityMode === "Wheelchair"
+      ? "The timetable does not say whether this train and its stations are step-free. Check with the operator."
+      : "The timetable does not say whether this train takes bikes. Check with the operator.",
+  );
   const overnightOptions = $derived(leg.travelMode === "Daytime" ? null : leg.travelMode.Overnight);
   const rows = $derived(plan === null ? [] : alternativeRows(plan, nearbyDay));
   const price = $derived(journey?.cost_parts?.price ?? null);
@@ -235,6 +244,15 @@
   </div>
   <div class="leg-card" class:expanded data-popup-edge>
     <div class="head">
+      {#if leg.mobilityMode !== "Foot"}
+        <span
+          class="mode"
+          title={`Travel ${mobilityModeLabels[leg.mobilityMode]}`}
+          aria-label={`Travel ${mobilityModeLabels[leg.mobilityMode]}`}
+        >
+          <Icon name={mobilityModeIcons[leg.mobilityMode]} />
+        </span>
+      {/if}
       <!-- An open card names its trains in the list of rides, so the header keeps only the date. -->
       {#if !expanded && journey !== null}
         <span class="chips">
@@ -248,6 +266,9 @@
         </span>
       {/if}
       <span class="when numbers" class:open={expanded}>{formatDate(leg.departureDate)}</span>
+      {#if !expanded && unconfirmedRides > 0}
+        <span class="unconfirmed" title={unconfirmedExplanation}>not confirmed</span>
+      {/if}
       <span class="grow"></span>
       {#if hasExplanation}
         <button
@@ -325,7 +346,7 @@
           </li>
           {#each rides as ride, rideIndex (rideIndex)}
             <!-- A change between two stations has a way that the rides alone do not show. -->
-            {@const changeWay = rideIndex === 0 ? null : transferWay(plan, rides[rideIndex - 1]!, ride)}
+            {@const changeWay = rideIndex === 0 ? null : transferWay(plan, rides[rideIndex - 1]!, ride, leg.mobilityMode)}
             {#if changeWay !== null}
               <li class="station-way" title={explainStationWay(changeWay)}>
                 {formatStationWay(changeWay, stationName(plan, ride.boarding_station))}
@@ -342,6 +363,9 @@
               />
               <span class="time numbers">{stationTime(plan, ride.alighting_station, ride.arrival_time)}</span>
               <span class="station">{stationName(plan, ride.alighting_station)}</span>
+              {#if ride.mode_availability === "Unconfirmed"}
+                <span class="unconfirmed" title={unconfirmedExplanation}>not confirmed</span>
+              {/if}
             </li>
           {/each}
           {#if journey.arrival_footpath !== null}
@@ -567,6 +591,20 @@
     display: flex;
     align-items: center;
     gap: var(--space-2);
+  }
+
+  .mode {
+    display: flex;
+    color: var(--color-accent);
+  }
+
+  .unconfirmed {
+    padding: 0 var(--space-2);
+    background: var(--color-notice-fill);
+    color: var(--color-notice);
+    border-radius: var(--radius-pill);
+    font-size: var(--text-caption);
+    white-space: nowrap;
   }
 
   .chips {
