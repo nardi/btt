@@ -69,7 +69,7 @@ Booking sites do not accept requests from a web page, so the web app has no live
 
 The web app stores trips in the browser, and other browsers and devices do not see them. To move a trip, save it as a file in the share dialog and import it on the other device.
 
-The web app works on phones and tablets. On a phone, the planning tab shows the list or the map, and a button at the end of the tab row switches between the two. When the phone is in landscape, the list and the map are side by side. On a touch screen, you can drag a place by its grip, or move it up or down with the buttons in its settings.
+The web app works on phones and tablets. On a phone, the planning tab shows the list or the map, and a List and Map slider under the tabs switches between the two. When the phone is in landscape, the list and the map are side by side. On a touch screen, you can drag a place by its grip, or move it up or down with the buttons in its settings.
 
 ## Where the data comes from
 

@@ -239,8 +239,9 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
+    box-sizing: border-box;
     width: min(600px, calc(100vw - 2 * var(--space-4)));
-    max-height: calc(100vh - 2 * var(--space-4));
+    max-height: calc(100dvh - 2 * var(--space-4));
     overflow-y: auto;
     padding: var(--space-4) var(--space-6);
     border: 1px solid var(--color-border);

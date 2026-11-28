@@ -165,14 +165,19 @@ pub fn photon_reverse_name(body: &str) -> Result<Option<String>, String> {
 ///
 /// Rejects with the JSON of a `CommandError`, or with a plain message when the arguments or the
 /// command are unknown.
-// The page awaits a promise, which an async function gives it. The commands themselves finish at
-// once, because the planner works in tasks that the event loop runs.
-#[allow(clippy::unused_async)]
+// The page awaits a promise, which an async function gives it. Most commands finish at once,
+// because the planner works in tasks that the event loop runs. A problem report waits for the
+// planner to explain each leg.
 #[wasm_bindgen]
 pub async fn invoke(command: String, arguments_json: String) -> Result<String, String> {
     let backend = backend()?;
     let arguments = Arguments::parse(&arguments_json)?;
-    match backend.run(&command, &arguments) {
+    let outcome = if command == "export_problem_report" {
+        backend.export_problem_report(&arguments).await
+    } else {
+        backend.run(&command, &arguments)
+    };
+    match outcome {
         Ok(value) => Ok(value.to_string()),
         Err(Failure::Command(error)) => Err(serde_json::to_string(&error).unwrap_or_default()),
         Err(Failure::Other(message)) => Err(message),

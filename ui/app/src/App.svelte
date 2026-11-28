@@ -526,9 +526,15 @@
       </div>
       <ThemeSwitch />
       <button type="button" class="share-button" onclick={() => (showShare = true)}>Share</button>
-      {#if features.problemReports}
-        <button type="button" onclick={() => (showProblemReport = true)}>Report a problem</button>
-      {/if}
+      <button
+        type="button"
+        class="report-button"
+        aria-label="Report a problem"
+        onclick={() => (showProblemReport = true)}
+      >
+        <span class="narrow-only"><Icon name="flag" size={18} /></span>
+        <span class="wide-only">Report a problem</span>
+      </button>
       <button
         type="button"
         class="about-button"
@@ -568,19 +574,6 @@
           {label}
         </button>
       {/each}
-      <!-- A phone in portrait shows the list or the map, and this button switches. On the other
-           screens it is invisible but keeps its space, so the tabs do not move. -->
-      <button
-        type="button"
-        class="icon-button large view-switch"
-        class:unused={screen !== "planning"}
-        inert={screen !== "planning"}
-        aria-label={phoneShowsMap ? "Show the list" : "Show the map"}
-        title={phoneShowsMap ? "Show the list" : "Show the map"}
-        onclick={() => (phoneShowsMap = !phoneShowsMap)}
-      >
-        <Icon name={phoneShowsMap ? "list" : "map"} />
-      </button>
     </nav>
     {#key screen}
       <div class="panel">
@@ -606,6 +599,28 @@
             onSwitchToSimilar={switchToSimilarTrip}
           />
         {:else}
+          <!-- A phone in portrait shows the list or the map, and this control switches. -->
+          <div class="view-switch" role="radiogroup" aria-label="View">
+            <span class="view-switch-thumb" class:on-map={phoneShowsMap} aria-hidden="true"></span>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={!phoneShowsMap}
+              onclick={() => (phoneShowsMap = false)}
+            >
+              <Icon name="list" size={16} />
+              List
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={phoneShowsMap}
+              onclick={() => (phoneShowsMap = true)}
+            >
+              <Icon name="map" size={16} />
+              Map
+            </button>
+          </div>
           <div class="workspace" class:shows-map={phoneShowsMap}>
             <div class="itinerary-column">
               <ItineraryView
@@ -810,10 +825,11 @@
       gap: var(--space-2);
     }
 
-    /* The back and About buttons only hold an icon here, so they are round. The back button has
-       the height of the Share button next to it. The About button has the size of the icon
-       buttons in its row, which have the class `icon-button large`. */
+    /* The back, report and About buttons only hold an icon here, so they are round. The back
+       button has the height of the Share button next to it. The report and About buttons have
+       the size of the icon buttons in their row, which have the class `icon-button large`. */
     .back-button,
+    .report-button,
     .about-button {
       flex: none;
       align-self: center;
@@ -826,9 +842,15 @@
       border-radius: 50%;
     }
 
+    .report-button,
     .about-button {
       width: 32px;
       height: 32px;
+    }
+
+    /* The second row has no room for the report button, so it follows the Share button. */
+    .report-button {
+      order: 2;
     }
 
     .trip-name {
@@ -861,21 +883,56 @@
       display: none;
     }
 
-    /* The switch is at the end of the tab row. It keeps the round edge of an icon button,
-       which the rules for the tabs remove. */
-    .tabs .view-switch {
-      display: inline-flex;
+    /* The switch is a track with two halves under the tabs. A thumb slides under the half
+       that is chosen. */
+    .panel > .view-switch {
+      position: relative;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
       flex: none;
-      align-self: center;
-      margin-left: var(--space-2);
-      padding: 0;
-      border: 1px solid var(--color-border);
-      border-radius: 50%;
+      margin-bottom: var(--space-3);
+      padding: 3px;
+      border-radius: var(--radius-pill);
+      background: var(--color-surface-muted);
+    }
+
+    .view-switch button {
+      position: relative;
+      z-index: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-1);
+      padding: var(--space-1) var(--space-3);
+      border: none;
+      border-radius: var(--radius-pill);
+      background: none;
+      color: var(--color-text-muted);
+      font-weight: 500;
+    }
+
+    .view-switch button:hover {
+      background: none;
       color: var(--color-text);
     }
 
-    .tabs .view-switch.unused {
-      visibility: hidden;
+    .view-switch button[aria-checked="true"] {
+      color: var(--color-text);
+      font-weight: 600;
+    }
+
+    .view-switch-thumb {
+      position: absolute;
+      inset: 3px auto 3px 3px;
+      width: calc(50% - 3px);
+      border-radius: var(--radius-pill);
+      background: var(--color-surface);
+      box-shadow: 0 1px 3px rgb(0 0 0 / 20%);
+      transition: transform 150ms ease-out;
+    }
+
+    .view-switch-thumb.on-map {
+      transform: translateX(100%);
     }
   }
 
@@ -892,7 +949,7 @@
     }
 
     .header-break,
-    .tabs .view-switch {
+    .panel > .view-switch {
       display: none;
     }
 

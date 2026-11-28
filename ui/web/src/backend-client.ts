@@ -5,7 +5,7 @@ type WorkerAnswer =
   | { kind: "result"; id: number; json: string }
   | { kind: "failure"; id: number; message: string }
   | { kind: "channel"; channelId: number; json: string }
-  | { kind: "file"; name: string; contents: string };
+  | { kind: "file"; name: string; contents: string | Uint8Array<ArrayBuffer> };
 
 /** A command that waits for its answer. */
 interface PendingCommand {
@@ -76,9 +76,10 @@ function readFailure(message: string): unknown {
   }
 }
 
-/** Offers a text as a download. */
-function offerDownload(name: string, contents: string): void {
-  const url = URL.createObjectURL(new Blob([contents], { type: "application/json" }));
+/** Offers a file as a download. A text is a JSON trip file, and bytes are a ZIP archive. */
+function offerDownload(name: string, contents: string | Uint8Array<ArrayBuffer>): void {
+  const type = typeof contents === "string" ? "application/json" : "application/zip";
+  const url = URL.createObjectURL(new Blob([contents], { type }));
   const link = document.createElement("a");
   link.href = url;
   link.download = name;

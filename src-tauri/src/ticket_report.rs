@@ -1,12 +1,10 @@
-//! What the app keeps about ticket prices for problem reports: the last ticket plan of each open
-//! trip with the journeys it was made from, and a log of the live price lookups with the raw
-//! answers of the booking sites. Lookups go to the booking site that the address of the
-//! booking link names.
+//! The log of live price lookups that the app keeps for problem reports, with the raw answers
+//! of the booking sites. Lookups go to the booking site that the address of the booking link
+//! names.
 
 use btt_model::{
     AccommodationRequest, EuroCents, ForeignAmount, LiveQuoteRequest, Price, PriceKind,
-    PriceSource, SimilarTrip, TicketLeg, TicketPlan, TicketPreferences, TravelClass, Traveller,
-    UnixTimeMinutes,
+    PriceSource, SimilarTrip, TravelClass, UnixTimeMinutes,
 };
 use btt_quotes::sbb::{Quote, Search, find_trip};
 use serde::Serialize;
@@ -16,21 +14,6 @@ use crate::state::AppState;
 
 /// The most live price lookups the log keeps. The oldest go first.
 const MAXIMUM_LOGGED_LOOKUPS: usize = 100;
-
-/// The last ticket plan of a trip with what it was made from, so the prices can be reproduced.
-#[derive(Debug, Clone, Serialize)]
-pub struct TicketPlanRecord {
-    /// When the plan was made, in RFC 3339 format.
-    pub created_at: String,
-    /// The chosen journey of each leg that went into the plan.
-    pub legs: Vec<TicketLeg>,
-    /// The traveller the plan is for, or `None` when it assumed an adult.
-    pub traveller: Option<Traveller>,
-    /// The ticket preferences of the trip.
-    pub preferences: TicketPreferences,
-    /// The plan the app showed, with the estimates and the booking links.
-    pub plan: TicketPlan,
-}
 
 /// How a live price lookup ended.
 #[derive(Debug, Clone, Serialize)]

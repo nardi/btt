@@ -1,7 +1,10 @@
 <script lang="ts">
   // Saves a problem report for the open trip: the trip, its planned legs, what the planner
-  // considered, the map view and recent log lines, with a note from the traveller.
+  // considered and the map view, with a note from the traveller. The desktop app adds recent log
+  // lines and live price lookups.
   import { commands, type GeoCoordinates, type TripId } from "@btt/shared/bindings";
+
+  import { appFeatures } from "@btt/shared/app-features";
 
   import { commandErrorMessage } from "./tauri-trip-source.svelte";
 
@@ -17,6 +20,9 @@
     mapView: { center: GeoCoordinates; zoom: number } | null;
     onClose: () => void;
   } = $props();
+
+  /** The features of this build. The web app downloads the report and has no live prices. */
+  const features = appFeatures();
 
   let note = $state("");
   let saving = $state(false);
@@ -34,7 +40,9 @@
     if (result.status === "error") {
       message = commandErrorMessage(result.error);
     } else if (result.data !== null) {
-      message = `Saved to ${result.data}`;
+      message = features.runsInBrowser
+        ? `Downloaded ${result.data}`
+        : `Saved to ${result.data}`;
     }
   }
 </script>
@@ -45,8 +53,9 @@
     <p>
       Describe what looks wrong, such as an odd route, a missing train or a ticket price that is
       far off. The report file holds this trip with its places, the planned journeys and what the
-      planner considered, and the ticket plan with the live price lookups and the answers of the
-      booking sites, so the problem can be reproduced. Share it only with people you want to see your trip.
+      planner considered, and the ticket plan{features.livePrices
+        ? " with the live price lookups and the answers of the booking sites"
+        : ""}, so the problem can be reproduced. Share it only with people you want to see your trip.
     </p>
     <textarea bind:value={note} rows="5" placeholder="What did you expect, and what did you see?"
     ></textarea>
@@ -56,7 +65,7 @@
     <div class="actions">
       <button type="button" onclick={onClose}>Close</button>
       <button type="button" class="primary" disabled={saving} onclick={save}>
-        {saving ? "Saving…" : "Save report…"}
+        {saving ? "Saving…" : features.runsInBrowser ? "Download report" : "Save report…"}
       </button>
     </div>
   </div>
@@ -76,7 +85,10 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
+    box-sizing: border-box;
     width: min(520px, calc(100vw - 2 * var(--space-4)));
+    max-height: calc(100dvh - 2 * var(--space-4));
+    overflow-y: auto;
     padding: var(--space-4) var(--space-6);
     border: 1px solid var(--color-border);
     border-radius: var(--radius);

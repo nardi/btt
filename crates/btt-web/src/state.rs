@@ -6,6 +6,10 @@ use std::sync::{Arc, Mutex, PoisonError};
 use btt_backend::editing::{PreparedEdit, prepare_edit};
 use btt_backend::place_naming::{has_provisional_name, provisional_place_name};
 use btt_backend::pricing::PriceBookJourneyPricer;
+use btt_backend::problem_report::{
+    ProblemReportView, ReportSummary, TicketPlanRecord, TicketsReport, report_file_name,
+    report_json, report_zip, reported_legs,
+};
 use btt_backend::sharing::{
     LinkOptions, share_snapshot, trip_file_json, trip_file_name, trip_of_file_json,
 };
@@ -17,10 +21,10 @@ use btt_fares::{FareData, PriceBook};
 use btt_geo::TimeZoneFinder;
 use btt_model::edit::NewTripPlace;
 use btt_model::{
-    CommandError, GeoCoordinates, LegPlanningResult, PassScenarioLeg, PlaceInsertionPoint,
-    PlanningSessionEvent, SnapshotLeg, StationSearchRadius, TicketLeg, Traveller, TravellerId,
-    Trip, TripEdit, TripEditNotices, TripEditOutcome, TripHistory, TripId, TripPlaceId,
-    TripSnapshot,
+    CURRENT_TRIP_SCHEMA_VERSION, CommandError, GeoCoordinates, LegPlanningResult, PassScenarioLeg,
+    PlaceInsertionPoint, PlanningSessionEvent, SnapshotLeg, StationSearchRadius, StoredTrip,
+    TicketLeg, Traveller, TravellerId, Trip, TripEdit, TripEditNotices, TripEditOutcome,
+    TripHistory, TripId, TripPlaceId, TripSnapshot,
 };
 use btt_planner::{
     DEFAULT_PLANNING_DEBOUNCE, LegCacheKey, LegPlanningBackend, LegResultStore, PlanningEventSink,
@@ -28,14 +32,14 @@ use btt_planner::{
 };
 use btt_timetable::LoadedTimetableBundle;
 use btt_timetable::manifest::TimetableManifest;
-use chrono::NaiveDate;
+use chrono::{DateTime, FixedOffset, NaiveDate, Offset, Utc};
 use futures_channel::mpsc::UnboundedSender;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use smol_str::SmolStr;
 
-use crate::host::{Host, Outgoing};
+use crate::host::{FileContents, Host, Outgoing};
 use crate::storage::WebStorage;
 use crate::{Arguments, Failure};
 
@@ -180,6 +184,8 @@ pub(crate) struct WebBackend {
     leg_results: WebLegResultStore,
     /// The trips the page has open.
     open_trips: RefCell<FxHashMap<TripId, OpenTrip>>,
+    /// The last ticket plan of each trip, for problem reports.
+    ticket_plans: RefCell<FxHashMap<TripId, TicketPlanRecord>>,
     /// Whether the state changed since the page last saved it.
     state_changed: Cell<bool>,
 }
@@ -201,6 +207,22 @@ fn now_milliseconds() -> u64 {
     {
         js_sys::Date::now() as u64
     }
+}
+
+/// Returns the time of the browser's clock in the browser's time zone.
+fn now_local() -> DateTime<FixedOffset> {
+    let date = js_sys::Date::new_0();
+    // A time zone offset is a whole number of minutes, and the clock of a browser is a finite,
+    // positive number of milliseconds.
+    #[allow(clippy::cast_possible_truncation)]
+    let (offset_seconds, seconds) = (
+        -(date.get_timezone_offset() as i32) * 60,
+        (date.get_time() / 1000.0) as i64,
+    );
+    let offset = FixedOffset::east_opt(offset_seconds).unwrap_or(Utc.fix());
+    DateTime::from_timestamp(seconds, 0)
+        .unwrap_or_default()
+        .with_timezone(&offset)
 }
 
 /// Serializes the result of a command.
@@ -230,6 +252,7 @@ impl WebBackend {
             server_timetables: RefCell::new(ServerTimetables::default()),
             leg_results,
             open_trips: RefCell::new(FxHashMap::default()),
+            ticket_plans: RefCell::new(FxHashMap::default()),
             state_changed: Cell::new(false),
         })
     }
@@ -378,7 +401,7 @@ impl WebBackend {
                 &arguments.get::<Vec<PassScenarioLeg>>("legs")?,
             ),
             // Booking sites do not allow requests from a page, so the browser has no live prices.
-            "live_journey_price" | "fetch_live_quote" | "export_problem_report" => Ok(Value::Null),
+            "live_journey_price" | "fetch_live_quote" => Ok(Value::Null),
             "share_trip" => self.share_trip(arguments),
             "export_trip_file" => self.export_trip_file(
                 arguments.get("tripId")?,
@@ -566,17 +589,90 @@ impl WebBackend {
         Ok((preferences, traveller))
     }
 
-    /// Finds the cheapest tickets for the journeys of a trip's legs.
+    /// Finds the cheapest tickets for the journeys of a trip's legs, and keeps the plan for a
+    /// problem report.
     fn plan_tickets(&self, trip_id: TripId, legs: &[TicketLeg]) -> Result<Value, Failure> {
         let (preferences, traveller) = self.pricing_context(trip_id)?;
-        to_value(&plan_trip_tickets(
+        let plan = plan_trip_tickets(
             legs,
             &preferences,
             traveller.as_ref(),
             today_utc(),
             &self.fare_data,
             &self.price_book,
-        ))
+        );
+        let value = to_value(&plan)?;
+        self.ticket_plans.borrow_mut().insert(
+            trip_id,
+            TicketPlanRecord {
+                created_at: now_local().to_rfc3339(),
+                legs: legs.to_vec(),
+                traveller,
+                preferences: preferences.ticket_preferences,
+                plan,
+            },
+        );
+        Ok(value)
+    }
+
+    /// Makes a problem report for a trip and gives it to the page as a download. Returns the
+    /// file name. The report has no log and no live price lookups, because the web app has
+    /// neither.
+    pub(crate) async fn export_problem_report(
+        &self,
+        arguments: &Arguments,
+    ) -> Result<Value, Failure> {
+        let trip_id: TripId = arguments.get("tripId")?;
+        let note: String = arguments.get("note")?;
+        let view: ProblemReportView = arguments.get("view")?;
+        let trip = self.open_or_stored_trip(trip_id)?;
+        let planning_backend = self.planning_backend()?;
+        let now = now_local();
+        let legs = reported_legs(&planning_backend, &trip, |cache_key| {
+            Ok(self.leg_results.load(cache_key))
+        })
+        .await?;
+        let summary = ReportSummary {
+            note,
+            created_at: now.to_rfc3339(),
+            app_version: APP_VERSION,
+            operating_system: "web",
+            backend: planning_backend.kind_name(),
+            timetable_version: Some(planning_backend.bundle_version())
+                .filter(|version| *version != 0),
+            bundle: None,
+        };
+        let tickets = TicketsReport::<()> {
+            plan: self.ticket_plans.borrow().get(&trip_id).cloned(),
+            live_quote_lookups: &[],
+            price_model_observations: self.fare_data.price_model.read().observation_count(),
+        };
+        let stored_trip = StoredTrip {
+            schema_version: CURRENT_TRIP_SCHEMA_VERSION,
+            trip,
+        };
+        let files = [
+            ("report.json", report_json(&summary)?),
+            ("trip.json", report_json(&stored_trip)?),
+            ("legs.json", report_json(&legs)?),
+            ("view.json", report_json(&view)?),
+            ("tickets.json", report_json(&tickets)?),
+        ];
+        let file_name = report_file_name(now);
+        self.host
+            .save_file(&file_name, FileContents::Zip(&report_zip(&files)?));
+        Ok(json!(file_name))
+    }
+
+    /// Returns the trip as the page has it open, or else as it is stored.
+    fn open_or_stored_trip(&self, trip_id: TripId) -> Result<Trip, CommandError> {
+        if let Some(open_trip) = self.open_trips.borrow().get(&trip_id) {
+            return Ok(open_trip.trip.clone());
+        }
+        self.storage
+            .borrow()
+            .load_trip(trip_id)
+            .ok_or(CommandError::TripNotFound(trip_id))
     }
 
     /// Chooses how to cover a trip's legs with single tickets and passes.
@@ -638,7 +734,7 @@ impl WebBackend {
         let (trip, snapshot) = self.snapshot_of_open_trip(trip_id, legs)?;
         let file_name = trip_file_name(&snapshot.trip.name);
         let json = trip_file_json(snapshot, &trip)?;
-        self.host.save_file(&file_name, &json);
+        self.host.save_file(&file_name, FileContents::Json(&json));
         Ok(json!(file_name))
     }
 

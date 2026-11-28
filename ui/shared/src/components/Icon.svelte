@@ -20,7 +20,8 @@
     | "info"
     | "map"
     | "list"
-    | "coaches";
+    | "coaches"
+    | "flag";
 
   /** The drawing of one icon. */
   interface IconShape {
@@ -34,6 +35,7 @@
 
   const shapes: Record<IconName, IconShape> = {
     chevron: { paths: ["M6 9l6 6 6-6"] },
+    flag: { paths: ["M5 21V4", "M5 4c4-2 7 2 11 0v9c-4 2-7-2-11 0"] },
     trash: {
       paths: ["M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"],
     },

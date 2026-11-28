@@ -7,8 +7,6 @@ export interface AppFeatures {
    * from a web page, so the web app shows estimates only.
    */
   livePrices: boolean;
-  /** Whether the app can write a problem report. */
-  problemReports: boolean;
   /** Whether the traveller can choose where the app keeps its data, which is portable mode. */
   dataLocation: boolean;
   /**
@@ -21,7 +19,6 @@ export interface AppFeatures {
 /** The features of the desktop app, which has all of them. */
 const desktopFeatures: AppFeatures = {
   livePrices: true,
-  problemReports: true,
   dataLocation: true,
   runsInBrowser: false,
 };
