@@ -23,6 +23,7 @@
 
   import { destinationPoint, haversineMeters } from "../geo";
   import { itineraryRows, tripPlaces } from "../itinerary";
+  import { registerGlyphProtocol, watchOnlineTiles } from "../offline-basemap";
   import {
     type PlaceDragPreview,
     type PlaceFocusRequest,
@@ -155,6 +156,15 @@
       map.getCanvas().style.cursor = "";
     }
   }
+
+  registerGlyphProtocol();
+
+  // Shows the offline base map while the tiles of OpenFreeMap are missing.
+  $effect(() => {
+    if (map !== undefined) {
+      watchOnlineTiles(map);
+    }
+  });
 
   // A remount of the map, such as when the theme changes, needs to fit the trip again.
   $effect(() => {

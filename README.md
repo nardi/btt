@@ -62,7 +62,7 @@ Booking sites do not accept requests from a web page, so the web app has no live
 
 The trains and times come from public timetable feeds of railway operators and transport authorities, mostly collected by the [Transitous](https://transitous.org) project. The app downloads a timetable file from the releases of this repository. A GitHub workflow rebuilds that file every Monday and a build is valid for 90 days. The About page of the app lists every feed with its license.
 
-Besides the timetable, the app makes three kinds of requests. It loads map tiles from [OpenFreeMap](https://openfreemap.org), it searches places with [Photon](https://photon.komoot.io), and it asks booking sites for the live price of a ticket when you price a trip. The web app makes the first two only.
+Besides the timetable, the app makes three kinds of requests. It loads map tiles from [OpenFreeMap](https://openfreemap.org), it searches places with [Photon](https://photon.komoot.io), and it asks booking sites for the live price of a ticket when you price a trip. The web app makes the first two only. The map shows an outline of Europe when it cannot load the tiles. The outline has the coast lines, the lakes, the country borders and the names of the biggest cities. The app replaces it with the tiles of OpenFreeMap as soon as the first tile has loaded. The data of the outline is described in `ui/shared/src/map-data/README.md`.
 
 ## Status
 

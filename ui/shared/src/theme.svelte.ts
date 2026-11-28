@@ -6,6 +6,7 @@ import type { StyleSpecification } from "maplibre-gl";
 
 import lightStyle from "./map-styles/light.json";
 import darkStyle from "./map-styles/dark.json";
+import { withOfflineBasemap, type OfflinePalette } from "./offline-basemap";
 
 /** The theme the app can show. */
 export type Theme = "light" | "dark";
@@ -65,9 +66,19 @@ if (typeof matchMedia === "function") {
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
 }
 
-/** The derived base style of the map, per theme. Both keep the OpenFreeMap attribution. */
+/** The colours of the offline base map, which match the land and the water of each style. */
+const offlinePalette: Record<Theme, OfflinePalette> = {
+  light: { water: "#d9e2e8", land: "#fafaf9", border: "#c4c4c0", text: "#62666f", halo: "#fafaf9" },
+  dark: { water: "#20262e", land: "#101014", border: "#3a3d48", text: "#9a9fab", halo: "#101014" },
+};
+
+/**
+ * The base style of the map, per theme. It draws the offline base map under the layers of
+ * OpenFreeMap, and both keep the OpenFreeMap attribution. See `offline-basemap.ts`.
+ */
 export function mapStyle(current: Theme): StyleSpecification {
-  return (current === "dark" ? darkStyle : lightStyle) as unknown as StyleSpecification;
+  const online = (current === "dark" ? darkStyle : lightStyle) as unknown as StyleSpecification;
+  return withOfflineBasemap(online, offlinePalette[current]);
 }
 
 /** The leg palette as paint colours, which cycles by leg position. */
