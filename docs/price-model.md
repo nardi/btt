@@ -281,6 +281,12 @@ The ranges from residuals also fail for an operator without prices. With every o
 
 A prediction is a few hash lookups and about a hundred multiplications over the nonzero entries of the feature vector. An observation costs one rank-one update of the $d \times d$ covariance, and a day with observations costs one Cholesky factorization of $\Lambda$, which is $d^3/3$ multiplications. With a few hundred weights, the state takes less than a megabyte. In a release build, learning from 944 seed prices takes 64 ms, about 70 microseconds per observation, and a prediction takes about 3 microseconds. Learning from the seed and a year of the traveller's lookups at start therefore takes a fraction of a second. The price book shares the model with the code that feeds it, behind a read-write lock, so planning tickets and learning from a lookup do not wait on each other for long.
 
+## Bike and wheelchair items
+
+The model prices the trains only. The ticket optimizer adds the items of a bike or a wheelchair to every strategy from the rules in `data/fares/bike_rules.toml` and `data/fares/accessibility_rules.toml`, because a pass covers neither. A bike rule that charges per ride gives one item per ride. A rule that charges per day gives one item for the rides of the rule on one day. A rule with a mandatory reservation gives a bike reservation item, and its fee includes the bike ticket. A ride that no rule covers gets a bike ticket item with a range of 0 to 15 euros. Its detail tells the traveller to check whether the train takes bikes and what the ticket costs. A rule that allows only a bagged bike, or no bike, gives a note and no item. The folding bike mode adds no items.
+
+A wheelchair leg gets one assistance booking per operator and day, without a fee, with the time in advance that the operator asks for. A ride whose operator reserves wheelchair spaces gets a reservation item with the fee of the rule. The optimizer prices one traveller, so the discount of a companion is not part of the totals. Each strategy has a note per operator instead, which says what the companion pays and which entitlement the companion needs.
+
 ## Limitations
 
 ### Fares the model does not separate
