@@ -1,0 +1,172 @@
+# Assistance, wheelchair spaces and companion discounts for wheelchair users, by operator.
+#
+# The `operator` field is an `id` from `data/operators.toml`. The `notice_hours` field is the
+# number of hours before departure by which the traveller has to book assistance.
+#
+# `wheelchair_space` is one of:
+#   { kind = "free" }                         - a space is available without a reservation.
+#   { kind = "reservation", fee = [lo, hi] }  - a space must be reserved, for a fee in euro.
+#   { kind = "not_available" }                - the trains have no wheelchair space.
+#
+# `companion` is one of:
+#   { kind = "free" }                         - one companion travels free of charge.
+#   { kind = "percent_off", percent = n }     - one companion gets n percent off a single ticket.
+#   { kind = "none" }                         - there is no companion discount.
+# The `entitlement` field names the card or document that gives the discount.
+#
+# `categories_not_accessible` lists train categories that the operator lists as not step-free.
+#
+# An entry with `unverified = true` has values from memory or from an old page. The planner uses
+# such an entry for tickets, but it does not count it as a confirmation that a train is step-free.
+
+[[operator]]
+id = "db-fernverkehr"
+unverified = true
+assistance_url = "https://www.bahn.de/service/individuelle-reise/barrierefrei/mobilitaetsservice"
+notice_hours = 24
+wheelchair_space = { kind = "reservation", fee = [0.0, 0.0] }
+companion = { kind = "free", entitlement = "Schwerbehindertenausweis with the mark B" }
+notes = "Book assistance and the wheelchair space with the Mobilitätsservice-Zentrale."
+
+[[operator]]
+id = "db-regio"
+unverified = true
+assistance_url = "https://www.bahn.de/service/individuelle-reise/barrierefrei/mobilitaetsservice"
+notice_hours = 24
+wheelchair_space = { kind = "free" }
+companion = { kind = "free", entitlement = "Schwerbehindertenausweis with the mark B" }
+
+[[operator]]
+id = "oebb"
+unverified = true
+assistance_url = "https://www.oebb.at/en/reiseplanung-services/barrierefreies-reisen"
+notice_hours = 24
+wheelchair_space = { kind = "reservation", fee = [0.0, 0.0] }
+companion = { kind = "free", entitlement = "Behindertenpass with the companion entry" }
+notes = "Night trains need 48 hours of notice."
+
+[[operator]]
+id = "sbb"
+unverified = true
+assistance_url = "https://www.sbb.ch/en/travel-information/accessible-travel.html"
+notice_hours = 1
+wheelchair_space = { kind = "free" }
+companion = { kind = "free", entitlement = "Swiss companion card" }
+
+[[operator]]
+id = "ns"
+unverified = true
+assistance_url = "https://www.ns.nl/en/travel-information/accessible-travel"
+notice_hours = 1
+wheelchair_space = { kind = "free" }
+companion = { kind = "free", entitlement = "OV-begeleiderskaart" }
+
+[[operator]]
+id = "sncb"
+unverified = true
+assistance_url = "https://www.belgiantrain.be/en/travel-info/prepare-for-your-journey/assistance-reduced-mobility"
+notice_hours = 3
+wheelchair_space = { kind = "free" }
+companion = { kind = "free", entitlement = "Belgian card for a free companion" }
+
+[[operator]]
+id = "sncf"
+unverified = true
+assistance_url = "https://www.garesetconnexions.sncf/en/acces-plus"
+notice_hours = 48
+wheelchair_space = { kind = "reservation", fee = [0.0, 0.0] }
+companion = { kind = "free", entitlement = "Carte mobilité inclusion with the companion entry" }
+notes = "Accès Plus books the assistance. On TGV INOUI the wheelchair space is in first class at the second class price."
+
+[[operator]]
+id = "ouigo"
+unverified = true
+assistance_url = "https://www.ouigo.com"
+notice_hours = 48
+wheelchair_space = { kind = "reservation", fee = [0.0, 0.0] }
+companion = { kind = "none" }
+
+[[operator]]
+id = "eurostar"
+unverified = true
+assistance_url = "https://www.eurostar.com/uk-en/travel-info/travel-planning/accessibility"
+notice_hours = 48
+wheelchair_space = { kind = "reservation", fee = [0.0, 0.0] }
+companion = { kind = "none" }
+notes = "The wheelchair user and one companion get a special fare that is booked by phone."
+
+[[operator]]
+id = "trenitalia"
+unverified = true
+assistance_url = "https://www.trenitalia.com/en/services/assistance-for-people-with-disabilities.html"
+notice_hours = 24
+wheelchair_space = { kind = "reservation", fee = [0.0, 0.0] }
+companion = { kind = "free", entitlement = "Carta Blu" }
+notes = "The Sale Blu book the assistance."
+
+[[operator]]
+id = "italo"
+unverified = true
+assistance_url = "https://www.italotreno.com"
+notice_hours = 12
+wheelchair_space = { kind = "reservation", fee = [0.0, 0.0] }
+companion = { kind = "percent_off", percent = 50, entitlement = "proof of disability" }
+
+[[operator]]
+id = "renfe"
+unverified = true
+assistance_url = "https://www.renfe.com/es/en/travel/accessibility"
+notice_hours = 12
+wheelchair_space = { kind = "reservation", fee = [0.0, 0.0] }
+companion = { kind = "percent_off", percent = 50, entitlement = "Tarjeta Dorada" }
+notes = "Atendo books the assistance."
+
+[[operator]]
+id = "regiojet"
+unverified = true
+assistance_url = "https://www.regiojet.com"
+notice_hours = 24
+wheelchair_space = { kind = "reservation", fee = [0.0, 0.0] }
+companion = { kind = "free", entitlement = "ZTP/P card" }
+
+[[operator]]
+id = "cd"
+unverified = true
+assistance_url = "https://www.cd.cz/en/info/bezbarierove-cestovani"
+notice_hours = 24
+wheelchair_space = { kind = "reservation", fee = [0.0, 0.0] }
+companion = { kind = "free", entitlement = "ZTP/P card" }
+
+[[operator]]
+id = "pkp-intercity"
+unverified = true
+assistance_url = "https://www.intercity.pl/en"
+notice_hours = 48
+wheelchair_space = { kind = "reservation", fee = [0.0, 0.0] }
+companion = { kind = "percent_off", percent = 95, entitlement = "Polish disability certificate" }
+
+[[operator]]
+id = "sj"
+unverified = true
+assistance_url = "https://www.sj.se/en"
+notice_hours = 24
+wheelchair_space = { kind = "reservation", fee = [0.0, 0.0] }
+companion = { kind = "free", entitlement = "Swedish companion card" }
+
+[[operator]]
+id = "dsb"
+unverified = true
+assistance_url = "https://www.dsb.dk/en"
+notice_hours = 12
+wheelchair_space = { kind = "reservation", fee = [0.0, 0.0] }
+companion = { kind = "free", entitlement = "Danish companion card" }
+
+[[operator]]
+id = "european-sleeper"
+unverified = true
+assistance_url = "https://www.europeansleeper.eu"
+notice_hours = 48
+wheelchair_space = { kind = "not_available" }
+companion = { kind = "none" }
+categories_not_accessible = ["ES"]
+notes = "The older coaches have steps and no wheelchair space."

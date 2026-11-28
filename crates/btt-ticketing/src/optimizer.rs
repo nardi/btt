@@ -6,15 +6,18 @@
 //! pass takes the days of the highest worth, and a continuous pass takes every day that pays.
 //! The start of the pass is tried at every day of the trip.
 
+use std::fmt::Write as _;
 use std::ops::Range;
 
 use btt_fares::{
-    FareData, NightFares, NightOperator, PassKind, PassType, PriceAgeGroup, PriceBook,
-    ReservationRule, RideFacts, RuleScope,
+    BikeCarriageMode, BikeFeePeriod, BikeRule, CompanionDiscount, FareData, NightFares,
+    NightOperator, PassKind, PassType, PriceAgeGroup, PriceBook, ReservationRule, RideFacts,
+    RuleScope, SeatFee, WheelchairSpace,
 };
 use btt_model::{
-    AgeGroup, EuroCents, EuroRange, Price, PriceKind, PriceSource, PriceTotal, StrategyKind,
-    TicketItem, TicketPreferences, TicketProduct, TicketStrategy, TravelClass,
+    AgeGroup, BookingLink, BookingLinkKind, EuroCents, EuroRange, MobilityMode, Price, PriceKind,
+    PriceSource, PriceTotal, StrategyKind, TicketItem, TicketPreferences, TicketProduct,
+    TicketStrategy, TravelClass,
 };
 use chrono::NaiveDate;
 use smol_str::SmolStr;
@@ -201,6 +204,64 @@ fn included_in_ticket_price() -> Price {
                    pays nothing for the accommodation on top. The price of the bed is in the \
                    ticket."
                 .into(),
+            as_of: None,
+            page: None,
+        },
+        original: None,
+    }
+}
+
+/// Returns the stations and the day of a ride, such as "Wien Hbf to Roma Termini on 16 Oct 2026".
+fn ride_text(ride: &RideInput) -> String {
+    format!(
+        "{} to {} on {}",
+        ride.from_name,
+        ride.to_name,
+        ride.departure_date.format("%-d %b %Y")
+    )
+}
+
+/// Returns the price of a bike or wheelchair space fee of a rule. A fee with one value from a
+/// checked rule is exact, and any other fee is a range.
+fn seat_fee_price(fee: SeatFee, name: &str, source: String, unverified: bool) -> Price {
+    let low = EuroCents::from_euro(fee.low);
+    let high = EuroCents::from_euro(fee.high);
+    let mut note = source;
+    if unverified {
+        note.push_str(" This fee is a rough value that has not been checked against its page.");
+    }
+    Price {
+        low,
+        high,
+        kind: if low == high && !unverified {
+            PriceKind::Formula
+        } else {
+            PriceKind::Range
+        },
+        source: PriceSource {
+            name: name.into(),
+            note: note.into(),
+            as_of: None,
+            page: None,
+        },
+        original: None,
+    }
+}
+
+/// Highest fee in euro that `unknown_bike_price` allows. Bike tickets in Europe cost from
+/// nothing to about this much for one ride.
+const UNKNOWN_BIKE_FEE_EURO: f64 = 15.0;
+
+/// Returns the price of a bike ticket for a train without a bike rule, a range from no fee to
+/// `UNKNOWN_BIKE_FEE_EURO`.
+fn unknown_bike_price() -> Price {
+    Price {
+        low: EuroCents(0),
+        high: EuroCents::from_euro(UNKNOWN_BIKE_FEE_EURO),
+        kind: PriceKind::Range,
+        source: PriceSource {
+            name: "Bike fees".into(),
+            note: "No bike rule is known for this train. The range is a guess.".into(),
             as_of: None,
             page: None,
         },
@@ -753,6 +814,276 @@ impl<'a> Problem<'a> {
         }
     }
 
+    /// Adds the bike and wheelchair items of the rides. Every strategy needs them, because a pass
+    /// covers neither a bike nor a wheelchair space. Returns the notes for the strategy, which
+    /// name the companion discounts and the trains that do not take an assembled bike.
+    fn add_mobility_items(&self, builder: &mut StrategyBuilder) -> Vec<SmolStr> {
+        let mut notes = Vec::new();
+        self.add_bike_items(builder, &mut notes);
+        self.add_wheelchair_items(builder, &mut notes);
+        notes
+    }
+
+    /// Adds the bike tickets and bike reservations of the rides in bike mode. A rule with a fee
+    /// per day gives one item for the rides of its operator on one day.
+    fn add_bike_items(&self, builder: &mut StrategyBuilder, notes: &mut Vec<SmolStr>) {
+        // Rides that one fee per day covers, keyed by the rule and the day.
+        let mut day_groups: Vec<(&BikeRule, NaiveDate, Vec<usize>)> = Vec::new();
+        for (index, ride) in self.rides.iter().enumerate() {
+            if ride.mobility_mode != MobilityMode::Bike {
+                continue;
+            }
+            let label = &ride.train_label;
+            let Some(rule) = self
+                .data
+                .bike_rules
+                .for_train(&label.operator, &label.category)
+            else {
+                builder.add(
+                    TicketProduct::BikeTicket,
+                    format!("Bike ticket, {} {}", label.category, label.number),
+                    format!(
+                        "{}. No bike rule is known for this train, so check whether it takes \
+                         bikes and what the bike ticket costs.",
+                        ride_text(ride)
+                    ),
+                    &[index],
+                    unknown_bike_price(),
+                    Some(shop_link(ride.from_country.as_deref())),
+                );
+                continue;
+            };
+            match (rule.mode, rule.per) {
+                (BikeCarriageMode::Free, _) => {}
+                (BikeCarriageMode::BaggedOnly | BikeCarriageMode::NotAllowed, _) => {
+                    notes.push(
+                        format!(
+                            "{} {} does not take an assembled bike.",
+                            label.category, label.number
+                        )
+                        .into(),
+                    );
+                }
+                (BikeCarriageMode::Ticket | BikeCarriageMode::Reservation, BikeFeePeriod::Ride) => {
+                    self.add_bike_item(builder, rule, &[index]);
+                }
+                (BikeCarriageMode::Ticket | BikeCarriageMode::Reservation, BikeFeePeriod::Day) => {
+                    let day = ride.departure_date;
+                    match day_groups.iter_mut().find(|(group_rule, group_day, _)| {
+                        group_rule.id == rule.id && *group_day == day
+                    }) {
+                        Some((_, _, indices)) => indices.push(index),
+                        None => day_groups.push((rule, day, vec![index])),
+                    }
+                }
+            }
+        }
+        for (rule, _, indices) in day_groups {
+            self.add_bike_item(builder, rule, &indices);
+        }
+    }
+
+    /// Adds one bike ticket or bike reservation for the rides that one fee of a rule covers.
+    fn add_bike_item(&self, builder: &mut StrategyBuilder, rule: &BikeRule, indices: &[usize]) {
+        let first = &self.rides[indices[0]];
+        let (product, name) = if rule.mode == BikeCarriageMode::Reservation {
+            (TicketProduct::BikeReservation, "Bike reservation")
+        } else {
+            (TicketProduct::BikeTicket, "Bike ticket")
+        };
+        let title = if indices.len() == 1 {
+            format!(
+                "{name}, {} {}",
+                first.train_label.category, first.train_label.number
+            )
+        } else {
+            format!(
+                "{name}, {} trains on {}",
+                indices.len(),
+                first.departure_date.format("%-d %b %Y")
+            )
+        };
+        let mut detail = indices
+            .iter()
+            .map(|&index| ride_text(&self.rides[index]))
+            .collect::<Vec<_>>()
+            .join(". ");
+        detail.push('.');
+        if let Some(text) = &rule.notes {
+            detail.push(' ');
+            detail.push_str(text);
+        }
+        let source = format!("Bike rule {}.", rule.id);
+        builder.add(
+            product,
+            title,
+            detail,
+            indices,
+            seat_fee_price(rule.fee, "Bike fees", source, rule.unverified),
+            Some(BookingLink {
+                label: "Open the bike ticket page".into(),
+                url: rule.booking.clone(),
+                kind: BookingLinkKind::Product,
+            }),
+        );
+    }
+
+    /// Adds the assistance bookings and wheelchair space reservations of the rides in wheelchair
+    /// mode, and a note per companion discount. One assistance booking covers the rides of one
+    /// operator on one day.
+    fn add_wheelchair_items(&self, builder: &mut StrategyBuilder, notes: &mut Vec<SmolStr>) {
+        // Rides of one operator on one day, which one assistance booking covers.
+        let mut assistance_groups: Vec<(&str, NaiveDate, Vec<usize>)> = Vec::new();
+        // Train categories of the wheelchair rides, per operator with a companion discount.
+        let mut companion_categories: Vec<(&str, &CompanionDiscount, Vec<&str>)> = Vec::new();
+        for (index, ride) in self.rides.iter().enumerate() {
+            if ride.mobility_mode != MobilityMode::Wheelchair {
+                continue;
+            }
+            let operator = ride.train_label.operator.as_str();
+            let day = ride.departure_date;
+            match assistance_groups
+                .iter_mut()
+                .find(|(group_operator, group_day, _)| {
+                    *group_operator == operator && *group_day == day
+                }) {
+                Some((_, _, indices)) => indices.push(index),
+                None => assistance_groups.push((operator, day, vec![index])),
+            }
+            let Some(rules) = self.data.accessibility_rules.for_operator(operator) else {
+                continue;
+            };
+            if let WheelchairSpace::Reservation { fee } = rules.wheelchair_space {
+                let label = &ride.train_label;
+                builder.add(
+                    TicketProduct::WheelchairSpaceReservation,
+                    format!(
+                        "Wheelchair space reservation, {} {}",
+                        label.category, label.number
+                    ),
+                    format!("{}.", ride_text(ride)),
+                    &[index],
+                    seat_fee_price(
+                        fee,
+                        "Wheelchair space fees",
+                        format!("Accessibility rule of {}.", rules.id),
+                        rules.unverified,
+                    ),
+                    Some(BookingLink {
+                        label: "Open the assistance page".into(),
+                        url: rules.assistance_url.clone(),
+                        kind: BookingLinkKind::Product,
+                    }),
+                );
+            }
+            if rules.companion != CompanionDiscount::None {
+                let category = ride.train_label.category.as_str();
+                match companion_categories
+                    .iter_mut()
+                    .find(|(group_operator, _, _)| *group_operator == operator)
+                {
+                    Some((_, _, categories)) if !categories.contains(&category) => {
+                        categories.push(category);
+                    }
+                    Some(_) => {}
+                    None => companion_categories.push((operator, &rules.companion, vec![category])),
+                }
+            }
+        }
+        for (operator, day, indices) in assistance_groups {
+            self.add_assistance_item(builder, operator, day, &indices);
+        }
+        for (_, discount, categories) in companion_categories {
+            let trains = categories.join(", ");
+            let note = match discount {
+                CompanionDiscount::Free { entitlement } => format!(
+                    "On the {trains} trains of this trip, a companion travels free of charge \
+                     with {entitlement}."
+                ),
+                CompanionDiscount::PercentOff {
+                    percent,
+                    entitlement,
+                } => format!(
+                    "On the {trains} trains of this trip, a companion gets {percent}% off a \
+                     single ticket with {entitlement}."
+                ),
+                CompanionDiscount::None => continue,
+            };
+            notes.push(note.into());
+        }
+    }
+
+    /// Adds the assistance booking for the rides of one operator on one day.
+    fn add_assistance_item(
+        &self,
+        builder: &mut StrategyBuilder,
+        operator: &str,
+        day: NaiveDate,
+        indices: &[usize],
+    ) {
+        let first = &self.rides[indices[0]];
+        let rules = self.data.accessibility_rules.for_operator(operator);
+        let title = if indices.len() == 1 {
+            format!(
+                "Assistance booking, {} {}",
+                first.train_label.category, first.train_label.number
+            )
+        } else {
+            format!(
+                "Assistance booking, {} trains on {}",
+                indices.len(),
+                day.format("%-d %b %Y")
+            )
+        };
+        let mut detail = indices
+            .iter()
+            .map(|&index| ride_text(&self.rides[index]))
+            .collect::<Vec<_>>()
+            .join(". ");
+        detail.push('.');
+        let link = if let Some(rules) = rules {
+            let _ = write!(
+                detail,
+                " Book at least {} hours before the departure.",
+                rules.notice_hours
+            );
+            if let Some(text) = &rules.notes {
+                detail.push(' ');
+                detail.push_str(text);
+            }
+            BookingLink {
+                label: "Open the assistance page".into(),
+                url: rules.assistance_url.clone(),
+                kind: BookingLinkKind::Product,
+            }
+        } else {
+            detail.push_str(
+                " No assistance service is known for this operator, so ask the operator how to \
+                 book help.",
+            );
+            shop_link(first.from_country.as_deref())
+        };
+        builder.add(
+            TicketProduct::AssistanceBooking,
+            title,
+            detail,
+            indices,
+            Price {
+                low: EuroCents(0),
+                high: EuroCents(0),
+                kind: PriceKind::Formula,
+                source: PriceSource {
+                    name: "EU rail passenger rights".into(),
+                    note: "Assistance for a traveller with reduced mobility has no fee.".into(),
+                    as_of: None,
+                    page: None,
+                },
+                original: None,
+            },
+            Some(link),
+        );
+    }
+
     /// Returns the link to buy the accommodation of a night ride, and the request for its live
     /// price when the booking site of the operator sells the train. The ÖBB shop lists a train
     /// between the stations of the ride at its departure, and European Sleeper takes the codes
@@ -1124,7 +1455,7 @@ impl<'a> Problem<'a> {
             self.add_single_tickets(&mut builder, &cover.runs);
         }
         self.add_accommodation(&mut builder, |_| false);
-        let mut notes = Vec::new();
+        let mut notes = self.add_mobility_items(&mut builder);
         if self.settings.class == TravelClass::First {
             notes.push("Single ticket prices are estimates for second class.".into());
         }
@@ -1181,6 +1512,7 @@ impl<'a> Problem<'a> {
             }
         }
         self.add_accommodation(&mut builder, |index| pass_rides.contains(&index));
+        notes.extend(self.add_mobility_items(&mut builder));
         let age_group = PriceAgeGroup::of(self.settings.age_group).unwrap_or(PriceAgeGroup::Adult);
         let title = format!(
             "Interrail Global Pass, {}, {}, {}",

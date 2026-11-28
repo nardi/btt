@@ -3,7 +3,7 @@
 use std::fmt::Write as _;
 
 use btt_fares::{ItaloStations, StationTable};
-use btt_model::{AgeGroup, BookingLink, BookingLinkKind, SiteSearch, TravelClass};
+use btt_model::{AgeGroup, BookingLink, BookingLinkKind, MobilityMode, SiteSearch, TravelClass};
 use chrono::NaiveDate;
 
 use crate::rides::RideInput;
@@ -433,7 +433,8 @@ pub fn sj_link(
 /// Returns a link to the booking site of European Sleeper for a run of its trains, with the search
 /// for the live price, or `None` when no station of the table lies within 5 km of an end of the
 /// run. A run that ends at a station the booking service does not sell is searched at the
-/// nearest station it does. The link opens the search of the day of the first ride.
+/// nearest station it does. The link opens the search of the day of the first ride, with one bike
+/// when the first ride is in bike mode.
 pub fn european_sleeper_link(
     stations: &StationTable,
     first: &RideInput,
@@ -447,9 +448,11 @@ pub fn european_sleeper_link(
     if origin.code == destination.code {
         return None;
     }
+    // The search adds a bike space when the traveller rides the run with a bike.
+    let bicycle_count = u8::from(first.mobility_mode == MobilityMode::Bike);
     let url = format!(
         "https://booking.europeansleeper.eu/en?departureStation={}&arrivalStation={}\
-         &departureDate={}&bicycleCount=0&petsCount=0&passengerTypes=72",
+         &departureDate={}&bicycleCount={bicycle_count}&petsCount=0&passengerTypes=72",
         origin.code, destination.code, first.departure_date,
     );
     Some((

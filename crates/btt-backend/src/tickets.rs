@@ -28,7 +28,12 @@ pub fn plan_trip_tickets(
     let rides = legs
         .iter()
         .flat_map(|leg| {
-            btt_ticketing::rides_of_journey(leg.arrival_place_id, &leg.journey, &leg.stations)
+            btt_ticketing::rides_of_journey(
+                leg.arrival_place_id,
+                &leg.journey,
+                &leg.stations,
+                leg.mobility_mode,
+            )
         })
         .collect();
     btt_ticketing::plan_tickets(

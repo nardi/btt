@@ -5,7 +5,8 @@ use std::sync::Arc;
 use btt_fares::{FareData, PriceBook};
 use btt_model::{EuroRange, Journey, LegPlanStation};
 use btt_planner::{
-    JourneyPricer, RidePassRow, RidePassTable, RidePriceClass, RidePriceRow, RidePriceTable,
+    JourneyPricer, RestrictedMode, RidePassRow, RidePassTable, RidePriceClass, RidePriceRow,
+    RidePriceTable, RuleVerdict,
 };
 
 /// Prices a journey through the ticket optimizer, so the price the plan shows and the price
@@ -35,6 +36,36 @@ impl JourneyPricer for PriceBookJourneyPricer {
         stations: &[LegPlanStation],
     ) -> Option<EuroRange> {
         btt_ticketing::journey_price_on_pass(journey, stations, &self.data, &self.book)
+    }
+
+    fn carriage_rule(&self, mode: RestrictedMode, operator: &str, category: &str) -> RuleVerdict {
+        match mode {
+            RestrictedMode::Bike => self.data.bike_rules.for_train(operator, category).map_or(
+                RuleVerdict::NoRule,
+                |rule| {
+                    if rule.mode.allows_assembled_bike() {
+                        RuleVerdict::Allows {
+                            verified: !rule.unverified,
+                        }
+                    } else {
+                        RuleVerdict::Forbids
+                    }
+                },
+            ),
+            // The file lists the services of an operator and not its step-free trains. So an
+            // entry can only forbid a train, through a category that it lists.
+            RestrictedMode::Wheelchair => self
+                .data
+                .accessibility_rules
+                .for_operator(operator)
+                .map_or(RuleVerdict::NoRule, |entry| {
+                    if entry.excludes_category(category) {
+                        RuleVerdict::Forbids
+                    } else {
+                        RuleVerdict::NoRule
+                    }
+                }),
+        }
     }
 
     fn pass_price_table(&self, classes: &[RidePriceClass]) -> Option<RidePassTable> {

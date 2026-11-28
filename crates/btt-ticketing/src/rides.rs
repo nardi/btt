@@ -2,8 +2,8 @@
 
 use btt_fares::country_of_time_zone;
 use btt_model::{
-    GeoCoordinates, Journey, LayoutLink, LegPlanStation, TrainLabel, TrainRide, TripPlaceId,
-    UnixTimeMinutes,
+    GeoCoordinates, Journey, LayoutLink, LegPlanStation, MobilityMode, TrainLabel, TrainRide,
+    TripPlaceId, UnixTimeMinutes,
 };
 use chrono::{DateTime, NaiveDate, NaiveTime};
 use chrono_tz::Tz;
@@ -46,6 +46,8 @@ pub struct RideInput {
     pub offers_berths: bool,
     /// Pages that show the layout of the train.
     pub layout_links: Vec<LayoutLink>,
+    /// How the traveller moves on the leg of the ride.
+    pub mobility_mode: MobilityMode,
 }
 
 impl RideInput {
@@ -99,10 +101,15 @@ pub fn rides_of_journey(
     leg_arrival_place_id: TripPlaceId,
     journey: &Journey,
     stations: &[LegPlanStation],
+    mobility_mode: MobilityMode,
 ) -> Vec<RideInput> {
     journey
         .rides()
         .filter_map(|ride| ride_input(leg_arrival_place_id, ride, stations))
+        .map(|ride| RideInput {
+            mobility_mode,
+            ..ride
+        })
         .collect()
 }
 
@@ -148,6 +155,7 @@ pub fn ride_input(
         distance_kilometres: ride_distance_kilometres(ride, stations),
         offers_berths: ride.offers_berths,
         layout_links: ride.layout_links.clone(),
+        mobility_mode: MobilityMode::Foot,
     })
 }
 
@@ -185,6 +193,7 @@ mod tests {
         };
         let stations = [station(5.0), station(5.4)];
         let mut ride = TrainRide {
+            mode_availability: btt_model::ModeAvailability::NotRequired,
             boarding_station: btt_model::LegPlanStationIndex(0),
             departure_time: UnixTimeMinutes(0),
             alighting_station: btt_model::LegPlanStationIndex(1),

@@ -39,7 +39,14 @@ fn main() {
     let rides = record
         .legs
         .iter()
-        .flat_map(|leg| rides_of_journey(leg.arrival_place_id, &leg.journey, &leg.stations))
+        .flat_map(|leg| {
+            rides_of_journey(
+                leg.arrival_place_id,
+                &leg.journey,
+                &leg.stations,
+                leg.mobility_mode,
+            )
+        })
         .collect();
     let today = chrono::DateTime::parse_from_rfc3339(&record.created_at)
         .expect("the date of the plan parses")

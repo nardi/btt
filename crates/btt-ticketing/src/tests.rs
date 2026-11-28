@@ -5,9 +5,9 @@ use std::num::NonZeroU32;
 
 use btt_fares::{FareData, PassKind, PriceAgeGroup, PriceBook, RideFacts};
 use btt_model::{
-    DurationMinutes, EuroCents, Journey, LegPlanStation, LegPlanStationIndex, StrategyKind,
-    TicketPlan, TicketPreferences, TicketProduct, TicketStrategy, TrainLabel, TrainRide,
-    TransferAndRide, TravelClass, Traveller, TripPlaceId, UnixTimeMinutes,
+    DurationMinutes, EuroCents, Journey, LegPlanStation, LegPlanStationIndex, PriceKind,
+    StrategyKind, TicketItem, TicketPlan, TicketPreferences, TicketProduct, TicketStrategy,
+    TrainLabel, TrainRide, TransferAndRide, TravelClass, Traveller, TripPlaceId, UnixTimeMinutes,
 };
 use chrono::NaiveDate;
 use proptest::prelude::*;
@@ -56,6 +56,7 @@ fn ride(
         distance_kilometres: kilometres,
         offers_berths,
         layout_links: Vec::new(),
+        mobility_mode: btt_model::MobilityMode::Foot,
     }
 }
 
@@ -985,6 +986,7 @@ fn connected_journey(
         UnixTimeMinutes(utc_minutes - 120)
     };
     let ride = |from: u8, to: u8, hour: u32| TrainRide {
+        mode_availability: btt_model::ModeAvailability::NotRequired,
         boarding_station: LegPlanStationIndex(from),
         departure_time: departure_at(hour),
         alighting_station: LegPlanStationIndex(to),
@@ -1031,7 +1033,12 @@ fn the_journey_price_is_what_the_tickets_cost() {
     let data = fare_data();
     let book = PriceBook::from_data(data);
     let price = crate::journey_price(&journey, &stations, data, &book).unwrap();
-    let rides = crate::rides_of_journey(TripPlaceId(NonZeroU32::MIN), &journey, &stations);
+    let rides = crate::rides_of_journey(
+        TripPlaceId(NonZeroU32::MIN),
+        &journey,
+        &stations,
+        btt_model::MobilityMode::Foot,
+    );
     let plan = plan(rides, None);
     let singles = plan
         .strategies
@@ -1052,7 +1059,12 @@ fn the_journey_price_counts_the_night_accommodation() {
     let data = fare_data();
     let book = PriceBook::from_data(data);
     let price = crate::journey_price(&journey, &stations, data, &book).unwrap();
-    let rides = crate::rides_of_journey(TripPlaceId(NonZeroU32::MIN), &journey, &stations);
+    let rides = crate::rides_of_journey(
+        TripPlaceId(NonZeroU32::MIN),
+        &journey,
+        &stations,
+        btt_model::MobilityMode::Foot,
+    );
     let plan = plan(rides, None);
     let singles = plan
         .strategies
@@ -1078,4 +1090,105 @@ fn a_journey_with_no_known_operator_gets_no_price() {
     let data = fare_data();
     let book = PriceBook::from_data(data);
     assert!(crate::journey_price(&journey, &stations, data, &book).is_none());
+}
+
+/// Returns a ride of an operator on a day, with a mobility mode.
+fn ride_with_mode(
+    day: u32,
+    operator: &str,
+    category: &str,
+    mobility_mode: btt_model::MobilityMode,
+) -> RideInput {
+    let mut ride = ride(day, ("AT", "AT"), category, 200.0, false);
+    ride.train_label.operator = operator.into();
+    ride.mobility_mode = mobility_mode;
+    ride
+}
+
+/// Returns the products of the items of every strategy of a plan.
+fn products_of_strategies(plan: &TicketPlan) -> Vec<Vec<TicketProduct>> {
+    plan.strategies
+        .iter()
+        .map(|strategy| {
+            strategy
+                .items
+                .iter()
+                .map(|item| item.product.clone())
+                .collect()
+        })
+        .collect()
+}
+
+#[test]
+fn a_bike_ride_needs_a_bike_item_in_every_strategy_and_a_foot_ride_none() {
+    use btt_model::MobilityMode;
+    let rides = vec![
+        ride_with_mode(0, "oebb", "RJX", MobilityMode::Bike),
+        ride_with_mode(1, "oebb", "RJX", MobilityMode::Foot),
+        ride_with_mode(2, "oebb", "RJX", MobilityMode::FoldingBike),
+    ];
+    let plan = plan(rides, Some(&adult("NL")));
+    assert!(plan.strategies.len() > 1);
+    for (strategy, products) in plan.strategies.iter().zip(products_of_strategies(&plan)) {
+        let bike_items: Vec<&TicketItem> = strategy
+            .items
+            .iter()
+            .filter(|item| item.product == TicketProduct::BikeReservation)
+            .collect();
+        assert_eq!(bike_items.len(), 1, "{products:?}");
+        assert_eq!(bike_items[0].ride_indices, [0]);
+        assert_eq!(bike_items[0].price.kind, PriceKind::Range);
+    }
+}
+
+#[test]
+fn a_bike_ride_without_a_rule_gets_an_item_with_a_guessed_price() {
+    let rides = vec![ride_with_mode(
+        0,
+        "unknown-operator",
+        "IC",
+        btt_model::MobilityMode::Bike,
+    )];
+    let plan = plan(rides, None);
+    let item = plan.strategies[0]
+        .items
+        .iter()
+        .find(|item| item.product == TicketProduct::BikeTicket)
+        .unwrap();
+    assert!(item.detail.contains("No bike rule"));
+    assert_eq!(item.price.kind, PriceKind::Range);
+    assert!(item.price.high > item.price.low);
+}
+
+#[test]
+fn wheelchair_rides_of_one_operator_and_day_share_one_assistance_booking() {
+    use btt_model::MobilityMode;
+    let rides = vec![
+        ride_with_mode(0, "oebb", "RJX", MobilityMode::Wheelchair),
+        ride_with_mode(0, "oebb", "IC", MobilityMode::Wheelchair),
+        ride_with_mode(1, "oebb", "RJX", MobilityMode::Wheelchair),
+    ];
+    let plan = plan(rides, None);
+    let strategy = &plan.strategies[0];
+    let assistance: Vec<&TicketItem> = strategy
+        .items
+        .iter()
+        .filter(|item| item.product == TicketProduct::AssistanceBooking)
+        .collect();
+    assert_eq!(assistance.len(), 2);
+    assert_eq!(assistance[0].ride_indices, [0, 1]);
+    assert_eq!(assistance[0].price.middle(), EuroCents(0));
+    // The ÖBB rule asks for a reserved wheelchair space on every ride.
+    let spaces = strategy
+        .items
+        .iter()
+        .filter(|item| item.product == TicketProduct::WheelchairSpaceReservation)
+        .count();
+    assert_eq!(spaces, 3);
+    assert!(
+        strategy
+            .notes
+            .iter()
+            .any(|note| note.contains("companion travels free"))
+    );
 }

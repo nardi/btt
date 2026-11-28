@@ -3,6 +3,8 @@
 //! The data lives in `data/fares/` as TOML and is compiled into this crate, so pricing needs no
 //! files at run time and no network.
 
+mod accessibility_rules;
+mod bike_rules;
 mod country;
 mod italo;
 mod night_fares;
@@ -16,6 +18,10 @@ mod tariff;
 
 use thiserror::Error;
 
+pub use accessibility_rules::{
+    AccessibilityRules, CompanionDiscount, OperatorAccessibility, WheelchairSpace,
+};
+pub use bike_rules::{BikeCarriageMode, BikeFeePeriod, BikeRule, BikeRules};
 pub use country::country_of_time_zone;
 pub use italo::{ItaloStation, ItaloStations};
 pub use night_fares::{
@@ -36,6 +42,10 @@ const PASSES_TOML: &str = include_str!("../../../data/fares/interrail_passes.tom
 const RULES_TOML: &str = include_str!("../../../data/fares/interrail_rules.toml");
 /// The reservation rules, as they are compiled in.
 const RESERVATIONS_TOML: &str = include_str!("../../../data/fares/interrail_reservations.toml");
+/// The bike rules, as they are compiled in.
+const BIKE_RULES_TOML: &str = include_str!("../../../data/fares/bike_rules.toml");
+/// The accessibility rules, as they are compiled in.
+const ACCESSIBILITY_RULES_TOML: &str = include_str!("../../../data/fares/accessibility_rules.toml");
 /// The tariffs and the exchange rates, as they are compiled in.
 const TARIFFS_TOML: &str = include_str!("../../../data/fares/tariffs.toml");
 /// The Italo stations, as they are compiled in.
@@ -119,6 +129,10 @@ pub struct FareData {
     pub passes: PassCatalogue,
     /// Which rides need a seat reservation on a pass, and for how much.
     pub reservations: ReservationRules,
+    /// What a traveller needs to take an assembled bike on a train, by operator.
+    pub bike_rules: BikeRules,
+    /// Assistance, wheelchair spaces and companion discounts, by operator.
+    pub accessibility_rules: AccessibilityRules,
     /// The model that estimates fares no other source prices, shared with the code that feeds
     /// it live prices.
     pub price_model: SharedPriceModel,
@@ -198,6 +212,8 @@ impl FareData {
         Ok(Self {
             passes: PassCatalogue::from_toml(PASSES_TOML)?,
             reservations: ReservationRules::from_toml(RESERVATIONS_TOML, RULES_TOML)?,
+            bike_rules: BikeRules::from_toml(BIKE_RULES_TOML)?,
+            accessibility_rules: AccessibilityRules::from_toml(ACCESSIBILITY_RULES_TOML)?,
             price_model: SharedPriceModel::new(PriceModel::bundled()?),
             night_fares: NightFares::from_sources(&[
                 (NightOperator::Oebb, NIGHT_FARES_JSONL),
@@ -238,5 +254,29 @@ mod tests {
         assert_eq!(data.passes.passes.len(), 10);
         assert_eq!(data.residence_journeys_each_way, 1);
         assert!(data.reservations.rules.len() > 30);
+        assert!(data.bike_rules.rules.len() > 20);
+        assert!(data.accessibility_rules.operators.len() > 15);
+    }
+
+    #[test]
+    fn the_bike_and_accessibility_rules_name_known_operators() {
+        let operators = include_str!("../../../data/operators.toml");
+        let known = |id: &str| operators.contains(&format!("id = \"{id}\""));
+        let data = FareData::bundled().unwrap();
+        for rule in &data.bike_rules.rules {
+            assert!(
+                known(&rule.operator),
+                "Unknown operator {} in bike rule {}.",
+                rule.operator,
+                rule.id
+            );
+        }
+        for entry in &data.accessibility_rules.operators {
+            assert!(
+                known(&entry.id),
+                "Unknown operator {} in the accessibility rules.",
+                entry.id
+            );
+        }
     }
 }

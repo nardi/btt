@@ -1,0 +1,250 @@
+# Rules for an assembled bike on a train, by operator and train category.
+#
+# Fees are in euro for one bike. Each fee is a range of the lowest and highest price seen. The
+# `per` field tells whether the fee is for one ride or for all rides of the operator on one day.
+# The `operator` field is an `id` from `data/operators.toml`. A rule without categories covers
+# every train of the operator. A rule that lists the category of a train comes before it.
+#
+# A rule with `unverified = true` has values from memory or from an old page. The planner uses
+# such a rule to price a bike, but it does not count the rule as a confirmation that the train
+# takes bikes. Check each rule against the page of the operator, then remove the flag.
+#
+# Modes:
+#   free        - the bike travels without a ticket.
+#   ticket      - the bike needs a ticket, and any train with bike spaces takes it.
+#   reservation - the bike needs a reserved bike space. The fee covers the ticket as well.
+#   bagged_only - only a bike that is taken apart and packed in a bag can travel.
+#   not_allowed - no bike can travel.
+#
+# A folding bike travels as luggage on all trains, so these rules do not apply to it.
+
+[[rule]]
+id = "de-long-distance"
+unverified = true
+operator = "db-fernverkehr"
+categories = ["ICE", "IC", "EC"]
+mode = "reservation"
+fee = [7.0, 9.9]
+per = "ride"
+booking = "https://www.bahn.de/service/individuelle-reise/fahrrad"
+notes = "A bike ticket for long-distance trains includes the bike space reservation."
+
+[[rule]]
+id = "de-regional"
+unverified = true
+operator = "db-regio"
+mode = "ticket"
+fee = [6.0, 7.0]
+per = "day"
+booking = "https://www.bahn.de/service/individuelle-reise/fahrrad"
+notes = "The Fahrradtageskarte Nahverkehr covers all regional trains on one day. Some regions let bikes travel free."
+
+[[rule]]
+id = "de-flixtrain"
+unverified = true
+operator = "flixtrain"
+mode = "reservation"
+fee = [9.0, 10.0]
+per = "ride"
+booking = "https://www.flixtrain.com"
+notes = "The number of bike spaces is small, so book early."
+
+[[rule]]
+id = "at-long-distance"
+unverified = true
+operator = "oebb"
+categories = ["RJ", "RJX", "EC", "IC", "NJ", "EN"]
+mode = "reservation"
+fee = [3.0, 10.0]
+per = "ride"
+booking = "https://www.oebb.at/en/reiseplanung-services/im-zug/fahrradmitnahme"
+notes = "A bike space reservation is mandatory on long-distance trains. Not every Railjet has bike spaces."
+
+[[rule]]
+id = "at-regional"
+unverified = true
+operator = "oebb"
+mode = "ticket"
+fee = [5.0, 5.0]
+per = "day"
+booking = "https://www.oebb.at/en/reiseplanung-services/im-zug/fahrradmitnahme"
+notes = "The bike day ticket covers regional trains."
+
+[[rule]]
+id = "at-westbahn"
+unverified = true
+operator = "westbahn"
+mode = "ticket"
+fee = [5.0, 5.0]
+per = "ride"
+booking = "https://westbahn.at"
+
+[[rule]]
+id = "ch-sbb"
+unverified = true
+operator = "sbb"
+mode = "ticket"
+fee = [14.0, 15.0]
+per = "day"
+booking = "https://www.sbb.ch/en/travel-information/luggage-bikes/bikes.html"
+notes = "The bike day pass covers all trains on one day. Intercity trains need a bike space reservation from 21 March to 31 October."
+
+[[rule]]
+id = "nl-ns"
+unverified = true
+operator = "ns"
+mode = "ticket"
+fee = [7.5, 8.5]
+per = "day"
+booking = "https://www.ns.nl/en/travel-information/bicycle-on-the-train"
+notes = "Bikes cannot travel on weekdays from 06:30 to 09:00 and from 16:30 to 18:00, except in July and August."
+
+[[rule]]
+id = "be-sncb"
+unverified = true
+operator = "sncb"
+mode = "ticket"
+fee = [4.0, 8.0]
+per = "ride"
+booking = "https://www.belgiantrain.be/en/travel-info/prepare-for-your-journey/bike"
+notes = "The bike supplement covers one ride. A day ticket for a bike costs more."
+
+[[rule]]
+id = "fr-ter"
+unverified = true
+operator = "sncf"
+categories = ["TER"]
+mode = "free"
+fee = [0.0, 0.0]
+per = "ride"
+booking = "https://www.sncf-connect.com"
+notes = "Most regional trains take bikes free of charge. Some lines need a reservation in summer."
+
+[[rule]]
+id = "fr-tgv-inoui"
+unverified = true
+operator = "sncf"
+categories = ["TGV INOUI", "Intercités"]
+mode = "reservation"
+fee = [0.0, 10.0]
+per = "ride"
+booking = "https://www.sncf-connect.com"
+notes = "A bike space must be reserved. Trains without bike spaces take only a bagged bike."
+
+[[rule]]
+id = "fr-ouigo"
+unverified = true
+operator = "ouigo"
+mode = "bagged_only"
+fee = [5.0, 5.0]
+per = "ride"
+booking = "https://www.ouigo.com"
+notes = "A bike must be packed in a bag of at most 120 by 90 cm, booked as an extra luggage item."
+
+[[rule]]
+id = "eu-eurostar"
+unverified = true
+operator = "eurostar"
+mode = "reservation"
+fee = [30.0, 40.0]
+per = "ride"
+booking = "https://www.eurostar.com/uk-en/travel-info/travel-planning/bikes"
+notes = "Only some trains between London and the continent have bike spaces. Other trains take only a bagged bike."
+
+[[rule]]
+id = "it-regional"
+unverified = true
+operator = "trenitalia"
+categories = ["R", "RV", "REG"]
+mode = "ticket"
+fee = [3.5, 3.5]
+per = "day"
+booking = "https://www.trenitalia.com/en/services/travelling_withyourbike.html"
+notes = "The bike supplement on regional trains is valid for 24 hours."
+
+[[rule]]
+id = "it-intercity"
+unverified = true
+operator = "trenitalia"
+categories = ["IC", "ICN"]
+mode = "reservation"
+fee = [3.5, 5.0]
+per = "ride"
+booking = "https://www.trenitalia.com/en/services/travelling_withyourbike.html"
+
+[[rule]]
+id = "it-frecce"
+unverified = true
+operator = "trenitalia"
+categories = ["FR", "FA", "FB"]
+mode = "bagged_only"
+fee = [0.0, 0.0]
+per = "ride"
+booking = "https://www.trenitalia.com/en/services/travelling_withyourbike.html"
+notes = "Some Frecciarossa trains have a few bike spaces that need a reservation."
+
+[[rule]]
+id = "it-italo"
+unverified = true
+operator = "italo"
+mode = "bagged_only"
+fee = [0.0, 0.0]
+per = "ride"
+booking = "https://www.italotreno.com"
+
+[[rule]]
+id = "cz-regiojet"
+unverified = true
+operator = "regiojet"
+mode = "reservation"
+fee = [4.0, 8.0]
+per = "ride"
+booking = "https://www.regiojet.com"
+
+[[rule]]
+id = "cz-cd"
+unverified = true
+operator = "cd"
+mode = "ticket"
+fee = [2.0, 4.0]
+per = "ride"
+booking = "https://www.cd.cz/en"
+notes = "Long-distance trains with bike spaces need a reservation, which costs extra."
+
+[[rule]]
+id = "pl-pkp-intercity"
+unverified = true
+operator = "pkp-intercity"
+mode = "reservation"
+fee = [2.0, 3.0]
+per = "ride"
+booking = "https://www.intercity.pl/en"
+
+[[rule]]
+id = "se-sj"
+unverified = true
+operator = "sj"
+mode = "bagged_only"
+fee = [0.0, 0.0]
+per = "ride"
+booking = "https://www.sj.se/en"
+notes = "SJ trains take only a folded or bagged bike. Some regional and night trains have bike spaces."
+
+[[rule]]
+id = "dk-dsb"
+unverified = true
+operator = "dsb"
+mode = "ticket"
+fee = [2.0, 4.0]
+per = "ride"
+booking = "https://www.dsb.dk/en"
+notes = "Intercity trains need a bike space ticket. Regional trains in the Copenhagen area take bikes free."
+
+[[rule]]
+id = "nl-european-sleeper"
+unverified = true
+operator = "european-sleeper"
+mode = "reservation"
+fee = [15.0, 25.0]
+per = "ride"
+booking = "https://www.europeansleeper.eu"
