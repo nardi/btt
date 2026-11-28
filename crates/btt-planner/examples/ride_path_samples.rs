@@ -89,6 +89,7 @@ fn main() {
     let mut rides: Vec<serde_json::Value> = Vec::new();
     for (from_latitude, from_longitude, to_latitude, to_longitude) in LEGS {
         let input = LegPlanningInput {
+            mobility_mode: btt_model::MobilityMode::Foot,
             departure: endpoint(from_latitude, from_longitude),
             arrival: endpoint(to_latitude, to_longitude),
             departure_date: NaiveDate::from_ymd_opt(2026, 10, 20).expect("the date is valid"),

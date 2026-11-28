@@ -2,7 +2,7 @@
 
 use btt_model::{
     DailyTimeWindow, DurationMinutes, GeoCoordinates, InterrailPassPolicy, JourneyChoice,
-    LegTravelMode, PlaceStay, PlaceWindowOverride, PriceWeight, SameDayStayRange,
+    LegTravelMode, MobilityMode, PlaceStay, PlaceWindowOverride, PriceWeight, SameDayStayRange,
     StationSearchRadius, TransferAversion, Trip, TripPlace, TripPlaceId,
 };
 use chrono::NaiveDate;
@@ -46,6 +46,10 @@ pub struct LegPlanningInput {
     pub price_weight: PriceWeight,
     /// The journey the traveller picked for this leg, which the planner shows when it can.
     pub chosen_journey: Option<JourneyChoice>,
+    /// How the traveller moves on the leg, which limits the trains and sets the time of the
+    /// ways.
+    #[serde(default)]
+    pub mobility_mode: MobilityMode,
 }
 
 /// Identifies a leg result in the cache. Covers the leg input and the backend that planned it.
@@ -67,8 +71,8 @@ impl LegPlanningInput {
     }
 
     /// Returns the encoding of this input that the cache key hashes. It lists the fields one by
-    /// one, and the price weight only when it is above zero, so results planned without prices
-    /// keep the keys they always had.
+    /// one, the price weight only when it is above zero, and the mobility mode only when it is
+    /// not `Foot`. So results planned without prices and on foot keep the keys they always had.
     fn key_bytes(&self) -> Vec<u8> {
         let parts = (
             &self.departure,
@@ -80,11 +84,15 @@ impl LegPlanningInput {
             &self.transfer_aversion,
             &self.chosen_journey,
         );
-        if self.price_weight.hundredths_of_minute_per_euro() > 0 {
-            postcard::to_stdvec(&(parts, self.price_weight)).unwrap_or_default()
-        } else {
-            postcard::to_stdvec(&parts).unwrap_or_default()
+        let priced = self.price_weight.hundredths_of_minute_per_euro() > 0;
+        let on_foot = self.mobility_mode == MobilityMode::Foot;
+        match (priced, on_foot) {
+            (true, true) => postcard::to_stdvec(&(parts, self.price_weight)),
+            (false, true) => postcard::to_stdvec(&parts),
+            (true, false) => postcard::to_stdvec(&(parts, self.price_weight, self.mobility_mode)),
+            (false, false) => postcard::to_stdvec(&(parts, self.mobility_mode)),
         }
+        .unwrap_or_default()
     }
 }
 
@@ -133,6 +141,7 @@ pub fn leg_planning_inputs(trip: &Trip) -> SmallVec<[IdentifiedLegInput; 16]> {
                             && chosen.arrival_place_id == leg.arrival_place.id
                     })
                     .map(|chosen| chosen.choice.clone()),
+                mobility_mode: leg.mobility_mode,
             },
         })
         .collect()

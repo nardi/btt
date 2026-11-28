@@ -242,6 +242,7 @@ fn legs(queries_path: &str, responses_path: &str, limit: usize) -> Vec<(String, 
                     time.date_naive()
                 ),
                 LegPlanningInput {
+                    mobility_mode: btt_model::MobilityMode::Foot,
                     departure: endpoint(from_coordinates, preferences.default_windows.departure),
                     arrival: endpoint(to_coordinates, preferences.default_windows.arrival),
                     departure_date: time.date_naive(),
@@ -378,6 +379,7 @@ fn time_one_leg(arguments: &[String]) {
         time_window,
     };
     let input = LegPlanningInput {
+        mobility_mode: btt_model::MobilityMode::Foot,
         departure: endpoint(from_lat, from_lon, preferences.default_windows.departure),
         arrival: endpoint(to_lat, to_lon, preferences.default_windows.arrival),
         departure_date: travel_date.parse().expect("date as YYYY-MM-DD"),

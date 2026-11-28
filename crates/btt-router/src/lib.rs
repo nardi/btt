@@ -12,6 +12,7 @@ mod index;
 mod latest_arrival;
 mod lower_bound;
 mod search;
+mod ways;
 
 pub use cost_search::{
     CostParetoJourneySet, CostSearchBuffers, CostedJourney, JourneyCostModel, MAXIMUM_TRAVEL_DAYS,
@@ -21,4 +22,7 @@ pub use index::SearchIndex;
 pub use search::{
     AllowEveryRide, CandidateStation, MinutesSinceBundleStart, ParetoJourneySet, RaptorJourney,
     RaptorLegQuery, RaptorRide, RaptorSearchBuffers, RideFilter, search_leg_journeys,
+};
+pub use ways::{
+    FootpathMode, LONGEST_WALK_METERS, footpath_minutes, uses_local_transport, way_minutes,
 };

@@ -786,6 +786,7 @@ dependencies = [
  "btt-timetable",
  "chrono",
  "chrono-tz",
+ "fixedbitset",
  "futures-util",
  "gloo-timers",
  "percent-encoding",

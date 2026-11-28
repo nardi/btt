@@ -10,7 +10,9 @@ use std::collections::BinaryHeap;
 
 use btt_timetable::{BundleStationIndex, LoadedTimetableBundle};
 
+use crate::index::mode_minutes;
 use crate::search::CandidateStation;
+use crate::ways::FootpathMode;
 
 /// Value of a station that cannot reach the arrival place.
 pub(crate) const UNREACHABLE: u32 = u32::MAX;
@@ -33,7 +35,7 @@ pub(crate) struct LowerBoundGraph {
 impl LowerBoundGraph {
     /// Builds the graph from every route and footpath of a bundle. This reads every stop event
     /// once, so it belongs with loading a bundle, not with a query.
-    pub(crate) fn new(bundle: &LoadedTimetableBundle) -> Self {
+    pub(crate) fn new(bundle: &LoadedTimetableBundle, mode: FootpathMode) -> Self {
         // (to station, from station, minutes), with duplicates that the sort below removes.
         let mut edges: Vec<(u32, u32, u16)> = Vec::new();
         for route_index in 0..bundle.route_count() {
@@ -62,7 +64,8 @@ impl LowerBoundGraph {
         for station_index in 0..bundle.station_count() {
             let from = BundleStationIndex(u32::try_from(station_index).unwrap_or(u32::MAX));
             for footpath in bundle.footpaths_from(from) {
-                edges.push((footpath.to_station.0, from.0, footpath.duration_minutes));
+                let minutes = mode_minutes(bundle, mode, from, footpath);
+                edges.push((footpath.to_station.0, from.0, minutes));
             }
         }
         // Sorting by station pair and then minutes puts the fastest edge of each pair first.

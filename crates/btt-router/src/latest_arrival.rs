@@ -24,6 +24,7 @@ use fixedbitset::FixedBitSet;
 
 use crate::index::SearchIndex;
 use crate::search::{MINUTES_PER_DAY, RaptorLegQuery};
+use crate::ways::FootpathMode;
 
 /// The latest moments at every station, in minutes since the bundle starts.
 #[derive(Debug, Default)]
@@ -52,6 +53,8 @@ pub(crate) struct LatestArrivals {
     minutes_from_departure: Vec<u32>,
     /// The queue of the search for `minutes_from_departure`.
     queue: BinaryHeap<Reverse<(u32, u32)>>,
+    /// The way of moving that the footpaths of the current search follow.
+    footpath_mode: FootpathMode,
 }
 
 impl LatestArrivals {
@@ -72,7 +75,9 @@ impl LatestArrivals {
         index: &SearchIndex,
         query: &RaptorLegQuery<'_>,
         deadline: u32,
+        mode: FootpathMode,
     ) {
+        self.footpath_mode = mode;
         let station_count = bundle.station_count();
         self.by_train.clear();
         self.by_train.resize(station_count, None);
@@ -87,7 +92,7 @@ impl LatestArrivals {
         self.earliest = query.departure_window.start.0;
         // A station the departure place can't reach before the deadline is of no use, which
         // keeps the search near the stations between the two places.
-        index.lower_bounds.compute_bounds_from(
+        index.lower_bounds_for(bundle, mode).compute_bounds_from(
             query.departure_candidates,
             deadline.saturating_sub(self.earliest),
             &mut self.minutes_from_departure,
@@ -98,7 +103,7 @@ impl LatestArrivals {
             if let Some(moment) = deadline.checked_sub(u32::from(candidate.time_to_place_minutes)) {
                 // A traveller who arrives here by train goes on to the arrival place without
                 // the transfer time.
-                self.raise_ready(index, candidate.station, moment, minimum_transfer);
+                self.raise_ready(bundle, index, candidate.station, moment, minimum_transfer);
                 self.raise_by_train(candidate.station, moment);
             }
         }
@@ -169,7 +174,7 @@ impl LatestArrivals {
             {
                 let departure = u32::from(service_day) * MINUTES_PER_DAY
                     + u32::from(bundle.stop_event(&route, trip_offset, position).departure.0);
-                self.raise_ready(index, station, departure, minimum_transfer);
+                self.raise_ready(bundle, index, station, departure, minimum_transfer);
             }
             if pattern_stop.alighting_allowed()
                 && let Some(latest) = self.by_train[station.as_usize()]
@@ -194,6 +199,7 @@ impl LatestArrivals {
     /// station after a train needs the walk.
     fn raise_ready(
         &mut self,
+        bundle: &LoadedTimetableBundle,
         index: &SearchIndex,
         station: BundleStationIndex,
         moment: u32,
@@ -207,7 +213,10 @@ impl LatestArrivals {
         if let Some(by_train) = moment.checked_sub(minimum_transfer) {
             self.raise_by_train(station, by_train);
         }
-        for &(from_station, minutes) in index.incoming_footpaths(station) {
+        for &(from_station, minutes) in index
+            .footpaths(bundle, self.footpath_mode)
+            .incoming(station)
+        {
             if let Some(by_train) = moment.checked_sub(u32::from(minutes)) {
                 self.raise_by_train(from_station, by_train);
             }
@@ -340,6 +349,7 @@ mod tests {
                     coordinates: GeoCoordinates::from_degrees(50.0, 8.0).unwrap(),
                     time_zone: "UTC".to_owned(),
                     trainline_station_id: None,
+                    wheelchair_boarding: btt_timetable::Availability::Unknown,
                 })
                 .unwrap();
         }
@@ -375,6 +385,8 @@ mod tests {
                     number: String::new(),
                     agency: String::new(),
                     offers_berths: false,
+                    bike_carriage: btt_timetable::Availability::Unknown,
+                    wheelchair_access: btt_timetable::Availability::Unknown,
                 },
             });
         }
@@ -448,7 +460,7 @@ mod tests {
                 maximum_train_rides: NonZeroU8::new(MAXIMUM_TRAIN_RIDES).unwrap(),
             };
             let mut latest = LatestArrivals::default();
-            latest.compute(&bundle, &index, &query, deadline);
+            latest.compute(&bundle, &index, &query, deadline, FootpathMode::Walk);
             if let Some(moment) = deadline.checked_sub(u32::from(time_to_place)) {
                 prop_assert!(latest.latest(target).is_some_and(|known| known >= moment));
             }

@@ -2,9 +2,12 @@
 
 use std::ops::Range;
 
-use btt_router::{CandidateStation, JourneyCostModel, MinutesSinceBundleStart, PreviousRide};
-use btt_timetable::{BundleTripIndex, LoadedTimetableBundle, RaptorRouteIndex};
+use btt_router::{
+    CandidateStation, FootpathMode, JourneyCostModel, MinutesSinceBundleStart, PreviousRide,
+};
+use btt_timetable::{BundleStationIndex, BundleTripIndex, LoadedTimetableBundle, RaptorRouteIndex};
 
+use crate::mobility::ModeVerdicts;
 use crate::pricing::{PriceMode, RidePrices};
 use crate::scoring::ScoringWeights;
 
@@ -48,6 +51,11 @@ pub(crate) struct LegCostModel<'a> {
     /// The cost of a journey the caller knows, in hundredths of a minute, which no journey the
     /// search is for may exceed. `i32::MAX` when the caller knows none.
     pub(crate) initial_cost_limit: i32,
+    /// How the traveller moves between stations.
+    pub(crate) footpath_mode: FootpathMode,
+    /// The trains and stations that the traveller can use with a bike or in a wheelchair.
+    /// `None` when the traveller can use every train and station.
+    pub(crate) mode_verdicts: Option<&'a ModeVerdicts>,
 }
 
 /// Converts a minute count or a percentage to the model's signed arithmetic.
@@ -89,6 +97,30 @@ impl LegCostModel<'_> {
 }
 
 impl JourneyCostModel for LegCostModel<'_> {
+    fn footpath_mode(&self) -> FootpathMode {
+        self.footpath_mode
+    }
+
+    fn may_board(
+        &self,
+        _raptor_route: RaptorRouteIndex,
+        trip: BundleTripIndex,
+        station: BundleStationIndex,
+    ) -> bool {
+        self.mode_verdicts
+            .is_none_or(|verdicts| verdicts.allows(trip, station))
+    }
+
+    fn may_alight(
+        &self,
+        _raptor_route: RaptorRouteIndex,
+        trip: BundleTripIndex,
+        station: BundleStationIndex,
+    ) -> bool {
+        self.mode_verdicts
+            .is_none_or(|verdicts| verdicts.allows(trip, station))
+    }
+
     fn access_cost(&self, candidate: &CandidateStation) -> i32 {
         i32::from(candidate.time_to_place_minutes) * self.way_extra_per_minute()
     }
@@ -295,6 +327,7 @@ mod tests {
                     coordinates: GeoCoordinates::from_degrees(50.0, 8.0).unwrap(),
                     time_zone: "UTC".to_owned(),
                     trainline_station_id: None,
+                    wheelchair_boarding: btt_timetable::Availability::Unknown,
                 })
                 .unwrap();
         }
@@ -318,6 +351,8 @@ mod tests {
                     number: String::new(),
                     agency: String::new(),
                     offers_berths,
+                    bike_carriage: btt_timetable::Availability::Unknown,
+                    wheelchair_access: btt_timetable::Availability::Unknown,
                 },
             });
         }
@@ -342,6 +377,8 @@ mod tests {
             price_mode: PriceMode::Single,
             maximum_duration_minutes: None,
             initial_cost_limit: i32::MAX,
+            footpath_mode: FootpathMode::Walk,
+            mode_verdicts: None,
         };
         let (berth_trip, seated_trip) = if bundle.trip_offers_berths(BundleTripIndex(0)) {
             (BundleTripIndex(0), BundleTripIndex(1))

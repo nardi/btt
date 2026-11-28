@@ -6,6 +6,8 @@
 //! longitude, and the station search radius in meters. One path to a tab-separated file plans
 //! the legs in it instead, one per line as the departure name, latitude and longitude and then
 //! the arrival name, latitude and longitude, and prints only the chosen journey of each.
+//! The `BTT_MOBILITY` environment variable sets the mobility mode, as described at
+//! `mobility_mode_from_environment`.
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -28,7 +30,19 @@ const LEGS: [(&str, f64, f64, &str, f64, f64); 5] = [
     ("Groningen", 53.2105, 6.5641, "Innsbruck", 47.2632, 11.4009),
 ];
 
+/// Reads the mobility mode from the `BTT_MOBILITY` environment variable: `bike`,
+/// `folding-bike` or `wheelchair`. Any other value, or none, plans on foot.
+fn mobility_mode_from_environment() -> btt_model::MobilityMode {
+    match std::env::var("BTT_MOBILITY").as_deref() {
+        Ok("bike") => btt_model::MobilityMode::Bike,
+        Ok("folding-bike") => btt_model::MobilityMode::FoldingBike,
+        Ok("wheelchair") => btt_model::MobilityMode::Wheelchair,
+        _ => btt_model::MobilityMode::Foot,
+    }
+}
+
 fn main() {
+    let mobility_mode = mobility_mode_from_environment();
     let mut arguments = std::env::args().skip(1);
     let bundle_path = arguments.next().expect("pass the bundle path");
     let date: NaiveDate = arguments
@@ -103,6 +117,7 @@ fn main() {
             time_window: DailyTimeWindow::from_start_and_end(time(7), time(20)),
         };
         let input = LegPlanningInput {
+            mobility_mode,
             departure: endpoint(from_latitude, from_longitude),
             arrival: endpoint(to_latitude, to_longitude),
             departure_date: date,

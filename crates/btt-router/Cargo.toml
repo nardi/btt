@@ -8,12 +8,12 @@ publish.workspace = true
 license-file.workspace = true
 
 [dependencies]
+btt-model.workspace = true
 btt-timetable.workspace = true
 fixedbitset.workspace = true
 smallvec.workspace = true
 
 [dev-dependencies]
-btt-model.workspace = true
 chrono.workspace = true
 proptest.workspace = true
 

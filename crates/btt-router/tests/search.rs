@@ -34,6 +34,7 @@ impl Network {
                 coordinates: GeoCoordinates::from_degrees(50.0, 8.0).unwrap(),
                 time_zone: "UTC".to_owned(),
                 trainline_station_id: None,
+                wheelchair_boarding: btt_timetable::Availability::Unknown,
             })
             .unwrap()
     }
@@ -81,6 +82,8 @@ impl Network {
                 number: number.into(),
                 agency: String::new(),
                 offers_berths: false,
+                bike_carriage: btt_timetable::Availability::Unknown,
+                wheelchair_access: btt_timetable::Availability::Unknown,
             },
         });
     }

@@ -1,5 +1,6 @@
 //! Prices a planned journey, so the planner can show what a journey costs next to its time.
 
+use crate::mobility::{RestrictedMode, RuleVerdict};
 use btt_model::{EuroRange, Journey, LegPlanStation};
 
 use btt_timetable::RaptorRouteIndex;
@@ -67,6 +68,14 @@ pub trait JourneyPricer: Send + Sync + 'static {
     fn pass_price_table(&self, classes: &[RidePriceClass]) -> Option<RidePassTable> {
         let _ = classes;
         None
+    }
+
+    /// Returns what the committed rules of an operator say about a train of a category for a
+    /// traveller with a bike or in a wheelchair. `operator` is an `id` from
+    /// `data/operators.toml`. The default knows no rules.
+    fn carriage_rule(&self, mode: RestrictedMode, operator: &str, category: &str) -> RuleVerdict {
+        let _ = (mode, operator, category);
+        RuleVerdict::NoRule
     }
 }
 

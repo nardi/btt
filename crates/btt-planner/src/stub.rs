@@ -73,6 +73,7 @@ impl StubBackend {
         let journey = Journey {
             access: STUB_STATION_WAY,
             first_ride: TrainRide {
+                mode_availability: btt_model::ModeAvailability::NotRequired,
                 boarding_station: LegPlanStationIndex(0),
                 departure_time,
                 alighting_station: LegPlanStationIndex(1),

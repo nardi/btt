@@ -8,13 +8,14 @@ use btt_geo::{TimeZoneFinder, local_time_to_unix_minutes};
 use btt_model::{
     AlternativeKind, ArrivalFootpath, DurationMinutes, EuroRange, Journey, JourneyChoice,
     JourneyCostParts, LegExtras, LegPlan, LegPlanStation, LegPlanStationIndex, LegPlanningResult,
-    LegTravelMode, NoJourneyReason, OvernightLegOptions, PassDays, PassJourneyOption, PriceWeight,
-    SearchedWindow, StationWay, TrainLabel, TrainRide, TransferAndRide, UnixTimeMinutes,
-    WayToStationMode,
+    LegTravelMode, MobilityMode, ModeAvailability, NoJourneyReason, OvernightLegOptions, PassDays,
+    PassJourneyOption, PriceWeight, SearchedWindow, StationWay, TrainLabel, TrainRide,
+    TransferAndRide, UnixTimeMinutes, WayToStationMode,
 };
 use btt_router::{
-    CandidateStation, CostParetoJourneySet, CostSearchBuffers, MinutesSinceBundleStart,
-    RaptorJourney, RaptorLegQuery, SearchIndex, search_leg_journeys_by_cost,
+    CandidateStation, CostParetoJourneySet, CostSearchBuffers, FootpathMode,
+    MinutesSinceBundleStart, RaptorJourney, RaptorLegQuery, SearchIndex,
+    search_leg_journeys_by_cost, uses_local_transport, way_minutes,
 };
 use btt_timetable::{
     BundleLoadError, BundleStationIndex, BundleTripIndex, LoadedTimetableBundle, RaptorRouteIndex,
@@ -33,6 +34,10 @@ use crate::chain::{ChainJourney, ChainStay, chain_through_costs};
 use crate::cost_model::LegCostModel;
 use crate::explanation::{CandidateExplanation, LegExplanation, RankedJourneyExplanation};
 use crate::input::{LegChainInput, LegEndpoint, LegPlanningInput, SameDayStop};
+use crate::mobility::{
+    ModeVerdict, ModeVerdicts, RestrictedMode, footpath_mode, restricted_mode,
+    transfer_extra_minutes,
+};
 use crate::operators::{OperatorEnd, OperatorTable};
 use crate::pricing::{JourneyPricer, NoPrice, PriceMode, RidePrices};
 use crate::ride_path::StationHopGraph;
@@ -139,6 +144,11 @@ pub struct TimetableBundleRouter<P: JourneyPricer = NoPrice> {
     /// The prices of rides, which the search adds to the cost. `None` when the pricer knows
     /// no price table.
     ride_prices: Option<RidePrices>,
+    /// The trains that take an assembled bike. Computed on first use in bike mode.
+    bike_verdicts: OnceLock<ModeVerdicts>,
+    /// The trains and stations that a wheelchair user can use. Computed on first use in
+    /// wheelchair mode.
+    wheelchair_verdicts: OnceLock<ModeVerdicts>,
 }
 
 impl<P: JourneyPricer> TimetableBundleRouter<P> {
@@ -199,7 +209,22 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             operator_ends: OnceLock::new(),
             pricer,
             ride_prices,
+            bike_verdicts: OnceLock::new(),
+            wheelchair_verdicts: OnceLock::new(),
         }
+    }
+
+    /// Returns the verdicts of the trains and stations for a mobility mode, or `None` when the
+    /// traveller can use every train and station.
+    pub(crate) fn mode_verdicts(&self, mode: MobilityMode) -> Option<&ModeVerdicts> {
+        let restricted = restricted_mode(mode)?;
+        let cell = match restricted {
+            RestrictedMode::Bike => &self.bike_verdicts,
+            RestrictedMode::Wheelchair => &self.wheelchair_verdicts,
+        };
+        Some(cell.get_or_init(|| {
+            ModeVerdicts::new(&self.bundle, &self.operators, &self.pricer, restricted)
+        }))
     }
 
     /// Returns the first and last day of the bundle's validity window, both inclusive.
@@ -814,11 +839,19 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             return Err(NoJourneyReason::TravelDateOutsideTimetable);
         }
         let first_day = departure_window.start.0 / MINUTES_PER_DAY;
-        let departure_candidates = self.candidates(&input.departure, first_day..=first_day + 1);
+        let departure_candidates = self.candidates(
+            &input.departure,
+            input.mobility_mode,
+            first_day..=first_day + 1,
+        );
         if departure_candidates.is_empty() {
             return Err(NoJourneyReason::NoStationNearDeparturePlace);
         }
-        let arrival_candidates = self.candidates(&input.arrival, first_day..=first_day + 2);
+        let arrival_candidates = self.candidates(
+            &input.arrival,
+            input.mobility_mode,
+            first_day..=first_day + 2,
+        );
         if arrival_candidates.is_empty() {
             return Err(NoJourneyReason::NoStationNearArrivalPlace);
         }
@@ -851,6 +884,8 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             price_mode: options.mode,
             maximum_duration_minutes: options.maximum_minutes,
             initial_cost_limit: options.maximum_cost.unwrap_or(i32::MAX),
+            footpath_mode: footpath_mode(input.mobility_mode),
+            mode_verdicts: self.mode_verdicts(input.mobility_mode),
         };
         let found = self.search_in_parallel(
             &departure_candidates,
@@ -1323,7 +1358,10 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
                 departure_candidates,
                 arrival_candidates,
                 departure_window: slice_window,
-                minimum_transfer_minutes: input.minimum_transfer_time.minutes(),
+                minimum_transfer_minutes: input
+                    .minimum_transfer_time
+                    .minutes()
+                    .saturating_add(transfer_extra_minutes(input.mobility_mode)),
                 maximum_train_rides: MAXIMUM_TRAIN_RIDES,
             };
             let mut buffers = self
@@ -1520,16 +1558,23 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
     }
 
     /// Returns the stations within a place's search radius that have service on any of the
-    /// given days, with the time to get there, closest first.
+    /// given days, with the time to get there in a mobility mode, closest first. In wheelchair
+    /// mode, stations that are not step-free are left out.
     fn candidates(
         &self,
         endpoint: &LegEndpoint,
+        mobility_mode: MobilityMode,
         days: std::ops::RangeInclusive<u32>,
     ) -> SmallVec<[CandidateStation; 16]> {
         let radius_meters = f64::from(endpoint.station_search_radius.meters());
+        let verdicts = self.mode_verdicts(mobility_mode);
+        let way_mode = footpath_mode(mobility_mode);
         self.station_index
             .stations_within(&self.bundle, endpoint.coordinates, radius_meters)
             .into_iter()
+            .filter(|nearby| {
+                verdicts.is_none_or(|verdicts| verdicts.allows_station(nearby.station))
+            })
             .filter(|nearby| {
                 let service_days = self.bundle.station_service_days(nearby.station);
                 days.clone()
@@ -1538,7 +1583,7 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             .take(MAXIMUM_CANDIDATE_STATIONS)
             .map(|nearby| CandidateStation {
                 station: nearby.station,
-                time_to_place_minutes: access_minutes(nearby.distance_meters),
+                time_to_place_minutes: way_minutes(way_mode, nearby.distance_meters),
             })
             .collect()
     }
@@ -1554,14 +1599,14 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
     ) -> Option<Journey> {
         let mut rides = journey.rides.iter();
         let first = rides.next()?;
-        let first_ride = self.train_ride(first, stations)?;
+        let first_ride = self.train_ride(first, input.mobility_mode, stations)?;
         let mut last = first;
         let mut later_rides = SmallVec::new();
         for ride in rides {
             let transfer = ride.departure.0.saturating_sub(last.arrival.0);
             later_rides.push(TransferAndRide {
                 transfer_duration: DurationMinutes(u16::try_from(transfer).unwrap_or(u16::MAX)),
-                ride: self.train_ride(ride, stations)?,
+                ride: self.train_ride(ride, input.mobility_mode, stations)?,
             });
             last = ride;
         }
@@ -1571,6 +1616,7 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             Some(footpath_minutes) => Some(ArrivalFootpath {
                 to_station: stations.index_of(&self.bundle, journey.arrival_candidate.station)?,
                 way: station_way(
+                    input.mobility_mode,
                     coordinates(last.alighting_station)
                         .haversine_distance_meters(coordinates(journey.arrival_candidate.station)),
                     u16::try_from(footpath_minutes).unwrap_or(u16::MAX),
@@ -1579,6 +1625,7 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
         };
         Some(Journey {
             access: station_way(
+                input.mobility_mode,
                 input
                     .departure
                     .coordinates
@@ -1589,6 +1636,7 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             later_rides,
             arrival_footpath,
             egress: station_way(
+                input.mobility_mode,
                 input
                     .arrival
                     .coordinates
@@ -1620,10 +1668,11 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
         Some(journey)
     }
 
-    /// Turns a router ride into a model ride.
+    /// Turns a router ride into a model ride, with the verdict of the ride in a mobility mode.
     fn train_ride(
         &self,
         ride: &btt_router::RaptorRide,
+        mobility_mode: MobilityMode,
         stations: &mut LegPlanStations,
     ) -> Option<TrainRide> {
         let (category, number, agency) = self.bundle.trip_train_label(ride.trip);
@@ -1644,7 +1693,24 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
             }
         }
         let departure_time = UnixTimeMinutes(self.bundle_start_unix_minutes + ride.departure.0);
+        let mode_availability =
+            self.mode_verdicts(mobility_mode)
+                .map_or(ModeAvailability::NotRequired, |verdicts| {
+                    let confirmed = [
+                        verdicts.trip_verdict(ride.trip),
+                        verdicts.station_verdict(ride.boarding_station),
+                        verdicts.station_verdict(ride.alighting_station),
+                    ]
+                    .iter()
+                    .all(|verdict| *verdict == ModeVerdict::Confirmed);
+                    if confirmed {
+                        ModeAvailability::Confirmed
+                    } else {
+                        ModeAvailability::Unconfirmed
+                    }
+                });
         Some(TrainRide {
+            mode_availability,
             boarding_station: stations.index_of(&self.bundle, ride.boarding_station)?,
             departure_time,
             alighting_station: stations.index_of(&self.bundle, ride.alighting_station)?,
@@ -1875,36 +1941,24 @@ fn arrival_footpath_minutes(journey: &RaptorJourney) -> Option<u32> {
     )
 }
 
-/// Distance from which the estimates assume local transport instead of walking, matching the
-/// builder's footpaths.
-const LONGEST_WALK_METERS: f64 = 1000.0;
-
 /// Describes a way off the train with its estimated minutes and the mode the estimate assumes.
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-fn station_way(distance_meters: f64, minutes: u16) -> StationWay {
+fn station_way(mobility_mode: MobilityMode, distance_meters: f64, minutes: u16) -> StationWay {
+    let way_mode = footpath_mode(mobility_mode);
     StationWay {
         duration: DurationMinutes(minutes),
         // Ways are at most a few tens of kilometers, so the meters fit easily.
         distance_meters: distance_meters.round() as u32,
-        mode: if distance_meters < LONGEST_WALK_METERS {
-            WayToStationMode::Walk
-        } else {
+        mode: if uses_local_transport(way_mode, distance_meters) {
             WayToStationMode::LocalTransport
+        } else {
+            match way_mode {
+                FootpathMode::Walk => WayToStationMode::Walk,
+                FootpathMode::Cycle => WayToStationMode::Cycle,
+                FootpathMode::Wheel => WayToStationMode::Wheel,
+            }
         },
     }
-}
-
-/// Estimates the minutes between a place and a station at a distance, with the same formula as
-/// the builder's footpaths. Short distances are walks, longer ones local transit.
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-fn access_minutes(distance_meters: f64) -> u16 {
-    let minutes = if distance_meters < LONGEST_WALK_METERS {
-        (distance_meters * 1.3 / 83.3).ceil()
-    } else {
-        (15.0 + distance_meters / 250.0).ceil()
-    };
-    // The distance is at most the 50 km search radius, so the minutes fit easily.
-    minutes as u16
 }
 
 /// Everything a search found for a leg, before ranking.
@@ -2146,6 +2200,20 @@ mod tests {
     /// Builds the bundle with the ICE arriving `ice_arrival` minutes into the day, so a test
     /// can make it faster than the shared 25 minutes.
     fn bundle_with_ice_arrival(ice_arrival: u16, regional_departure: u16) -> LoadedTimetableBundle {
+        bundle_with_access(
+            ice_arrival,
+            regional_departure,
+            [btt_timetable::Availability::Unknown; 3],
+        )
+    }
+
+    /// Builds the bundle with the feed values for the ICE, the regional train and the first
+    /// station. The value of a train applies to bikes and to wheelchairs alike.
+    fn bundle_with_access(
+        ice_arrival: u16,
+        regional_departure: u16,
+        [ice_access, regional_access, first_station_access]: [btt_timetable::Availability; 3],
+    ) -> LoadedTimetableBundle {
         let mut builder =
             BundleBuilder::new(NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(), 2, 1).unwrap();
         for (name, latitude) in [("S0", 50.0), ("SM", 50.025), ("S1", 50.05)] {
@@ -2155,6 +2223,11 @@ mod tests {
                     coordinates: GeoCoordinates::from_degrees(latitude, 8.0).unwrap(),
                     time_zone: "Europe/Berlin".into(),
                     trainline_station_id: None,
+                    wheelchair_boarding: if name == "S0" {
+                        first_station_access
+                    } else {
+                        btt_timetable::Availability::Unknown
+                    },
                 })
                 .unwrap();
         }
@@ -2176,6 +2249,8 @@ mod tests {
                     number: "1".into(),
                     agency: "DB Fernverkehr AG".into(),
                     offers_berths: false,
+                    bike_carriage: ice_access,
+                    wheelchair_access: ice_access,
                 },
             }
         };
@@ -2213,6 +2288,8 @@ mod tests {
                 number: "2".into(),
                 agency: "DB Fernverkehr AG".into(),
                 offers_berths: false,
+                bike_carriage: regional_access,
+                wheelchair_access: regional_access,
             },
         });
         LoadedTimetableBundle::from_bundle(&builder.build().unwrap()).unwrap()
@@ -2230,6 +2307,7 @@ mod tests {
                     coordinates: GeoCoordinates::from_degrees(latitude, 8.0).unwrap(),
                     time_zone: "Europe/Berlin".into(),
                     trainline_station_id: None,
+                    wheelchair_boarding: btt_timetable::Availability::Unknown,
                 })
                 .unwrap();
         }
@@ -2253,6 +2331,8 @@ mod tests {
                     number: "1".into(),
                     agency: agency.into(),
                     offers_berths: false,
+                    bike_carriage: btt_timetable::Availability::Unknown,
+                    wheelchair_access: btt_timetable::Availability::Unknown,
                 },
             });
         };
@@ -2260,6 +2340,78 @@ mod tests {
         add_train("Eurostar", &[0, 4]);
         add_train("Obscure Rail", &[0]);
         LoadedTimetableBundle::from_bundle(&builder.build().unwrap()).unwrap()
+    }
+
+    /// Plans the leg of `leg_input` in a mobility mode on a bundle.
+    fn plan_in_mode(
+        bundle: LoadedTimetableBundle,
+        mobility_mode: btt_model::MobilityMode,
+    ) -> LegPlanningResult {
+        let router =
+            TimetableBundleRouter::from_loaded(bundle, Arc::new(TimeZoneFinder::new()), NoPrice);
+        let input = LegPlanningInput {
+            mobility_mode,
+            ..leg_input(PriceWeight::BALANCED)
+        };
+        router.plan_leg_with_extras(&input, || false)
+    }
+
+    #[test]
+    fn bike_and_wheelchair_modes_skip_a_train_that_refuses_them() {
+        use btt_model::{MobilityMode, ModeAvailability};
+        use btt_timetable::Availability;
+        let access = [Availability::No, Availability::Yes, Availability::Unknown];
+        for (mode, category, availability, way_mode) in [
+            (
+                MobilityMode::Foot,
+                "ICE",
+                ModeAvailability::NotRequired,
+                WayToStationMode::Walk,
+            ),
+            (
+                MobilityMode::FoldingBike,
+                "ICE",
+                ModeAvailability::NotRequired,
+                WayToStationMode::Cycle,
+            ),
+            (
+                MobilityMode::Bike,
+                "RE",
+                ModeAvailability::Confirmed,
+                WayToStationMode::Cycle,
+            ),
+            // The first station has no feed value, so the wheelchair ride stays unconfirmed.
+            (
+                MobilityMode::Wheelchair,
+                "RE",
+                ModeAvailability::Unconfirmed,
+                WayToStationMode::Wheel,
+            ),
+        ] {
+            let LegPlanningResult::Found(plan) =
+                plan_in_mode(bundle_with_access(505, 480, access), mode)
+            else {
+                panic!("the leg has a journey in {mode:?} mode");
+            };
+            let ride = &plan.chosen_journey.first_ride;
+            assert_eq!(ride.train_label.category, category, "{mode:?}");
+            assert_eq!(ride.mode_availability, availability, "{mode:?}");
+            assert_eq!(plan.chosen_journey.access.mode, way_mode, "{mode:?}");
+        }
+    }
+
+    #[test]
+    fn wheelchair_mode_never_uses_a_station_that_is_not_step_free() {
+        use btt_timetable::Availability;
+        let access = [Availability::Yes, Availability::Yes, Availability::No];
+        let found = |mode| {
+            matches!(
+                plan_in_mode(bundle_with_access(505, 480, access), mode),
+                LegPlanningResult::Found(_)
+            )
+        };
+        assert!(found(btt_model::MobilityMode::Foot));
+        assert!(!found(btt_model::MobilityMode::Wheelchair));
     }
 
     #[test]
@@ -2304,6 +2456,7 @@ mod tests {
             time_window: DailyTimeWindow::from_start_and_end(time(6), time(20)),
         };
         LegPlanningInput {
+            mobility_mode: btt_model::MobilityMode::Foot,
             departure: endpoint(50.0),
             arrival: endpoint(50.05),
             departure_date: NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(),

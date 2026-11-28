@@ -24,6 +24,7 @@ use crate::search::{
     RaptorLegQuery, RaptorRide, RideOrigin, WindowDeparture, collect_departures, earliest_trip,
     raptor_ride,
 };
+use crate::ways::FootpathMode;
 
 /// Marks a route that is not queued for scanning in the current round.
 const NOT_QUEUED: u16 = u16::MAX;
@@ -82,6 +83,37 @@ pub trait JourneyCostModel {
         arrival: MinutesSinceBundleStart,
         previous: Option<PreviousRide>,
     ) -> i32;
+
+    /// Returns how the traveller moves between stations, which picks the footpath table. The
+    /// default is a walk.
+    fn footpath_mode(&self) -> FootpathMode {
+        FootpathMode::Walk
+    }
+
+    /// Returns whether the traveller may board a trip at a station. The default allows every
+    /// boarding. A model that returns `false` hides the trip from the traveller at that
+    /// station, and the search boards the next trip that it allows.
+    fn may_board(
+        &self,
+        raptor_route: RaptorRouteIndex,
+        trip: BundleTripIndex,
+        station: BundleStationIndex,
+    ) -> bool {
+        let _ = (raptor_route, trip, station);
+        true
+    }
+
+    /// Returns whether the traveller may leave a trip at a station. The default allows every
+    /// alighting.
+    fn may_alight(
+        &self,
+        raptor_route: RaptorRouteIndex,
+        trip: BundleTripIndex,
+        station: BundleStationIndex,
+    ) -> bool {
+        let _ = (raptor_route, trip, station);
+        true
+    }
 
     /// Returns the most that riding a route from the stop at `earlier` can cost on top of riding
     /// it from the stop at `later`, whichever stop after both the traveller leaves at, so the
@@ -847,7 +879,10 @@ impl CreditReach {
                 if moment < latest[station as usize] {
                     continue;
                 }
-                for &(from, minutes) in index.lower_bounds.incoming(station as usize) {
+                for &(from, minutes) in index
+                    .lower_bounds_for(bundle, model.footpath_mode())
+                    .incoming(station as usize)
+                {
                     let earlier = moment - i32::from(minutes);
                     let slot = &mut latest[from.as_usize()];
                     if earlier > *slot {
@@ -895,13 +930,15 @@ pub fn search_leg_journeys_by_cost<M: JourneyCostModel>(
     if let Some(deadline) = deadline {
         buffers
             .latest_arrivals
-            .compute(bundle, index, query, deadline);
+            .compute(bundle, index, query, deadline, model.footpath_mode());
     }
-    index.lower_bounds.compute_bounds(
-        query.arrival_candidates,
-        &mut buffers.lower_bound_by_station,
-        &mut buffers.lower_bound_queue,
-    );
+    index
+        .lower_bounds_for(bundle, model.footpath_mode())
+        .compute_bounds(
+            query.arrival_candidates,
+            &mut buffers.lower_bound_by_station,
+            &mut buffers.lower_bound_queue,
+        );
     buffers.credit_reach.compute(bundle, index, model);
     for (candidate_index, candidate) in (0_u16..).zip(query.arrival_candidates) {
         let Some(slot) = buffers
@@ -1456,6 +1493,9 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                     let arrival = u32::from(route_label.service_day) * MINUTES_PER_DAY
                         + u32::from(times.arrival.0);
                     let trip = BundleTripIndex(route.first_trip_index + route_label.trip_offset);
+                    if !self.model.may_alight(raptor_route, trip, station) {
+                        continue;
+                    }
                     let ride_cost = self.model.ride_cost(
                         raptor_route,
                         trip,
@@ -1563,7 +1603,7 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                         route,
                         position,
                         ready,
-                        |_, _| true,
+                        |trip, _| self.model.may_board(raptor_route, trip, station),
                     ) else {
                         // Labels that are ready later find no trip either.
                         break;
@@ -1656,7 +1696,11 @@ impl<M: JourneyCostModel> CostSearch<'_, M> {
                         Some((ride_arrival.station, ride_arrival.cost, ride_arrival.days));
                 }
             }
-            for &footpath in self.index.footpaths_shortest_first(ride_arrival.station) {
+            for &footpath in self
+                .index
+                .footpaths(self.bundle, self.model.footpath_mode())
+                .shortest_first(ride_arrival.station)
+            {
                 let arrival = ride_arrival.arrival + u32::from(footpath.duration_minutes);
                 if stops_early
                     && self.walk_cannot_beat_targets(

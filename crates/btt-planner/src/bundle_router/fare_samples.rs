@@ -1,7 +1,7 @@
 //! Single-train rides picked across the bundle, for collecting the live fares that seed the
 //! price model.
 
-use btt_model::{LegPlanStation, TrainRide};
+use btt_model::{LegPlanStation, MobilityMode, TrainRide};
 use btt_router::{MinutesSinceBundleStart, RaptorRide};
 use btt_timetable::{BundleTripIndex, RaptorRouteIndex};
 use chrono::NaiveDate;
@@ -145,7 +145,8 @@ impl<P: JourneyPricer> TimetableBundleRouter<P> {
                     ),
                 };
                 let mut stations = LegPlanStations::default();
-                if let Some(ride) = self.train_ride(&raptor_ride, &mut stations) {
+                if let Some(ride) = self.train_ride(&raptor_ride, MobilityMode::Foot, &mut stations)
+                {
                     samples.push(FareSampleRide {
                         ride,
                         stations: stations.table.into_vec(),

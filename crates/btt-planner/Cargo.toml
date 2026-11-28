@@ -18,6 +18,7 @@ futures-util.workspace = true
 percent-encoding.workspace = true
 postcard.workspace = true
 regex.workspace = true
+fixedbitset.workspace = true
 rustc-hash.workspace = true
 serde.workspace = true
 smol_str.workspace = true
