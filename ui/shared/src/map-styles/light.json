@@ -39,34 +39,37 @@
       "paint": { "line-color": "#d9d9d6", "line-width": 1, "line-opacity": 0.8 }
     },
     {
-      "id": "road-major",
+      "id": "rail-transit",
       "type": "line",
       "source": "openmaptiles",
       "source-layer": "transportation",
-      "filter": [
-        "in",
-        ["get", "class"],
-        ["literal", ["motorway", "trunk", "primary", "secondary"]]
-      ],
+      "minzoom": 11,
+      "filter": ["==", ["get", "class"], "transit"],
       "layout": { "line-cap": "round" },
-      "paint": {
-        "line-color": "#d9d9d6",
-        "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.6, 14, 1.6]
-      }
+      "paint": { "line-color": "#8c919b", "line-width": 0.8, "line-opacity": 0.7 }
     },
     {
-      "id": "road-minor",
+      "id": "rail-service",
       "type": "line",
       "source": "openmaptiles",
       "source-layer": "transportation",
       "minzoom": 12,
-      "filter": [
-        "in",
-        ["get", "class"],
-        ["literal", ["tertiary", "minor", "service", "path"]]
-      ],
+      "filter": ["all", ["==", ["get", "class"], "rail"], ["has", "service"]],
       "layout": { "line-cap": "round" },
-      "paint": { "line-color": "#d9d9d6", "line-width": 0.8, "line-opacity": 0.6 }
+      "paint": { "line-color": "#8c919b", "line-width": 0.8, "line-opacity": 0.6 }
+    },
+    {
+      "id": "rail",
+      "type": "line",
+      "source": "openmaptiles",
+      "source-layer": "transportation",
+      "minzoom": 8,
+      "filter": ["all", ["==", ["get", "class"], "rail"], ["!", ["has", "service"]]],
+      "layout": { "line-cap": "round" },
+      "paint": {
+        "line-color": "#8c919b",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.8, 14, 2]
+      }
     },
     {
       "id": "place-small",

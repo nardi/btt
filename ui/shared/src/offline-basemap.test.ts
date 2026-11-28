@@ -7,7 +7,7 @@ import lightStyle from "./map-styles/light.json";
 import darkStyle from "./map-styles/dark.json";
 import { withOfflineBasemap } from "./offline-basemap";
 
-const palette = { water: "#000", land: "#fff", border: "#888", text: "#444", halo: "#fff" };
+const palette = { water: "#000", land: "#fff", border: "#888", rail: "#666", text: "#444", halo: "#fff" };
 
 /** The features of the data file that the offline base map draws. */
 const basemap = JSON.parse(
@@ -15,9 +15,9 @@ const basemap = JSON.parse(
 ) as { features: { properties: { kind: string; name?: string }; geometry: { type: string } }[] };
 
 describe("offline base map data", () => {
-  it("has land, lakes, borders and cities", () => {
+  it("has land, lakes, borders, rail lines and cities", () => {
     const kinds = new Set(basemap.features.map((feature) => feature.properties.kind));
-    expect([...kinds].sort()).toEqual(["border", "city", "lake", "land"]);
+    expect([...kinds].sort()).toEqual(["border", "city", "lake", "land", "rail"]);
   });
 
   it("has Vienna among the cities", () => {
@@ -34,12 +34,15 @@ describe("map style", () => {
       const style = withOfflineBasemap(online as unknown as StyleSpecification, palette);
       const ids = style.layers.map((layer) => layer.id);
       expect(ids[0]).toBe("background");
-      expect(ids.slice(1, 5)).toEqual([
+      expect(ids.slice(1, 6)).toEqual([
         "offline-sea",
         "offline-land",
         "offline-lake",
         "offline-border",
+        "offline-rail",
       ]);
+      expect(ids).toContain("rail-overview");
+      expect(ids).not.toContain("road-major");
       expect(ids.indexOf("water")).toBeGreaterThan(ids.indexOf("offline-border"));
       expect(ids[ids.length - 1]).toBe("offline-city");
       expect(Object.keys(style.sources)).toEqual(["openmaptiles", "offline-basemap"]);

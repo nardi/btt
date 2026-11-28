@@ -37,6 +37,8 @@ export interface OfflinePalette {
   land: string;
   /** The colour of the country borders. */
   border: string;
+  /** The colour of the rail lines, which is the colour of the rail layers of the online style. */
+  rail: string;
   /** The colour of the names of the cities. */
   text: string;
   /** The colour of the outline of the names of the cities, which is the colour of the land. */
@@ -52,7 +54,30 @@ export function offlineSource(): SourceSpecification {
   };
 }
 
-/** The layers under the layers of OpenFreeMap: sea, land, lakes and borders. */
+/**
+ * The zoom level from which the tiles of OpenFreeMap have rail lines. The stored rail lines cover
+ * the levels below it, also when the tiles are available.
+ */
+const tileRailMinimumZoom = 8;
+
+/** The layer of the stored rail lines. The paint matches the rail layer of the online style. */
+function railLayer(id: string, palette: OfflinePalette): LayerSpecification {
+  return {
+    id,
+    type: "line",
+    source: offlineSourceId,
+    filter: ["==", ["get", "kind"], "rail"],
+    layout: { "line-cap": "round" },
+    paint: {
+      "line-color": palette.rail,
+      "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.6, 8, 0.8, 14, 2],
+      // The network is dense, so the lines are fainter when the map shows a whole country.
+      "line-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.5, 8, 1],
+    },
+  };
+}
+
+/** The layers under the layers of OpenFreeMap: sea, land, lakes, borders and rail lines. */
 export function offlineBaseLayers(palette: OfflinePalette): LayerSpecification[] {
   return [
     {
@@ -81,6 +106,9 @@ export function offlineBaseLayers(palette: OfflinePalette): LayerSpecification[]
       filter: ["==", ["get", "kind"], "border"],
       paint: { "line-color": palette.border, "line-width": 1 },
     },
+    // The tiles show the rail lines from this zoom level on. Below it the layer after the online
+    // layers shows the stored lines, so this layer only serves the zoom levels above.
+    { ...railLayer(`${offlineLayerPrefix}rail`, palette), minzoom: tileRailMinimumZoom },
   ];
 }
 
@@ -116,6 +144,9 @@ export function withOfflineBasemap(online: StyleSpecification, palette: OfflineP
       ...(background === undefined ? [] : [background]),
       ...offlineBaseLayers(palette),
       ...onlineLayers,
+      // This layer is not hidden when the tiles load, because the tiles have no rail lines below
+      // the zoom level of this layer.
+      { ...railLayer("rail-overview", palette), maxzoom: tileRailMinimumZoom },
       offlineLabelLayer(palette),
     ],
   };

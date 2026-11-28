@@ -2,10 +2,11 @@
 //
 // The land, lakes and country borders come from Natural Earth at the scale of 1:50 million, which
 // is in the public domain. The script cuts them to the box below, drops digits that a map at zoom
-// 7 cannot show, and adds the biggest cities of `crates/btt-model/data/cities.tsv` as points.
+// 7 cannot show, and adds the biggest cities of `crates/btt-model/data/cities.tsv` as points. The
+// rail lines come from Natural Earth at the scale of 1:10 million and are simplified further.
 // Run `node tools/offline-basemap.js` from the root of the repository.
 //
-// Every feature has a `kind` property. The values are `land`, `lake`, `border` and `city`. A city
+// Every feature has a `kind` property. The values are `land`, `lake`, `border`, `rail` and `city`. A city
 // also has a `name` and a `rank`, which is its place in the list of cities by population.
 
 import fs from 'node:fs';
@@ -21,6 +22,9 @@ const BOX = { west: -25, south: 34, east: 45, north: 72 };
 // The number of decimals of a coordinate. Two decimals are about one kilometre.
 const DECIMALS = 2;
 const CITY_COUNT = 150;
+// The distance in degrees that a simplified rail line can differ from the original. It is about
+// 1.5 kilometres.
+const RAIL_TOLERANCE = 0.015;
 
 /** Returns the coordinate rounded to the decimals of the file. */
 function round(value) {
@@ -152,6 +156,34 @@ function clipLine(points) {
   return lines;
 }
 
+/** Returns the line with fewer points, such that no dropped point is further than the tolerance from it. */
+function simplifyLine(points, tolerance) {
+  if (points.length < 3) {
+    return points;
+  }
+  const [start, end] = [points[0], points[points.length - 1]];
+  const length = Math.hypot(end[0] - start[0], end[1] - start[1]);
+  let farthest = -1;
+  let farthestDistance = 0;
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const [x, y] = points[index];
+    const distance =
+      length === 0
+        ? Math.hypot(x - start[0], y - start[1])
+        : Math.abs((end[0] - start[0]) * (y - start[1]) - (end[1] - start[1]) * (x - start[0])) / length;
+    if (distance > farthestDistance) {
+      farthest = index;
+      farthestDistance = distance;
+    }
+  }
+  if (farthestDistance <= tolerance) {
+    return [start, end];
+  }
+  const before = simplifyLine(points.slice(0, farthest + 1), tolerance);
+  const after = simplifyLine(points.slice(farthest), tolerance);
+  return [...before, ...after.slice(1)];
+}
+
 /** Downloads one Natural Earth file and returns its features. */
 async function features(name) {
   const response = await fetch(`${NATURAL_EARTH}${name}.geojson`);
@@ -231,9 +263,24 @@ for (const feature of await features('ne_50m_admin_0_boundary_lines_land')) {
   }
 }
 
+// A rail line that is cut to the box and simplified can end up with a single point. All lines
+// are in one feature, because the overhead of a feature is bigger than a short line.
+const railLines = [];
+for (const feature of await features('ne_10m_railroads')) {
+  for (const line of linesOf(feature.geometry).flatMap(clipLine)) {
+    const simplified = simplifyLine(line, RAIL_TOLERANCE).map(([x, y]) => [round(x), round(y)]);
+    if (simplified.length >= 2) {
+      railLines.push(simplified);
+    }
+  }
+}
+const rails = [
+  { type: 'Feature', properties: { kind: 'rail' }, geometry: { type: 'MultiLineString', coordinates: railLines } },
+];
+
 fs.mkdirSync('ui/shared/src/map-data', { recursive: true });
 fs.writeFileSync(
   OUTPUT,
-  JSON.stringify({ type: 'FeatureCollection', features: [...land, ...lakes, ...borders, ...cityFeatures()] }),
+  JSON.stringify({ type: 'FeatureCollection', features: [...land, ...lakes, ...borders, ...rails, ...cityFeatures()] }),
 );
 console.log(`${OUTPUT}: ${fs.statSync(OUTPUT).size} bytes`);

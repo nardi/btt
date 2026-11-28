@@ -68,8 +68,8 @@ if (typeof matchMedia === "function") {
 
 /** The colours of the offline base map, which match the land and the water of each style. */
 const offlinePalette: Record<Theme, OfflinePalette> = {
-  light: { water: "#d9e2e8", land: "#fafaf9", border: "#c4c4c0", text: "#62666f", halo: "#fafaf9" },
-  dark: { water: "#20262e", land: "#101014", border: "#3a3d48", text: "#9a9fab", halo: "#101014" },
+  light: { water: "#d9e2e8", land: "#fafaf9", border: "#c4c4c0", rail: "#8c919b", text: "#62666f", halo: "#fafaf9" },
+  dark: { water: "#20262e", land: "#101014", border: "#3a3d48", rail: "#6b7080", text: "#9a9fab", halo: "#101014" },
 };
 
 /**
