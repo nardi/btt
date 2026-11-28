@@ -10,9 +10,10 @@ use btt_model::{
     AcceptedBerths, AlternativeKind, ArrivalFootpath, BerthType, DailyTimeWindow, DurationMinutes,
     EuroCents, EuroRange, GeoCoordinates, Itinerary, ItineraryRoute, Journey, JourneyCostParts,
     LegPlan, LegPlanStation, LegPlanStationIndex, LegPlanningResult, LegTravelMode, LocalTimeOfDay,
-    NoJourneyReason, OvernightLegOptions, PlaceStay, PlaceWindowOverride, SameDayStayRange,
-    SnapshotLeg, StationSearchRadius, StationWay, TrainLabel, TrainRide, TransferAndRide, Trip,
-    TripPlace, TripPlaceId, TripSnapshot, UnixTimeMinutes, ViaPlace, WayToStationMode,
+    MobilityMode, MobilityModeChange, ModeAvailability, NoJourneyReason, OvernightLegOptions,
+    PlaceStay, PlaceWindowOverride, SameDayStayRange, SnapshotLeg, StationSearchRadius, StationWay,
+    TrainLabel, TrainRide, TransferAndRide, Trip, TripPlace, TripPlaceId, TripSnapshot,
+    UnixTimeMinutes, ViaPlace, WayToStationMode,
 };
 use chrono::NaiveDate;
 use smallvec::{SmallVec, smallvec};
@@ -43,6 +44,7 @@ pub fn place(id: u32, name: &str, latitude: f64, longitude: f64) -> TripPlace {
         coordinates: coordinates(latitude, longitude),
         station_search_radius: StationSearchRadius::DEFAULT,
         window_override: None,
+        departing_mobility_mode: btt_model::MobilityModeChange::Keep,
     }
 }
 
@@ -85,6 +87,7 @@ pub fn ride(
     offers_berths: bool,
 ) -> TrainRide {
     TrainRide {
+        mode_availability: btt_model::ModeAvailability::NotRequired,
         boarding_station: LegPlanStationIndex(boarding),
         departure_time: departure,
         alighting_station: LegPlanStationIndex(alighting),
@@ -148,7 +151,11 @@ pub fn demo_snapshot() -> TripSnapshot {
         via_places: vec![
             ViaPlace {
                 arriving_leg_travel_mode: LegTravelMode::Daytime,
-                place: place(2, "Vienna", 48.2084, 16.3725),
+                // The traveller takes a bike from Vienna on.
+                place: TripPlace {
+                    departing_mobility_mode: MobilityModeChange::Switch(MobilityMode::Bike),
+                    ..place(2, "Vienna", 48.2084, 16.3725)
+                },
                 stay: PlaceStay::Nights(NonZeroU8::new(2).unwrap()),
             },
             ViaPlace {
@@ -159,7 +166,10 @@ pub fn demo_snapshot() -> TripSnapshot {
                         preferred: Some(BerthType::Sleeper),
                     },
                 }),
-                place: place(3, "Rome", 41.8933, 12.4829),
+                place: TripPlace {
+                    departing_mobility_mode: MobilityModeChange::Switch(MobilityMode::Wheelchair),
+                    ..place(3, "Rome", 41.8933, 12.4829)
+                },
                 stay: PlaceStay::SameDay {
                     stay_range_override: Some(SameDayStayRange {
                         minimum: DurationMinutes(120),
@@ -268,19 +278,29 @@ pub fn demo_snapshot() -> TripSnapshot {
         station("Wien Hbf", 48.185149, 16.377555, "Europe/Vienna"),
         station("Roma Termini", 41.900569, 12.50202, "Europe/Rome"),
     ];
+    // The traveller cycles to and from a night train whose bike spaces are not confirmed.
     let night = Journey {
-        access: way(9, 2100),
-        first_ride: ride(
-            0,
-            utc(day_three, 19, 40),
-            1,
-            utc(date(2026, 10, 17), 7, 55),
-            label("NJ", "295", "oebb", "ÖBB-Personenverkehr AG"),
-            true,
-        ),
+        access: StationWay {
+            mode: WayToStationMode::Cycle,
+            ..way(9, 2100)
+        },
+        first_ride: TrainRide {
+            mode_availability: ModeAvailability::Unconfirmed,
+            ..ride(
+                0,
+                utc(day_three, 19, 40),
+                1,
+                utc(date(2026, 10, 17), 7, 55),
+                label("NJ", "295", "oebb", "ÖBB-Personenverkehr AG"),
+                true,
+            )
+        },
         later_rides: SmallVec::new(),
         arrival_footpath: None,
-        egress: way(3, 200),
+        egress: StationWay {
+            mode: WayToStationMode::Cycle,
+            ..way(3, 200)
+        },
         sleeping_ride: Some(0),
         cost_parts: Some(cost_parts(740, Some((8900, 11900, 21900)))),
         alternative_kind: None,

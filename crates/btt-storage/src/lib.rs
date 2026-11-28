@@ -781,6 +781,7 @@ mod tests {
                     mode: WayToStationMode::Walk,
                 },
                 first_ride: TrainRide {
+                    mode_availability: btt_model::ModeAvailability::NotRequired,
                     boarding_station: LegPlanStationIndex(0),
                     departure_time: UnixTimeMinutes(29_000_000),
                     alighting_station: LegPlanStationIndex(1),

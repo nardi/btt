@@ -10,8 +10,8 @@ use thiserror::Error;
 use crate::coordinates::GeoCoordinates;
 use crate::history::TripHistoryState;
 use crate::itinerary::{
-    Itinerary, ItineraryRoute, LegTravelMode, PlaceStay, PlaceWindowOverride, StationSearchRadius,
-    TripPlace, TripPlaceId, ViaPlace,
+    Itinerary, ItineraryRoute, LegTravelMode, MobilityMode, MobilityModeChange, PlaceStay,
+    PlaceWindowOverride, StationSearchRadius, TripPlace, TripPlaceId, ViaPlace,
 };
 use crate::plan::JourneyChoice;
 use crate::trip::{ChosenJourney, LegTransferOverride, TransferTimeSetting, Trip, TripPreferences};
@@ -105,6 +105,14 @@ pub enum TripEdit {
         /// The new travel mode.
         travel_mode: LegTravelMode,
     },
+    /// Changes the mobility mode of the legs that leave a place. The change has no effect on the
+    /// destination, because no leg leaves it.
+    SetMobilityMode {
+        /// Place from which the changed legs leave.
+        place_id: TripPlaceId,
+        /// The new mode, or `Keep` to use the mode of the leg that arrives at the place.
+        change: MobilityModeChange,
+    },
     /// Replaces the trip-wide preferences.
     SetTripPreferences(TripPreferences),
     /// Picks a journey for the leg that arrives at a place, or goes back to the planner's pick.
@@ -172,6 +180,22 @@ impl TripEdit {
             Self::SetLegTravelMode {
                 arrival_place_id, ..
             } => format!("Travel to {} by day", place_name(arrival_place_id)),
+            Self::SetMobilityMode {
+                place_id,
+                change: MobilityModeChange::Keep,
+            } => format!("Keep the mobility mode at {}", place_name(place_id)),
+            Self::SetMobilityMode {
+                place_id,
+                change: MobilityModeChange::Switch(mode),
+            } => {
+                let means = match mode {
+                    MobilityMode::Foot => "on foot",
+                    MobilityMode::Bike => "by bike",
+                    MobilityMode::FoldingBike => "by folding bike",
+                    MobilityMode::Wheelchair => "by wheelchair",
+                };
+                format!("Leave {} {means}", place_name(place_id))
+            }
             Self::SetTripPreferences(_) => "Change the preferences".to_owned(),
             Self::ChooseJourney {
                 arrival_place_id,
@@ -344,6 +368,9 @@ impl Trip {
                 set_entry(&mut layout.leg_travel_modes, leg_key, travel_mode);
                 Ok(self.replace_itinerary(&layout))
             }
+            TripEdit::SetMobilityMode { place_id, change } => {
+                self.update_place(place_id, |place| place.departing_mobility_mode = change)
+            }
             TripEdit::ChooseJourney {
                 arrival_place_id,
                 choice,
@@ -457,6 +484,7 @@ impl Trip {
                 coordinates: new_place.coordinates,
                 station_search_radius: new_place.station_search_radius,
                 window_override: None,
+                departing_mobility_mode: crate::itinerary::MobilityModeChange::Keep,
             },
         );
         self.next_place_id = next_place_id;
@@ -988,6 +1016,48 @@ mod tests {
                 name: "Berlin Hbf".into(),
             }),
             "Rename Berlin to Berlin Hbf"
+        );
+        assert_eq!(
+            describe(TripEdit::SetMobilityMode {
+                place_id: berlin,
+                change: MobilityModeChange::Switch(MobilityMode::Bike),
+            }),
+            "Leave Berlin by bike"
+        );
+    }
+
+    #[test]
+    fn mobility_mode_applies_to_following_legs_and_moves_with_its_place() {
+        let mut trip = trip_with_places(&[
+            ("Amsterdam", 52.37, 4.90),
+            ("Berlin", 52.52, 13.37),
+            ("Prague", 50.08, 14.43),
+            ("Vienna", 48.21, 16.37),
+        ]);
+        let berlin = trip.itinerary.trip_places().nth(1).unwrap().id;
+        trip.apply_edit(TripEdit::SetMobilityMode {
+            place_id: berlin,
+            change: MobilityModeChange::Switch(MobilityMode::Bike),
+        })
+        .unwrap();
+        let modes = |trip: &Trip| {
+            trip.itinerary
+                .legs()
+                .map(|leg| leg.mobility_mode)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            modes(&trip),
+            [MobilityMode::Foot, MobilityMode::Bike, MobilityMode::Bike]
+        );
+        trip.apply_edit(TripEdit::ReorderPlace {
+            place_id: berlin,
+            new_index: 2,
+        })
+        .unwrap();
+        assert_eq!(
+            modes(&trip),
+            [MobilityMode::Foot, MobilityMode::Foot, MobilityMode::Bike]
         );
     }
 }

@@ -228,6 +228,15 @@ pub enum TicketProduct {
     Reservation,
     /// Berth or sleeper accommodation on a night train.
     NightAccommodation,
+    /// A ticket for an assembled bike, for one ride or for the rides of one operator on one day.
+    BikeTicket,
+    /// A reserved bike space on one ride. The fee includes the bike ticket.
+    BikeReservation,
+    /// A reserved wheelchair space on one ride.
+    WheelchairSpaceReservation,
+    /// A request to the operator for help to board and alight, for its rides on one day. It has
+    /// no fee, and the detail says how long in advance to make it.
+    AssistanceBooking,
 }
 
 /// One ticket to buy.
@@ -453,6 +462,9 @@ pub struct TicketLeg {
     pub journey: crate::plan::Journey,
     /// The stations the journey's rides refer to.
     pub stations: Vec<crate::plan::LegPlanStation>,
+    /// How the traveller moves on the leg, which adds bike and wheelchair items.
+    #[serde(default)]
+    pub mobility_mode: crate::itinerary::MobilityMode,
 }
 
 /// What a pass option of a leg costs, as the choice of a pass sees it. It mirrors

@@ -336,6 +336,7 @@ pub async fn live_journey_price(
                 leg.arrival_place_id,
                 &leg.journey,
                 &leg.stations,
+                leg.mobility_mode,
             ),
             traveller: None,
             preferences: &preferences,

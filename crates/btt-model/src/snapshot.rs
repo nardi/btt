@@ -31,7 +31,7 @@ pub(crate) const PLACE_STEP_MICRODEGREES: i64 = 100;
 ///
 /// A change that old viewers cannot read bumps it. The viewer reads every older version, so a
 /// link that was sent once keeps opening.
-pub const SNAPSHOT_SCHEMA_VERSION: u16 = 2;
+pub const SNAPSHOT_SCHEMA_VERSION: u16 = 3;
 
 /// A snapshot as it is exported, with the schema version of its document.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -220,6 +220,7 @@ fn shared_itinerary(itinerary: &Itinerary) -> Itinerary {
             coordinates,
             station_search_radius: StationSearchRadius::DEFAULT,
             window_override: None,
+            departing_mobility_mode: crate::itinerary::MobilityModeChange::Keep,
             ..place.clone()
         }
     };
@@ -324,6 +325,7 @@ fn drop_unused_stations(plan: &mut LegPlan) {
 /// layout links, without the agency of its trains and with only the door-to-door time and the price of its cost parts.
 fn shared_journey(journey: &Journey) -> Journey {
     let shared_ride = |ride: &TrainRide| TrainRide {
+        mode_availability: crate::plan::ModeAvailability::NotRequired,
         intermediate_station_coordinates: SmallVec::new(),
         path_coordinates: Vec::new(),
         layout_links: Vec::new(),

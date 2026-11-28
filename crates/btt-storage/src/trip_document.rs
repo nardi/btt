@@ -13,13 +13,19 @@ type TripDocumentMigration = fn(&mut Value);
 ///
 /// A change to the `Trip` layout adds a function here, bumps `CURRENT_TRIP_SCHEMA_VERSION` and
 /// adds a fixture for the old version.
-const TRIP_DOCUMENT_MIGRATIONS: [TripDocumentMigration; 5] = [
+const TRIP_DOCUMENT_MIGRATIONS: [TripDocumentMigration; 6] = [
     wrap_window_overrides,
     night_windows_to_bedtime,
     add_ticket_preferences,
     add_live_prices,
     purchase_date_to_enum,
+    add_mobility_modes,
 ];
+
+/// Version 7 adds the mobility mode of the legs that leave a place. A place without it keeps the
+/// mode of the previous leg, so every leg of an older trip is on foot and the document needs no
+/// change. The new version keeps an older app from loading a trip and dropping its modes.
+fn add_mobility_modes(_document: &mut Value) {}
 
 /// Version 6 replaces the optional assumed purchase date with `PurchaseDate`. A missing or null
 /// date becomes `Today`, and a date becomes `On` with that date.
@@ -157,7 +163,9 @@ pub fn trip_from_document(document: &str) -> Result<Trip, StorageError> {
 
 #[cfg(test)]
 mod tests {
-    use btt_model::{LegTravelMode, PlaceWindowOverride, PurchaseDate, TicketPreferences};
+    use btt_model::{
+        LegTravelMode, MobilityMode, PlaceWindowOverride, PurchaseDate, TicketPreferences,
+    };
     use chrono::NaiveDate;
 
     use super::*;
@@ -176,6 +184,9 @@ mod tests {
 
     /// A document written by schema version 5, with a purchase date that is set.
     const TRIP_DOCUMENT_VERSION_5: &str = include_str!("../tests/fixtures/trip_v5.json");
+
+    /// A document written by schema version 6, before the mobility modes existed.
+    const TRIP_DOCUMENT_VERSION_6: &str = include_str!("../tests/fixtures/trip_v6.json");
 
     #[test]
     fn every_schema_version_fixture_loads() {
@@ -220,6 +231,13 @@ mod tests {
         assert_eq!(
             trip.preferences.ticket_preferences.assumed_purchase_date,
             PurchaseDate::On(NaiveDate::from_ymd_opt(2026, 1, 2).unwrap())
+        );
+
+        let trip = trip_from_document(TRIP_DOCUMENT_VERSION_6).unwrap();
+        assert!(
+            trip.itinerary
+                .legs()
+                .all(|leg| leg.mobility_mode == MobilityMode::Foot)
         );
     }
 

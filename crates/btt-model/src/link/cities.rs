@@ -163,6 +163,7 @@ mod tests {
             coordinates: GeoCoordinates::from_degrees(latitude, longitude).unwrap(),
             station_search_radius: StationSearchRadius::DEFAULT,
             window_override: None,
+            departing_mobility_mode: crate::itinerary::MobilityModeChange::Keep,
         }
     }
 

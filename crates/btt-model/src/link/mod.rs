@@ -271,6 +271,7 @@ mod tests {
 
     use super::*;
     use crate::link::bits::BitWriter;
+    use crate::snapshot::SNAPSHOT_SCHEMA_VERSION;
 
     /// Wraps bytes as a payload the way the encoder does, so the checks of the outer layers pass
     /// and the bytes themselves meet the reader.
@@ -289,12 +290,13 @@ mod tests {
     #[test]
     fn a_newer_schema_version_is_named_as_such() {
         let mut writer = BitWriter::default();
-        writer.number(3);
+        let newer_version = SNAPSHOT_SCHEMA_VERSION + 1;
+        writer.number(u64::from(newer_version));
         writer.number(99);
         let payload = payload_of_bytes(&writer.finish());
         assert_eq!(
             decode_snapshot_link(&payload),
-            Err(SnapshotLinkError::NewerSchema(3))
+            Err(SnapshotLinkError::NewerSchema(newer_version))
         );
     }
 

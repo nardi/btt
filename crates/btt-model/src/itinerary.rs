@@ -42,6 +42,10 @@ pub struct TripPlace {
     pub station_search_radius: StationSearchRadius,
     /// Replaces the trip's default windows for legs that leave or reach this place.
     pub window_override: Option<PlaceWindowOverride>,
+    /// Whether the legs that leave this place use another mobility mode. The destination
+    /// keeps `Keep`, because no leg leaves it.
+    #[serde(default)]
+    pub departing_mobility_mode: MobilityModeChange,
 }
 
 impl TripPlace {
@@ -217,6 +221,41 @@ impl LegTravelMode {
     }
 }
 
+/// How the traveller moves on a leg, which limits the trains and sets the time of the ways to
+/// and between stations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize, Type)]
+pub enum MobilityMode {
+    /// On foot, with local transport for longer ways.
+    #[default]
+    Foot,
+    /// With an assembled bike, which only some trains take.
+    Bike,
+    /// With a folding bike, which travels folded as luggage on every train.
+    FoldingBike,
+    /// In a wheelchair, on step-free trains and stations only.
+    Wheelchair,
+}
+
+/// Whether a place changes the mobility mode of the legs that leave it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize, Type)]
+pub enum MobilityModeChange {
+    /// The legs keep the mode of the leg that arrives at the place. A trip starts on foot.
+    #[default]
+    Keep,
+    /// The legs from the place on use this mode.
+    Switch(MobilityMode),
+}
+
+impl MobilityModeChange {
+    /// Returns the mode of the legs that leave the place, given the mode of the arriving leg.
+    pub const fn applied_to(self, arriving: MobilityMode) -> MobilityMode {
+        match self {
+            Self::Keep => arriving,
+            Self::Switch(mode) => mode,
+        }
+    }
+}
+
 /// A place between the origin and the destination, with the leg that arrives there.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
 pub struct ViaPlace {
@@ -264,6 +303,9 @@ pub struct ItineraryLeg<'a> {
     pub arrival_place: &'a TripPlace,
     /// Whether the leg includes a night train.
     pub travel_mode: &'a LegTravelMode,
+    /// How the traveller moves on the leg, from the last place up to its departure place that
+    /// changes the mode.
+    pub mobility_mode: MobilityMode,
     /// Stay at the departure place, or `None` for the leg that leaves the origin.
     pub stay_at_departure_place: Option<&'a PlaceStay>,
 }
@@ -309,14 +351,20 @@ impl Itinerary {
                     &route.destination,
                     &route.final_leg_travel_mode,
                 )));
-            departures.zip(arrivals).map(
-                |((departure_place, stay_at_departure_place), (arrival_place, travel_mode))| {
-                    ItineraryLeg {
+            departures.zip(arrivals).scan(
+                MobilityMode::Foot,
+                |mobility_mode,
+                 ((departure_place, stay_at_departure_place), (arrival_place, travel_mode))| {
+                    *mobility_mode = departure_place
+                        .departing_mobility_mode
+                        .applied_to(*mobility_mode);
+                    Some(ItineraryLeg {
                         departure_place,
                         arrival_place,
                         travel_mode,
+                        mobility_mode: *mobility_mode,
                         stay_at_departure_place,
-                    }
+                    })
                 },
             )
         })
@@ -379,6 +427,7 @@ pub(crate) mod tests {
             coordinates: GeoCoordinates::from_degrees(latitude, longitude).unwrap(),
             station_search_radius: StationSearchRadius::DEFAULT,
             window_override: None,
+            departing_mobility_mode: MobilityModeChange::Keep,
         }
     }
 

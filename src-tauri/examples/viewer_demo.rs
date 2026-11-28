@@ -33,6 +33,7 @@ fn place(id: u32, name: &str, latitude: f64, longitude: f64) -> TripPlace {
             .expect("the coordinates are on Earth"),
         station_search_radius: StationSearchRadius::DEFAULT,
         window_override: None,
+        departing_mobility_mode: btt_model::MobilityModeChange::Keep,
     }
 }
 

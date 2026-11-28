@@ -31,8 +31,8 @@ pub use edit::{
 pub use history::{MAXIMUM_HISTORY_STEPS, TripHistory, TripHistoryState};
 pub use itinerary::{
     AcceptedBerths, BerthType, Itinerary, ItineraryLeg, ItineraryRoute, LegTravelMode,
-    OvernightLegOptions, PlaceStay, PlaceWindowOverride, SameDayStayRange, StationSearchRadius,
-    TripPlace, TripPlaceId, ViaPlace,
+    MobilityMode, MobilityModeChange, OvernightLegOptions, PlaceStay, PlaceWindowOverride,
+    SameDayStayRange, StationSearchRadius, TripPlace, TripPlaceId, ViaPlace,
 };
 pub use link::{
     LinkAlphabet, SnapshotLink, SnapshotLinkError, decode_snapshot_link, encode_snapshot_link,
@@ -42,9 +42,9 @@ pub use place_search::PlaceSearchResult;
 pub use plan::{
     AlternativeKind, ArrivalFootpath, Journey, JourneyChoice, JourneyCostParts, LayoutLink,
     LayoutLinkKind, LayoutLinkSource, LegExtras, LegPlan, LegPlanStation, LegPlanStationIndex,
-    LegPlanningResult, NearbyDaySuggestion, NoJourneyReason, PassJourneyOption, PlanningRunId,
-    PlanningSessionEvent, SearchedWindow, StationWay, TrainLabel, TrainRide, TransferAndRide,
-    WayToStationMode,
+    LegPlanningResult, ModeAvailability, NearbyDaySuggestion, NoJourneyReason, PassJourneyOption,
+    PlanningRunId, PlanningSessionEvent, SearchedWindow, StationWay, TrainLabel, TrainRide,
+    TransferAndRide, WayToStationMode,
 };
 pub use snapshot::{SNAPSHOT_SCHEMA_VERSION, SnapshotLeg, StoredSnapshot, TripSnapshot};
 pub use tickets::{

@@ -103,6 +103,23 @@ pub struct TrainRide {
     /// knows none, and in plans stored without them.
     #[serde(default)]
     pub layout_links: Vec<LayoutLink>,
+    /// Whether the timetable or a rule confirms that the traveller can make the ride in the
+    /// mobility mode of the leg. For a wheelchair, this covers the boarding and the alighting
+    /// station as well.
+    #[serde(default)]
+    pub mode_availability: ModeAvailability,
+}
+
+/// Whether the timetable or a rule confirms that a ride suits the mobility mode of its leg.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize, Type)]
+pub enum ModeAvailability {
+    /// The mode places no limit on the ride, such as on foot or with a folding bike.
+    #[default]
+    NotRequired,
+    /// The feed or a checked rule confirms the ride.
+    Confirmed,
+    /// Nothing excludes the ride, but nothing confirms it either.
+    Unconfirmed,
 }
 
 /// A transfer from the previous ride, followed by the next ride.
@@ -121,6 +138,10 @@ pub enum WayToStationMode {
     Walk,
     /// By bus, tram or metro, for longer ways.
     LocalTransport,
+    /// By bike, at any distance.
+    Cycle,
+    /// In a wheelchair, for ways shorter than a kilometer.
+    Wheel,
 }
 
 /// A way off the train, between a place and a station or between two stations. Its duration

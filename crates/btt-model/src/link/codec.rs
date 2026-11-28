@@ -26,13 +26,13 @@ use super::vocabulary::{self, CATEGORIES, OPERATORS, TIME_ZONES};
 use super::{cities, stations, trains};
 use crate::coordinates::{GeoCoordinates, Latitude, Longitude};
 use crate::itinerary::{
-    Itinerary, ItineraryRoute, LegTravelMode, OvernightLegOptions, PlaceStay, StationSearchRadius,
-    TripPlace, TripPlaceId, ViaPlace,
+    Itinerary, ItineraryRoute, LegTravelMode, MobilityMode, MobilityModeChange,
+    OvernightLegOptions, PlaceStay, StationSearchRadius, TripPlace, TripPlaceId, ViaPlace,
 };
 use crate::plan::{
     AlternativeKind, ArrivalFootpath, Journey, JourneyCostParts, LegPlan, LegPlanStation,
-    LegPlanStationIndex, LegPlanningResult, NoJourneyReason, StationWay, TrainLabel, TrainRide,
-    TransferAndRide, WayToStationMode,
+    LegPlanStationIndex, LegPlanningResult, ModeAvailability, NoJourneyReason, StationWay,
+    TrainLabel, TrainRide, TransferAndRide, WayToStationMode,
 };
 use crate::snapshot::{SNAPSHOT_SCHEMA_VERSION, SnapshotLeg, TripSnapshot};
 use crate::tickets::{EuroCents, EuroRange};
@@ -334,6 +334,24 @@ impl SnapshotWriter {
             self.bits.signed_number(longitude - self.place_steps.1);
             self.place_steps = (latitude, longitude);
         }
+        self.mobility_mode_change(place.departing_mobility_mode);
+    }
+
+    /// Writes the mobility mode change of a place: a bit for a switch, then two bits for the mode.
+    fn mobility_mode_change(&mut self, change: MobilityModeChange) {
+        match change {
+            MobilityModeChange::Keep => self.bits.bit(false),
+            MobilityModeChange::Switch(mode) => {
+                self.bits.bit(true);
+                let code = match mode {
+                    MobilityMode::Foot => 0,
+                    MobilityMode::Bike => 1,
+                    MobilityMode::FoldingBike => 2,
+                    MobilityMode::Wheelchair => 3,
+                };
+                self.bits.bits(code, 2);
+            }
+        }
     }
 
     /// Writes the trip without the parts a snapshot leaves out.
@@ -386,7 +404,13 @@ impl SnapshotWriter {
     fn way(&mut self, way: StationWay) {
         self.bits.number(u64::from(way.duration.0));
         self.bits.number(u64::from(way.distance_meters));
-        self.bits.bit(way.mode == WayToStationMode::LocalTransport);
+        let code = match way.mode {
+            WayToStationMode::Walk => 0,
+            WayToStationMode::LocalTransport => 1,
+            WayToStationMode::Cycle => 2,
+            WayToStationMode::Wheel => 3,
+        };
+        self.bits.bits(code, 2);
     }
 
     /// Writes the train of a ride: its line in the dictionary of trains plus one, or zero and
@@ -414,6 +438,12 @@ impl SnapshotWriter {
     fn ride(&mut self, ride: &TrainRide, previous_alighting: Option<LegPlanStationIndex>) {
         self.train(&ride.train_label);
         self.bits.bit(ride.offers_berths);
+        let availability_code = match ride.mode_availability {
+            ModeAvailability::NotRequired => 0,
+            ModeAvailability::Confirmed => 1,
+            ModeAvailability::Unconfirmed => 2,
+        };
+        self.bits.bits(availability_code, 2);
         self.time(ride.departure_time);
         match previous_alighting {
             Some(previous) => {
@@ -630,6 +660,7 @@ impl SnapshotReader<'_> {
             (name, latitude, longitude)
         };
         let out_of_range = || SnapshotLinkError::Malformed("a coordinate is out of range");
+        let departing_mobility_mode = self.mobility_mode_change()?;
         let step = crate::snapshot::PLACE_STEP_MICRODEGREES;
         let coordinates = GeoCoordinates {
             latitude: i32::try_from(latitude_steps * step)
@@ -647,7 +678,22 @@ impl SnapshotReader<'_> {
             coordinates,
             station_search_radius: StationSearchRadius::DEFAULT,
             window_override: None,
+            departing_mobility_mode,
         })
+    }
+
+    /// Reads the mobility mode change of a place.
+    fn mobility_mode_change(&mut self) -> Result<MobilityModeChange, SnapshotLinkError> {
+        if !self.bits.bit()? {
+            return Ok(MobilityModeChange::Keep);
+        }
+        let mode = match self.bits.bits(2)? {
+            0 => MobilityMode::Foot,
+            1 => MobilityMode::Bike,
+            2 => MobilityMode::FoldingBike,
+            _ => MobilityMode::Wheelchair,
+        };
+        Ok(MobilityModeChange::Switch(mode))
     }
 
     /// Reads the trip.
@@ -739,10 +785,11 @@ impl SnapshotReader<'_> {
     fn way(&mut self) -> Result<StationWay, SnapshotLinkError> {
         let duration = DurationMinutes(self.bits.number_u16()?);
         let distance_meters = self.bits.number_u32()?;
-        let mode = if self.bits.bit()? {
-            WayToStationMode::LocalTransport
-        } else {
-            WayToStationMode::Walk
+        let mode = match self.bits.bits(2)? {
+            0 => WayToStationMode::Walk,
+            1 => WayToStationMode::LocalTransport,
+            2 => WayToStationMode::Cycle,
+            _ => WayToStationMode::Wheel,
         };
         Ok(StationWay {
             duration,
@@ -809,6 +856,16 @@ impl SnapshotReader<'_> {
     ) -> Result<TrainRide, SnapshotLinkError> {
         let train_label = self.train()?;
         let offers_berths = self.bits.bit()?;
+        let mode_availability = match self.bits.bits(2)? {
+            0 => ModeAvailability::NotRequired,
+            1 => ModeAvailability::Confirmed,
+            2 => ModeAvailability::Unconfirmed,
+            _ => {
+                return Err(SnapshotLinkError::Malformed(
+                    "a ride has an unknown availability",
+                ));
+            }
+        };
         let departure_time = self.time()?;
         let boarding_station = match previous_alighting {
             Some(previous) if self.bits.bit()? => previous,
@@ -817,6 +874,7 @@ impl SnapshotReader<'_> {
         let alighting_station = self.station_index(station_count)?;
         let arrival_time = self.time()?;
         Ok(TrainRide {
+            mode_availability,
             boarding_station,
             departure_time,
             alighting_station,
